@@ -43,7 +43,7 @@ A site's "op" says how its new bytes are made:
 | `jsr`, `jmp` | `4eb9` or `4ef9` + target's address, nop-padded to the stock length (6 bytes or more) |
 | `keep2` | the stock opcode word + target's address (a `jsr.l` or `lea.l` whose operand you redirect) |
 | `ptr` | target's address (4 bytes of data, e.g. a vtable entry) |
-| `bytes` | `new`, given in hex; `"kind": "code"` if they are instructions |
+| `bytes` | `new`, given in hex; `"kind": "code"` if they are instructions; `"relocs"`, as `[offset, "abs32", "sym:NAME", addend]`, put your own symbols' addresses in them |
 | `dsp_jsr` | `jsr >target` over one two-word DSP instruction in a payload (6 bytes) |
 
 With a target, `"addend": N` (optional) adds N bytes to its address (N words
@@ -107,6 +107,28 @@ class BuildError(Exception):
 
 def sha(b):
     return hashlib.sha256(b).hexdigest()
+
+
+def bytes_relocs(addr, new, relocs):
+    """A `bytes` site's "relocs" -> [[offset, "abs32", target, addend]], each
+    inside `new`, none overlapping; the target is "sym:NAME" or "abs"."""
+    def is_int(v):
+        return isinstance(v, int) and not isinstance(v, bool)
+    if not isinstance(relocs, list):
+        raise BuildError('site 0x%08x: "relocs" is a list of [offset, "abs32", "sym:NAME", addend]'
+                         % addr)
+    out = []
+    for r in relocs:
+        if not (isinstance(r, list) and len(r) == 4 and is_int(r[0]) and r[1] == 'abs32'
+                and 0 <= r[0] <= len(new) - 4 and isinstance(r[2], str)
+                and (r[2] == 'abs' or r[2].startswith('sym:') and len(r[2]) > 4) and is_int(r[3])):
+            raise BuildError('site 0x%08x: a relocation is [offset, "abs32", "sym:NAME", addend] '
+                             'inside the new bytes, not %r' % (addr, r))
+        out.append(list(r))
+    offs = sorted(r[0] for r in out)
+    if any(b - a < 4 for a, b in zip(offs, offs[1:])):
+        raise BuildError('site 0x%08x: two relocations overlap' % addr)
+    return out
 
 
 def run(cmd):
@@ -421,6 +443,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         elif op == 'bytes':
             new = bytes.fromhex(s['new'])
             kind = s.get('kind', 'data')
+            rel_ = bytes_relocs(addr, new, s.get('relocs', []))
         elif op == 'dsp_jsr':                # two DSP words of a payload: jsr >target
             if not any(at <= addr and addr + len(stockb) <= at + n
                        for at, n in dev.dsp_payloads.values()):
@@ -445,7 +468,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                 raise BuildError('site 0x%08x: %s. A code site must cover whole stock '
                                  'instructions' % (addr, note))
         for _o, _t, tgt, _a in rel_:
-            if tgt[4:] not in symbols:
+            if tgt.startswith('sym:') and tgt[4:] not in symbols:
                 imports.add(tgt[4:])
         sites.append({'addr': '0x%08x' % addr, 'len': len(stockb), 'stock_sha256': sha(stockb),
                       'new': new.hex(), 'kind': kind, 'relocs': rel_})

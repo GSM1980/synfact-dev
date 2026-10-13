@@ -99,7 +99,7 @@ below was found again in 1.17.
     UART), which writes a container to 0x80000 or another image to
     0x40000-0x80000.
   None of them writes anything from the main OS image: unlike the Analog
-  Rytm's, it holds no copy of the bootstrap to re-flash, and needs no
+  Rytm mk1's (#11), it holds no copy of the bootstrap to re-flash, and needs no
   `protected` range. The bootstrap itself is section 2, which every build
   keeps stock (version 0x0201: the bootstrap's own upgrade only runs for a
   greater one). The bootstrap's MIDI upgrade (the STARTUP menu) writes the
@@ -290,6 +290,93 @@ below was found again in 1.17.
     The shop's details sheet says, mod by mod, what has been checked
     (`on_unit` in web/catalog.json).
   - Not yet run on an MKI.
+
+## The Model:Cycles and Model:Samples (1.13)
+
+One platform (an MCF54415, ColdFire V4 with EMAC, as the Digitakt), two
+profiles: `model_cycles.py` keeps the evidence for each fact, and
+`model_samples.py` gives the Model:Samples' own addresses.
+
+- **Files.** One ELE3 container: sections 5 (the build string), 2 (the
+  bootstrap), 3 (the main OS, packed as the Digitakt's) and 4 (the updater).
+  Sealed as the Digitakt II: an HMAC-SHA256 after the last section, its key
+  from the bootstrap's seed string (`REVERB SEND`, `DELAY TIME`). `syx.py`
+  rebuilds both stock files byte for byte from their own main OS stream
+  (tests/test_releases.py).
+- **The version field** is at `0x0C`, not `0x14`: the unit shows the
+  header's `1.13` there, and nothing reads `0x14-0x18`. The profile places it
+  (`version_at`), and a build that names no version keeps stock's
+  (`version_optional`).
+- **Staging and flash.** Section 3 is read to `0x40200000` and unpacked to
+  `0x40000400`, as on the Digitakt mk1. The container is at flash
+  `0x20000` and must end below `0x1E0000`, where the OS keeps two stores:
+  1.75 MB, of which stock takes 0.70 MB.
+- **Free memory.** DDR `0x47E00000-0x47E40000` (the linker's `ddr`), below
+  the boot stack and above every buffer the OSes use; the SRAM tail
+  `0x8000F700-0x80010000`, zeroed at reset and named by no instruction. On
+  the Model:Cycles, CHORD's two SRAM tables (`sram-chord-a`, `-b`) are free
+  only to a mod that serves CHORD its tables from elsewhere.
+- **The core** ([mods/core-mc](../mods/core-mc), [mods/core-ms](../mods/core-ms))
+  is the shared core.s with ev_tick, ev_draw, ev_key and ev_enc
+  ([CORES.md](CORES.md)).
+- **On the units.** Builds with the core and mods on it (a hook bus, menus,
+  USB audio, sample playback changes) run on both units, sent with Transfer
+  over USB as an OS update. Recovery: hold
+  FUNC while powering on, TRIG 4 (OS UPGRADE), and the stock `.syx` over
+  5-pin MIDI.
+
+## The Analog Rytm MKII (1.73)
+
+A proof of concept: the profile (`analog_rytm_mk2.py`, where each fact's
+evidence is) and a core (mods/core-ar2) built from the Digitakt mk1's sources.
+On a unit (11 Oct 2026), a build of core-ar2 with hello-marker-ar2 booted,
+reported its own version (HM01) and drew the marker on every screen.
+With examples/hooks-check-ar2 (HC01), every event core-ar2 provides ran as
+expected: tick, draw, key, encoder, a SETTINGS row, and the render's entry
+and exit.
+The Rytm runs on the Digitakt mk1's platform, and its main OS reads like the
+Digitakt's in the places elekloader depends on.
+
+- **Files.** The Digitakt mk1's family (ELE3, the same SysEx transport),
+  device byte `0x0C`, no trailer. Five sections: 5, 2 (the bootstrap, with the
+  STARTUP menu), 1 (an FPGA bitstream), 3 (MAIN OS) and 8 (the ARM image the
+  Digitakt mk1 and Digitone mk1 carry too, byte for byte). The writer
+  reproduces the stock file byte for byte from its own main OS stream.
+- **Staging.** The bootstrap's loader (`0x80000590`) is the Digitakt mk1's call
+  for call: section 3 from flash at its container offset + `0x80000`, to
+  `0x40200000`, unpacked in place to `0x40000400` by the same depacker. Stock's
+  in-place gap is 401,261 bytes; elekloader's repack of stock, 533,073.
+- **Flash.** `flash_limit` is `0x300000`. The OS keeps the Digitakt's store at
+  `0x380000`-`0x400000`, and a second one of its own at `0x300000`-`0x380000`
+  (a 0x1B072-byte block at `0x300000` or `0x340000`), read, written and erased
+  through the same routines. elekloader's repack of stock ends at `0x20A5D0`
+  (Elektron's at `0x1EA2F0`). The in-OS upgrade erases from `0x80000`, a
+  sector at a time, only as far as the container it received reaches.
+- **No protected range.** The main OS holds no copy of the bootstrap: no 512
+  bytes of section 2's first 0x7D94 are in it (after them come zero-padded
+  tables), what they share is pieces of tables and data, and the packed
+  section shares nothing. Every call into the OS's SPI NOR routines (program
+  0x40136fae; erase 0x4013702a and five others) is from one of: the stores
+  at 0x300000 and 0x380000; the in-OS upgrade (0x4009f3a0: erase and write
+  from 0x80000, from what it received); the factory console (0x4013a068:
+  "READY FOR BOOTSTRAP" writes a received bootstrap at 0x40000, "READY FOR
+  OS" a received container from 0x80000); and an erase of 0x400000-0xc00000
+  behind a marker. None writes bytes of the main OS image.
+  tests/test_rytm_mk2.py checks both.
+- **Mods' area.** `0x47BE0000`-`0x47C00000`, the Digitakt mk1's. Checked on a
+  unit: filled from the boot site at power-on, no word of it changed through a
+  long session of playback, sampling, effects, MIDI and Overbridge, or after a
+  power cycle.
+- **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE, the
+  stock file over MIDI DIN. Checked on a unit with stock 1.73.
+- **The TypeScript engine** (js/) has the profile too (`ANALOG_RYTM_MK2`). Its
+  ColdFire decoder agrees with the Python's at every even offset of the 1.73
+  main OS (`tools/isa_parity`), and `tools/parity.ts` takes the Rytm's cases
+  (`stocks.ar173`, `dirs.ar`). With core-ar2 0.1, hello-marker-ar2 and
+  hooks-check-ar2 built for 1.73, its nine cases (four builds, a check, three
+  refusals) give the same files, messages and checks as the Python (11 Oct
+  2026). The web page's list of where to download each stock OS does not
+  name the Rytm yet.
 
 ## What a new device needs besides its profile
 
