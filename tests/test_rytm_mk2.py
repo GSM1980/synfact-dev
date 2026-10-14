@@ -64,7 +64,7 @@ def test_the_file_and_the_writer():
 
 def test_a_repack_verifies_inside_the_flash_limit():
     raw, st, img = stock()
-    out = formats.write(st, formats.pack_main(img), DEV, version='AR01')
+    out = formats.write(st, formats.pack_main(img, DEV), DEV, version='AR01')
     facts = formats.verify(out, st, img, DEV, version='AR01')
     assert facts['flash_headroom'] > 0 and facts['main']['inplace_min_gap'] > 0
 
