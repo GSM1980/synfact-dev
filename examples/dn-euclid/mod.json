@@ -1,0 +1,13 @@
+{
+ "id": "dneuclid", "version": "1.0",
+ "license": "GPL-2.0-or-later",
+ "title": "EUCLID (Digitone step-fire events)", "category": "Sequencer", "author": "Dracyr",
+ "description": "EUCLID, the smallest step-fire mod for the Digitone mk1: track 1 fires 5 steps of every 16, spread as evenly as they go, whatever its own trigs say; every other track plays as stock. A template for a mod that changes what the sequencer plays: it names no firmware address, so its OS 1.44 port is empty (docs/ADAPTING.md, \"Step-fire events\"). Needs seq-events.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["euclid.c"],
+ "subscribe": [
+  {"event": "ev_gen_trig", "fn": "euclid_trig", "order": 50}
+ ],
+ "requires": ["core", "seq-events"]
+}

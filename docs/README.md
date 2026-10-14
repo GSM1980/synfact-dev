@@ -35,6 +35,8 @@ docs match its code.
   [mods/machine-pages](../mods/machine-pages) (its SRC machines' pages, core
   3.0), [mods/core-dn1](../mods/core-dn1) (Digitone mk1) with
   [mods/machines-dn1](../mods/machines-dn1) (its machines, core-dn1 3.1),
+  [mods/seq-events-dn1](../mods/seq-events-dn1) (its step fire as events;
+  the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1)),
   [mods/core-dt2](../mods/core-dt2) (Digitakt II), and
   [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot)
   (Octatrack).
@@ -61,6 +63,9 @@ docs match its code.
     4.0): a tremolo on everything the Digitone plays;
   - `dn-progchange`, the smallest one that takes program changes
     (core-dn1 4.0): each shown for two seconds, channel 16's taken;
+  - `dn-euclid`, the smallest Digitone mk1 mod on seq-events: track 1 fires 5
+    steps of every 16, with an empty OS 1.44 port; `euclid` the same on the
+    Digitakt mk1, with an empty OS 1.54 port;
   - `dsp-tone-ot`, the smallest mod with code on the Octatrack's DSP: a quiet
     sawtooth in place of input A, through the DSP bus.
 

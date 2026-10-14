@@ -1,0 +1,242 @@
+{
+ "id": "seq-events",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "seq events",
+ "category": "Framework",
+ "author": "Dracyr",
+ "description": "The Digitakt mk1's step fire as events, so several mods that change what the sequencer plays combine: generators (does an audio track's step fire; which note it plays) and effects over what every fire plays, audio and MIDI tracks (the step it reads, the trig, its condition, notes, velocity and locks), a step clock per track, and the playing pattern's facts when asked (docs/ADAPTING.md, \"Step-fire events\"). On its own it changes nothing the unit does.",
+ "device": "digitakt-mk1",
+ "os": "1.53",
+ "sources": [
+  "seq.s",
+  "../seq-events/seq.c"
+ ],
+ "cflags": [
+  "-Os",
+  "-DSQ_PATTERN_PP=0x4199dc38",
+  "-DSQ_NEXT_PP=0x4199dc40",
+  "-DSQ_TRANSPORT=0x4199dc2c",
+  "-DSQ_REARM=0x4006fb82"
+ ],
+ "sites": [
+  {
+   "addr": "0x4006f4dc",
+   "stock": "282f004c246f0050",
+   "op": "jsr",
+   "target": "sq_site_sread"
+  },
+  {
+   "addr": "0x4006f51a",
+   "stock": "30330800c280",
+   "op": "jsr",
+   "target": "sq_site_gate"
+  },
+  {
+   "addr": "0x4006f564",
+   "stock": "4fef00104a80",
+   "op": "jsr",
+   "target": "sq_site_scond"
+  },
+  {
+   "addr": "0x4006f56e",
+   "stock": "7128038c2f00",
+   "op": "jsr",
+   "target": "sq_site_sprob"
+  },
+  {
+   "addr": "0x4006f582",
+   "stock": "d48332332800",
+   "op": "jsr",
+   "target": "sq_site_word"
+  },
+  {
+   "addr": "0x4006f5be",
+   "stock": "41f338007cff",
+   "op": "jsr",
+   "target": "sq_site_notes"
+  },
+  {
+   "addr": "0x4006f750",
+   "stock": "203c000005dc",
+   "op": "jsr",
+   "target": "sq_site_slocks"
+  },
+  {
+   "addr": "0x4006f772",
+   "stock": "202f0030d7c4",
+   "op": "jsr",
+   "target": "sq_site_svel"
+  },
+  {
+   "addr": "0x4006f864",
+   "stock": "282f0054266f0058",
+   "op": "jsr",
+   "target": "sq_site_mread"
+  },
+  {
+   "addr": "0x4006f8a4",
+   "stock": "30320800c280",
+   "op": "jsr",
+   "target": "sq_site_mgate"
+  },
+  {
+   "addr": "0x4006f8ee",
+   "stock": "4fef00104a80",
+   "op": "jsr",
+   "target": "sq_site_mcond"
+  },
+  {
+   "addr": "0x4006f8f8",
+   "stock": "7328038c2f01",
+   "op": "jsr",
+   "target": "sq_site_mprob"
+  },
+  {
+   "addr": "0x4006f90c",
+   "stock": "d48334322800",
+   "op": "jsr",
+   "target": "sq_site_mword"
+  },
+  {
+   "addr": "0x4006f98a",
+   "stock": "41f2380072ff",
+   "op": "jsr",
+   "target": "sq_site_mnotes"
+  },
+  {
+   "addr": "0x4006f9a6",
+   "stock": "41f2380072ff",
+   "op": "jsr",
+   "target": "sq_site_mvel"
+  }
+ ],
+ "ports": {
+  "1.54": {
+   "cflags": [
+    "-Os",
+    "-DSQ_PATTERN_PP=0x4199ec38",
+    "-DSQ_NEXT_PP=0x4199ec40",
+    "-DSQ_TRANSPORT=0x4199ec2c",
+    "-DSQ_REARM=0x4006fb82"
+   ],
+   "sites": [
+    {
+     "addr": "0x4006f4dc",
+     "stock": "282f004c246f0050",
+     "op": "jsr",
+     "target": "sq_site_sread"
+    },
+    {
+     "addr": "0x4006f51a",
+     "stock": "30330800c280",
+     "op": "jsr",
+     "target": "sq_site_gate"
+    },
+    {
+     "addr": "0x4006f564",
+     "stock": "4fef00104a80",
+     "op": "jsr",
+     "target": "sq_site_scond"
+    },
+    {
+     "addr": "0x4006f56e",
+     "stock": "7128038c2f00",
+     "op": "jsr",
+     "target": "sq_site_sprob"
+    },
+    {
+     "addr": "0x4006f582",
+     "stock": "d48332332800",
+     "op": "jsr",
+     "target": "sq_site_word"
+    },
+    {
+     "addr": "0x4006f5be",
+     "stock": "41f338007cff",
+     "op": "jsr",
+     "target": "sq_site_notes"
+    },
+    {
+     "addr": "0x4006f750",
+     "stock": "203c000005dc",
+     "op": "jsr",
+     "target": "sq_site_slocks"
+    },
+    {
+     "addr": "0x4006f772",
+     "stock": "202f0030d7c4",
+     "op": "jsr",
+     "target": "sq_site_svel"
+    },
+    {
+     "addr": "0x4006f864",
+     "stock": "282f0054266f0058",
+     "op": "jsr",
+     "target": "sq_site_mread"
+    },
+    {
+     "addr": "0x4006f8a4",
+     "stock": "30320800c280",
+     "op": "jsr",
+     "target": "sq_site_mgate"
+    },
+    {
+     "addr": "0x4006f8ee",
+     "stock": "4fef00104a80",
+     "op": "jsr",
+     "target": "sq_site_mcond"
+    },
+    {
+     "addr": "0x4006f8f8",
+     "stock": "7328038c2f01",
+     "op": "jsr",
+     "target": "sq_site_mprob"
+    },
+    {
+     "addr": "0x4006f90c",
+     "stock": "d48334322800",
+     "op": "jsr",
+     "target": "sq_site_mword"
+    },
+    {
+     "addr": "0x4006f98a",
+     "stock": "41f2380072ff",
+     "op": "jsr",
+     "target": "sq_site_mnotes"
+    },
+    {
+     "addr": "0x4006f9a6",
+     "stock": "41f2380072ff",
+     "op": "jsr",
+     "target": "sq_site_mvel"
+    }
+   ]
+  }
+ },
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "sq_tick",
+   "order": 10
+  },
+  {
+   "event": "ev_tick",
+   "fn": "sq_tick_end",
+   "order": 90
+  }
+ ],
+ "collections": {
+  "ev_fire_step": 4,
+  "ev_gen_trig": 4,
+  "ev_fire_trig": 4,
+  "ev_fire_cond": 4,
+  "ev_gen_notes": 4,
+  "ev_fire_notes": 4,
+  "ev_fire_vel": 4,
+  "ev_fire_locks": 4
+ },
+ "requires": [
+  "core"
+ ]
+}
