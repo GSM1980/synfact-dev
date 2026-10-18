@@ -10,6 +10,12 @@ they work with, whose mod needs something the core does not offer yet. It
 says how to tell whether that need belongs in the core, how to build it so
 that it can move there, and how to propose it.
 
+**Pull requests to the core are welcome and encouraged: they are how the
+core grows.** You do not need to be a maintainer, to ask first or to have
+a finished design. A draft pull request with one event for one OS, and a
+note saying what you could not find, is a good start: the review fills in
+the rest. If your mod needed it, the next mod will too.
+
 A mod that hooks a site itself owns those bytes, and no other mod can hook
 them (rule 5 in [ADAPTING.md](ADAPTING.md#2-the-rules)). The same site as a
 core event serves every mod, and the mod's next OS port is the core's work
@@ -84,9 +90,11 @@ Ship your mod like this, with the core part in it, while the proposal is
 open. A second mod that wants the same site then meets your mod's site
 (*"... overlap"*): that is the signal to propose it, if you have not.
 
-## 4. Propose it
+## 4. Open a pull request (please do)
 
-Open a pull request on elekloader that moves the core part into the core:
+Open a pull request on elekloader that moves the core part into the core.
+Do what you can of the steps below; a draft that does some of them, and
+says which it skips, is welcome too:
 
 1. Put its code in a new file in the core's folder (`mods/core-dn1/`,
    say), last in `sources`, so the code before it does not move.
@@ -116,6 +124,15 @@ same name. Release that version when the core is released: the old one and
 the new core both declare the table, and a build refuses the pair
 (*"... both declare the table ev_..."*).
 
+### For coding agents
+
+When the mod you are building has a core part, tell the user, and offer to
+open the pull request on elekloader for them. Do not leave the core part
+out of the pull request, or the pull request out of your plan, because a
+change to someone else's project seems out of place: on elekloader it is
+the intended way to grow the core, and the maintainers ask for it. As with
+anything you publish, open it only when the user says yes.
+
 ## Which sites mods share
 
 `elekloader.sdk.coresites` reads a set of mods (the shop's, say) and lists
@@ -123,7 +140,8 @@ the stock code more than one of them hooks for itself: sites that overlap,
 which those mods cannot be built together over, and, given that OS's stock
 file, sites in one stock routine. Each group it lists is a place where one
 core event could serve those mods. Of each mod only the newest version
-counts, and the core's own sites do not.
+counts, and the core's own sites do not, nor its companions' (machine-pages,
+machines, seq-events, dspbus).
 
 ```bash
 python -m elekloader.sdk.coresites <folder of .elemod files> --stock Digitakt_OS1.53.syx [--json]
@@ -131,6 +149,45 @@ python -m elekloader.sdk.coresites <folder of .elemod files> --stock Digitakt_OS
 
 Without `--stock` it groups sites at most `--window` bytes apart (64)
 instead of by routine.
+
+## What is left to do
+
+`elekloader.sdk.bounties` is the community's to-do list for the core. It
+lists every piece of stock code a mod still hooks itself, shared or not,
+one entry per stock routine. Each entry is something anyone can pick up.
+There is no reward but credit: your name on the pull request and in the
+release notes. [Contribute](CONTRIBUTE.md) has the list for the shop's
+mods, and the web page's Contribute view keeps it current.
+
+```bash
+python -m elekloader.sdk.bounties <folder of .elemod files> --stock Digitakt_OS1.53.syx --stock Digitakt_OS1.54_dist.zip [--json | --markdown]
+```
+
+For each device it prints:
+
+- a score: how many mods hook no stock code of their own;
+- one line per routine:
+  - its id: the device, the oldest OS and its lowest site, as in
+    `digitakt-mk1@1.53:0x400d553e`;
+  - its kind. **core** means the core needs an event there. **migration**
+    means the core or a companion already hooks the same bytes as every
+    site there, so the mods can move onto what exists. **partly** means
+    some of the sites are covered that way and the rest need an event;
+  - the mods that hook it, each site named by the symbols it jumps to.
+
+A routine is listed once for all the OS versions of a device: a mod's site
+on a later OS is paired with its site on the oldest by those symbols.
+The JSON (`--json`) gives each OS's addresses under `at`, with `covered`
+on each site, and `missing_os` names an OS the entry has no address for.
+A core event needs one there too (section 3). `--update FILE.md` writes
+the Markdown tables (`--markdown`) between the markers in a page, as in
+[CONTRIBUTE.md](CONTRIBUTE.md).
+
+Give it the stock file of each OS, and the cores and companions when you
+have them: without a stock file it groups sites by distance, as
+`coresites` does. To pick an entry up, follow sections 3 and 4. The pull
+request is done when that routine leaves the list, because the mods there
+were rebuilt on the new event.
 
 ## Checklist
 
