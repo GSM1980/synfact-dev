@@ -367,6 +367,51 @@ def test_the_core_bus_sites():
     assert at + 24 == DEV.image_free[0][1]          # the run's end: its start is octabam's SPECTRUM's
 
 
+def test_the_take_events_replay_their_sites():
+    """mods/takes-ot: each event's site is whole stock instructions, its stub's stock path
+    replays them as they are (the stock words, a short branch at the end as the same branch
+    to its absolute target), then goes back to the instruction after the site (a jmp event)
+    or returns (a jsr event); the converter's TAKES names the same sites, kinds and lengths."""
+    import re
+    from elekloader.sdk import octabam
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'takes-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'takes-ot', 'takes.s')) as fh:
+        src = fh.read()
+    blocks = dict(re.findall(r'^\s+TAKE\s+(\w+),\s*\w+\n(.*?)(?=^\s+TAKE\s|\Z)', src, re.M | re.S))
+    assert len(j['sites']) == len(blocks) == len(octabam.TAKES) == 19
+    for s in j['sites']:
+        ev, addr, n = s['target'][len('take_'):], int(s['addr'], 16), len(s['stock']) // 2
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == s['stock'], ev
+        assert octabam.TAKES[addr] == (ev, s['op'], n), ev
+        assert j['collections'][ev] == 8, ev                      # {claims, entry}
+        lines = [x.split('|')[0].strip() for x in blocks[ev].splitlines()]
+        lines = [x for x in lines if x]
+        words = b''
+        while lines and lines[0].startswith('.word'):
+            words += b''.join(int(w, 16).to_bytes(2, 'big') for w in lines.pop(0)[5:].split(','))
+        assert img[o:o + len(words)] == words, ev                # the stock words, unchanged
+        rest = img[o + len(words):o + n]
+        after = addr + n
+        if s['op'] == 'jsr':
+            assert rest == b'' and lines == ['rts'], ev
+            continue
+        if not rest:                                              # straight on
+            assert lines == ['jmp     0x%08x' % after], (ev, lines)
+            continue
+        assert len(rest) == 2 and rest[0] & 0xf0 == 0x60, ev    # a short branch ends the site
+        cc, disp = rest[0] & 0x0f, rest[1] - (256 if rest[1] & 0x80 else 0)
+        target = addr + n + disp                                  # from the branch's end
+        if cc == 0:                                               # bra.s
+            assert lines == ['jmp     0x%08x' % target], (ev, lines)
+            continue
+        inverse = {0x6: 'beq.s', 0x7: 'bne.s', 0xd: 'bge.s'}[cc]  # bne, beq, blt
+        assert lines == ['%s   2f' % inverse, 'jmp     0x%08x' % target,
+                         '2:      jmp     0x%08x' % after], (ev, lines)
+
+
 def test_a_site_can_add_to_its_target():
     """sdk.build's `addend`: a site's relocation carries it (no toolchain needed:
     a mod of sites only). Only a site with a target takes one."""
