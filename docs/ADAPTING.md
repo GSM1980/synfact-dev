@@ -163,7 +163,7 @@ The sites core owns (do not patch them):
   0x400a4816, 0x400db87e, 0x4011fb02, 0x40121656;
 - Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
   0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2;
-- from core-ar2 0.2, on both Rytm releases, 16 more for mod storage
+- from core-ar2 0.2, on both Rytm releases, 22 more for mod storage
   (listed under "Mod storage").
 
 A firmware routine your mod calls has its own address on each device and
@@ -649,7 +649,9 @@ saved by another layout, and after its scope was reset (below). Core exports
 no firmware locations, so a mod names the live objects it passes as `item`
 itself, for each OS. While an item is live its fields sit inside the stock
 object, so copy, paste, undo and pattern changes carry them with no extra
-code.
+code. One byte can hold fields of several mods, so `core_store_get` and
+`core_store_set` mask interrupts while they read or write a field: call them
+from any context, the audio interrupt too.
 
 **The tagged store.** One byte of each of the 256 entries of the 17 songs in
 a project image is never used by the stock OS: 4,352 bytes. Core keeps
@@ -657,23 +659,31 @@ there a 10-byte header (the layout ID, then one generation per scope), then
 T bytes for each of the 129 x 13 pattern tracks, then P bytes for each of
 the 129 patterns, then the project's own bytes. T and P start at 2 and 4,
 and grow when the mods need it (T can't reach 3: the store would not fit,
-so `track` is limited to 16 bits a track). The stock OS does not keep these
+so `track` is limited to 16 bits a track). P growing moves the patterns'
+and the project's regions, so their data in older projects loads as zeros;
+the pattern tracks come first and keep theirs. The stock OS does not keep these
 bytes in a project file, so core also hooks the file save and load
 (Transfer's `.arprj` and the card) and Total Recall's buffer.
 
 **The lockfile.** Where each field sits is decided once and then kept, in a
-JSON file per project: `elekloader.patch --lockfile FILE` (default: next to
-the output, `OUT.lock.json`); the desktop app keeps one per profile; the web
-bridge takes it as `store` and returns the new one. A build that adds a
-field puts it in bits no field ever used; one that drops or changes a field
-frees its bits. Each layout has a 4-byte ID and a generation per scope.
-Every change gives a
-new ID, and the build keeps the last 15 IDs as ancestors, so a project saved
-by an older layout still loads. When a scope is full the allocator bumps its
-generation and packs that scope's fields again from bit 0: the scope's data
-in projects saved before then loads as zeros. Keep the lockfile with the
-project: a build made without it starts a new layout, which reads none of
-the old data. Copies go in the build's manifest (`store`) and in the build
+JSON file: `elekloader.patch --lockfile FILE` (default:
+`analog-rytm-mk2.lock.json` in the output's folder, so every build written
+there shares it); the desktop app keeps one per profile; the web bridge
+takes it as `store` and returns the new one. A build that adds a field puts
+it in bits no field ever used. A field whose mod leaves the build keeps its
+bits, and no other field is given them: when the mod comes back with the
+field unchanged (the same `sym`, `scope` and `bits`), the field takes its
+old place, with the values it had. A field whose scope or width changes
+starts again from zero. Each layout has a 4-byte ID, a hash of the layout,
+and a generation per scope: the same mods built without a lockfile always
+get the same layout and ID, and two layouts share an ID only when they
+place every field alike. Every change gives a new ID, and the build keeps
+the last 15 IDs as ancestors, so a project saved by an older layout still
+loads. When a scope is full the allocator bumps its generation and packs
+that scope's fields again from bit 0: the scope's data in projects saved
+before then loads as zeros. Keep the lockfile: a build made without it packs
+the fields afresh, which reads the old data only when the mods are the same
+as when it was first made. Copies go in the build's manifest (`store`) and in the build
 itself, after the mods' image (`ELKSTORE`, its length, then the lockfile's
 text; about 1-2 KB, never copied into RAM), so a lost lockfile comes back
 from the last .syx: `elekloader.patch --lockfile-from OLD.syx`. The unit
@@ -694,14 +704,19 @@ sets things up per project, subscribes to `ev_project`:
 |---|---|---|---|
 | `ev_project` | Analog Rytm MKII only (core-ar2 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
 
-Core-ar2 0.2 owns 16 more sites, the same on 1.73 and 1.74 except the file
-save (0x400b0804 on 1.73, 0x400b0870 on 1.74): 0x4000937c and 0x40009146
+Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
+save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
 (the pattern serializers), 0x4000843a and 0x400081f6 (sounds), 0x400088d6
 and 0x4000863e (kits), 0x40007a5c and 0x4000763c (global slots), 0x40011ab8
 and 0x400118e8 (pattern and track init), 0x400122b6 (sound init),
 0x40011d38 (CREATE NEW and the project reset), 0x4000cd2e (every project
 load), 0x40034d86 (Total Recall's buffer save), the file save, and
-0x40035000 (the file load). `examples/store-check-ar2` uses a field in each
+0x40035000 (the file load), and the three calls through which the SysEx
+project commands copy, write and swap whole stored songs (0x4018b6ec,
+0x4018c09a, 0x4018c2bc on 1.73; 0x4018b8b8, 0x4018c266, 0x4018c488 on 1.74)
+and whole stored patterns (0x4018ba90, 0x4018c736, 0x4018c968 on 1.73;
+0x4018bc5c, 0x4018c902, 0x4018cb34 on 1.74).
+`examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)

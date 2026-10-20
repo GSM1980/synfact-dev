@@ -30,6 +30,11 @@
  * stored project (the working copy at 0x405c8f20) carries the build's own
  * store; a project file, Total Recall's buffer and the like carry theirs.
  *
+ * The SysEx project commands that copy, swap or write whole stored songs go
+ * through st_song_copy, which leaves the target's store bytes, and those for
+ * whole stored patterns through st_pattern_copy, which clears the target
+ * slot's fields (three sites each, at different addresses on 1.73 and 1.74).
+ *
  * Data is used only when it was written by this layout or one of its
  * ancestors (core_store_ids) and its scope's generation is this build's:
  * sounds and kits by their own copy of the ID, everything else by the header
@@ -453,13 +458,75 @@ int st_file_load(void *live, unsigned char *src, void *progress)
     return r;
 }
 
+/* ---- the SysEx project commands: whole stored songs ----
+ * The SysEx handler copies, swaps and writes stored song records (0x518 B,
+ * song slots 1..16 of a project image) with memcpy. Byte +2 of each of a
+ * record's 256 entries is the tagged store, which belongs to the image, not
+ * the song: copy everything else and leave the target's store bytes. In a
+ * swap the temporary buffer keeps its own (garbage) bytes, so both slots end
+ * with their own. Any other length is a plain copy. */
+
+void *st_song_copy(unsigned char *dst, const unsigned char *src, unsigned n)
+{
+    unsigned i;
+    for (i = 0; i < n; i++)
+        if (n != 0x518 || i < 0x116 || i >= 0x116 + 4 * 256 || ((i - 0x116) & 3))
+            dst[i] = src[i];
+    return dst;
+}
+
+/* The same commands copy, write and swap whole stored patterns (13,101 B)
+ * with memcpy. A pattern's track and pattern fields are kept by slot in the
+ * image's store, so they can't follow it: clear the target slot's, so the
+ * pattern loads with its mods' defaults instead of the slot's old values.
+ * Only a scope this layout reads there is cleared: another layout places its
+ * fields elsewhere, and this layout's offsets would hit other slots' fields
+ * or the project's. A swap's temporary buffer is in no image and is left
+ * alone. */
+
+void *st_pattern_copy(unsigned char *dst, const unsigned char *src, unsigned n)
+{
+    unsigned char *img;
+    unsigned i, t, j, T = SPLIT_T, P = SPLIT_P;
+    int k;
+    for (i = 0; i < n; i++)
+        dst[i] = src[i];
+    if (n != 13101 || !(img = pattern_image(dst)) || (k = pattern_index(img, dst)) < 0)
+        return dst;
+    if (store_ok(img, SC_TRACK))
+        for (t = 0; t < 13; t++)
+            for (j = 0; j < T; j++)
+                B(store_byte(img, HEADER + (13 * k + t) * T + j)) = 0;
+    if (store_ok(img, SC_PATTERN))
+        for (j = 0; j < P; j++)
+            B(store_byte(img, PATTERNS_AT + P * k + j)) = 0;
+    return dst;
+}
+
 /* ---- for mods: a field's value in an item ----
  * field: the descriptor elekloader gives the field's symbol: the scope in
  * bits 28..31, the width (1..32) in bits 22..27 and the bit offset in the
  * scope's bytes in bits 0..21, most significant bit first.
  * item and index, by scope: a sound, the live sound; a kit, the live kit; a
  * global slot, index 0..3; a pattern track, the live pattern and index 0..12
- * (the track); a pattern, the live pattern; the project, neither. */
+ * (the track); a pattern, the live pattern; the project, neither.
+ *
+ * One byte can hold fields of several mods, and mods use them from the UI
+ * and from the audio interrupt, so a field is read and written with
+ * interrupts masked, as the OS's own critical sections do: no write is lost
+ * to another's, and no reader sees half a value. */
+
+static unsigned short irq_mask(void)
+{
+    unsigned short sr;
+    __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) : : "memory");
+    return sr;
+}
+
+static void irq_restore(unsigned short sr)
+{
+    __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "memory");
+}
 
 static volatile unsigned char *field_base(unsigned scope, unsigned char *item, int index)
 {
@@ -487,10 +554,13 @@ unsigned core_store_get(unsigned field, void *item, int index)
 {
     unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i;
     volatile unsigned char *base = field_base(scope, item, index);
+    unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return 0;
+    sr = irq_mask();
     for (i = 0; i < w; i++, o++)
         v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
+    irq_restore(sr);
     return v;
 }
 
@@ -498,8 +568,10 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
 {
     unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, i;
     volatile unsigned char *base = field_base(scope, item, index), *p;
+    unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return;
+    sr = irq_mask();
     for (i = 0; i < w; i++, o++) {
         unsigned bit = 0x80 >> (o & 7);
         p = field_byte(scope, base, o >> 3);
@@ -508,4 +580,5 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
         else
             *p &= ~bit;
     }
+    irq_restore(sr);
 }

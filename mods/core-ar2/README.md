@@ -53,7 +53,8 @@ What differs from the Digitakt mk1 at these sites:
 ## Mod storage (0.2)
 
 Mods declare fields in their mod.json (`storage`) and read and write them
-with `core_store_get` and `core_store_set`; elekloader places the fields
+with `core_store_get` and `core_store_set`, which mask interrupts while they
+do (one byte can hold several mods' fields); elekloader places the fields
 from the build's lockfile. docs/ADAPTING.md ("Mod storage (core-ar2 0.2,
 Analog Rytm MKII)") is the mod writer's guide; `store.c`'s opening comment
 has the byte layout.
@@ -75,7 +76,7 @@ project image (4,352 bytes). The stock OS leaves those bytes out of a
 project file, so core hooks the file save and load and the save to a
 buffer in RAM, and carries the store across.
 
-The 16 sites, by `jmp` unless marked, each with its displaced instructions
+The 22 sites, by `jmp` unless marked, each with its displaced instructions
 in `store.s`:
 
 | site | 1.73 | 1.74 | why |
@@ -91,6 +92,8 @@ in `store.s`:
 | buffer save (`keep2`) | 0x40034d86 | the same | which image is being saved |
 | file save (`keep2`) | 0x400b0804 | 0x400b0870 | the same, for a project file |
 | file load (`keep2`) | 0x40035000 | the same | which image is being loaded |
+| SysEx song copy, write, swap (`keep2`) | 0x4018b6ec, 0x4018c09a, 0x4018c2bc | 0x4018b8b8, 0x4018c266, 0x4018c488 | copy whole stored songs but leave the target's store bytes |
+| SysEx pattern copy, write, swap (`keep2`) | 0x4018ba90, 0x4018c736, 0x4018c968 | 0x4018bc5c, 0x4018c902, 0x4018cb34 | clear the target pattern slot's fields, which can't follow the pattern |
 
 After CREATE NEW and after every project load (the project init and
 project load sites), core calls the mods' `ev_project` handlers with what
@@ -101,12 +104,20 @@ What it does not do:
 - **Global SysEx dumps** have no room for a layout ID, so a global slot
   received as SysEx drops its mod data, even from the same build; its
   stock settings load as usual.
-- **Freed bits** (a field a build dropped) are not cleared on save; no new
+- **Freed bits** (a field a build dropped) are not cleared on save; no other
   field is placed there until the scope's generation is bumped, which turns
-  the old data to zeros anyway.
+  the old data to zeros anyway, and the field takes them back, with its
+  values, if its mod returns.
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
 - **Projects saved before OS 1.70** are not supported.
+- **Patterns copied by the SysEx project commands** between stored patterns
+  (in one project or two), swapped, or written into one from a received
+  record don't take their pattern-track and pattern fields with them: those
+  are kept by pattern slot in the tagged store. Core clears the target
+  slot's fields instead, so the pattern loads with its mods' defaults, as a
+  pattern received as a SysEx dump does. A target project saved with another
+  mod layout keeps its store as it is.
 
 ## Checked so far
 
