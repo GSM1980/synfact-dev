@@ -307,7 +307,8 @@ The corrected full normal bank is
 FM TONE, Recorder, LFO3, POLY and System info combination. Keep the already
 installed core 0.12.19 SYX; only replace the bank. The folder's core images and
 SYX are identical copies of the preceding verified delivery, not a changed core.
-Physical confirmation of the alternating-note fix remains required.
+The user confirmed the alternating-note correction works on the Syntakt on
+2026-10-29. Physical CPU/timing measurements remain pending.
 
 ```powershell
 $env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
@@ -323,5 +324,6 @@ The 0.2.1 delivery passes the common regression (58 checks; 0 optional
 comparisons skipped), a separate profiler-order/timer test, fresh core lint,
 the 12 native keyboard/MIDI cases and the 432-topology instruction/copy test.
 The recorded block/guard/publication counts equal 0.2 exactly. AUDIO and the
-core SYX remain byte-identical. No physical alternating-note retest has yet
-been reported for this corrected bank.
+core SYX remain byte-identical. The user physically verified this corrected
+bank on 2026-10-29 and approved merging it into main. This functional
+confirmation does not supply the still-pending CPU/timing readings.
