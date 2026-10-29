@@ -17,6 +17,7 @@
     "generic current machine transport replaces legacy FM frame",
     "UI input uses existing KEY/ENC view contexts; no runtime patches",
     "POLY/M.LFO choices only, retired mono codes migrate to M.LFO, no Sound-setting overrides",
+    "compact publication with cached bounds, aligned longs and exact donor field/padding semantics",
     "copy complete native Sounds on voice entry and task-side edits; native per-track engines; shared effective output only for M.LFO"
   ]
 }

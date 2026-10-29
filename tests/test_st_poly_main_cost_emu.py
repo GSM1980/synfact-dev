@@ -28,6 +28,7 @@ class Main(Callback):
             if key in self.sym:self.u.mem_write(self.sym[key],value)
         self.u.mem_write(self.sym['poly_modes'],bytes([int(mode=='poly')])+bytes(7))
         self.write32(self.sym['poly_shared_mask'],6 if shared else 0)
+        if 'poly_publish_span' in self.sym:self.write32(self.sym['poly_publish_span'],0x0103 if shared else 0x0808)
         if 'poly_independent_mask' in self.sym:self.write32(self.sym['poly_independent_mask'],6 if mode=='poly' else 0)
         self.write32(0x43bd7430,0x44000000);self.write32(0x43bd743c,0x43000000)
         self.u.mem_write(0x43001550,bytes(2))
@@ -90,6 +91,7 @@ class Main(Callback):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--folder',required=True,type=Path);p.add_argument('--bank',required=True,type=Path)
+    p.add_argument('--previous-bank',type=Path)
     p.add_argument('--out',required=True,type=Path);a=p.parse_args();result={}
     for three in (False,True):
         for mode in ('off','shared','poly'):
@@ -100,6 +102,14 @@ def main():
         assert 'type_queries' not in result['three_fm_poly']['stages']
         assert 'late_publish' not in result['three_fm_poly']['stages']
         assert result['three_fm_shared']['total']>result['three_fm_poly']['total']
-    a.out.write_text(json.dumps(dict(cases=result,device_access=False,units='guest instructions, not CPU percent'),indent=2)+'\n')
+    comparison=None
+    if a.previous_bank:
+        previous=Main(a.folder,a.previous_bank,'shared',True).run()
+        current=result['three_fm_shared']
+        assert current['total']<previous['total'], 'M.LFO did not get cheaper'
+        for stage in ('modulation','lfo_dispatch_and_lfo3','extended_sender'):
+            assert current['stages'][stage]==previous['stages'][stage],stage
+        comparison=dict(previous=previous,current=current)
+    a.out.write_text(json.dumps(dict(cases=result,comparison=comparison,device_access=False,units='guest instructions, not CPU percent'),indent=2)+'\n')
     print(json.dumps(result,indent=2))
 if __name__=='__main__':main()

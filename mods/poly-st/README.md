@@ -134,7 +134,7 @@ LFO3 locks, retaining the reference count. `test_st_poly_main_cost_emu.py`
 includes actual native bus dispatch, LFO3, type queries and extended transport,
 and distinguishes one-FM-plus-two-stock from three-FM baselines. It deliberately
 excludes conversion, scheduling and cache timing; it cannot predict the MAIN
-percentage on hardware. The user reported MAIN 91–92% OFF, 96% M.LFO, 97% POLY
+percentage on hardware. The user reported MAIN 91â€“92% OFF, 96% M.LFO, 97% POLY
 with three voices and different original slave machines on the previous bank.
 That physical comparison must be repeated with this implementation.
 
@@ -143,6 +143,34 @@ independent FM tracks and with POLY active; M.LFO measures 12,335. A one-FM plus
 two-stock OFF baseline measures 11,625: creating two more FM voices costs extra
 extended transport even when the native modulation work is identical. The
 test rejects any additional steady block work in POLY against three FM tracks.
+
+## M.LFO publication (0.7)
+
+Hardware feedback on 0.6: three voices playing a pattern measure MAIN 91% in
+POLY and 94% in M.LFO. Version 0.7 keeps the same native engines, full effective
+parameter projection and installed SYX. It compacts the publication's opcode
+stream with post-increment accesses, uses longs only when both ends are aligned,
+and caches first/end shared track bounds during configuration. It still copies
+all fields including aux controls; padding and every unrelated track survive.
+
+For a master on track 1 and three voices, the linked copy goes from 305 to 254
+instructions and from 1,558 to 598 executed opcode bytes. The full measured
+M.LFO path goes from 12,335 to 12,285 instructions; its increment over POLY drops
+from 557 to 507. POLY remains exactly 11,778, identical to three independent FM
+tracks. These are emulator counts; opcode byte reduction does not predict cache
+misses or hardware CPU percentage. The 94% hardware comparison needs repeating.
+
+`test_st_poly_publication_emu.py --bank BANK --previous-bank BANK_0_6 --main MAIN
+--out JSON` compares the linked assembly with both the previous donor-compatible
+bank and an independent field/padding oracle: 517 topology/PLAY combinations,
+three random inputs each (1,551 cases). The old full-range entry remains for
+reference probes; production uses the bounded entry. Host tests verify cached
+bounds for every valid topology and all 256 mode masks. The MAIN cost test's
+`--previous-bank` option rejects a cost regression and changes to native engines
+or extended sender. The standard 120-case LFO differential remains required.
+
+Bank: `out/mlfo-publication-0.7-final/synfact-machines.smz4`.
+Branch: `perf/mlfo-publication`. This is an SMZ-only update.
 
 ## Source and build
 

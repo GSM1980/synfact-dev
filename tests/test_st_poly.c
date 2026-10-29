@@ -52,6 +52,9 @@ void native_publish_sound(const volatile B *s,T t)
  *(B *)(0x80002f50+t)=s[0xa2];}
 static T projections;
 void poly_fast_publish(B *w,const volatile B *o){projections++;poly_publish(w,o);}
+void poly_fast_publish_span(B *w,const volatile B *o,T span)
+{T t;for(t=1;t<8;t++)if(o[t]<t)assert(t>=(span>>8) && t<(span&255));
+ poly_fast_publish(w,o);}
 void poly_native_shared(void){}void poly_mod_shared(void){}
 void poly_native_all(void){}void poly_mod_all(void){}
 
@@ -235,6 +238,14 @@ static void topology(void)
         T n=code;
         for(i=0;i<8;i++){states[i]=(B)(n&3u);n>>=2;states[i]=states[i]?states[i]+2:0;}
         if(!poly_resolve(states,owners))continue;
+        /* Bounds are cached during configuration, never found in the IRQ. */
+        for(T modes=0;modes<256;modes++) {
+            T first=8,end=8;
+            for(T t=0;t<8;t++)poly_modes[t]=(B)((modes>>t)&1);
+            poly_play_maps(owners);
+            for(T t=1;t<8;t++)if(poly_post_map[t]<t){if(first==8)first=t;end=t+1;}
+            assert(poly_publish_span==((first<<8)|end));
+        }
         valids++;
         for(i=0;i<8;i++)if(states[i]>=3){for(j=1;j<states[i]-1u;j++)assert(owners[i+j]==i);i+=states[i]-2u;}
         for(i=8;i<12;i++)assert(owners[i]==i);

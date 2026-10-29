@@ -1,4 +1,4 @@
-[elekloader docs](README.md) › Parallel agents on this workstation
+[elekloader docs](README.md) â€º Parallel agents on this workstation
 
 # Parallel agents on this workstation
 
@@ -61,7 +61,7 @@ and per-voice pan) conflict when merged.
 | Branch | Folder | Task |
 |---|---|---|
 | `feat/poly-analog-st` | `C:\Desarrollo\synfact-dev` (stays) | POLY on analog tracks 9 and 10 with no added CPU |
-| `refactor/poly-copy-on-change` | `C:\Desarrollo\synfact-dev-pan` | copy-on-change POLY/M.LFO; native per-track engines |
+| `perf/mlfo-publication` | `C:\Desarrollo\synfact-dev-pan` | compact M.LFO publication; retain native per-track engines |
 
 The original feature branches start at `dbf6e12`. The pan work continues from
 `096efaa` (PLAY modes) and `1efc52c` (remove MONO/LEG/PRIO); the current performance

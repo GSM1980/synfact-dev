@@ -106,19 +106,20 @@ def verify(folder,synfact=None):
     for off in [0x24,0x32]:
         modulation[off+2:off+4]=struct.pack('>h',linked['poly_mod_helper_bridge']-(linked['poly_mod_shared']+off+2))
     assert bank_read('poly_mod_shared',len(modulation))==modulation
-    for name in ['poly_native_shared','poly_mod_shared','poly_native_lfo_guard','poly_fast_publish','si_tick','si_draw']:
+    for name in ['poly_native_shared','poly_mod_shared','poly_native_lfo_guard','poly_fast_publish','poly_fast_publish_span','si_tick','si_draw']:
         assert sy[name].shndx==section.idx and sy[name].value<report['main_bytes']
     for name in ['main3-1.o','main3-2.o']:
         obj=elf.Elf.load(work/name);assert audit(obj.section('.text').data)>0
     if synfact:
         p=json.loads((mod/'provenance.json').read_text())
         for name,digest in p['source_sha256'].items():assert hashlib.sha256((synfact/name).read_bytes()).hexdigest()==digest,name
-        # Git worktrees may use CRLF; assembled instructions must stay identical.
-        assert (mod/'publication.s').read_text()==(synfact/'src/features/lfo3/poly/publication.s').read_text()
+        # Publication is now authored compact code; the donor remains pinned
+        # above. test_st_poly_publication_emu compares the linked implementation
+        # with the donor bank and a separate field/padding oracle for all maps.
         guard=(synfact/'src/features/lfo3/poly/guards.s').read_text(encoding='utf-8')
         fragment=guard[guard.index('poly_mod_first_guard:'):guard.index('poly_native_dispatch:')]+guard[guard.index('poly_native_lfo_guard:'):]
         assert fragment.replace('poly_fast_owners','poly_lfo_map') in (mod/'imported/kernels.s').read_text(encoding='utf-8')
-    print('PASS: POLY source provenance; 6 existing/new shared subscriptions; 12 core-owned native bridges; exact replay ABI; host API 2; telemetry moved to SMZ; imported optimized guards/publication; -O3')
+    print('PASS: POLY source provenance; 6 existing/new shared subscriptions; 12 core-owned native bridges; exact replay ABI; host API 2; telemetry moved to SMZ; imported native guards; compact publication; -O3')
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('folder',type=Path);p.add_argument('--synfact',type=Path)

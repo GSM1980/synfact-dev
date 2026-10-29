@@ -63,6 +63,7 @@ class Run:
         mask=self.sym.get('poly_independent_mask',self.sym.get('poly_lfo_saved_mask'))
         if mask:self.write32(mask,14 if independent else 0)
         if 'poly_shared_mask' in self.sym:self.write32(self.sym['poly_shared_mask'],0 if independent else 14)
+        if 'poly_publish_span' in self.sym:self.write32(self.sym['poly_publish_span'],0x0808 if independent else 0x0104)
     def publish(self):
         self.write32(ARGS,WORK);self.call('poly_native',3,ARGS,ARGS+16)
     def block(self,data,trigs,which,third):
@@ -120,6 +121,7 @@ def mixed_probe(native,bank,stock):
     actual.u.mem_write(actual.sym['poly_modes'],bytes([1,0,0,0,0,0,0,0]))
     if 'poly_independent_mask' in actual.sym:actual.write32(actual.sym['poly_independent_mask'],2)
     actual.write32(actual.sym['poly_shared_mask'],8)
+    if 'poly_publish_span' in actual.sym:actual.write32(actual.sym['poly_publish_span'],0x0304)
     ref.u.mem_write(ref.sym['poly_post_map'],post);data,_=fixture(1,1,0)
     for block in range(80):
         trigs={0:1,11:2,29:4,43:8}.get(block,0)
