@@ -169,7 +169,7 @@ void poly_preview(u32 *event)
         for(i=0;i<4;i++)if(preview_notes[track][i]<128) {
             batch[count]=copy_event(event);
             if(!batch[count])break;
-            batch[count][2]=track+i;batch[count][18]=track+i;
+            poly_voice_target(batch[count],track,i);
             batch[count][6]=preview_notes[track][i];count++;
         }
         if(i==4 && count && poly_submit(batch,count,0,1)) {
@@ -354,7 +354,7 @@ static u32 poly_live_keys(u32 *event,u32 track,u32 voices,u32 press)
         live_notes[track][voice]=128;
     }
     /* Voice 0 is the master's own event, untouched; SLAVE fields as FM_FAST. */
-    if(voice){event[2]=track+voice;event[18]=track+voice;}
+    if(voice)poly_voice_target(event,track,voice);
     return 0;
 }
 
@@ -388,7 +388,7 @@ static u32 poly_live_chord(u32 *event,u32 track,u32 voices)
         if(note<0 || note>(track<8?127:84))continue;
         batch[count]=copy_event(event);
         if(!batch[count])break;
-        batch[count][2]=track+i;batch[count][18]=track+i;
+        poly_voice_target(batch[count],track,i);
         batch[count][6]=(u32)note;count++;
     }
     if(i<voices || !poly_submit(batch,count,0,1)) {

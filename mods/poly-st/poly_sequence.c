@@ -67,7 +67,7 @@ static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
     time+=prep_delay(sequence,master)-prep_delay(sequence,master+voice);
     if(time<0)return 0;
     for(i=0;i<20;i++)target[i]=source[i];
-    target[2]=master+voice;target[18]=master+voice;target[6]=(u32)note;
+    poly_voice_target(target,master,voice);target[6]=(u32)note;
     PREP_TIME(master+voice)=time;
     return 1;
 }

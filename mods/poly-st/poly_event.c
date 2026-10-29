@@ -20,6 +20,22 @@ static u32 *copy_event(const u32 *source)
     event[0]=0;
     event[19]=0;
     return event;
+}
+
+/* Keyboard/MIDI kind-2 events have Sound+28h == 0 (401196e2).
+ * The native consumer then loads the destination track's own kit Sound
+ * (400a464c), replacing an analog slave's machine. Bind the master's borrowed
+ * kit Sound on retarget, exactly as sequencer events with an explicit Sound.
+ * Keep pooled/locked Sounds and master/digital events unchanged. Event path
+ * only: no extra work in the per-block publisher or subscription guards. */
+static void poly_voice_target(volatile u32 *event,u32 master,u32 voice)
+{
+    if(voice && master>=8 && !event[10] && !event[11]) {
+        u32 kit=*(volatile u32 *)0x43bd743cu;
+        if(kit)event[10]=kit+0x2au+master*0x123u;
+    }
+    event[2]=master+voice;
+    event[18]=master+voice;
 }
 
 u32 poly_prepare(const u32 *source,const volatile u8 *sequence,u32 step,
@@ -48,8 +64,7 @@ u32 poly_prepare(const u32 *source,const volatile u8 *sequence,u32 step,
             while(count) {count--;native_event_free(out[count]);out[count]=(u32 *)0;}
             return 0;
         }
-        out[count][2]=track+i;
-        out[count][18]=track+i;
+        poly_voice_target(out[count],track,i);
         out[count][6]=(u32)note;
         count++;
     }

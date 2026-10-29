@@ -271,3 +271,57 @@ POLY instruction counter. The common regression's previous-build input is
 build and the main bank built before this task. The older LFO3-publication
 folder predates main's FM feedback changes and is not an AUDIO baseline for
 this task. No comparison check was relaxed.
+
+
+## 0.2.1: analog keyboard/MIDI slave Sound fallback
+
+Physical report after 0.2: track 9 with 2/3 voices alternates one different
+sounding note as voice allocation rotates. Track 10 with 2 voices and digital
+groups were reported unaffected. Confirmed native defect: the live constructor
+`40119684` clears event Sound+`28h` at `401196e2`. POLY previously retargeted
+only track/note identity. In the consumer, `400a4610` sees the null Sound and
+`400a464c..400a466a` chooses the destination track's saved kit Sound, invoking
+`400a31a2/400a30c4` and replacing its machine byte. The preceding commit-time
+publication cannot prevent a later note from undoing it. Digital effective TYPE
+resolution can mask that mismatch. The audible outcome depends on the saved
+slave Sounds; a group that sounds correct does not rule out the fallback.
+
+`poly_voice_target` now binds the master's borrowed kit Sound only for analog
+slave events with neither an explicit nor a pooled/locked Sound. It is shared
+by keyboard/MIDI, chord, preview/release and first-step preparation. It retains
+existing explicit Sound references and leaves master/digital events unchanged.
+This runs on events, with no added per-block work. The instruction counter
+reproduces the previous block/guard/publication counts exactly (432 topologies).
+
+The earlier host test's sink stopped before native Sound selection; therefore
+it verified routing while missing this failure. `tests/test_st_poly_keyboard_emu.py`
+now executes the real live constructor, compiled POLY immediate handler and
+native Sound selection/publication up to its smoothing tail, against stock MAIN
+and the loaded 0.12.19 resident core. All 12 keyboard/MIDI cases (9×2, 9×3,
+10×2) fail with the previous bank and select the master Sound with 0.2.1.
+This checks firmware data/control flow, not analog audio electronics. Host tests
+also cover chord/preview/sequencer/statics and retaining explicit/pooled Sounds.
+
+The corrected full normal bank is
+`out/poly-analog-keyboard-20261029/synfact-machines.smz4`, with the same SP,
+FM TONE, Recorder, LFO3, POLY and System info combination. Keep the already
+installed core 0.12.19 SYX; only replace the bank. The folder's core images and
+SYX are identical copies of the preceding verified delivery, not a changed core.
+Physical confirmation of the alternating-note fix remains required.
+
+```powershell
+$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
+& C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_poly_keyboard_emu.py `
+  --before out/core-st-0.12.19-poly-analog-ready/synfact-machines.smz4 `
+  --after out/poly-analog-keyboard-20261029/synfact-machines.smz4 `
+  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
+  --core out/poly-analog-keyboard-20261029/main.bin `
+  --out out/poly-analog-keyboard-20261029/keyboard.json
+```
+
+The 0.2.1 delivery passes the common regression (58 checks; 0 optional
+comparisons skipped), a separate profiler-order/timer test, fresh core lint,
+the 12 native keyboard/MIDI cases and the 432-topology instruction/copy test.
+The recorded block/guard/publication counts equal 0.2 exactly. AUDIO and the
+core SYX remain byte-identical. No physical alternating-note retest has yet
+been reported for this corrected bank.

@@ -416,6 +416,46 @@ static void analog(void)
     args[0]=0x80002f59u;assert(!poly_native(ST_NATIVE_TYPE,args,&result));
 }
 
+/* Distinct saved slave Sounds must survive, but never be chosen by a
+ * retargeted keyboard/MIDI/chord/preview/first-step note. */
+static void analog_event_sounds(void)
+{
+    T master,voices,k,pass,origin,note,kind,e[20],time,sound,explicit_sound=(T)KIT+0x1580;
+    for(master=8;master<=9;master++)for(voices=2;voices<=poly_max_voices(master);voices++) {
+        reset();sound=(T)KIT+0x2a+master*0x123;
+        for(k=8;k<=10;k++)KIT[0x2a+k*0x123+0xa2]=(B)(8+k-8);
+        assert(poly_record_write(master,1,voices));
+        for(origin=1;origin<=2;origin++)for(pass=0;pass<3;pass++)for(k=0;k<voices;k++) {
+            memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=master;e[3]=2;e[6]=60+k;
+            poly_test_origin=origin;native_immediate(e);
+            assert(queued==1 && queue[0][2]==master+k && queue[0][6]==60+k);
+            assert(queue[0][10]==(k?sound:0));drain();
+            e[1]=2;e[2]=master;e[18]=master;e[10]=0;native_immediate(e);
+            assert(queued==1 && queue[0][2]==master+k);drain();
+        }
+        for(kind=1;kind<=2;kind++) {
+            memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=master;e[3]=kind;e[6]=60;
+            *(T *)0x402d575cu=0;poly_test_origin=0;native_immediate(e);
+            assert(queued==voices);
+            for(k=0;k<voices;k++)assert(queue[k][10]==(k?sound:0));drain();
+        }
+        /* Native sequencer mock also emits a null Sound, to cover fallback. */
+        assert(poly_trig(master,SEQ,(T)KIT,0,e,&time) && poly_sequence_enqueue(e,time));
+        for(k=0;k<voices;k++)assert(queue[k][10]==(k?sound:0));drain();
+        assert(poly_trig(master,SEQ,(T)KIT,0,(T *)PREP_EVENT(master),&time));
+        for(k=1;k<voices;k++)assert(PREP_EVENT(master+k)[10]==sound);
+        /* Explicit/pool Sounds keep their native references; no forced kit fallback. */
+        for(note=0;note<3;note++) {
+            memset(e,0,sizeof e);e[10]=note==0?explicit_sound:0;e[11]=note==1?explicit_sound:0;
+            poly_voice_target(e,master,1);
+            assert(e[10]==(note==0?explicit_sound:note==1?0:sound));
+            assert(e[11]==(note==1?explicit_sound:0));
+        }
+        for(k=8;k<=10;k++)assert(KIT[0x2a+k*0x123+0xa2]==8+k-8);
+    }
+    memset(e,0,sizeof e);poly_voice_target(e,0,1);assert(!e[10] && !e[11]);
+}
+
 int main(void)
 {
     setbuf(stdout,0);
@@ -424,7 +464,7 @@ int main(void)
     assert(ram==(void *)0x40000000u && bus==(void *)0x80000000u);
     {struct st_machine_ui_api ui={6};struct st_smz_api api={3,&ui};
      ui.host=&services;assert(poly_initialize(&api));ui.version=7;assert(!poly_initialize(&api));}
-    topology();groups_and_notes();ui();recording_and_publication();inactive_native();native_interest_changes();analog();
+    topology();groups_and_notes();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();
     puts("PASS: 108 digital topologies plus analog 9x2/9x3/10x2; overlap/limits/legacy PQ/84-note/UI/machine tick/recording; 2/3/4 voices, live/chord/sequence paths, stealing/off, rollback, CRC persistence, MIDI suspension, page/controls/slave guards, native interest by group state");
     return 0;
 }
