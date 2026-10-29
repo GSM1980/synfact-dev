@@ -16,7 +16,10 @@ static u32 valid(const volatile u8 *p)
 {
     u32 crc=65535u,j,state,width,position=0;
     volatile u32 i,bits;
-    if(p[0]!=0x50u || p[1]!=0x51u)return 0;
+    if(p[0]!=0x50u || (p[1]!=0x51u && (p[1]&0xf8u)!=0x58u))return 0;
+    /* Bit 1 needs track 9 ON; track 10 must not overlap either 9 group. */
+    if(p[1]!=0x51u && (((p[1]&2u) && !(p[1]&4u)) ||
+                            ((p[1]&4u) && (p[1]&1u))))return 0;
     for(i=0;i<5;i++) {
         crc=xor_bits(crc,(u32)p[i]<<8);
         for(j=0;j<8;j++)crc=xor_bits(crc<<1,(crc&32768u)?0x1021u:0u)&65535u;
@@ -37,6 +40,36 @@ static u32 valid(const volatile u8 *p)
     return 1;
 }
 
+/* Same seven-byte record and CRC as Synfact, including saved analog groups. */
+static void record_states(const volatile u8 *record,u8 *states)
+{
+    u32 i,bits;
+    for(i=0;i<12;i++)states[i]=0;
+    if(!valid(record))return;
+    bits=((u32)record[2]<<16)|((u32)record[3]<<8)|record[4];
+    for(i=0;i<8;i++)states[i]=(u8)((bits>>(21u-3u*i))&7u);
+    if(record[1]!=0x51u) {
+        if(record[1]&4u)states[8]=(record[1]&2u)?4:3;
+        if(record[1]&1u)states[9]=3;
+    }
+}
+static void record_encode(const u8 *states,u8 *raw)
+{
+    u32 bits=0,crc=65535u,i,j;
+    for(i=0;i<8;i++)bits=(bits<<3)+states[i];
+    raw[0]=0x50;raw[1]=0x51;
+    if(states[8]>=3 || states[9]>=3) {
+        raw[1]=0x58;
+        if(states[8]>=3)raw[1]|=(states[8]==4)?6u:4u;
+        if(states[9]>=3)raw[1]|=1u;
+    }
+    raw[2]=(u8)(bits>>16);raw[3]=(u8)(bits>>8);raw[4]=(u8)bits;
+    for(i=0;i<5;i++) {
+        crc=xor_bits(crc,(u32)raw[i]<<8);
+        for(j=0;j<8;j++)crc=xor_bits(crc<<1,(crc&32768u)?0x1021u:0u)&65535u;
+    }
+    raw[5]=(u8)(crc>>8);raw[6]=(u8)crc;
+}
 u32 poly_header_load(u8 *destination,const u8 *source)
 {
     u32 result=stock_header_load(destination,source),i,ok;

@@ -216,3 +216,15 @@ with optional module lists. No second dispatch list or module-specific gate is
 added. Metadata adapters short-circuit native IDs/inactive machine banks while
 retaining their extended queries. The extended sender skips FPGA writes for
 stock-only blocks, preserving masks/checksums and immediate extension restart.
+
+
+## Core 0.12.19 / POLY analog ownership
+
+No site, ABI, native body or core callback contract changes. The optional POLY
+bank now uses all 12 entries of the existing OWNERS map; digital TYPE cursor
+bits remain limited to 0..7 and an analog-only group does not request TYPE.
+The bank publishes its owners, grouped byte, first/end publication bounds and
+slave bitmap in the same existing native IMMEDIATE exclusion. Analog machine
+changes use that operation from TICK, never an added audio-block check. See
+[POLY evidence and budgets](../poly-st/README.md) for the stock layout audit,
+linked checks and pending physical profiling.

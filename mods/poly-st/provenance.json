@@ -1,5 +1,5 @@
 {
-  "source": "Synfact authored digital POLY",
+  "source": "Synfact authored POLY with local analog and CPU-neutral adaptations",
   "source_sha256": {
     "src/current/poly_core.c": "4fcccd3e52d9cba344e5f754b554a553def85098e0600796164d305c15ba8d39",
     "src/current/poly_event.c": "51e44829b2f841ceb38bd98629ad694665849fdd41302ce291ff2e2c42025610",
@@ -15,6 +15,22 @@
   "changes": [
     "shared core events and bounded native transaction replays",
     "generic current machine transport replaces legacy FM frame",
-    "UI input uses existing KEY/ENC view contexts; no runtime patches"
-  ]
+    "UI input uses existing KEY/ENC view contexts; no runtime patches",
+    "12-track topology; compatible analog PQ flags; UI-only machine propagation under native immediate exclusion",
+    "local publication bound and grouped byte computed only in poly_commit",
+    "local guards use bound 12 and an IRQ-published slave bitmap; native kernel bodies remain stock",
+    "first/last slave bounds skip independent tracks outside the publication range; scaled word addressing saves four instructions per slave",
+    "native TRIG synchronizes once before grouped routing; analog-only groups never subscribe TYPE"
+  ],
+  "local_sha256": {
+    "main.c": "5022f2c70b782e46538ff8349f252e5cbb4740fbf644c39443feb925bd267887",
+    "poly_core.c": "25c4809a3cb90b3c0d19792403ac98a6bdf6c1a278e67b05cb72cde2e9ecf0e3",
+    "poly_event.c": "3c1759f60f415b2014a9f0fdeb1f67d52dc2e28883ce6f488a5a38c7e92829f3",
+    "poly_groups.c": "61c951c0ac61e979c97f7eeef6b896ab4095f30b39e118b8fb99b73bb741dc83",
+    "poly_pattern.c": "f47acb03d8b200707d70da13260fc836fe9256292073e10fe05364a9a63f6af3",
+    "poly_sequence.c": "b9cabfe0faaafbd4d77b147ff37f079e3a42e6b0a76587600de397a39e8ff65f",
+    "poly_publication.c": "216d7190b82829a79ce5f780a6a64e7975b4e954aa91cec1cfb8e8c4bb62fccc",
+    "poly_ui.c": "4939a1d31b1911b47134623a28cee21517cfb3826b2d4dfa4cf19c6427f21019",
+    "publication.s": "47edee8feb89991c82a7e3e9309dda9297c23f1b13fe0241bb9307f0c3dcc454"
+  }
 }

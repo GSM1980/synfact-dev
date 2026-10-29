@@ -9,18 +9,18 @@
 #include "poly_type.c"
 /* Generic core parameter transport owns all machine frames. */
 
-volatile struct config poly_seq_config DATA={1,0,{0,0,0,0,0,0,0,0},
+volatile struct config poly_seq_config DATA={1,0,{0,0,0,0,0,0,0,0,0,0,0,0},
     {0,1,2,3,4,5,6,7,8,9,10,11},{{0,0,0,0}}};
 #ifndef POLY_HOST_TEST
-__asm__(".globl poly_owner_map\n.set poly_owner_map,poly_seq_config+16");
+__asm__(".globl poly_owner_map\n.set poly_owner_map,poly_seq_config+20");
 #else
-__asm__(".globl _poly_owner_map\n.set _poly_owner_map,_poly_seq_config+16");
+__asm__(".globl _poly_owner_map\n.set _poly_owner_map,_poly_seq_config+20");
 #endif
 static u8 record_cache[7] DATA={0};
 static u32 cache_sequence DATA=0;
 static u32 cache_midi_mask DATA=0xffffffffu;
-static u32 preview_notes[8][4] DATA={{0}};
-static u32 preview_generation[8] DATA={0};
+static u32 preview_notes[12][4] DATA={{0}};
+static u32 preview_generation[12] DATA={0};
 static u32 preview_depth DATA=0;
 
 u32 poly_effective_owner(u32 track) {return track<12?poly_owner_map[track]:track;}
@@ -29,9 +29,9 @@ u32 poly_effective_owner(u32 track) {return track<12?poly_owner_map[track]:track
  * UI edits are committed under the same native interrupt exclusion. */
 static u32 poly_sync_locked(void)
 {
-    volatile u32 i,changed=0,bits,midi_bit;
+    volatile u32 i,changed=0,midi_bit;
     u32 kit=*(volatile u32 *)0x43bd743cu,midi_mask,j,width;
-    u8 states[8];
+    u8 states[12];
     const volatile u8 *sequence=*(const volatile u8 **)0x43bd7430u;
     const volatile u8 *record;
     if(!sequence)return 0;
@@ -41,14 +41,10 @@ static u32 poly_sync_locked(void)
     if(midi_mask!=cache_midi_mask)changed=1;
     for(i=0;i<7;i++)if(record[i]!=record_cache[i])changed=1;
     if(!changed)return 1;
-    for(i=0;i<8;i++)states[i]=0;
-    if(valid(record)) {
-        bits=record[2];bits=(bits<<8)+record[3];bits=(bits<<8)+record[4];
-        for(i=0;i<8;i++)states[i]=(u8)((bits>>(21u-3u*i))&7u);
-    }
+    record_states(record,states);
     /* A saved group can be loaded with a KIT whose member is now MIDI.
      * Suspend only that group; retain its recorded topology for audio mode. */
-    for(i=0;i<8;i++)if(states[i]>=3u) {
+    for(i=0;i<12;i++)if(states[i]>=3u) {
         width=states[i]-1u;
         for(j=i;j<i+width;j++) {
             midi_bit=(midi_mask>>j)&1u;
@@ -65,20 +61,16 @@ static u32 poly_sync_locked(void)
 
 static u32 poly_record_write_locked(u32 track,u32 enabled,u32 voices)
 {
-    u8 states[8],owners[12],raw[7];
-    volatile u32 i,bits=0,crc=65535u,j,middle,midi_bit;
+    u8 states[12],owners[12],raw[7];
+    volatile u32 i,midi_bit;
     volatile u8 *sequence=*(volatile u8 **)0x43bd7430u;
     u32 kit=*(volatile u32 *)0x43bd743cu;
-    if(!sequence || !kit || track>=8 || voices<2 || voices>4)return 0;
+    if(!sequence || !kit || voices<2 || voices>poly_max_voices(track))return 0;
     poly_sync_locked();
     if(poly_seq_config.owners[track]!=track)return 0;
     /* Keep suspended groups in the persistent record when another master is
      * edited. Runtime states can differ only because of the current MIDI KIT. */
-    if(valid(sequence+0x21381u)) {
-        bits=sequence[0x21383u];bits=(bits<<8)+sequence[0x21384u];bits=(bits<<8)+sequence[0x21385u];
-        for(i=0;i<8;i++)states[i]=(u8)((bits>>(21u-3u*i))&7u);
-    }else for(i=0;i<8;i++)states[i]=0;
-    bits=0;
+    record_states(sequence+0x21381u,states);
     states[track]=(u8)(voices-2u+(enabled?3u:0u));
     if(!poly_resolve(states,owners))return 0;
     /* Do not silently convert existing MIDI tracks into digital voices. */
@@ -86,17 +78,34 @@ static u32 poly_record_write_locked(u32 track,u32 enabled,u32 voices)
         midi_bit=(*(volatile u16 *)(kit+0x1550u)>>i)&1u;
         if(midi_bit)return 0;
     }
-    for(i=0;i<8;i++)bits=(bits<<3)+states[i];
-    raw[0]=0x50;raw[1]=0x51;
-    middle=bits>>8;
-    raw[2]=(u8)(middle>>8);raw[3]=(u8)middle;raw[4]=(u8)bits;
-    for(i=0;i<5;i++) {
-        crc=xor_bits(crc,(u32)raw[i]<<8);
-        for(j=0;j<8;j++)crc=xor_bits(crc<<1,(crc&32768u)?0x1021u:0u)&65535u;
-    }
-    raw[5]=(u8)(crc>>8);raw[6]=(u8)crc;
+    record_encode(states,raw);
     for(i=0;i<7;i++)sequence[0x21381u+i]=raw[i];
     return poly_sync_locked();
+}
+
+/* Only UI reads machine IDs: never scan them from the audio fast path. */
+static void poly_analog_publish_locked(void)
+{
+    u32 t,i,kit=*(volatile u32 *)0x43bd743cu;
+    if(!kit)return;
+    for(t=8;t<10;t++)if(poly_seq_config.states[t]>=3) {
+        u8 type=*(volatile u8 *)(0x80002f50u+t);
+        if(type==poly_analog_type[t-8])continue;
+        for(i=t+1;i<t+poly_seq_config.states[t]-1u;i++)
+            native_publish_sound((const volatile u8 *)(kit+0x2au+t*0x123u),i);
+        poly_analog_type[t-8]=type;
+    }
+}
+
+static void poly_analog_ui(void)
+{
+    u32 t;
+    if(!poly_analog_active)return;
+    for(t=8;t<10;t++)if(poly_seq_config.states[t]>=3 &&
+        *(volatile u8 *)(0x80002f50u+t)!=poly_analog_type[t-8]) {
+        u32 command[6]={0x504f4c59u,0x414e4c47u,0,0,0,0};
+        native_immediate(command);break;
+    }
 }
 
 /* The existing native immediate queue entry supplies its SR save/mask/restore
@@ -136,7 +145,7 @@ void poly_preview(u32 *event)
 {
     u32 track=event[2],step,count=0,i;
     u32 *batch[4];
-    if(track>=8 || event[3]!=1 || event[11]){native_immediate(event);return;}
+    if(track>=12 || event[3]!=1 || event[11]){native_immediate(event);return;}
     poly_sync();
     if(poly_seq_config.owners[track]<track) {
         if(!event[0])native_event_free(event);
@@ -219,7 +228,7 @@ static u32 poly_live_from_keys(void)
  * intervals, unused ones OFF (64). Existing step values and track defaults
  * are not used. */
 struct rec_chord {u32 sequence,age;u8 dirty,step,count,notes[4];};
-static struct rec_chord rec_chords[8] DATA={{0}};
+static struct rec_chord rec_chords[12] DATA={{0}};
 
 static u32 poly_rec_active(void)
 {
@@ -265,7 +274,7 @@ void poly_rec_ui(void)
     volatile u8 *model,*mirror;
     struct rec_chord *chord;
     u8 lanes[4];
-    for(t=0;t<8;t++) {
+    for(t=0;t<12;t++) {
         chord=&rec_chords[t];
         if(!chord->dirty)continue;
         if(chord->sequence!=poly_seq_config.sequence || ++chord->age>2000u){chord->dirty=0;continue;}
@@ -302,11 +311,11 @@ void poly_rec_ui(void)
  * priority re-send the newest held key: if that key still sounds on its voice
  * the repeat is absorbed, if it was stolen it takes a voice again. A release
  * of a stolen key is absorbed. */
-static u8 live_notes[8][4] DATA={{0}};
-static u32 live_age[8][4] DATA={{0}};
+static u8 live_notes[12][4] DATA={{0}};
+static u32 live_age[12][4] DATA={{0}};
 static u32 live_clock DATA=0;
-static u32 live_next[8] DATA={0};
-static u32 live_generation[8] DATA={0};
+static u32 live_next[12] DATA={0};
+static u32 live_generation[12] DATA={0};
 
 static u32 poly_live_keys(u32 *event,u32 track,u32 voices,u32 press)
 {
@@ -353,9 +362,9 @@ static u32 poly_live_keys(u32 *event,u32 track,u32 voices,u32 press)
  * note also plays NOT2..NOT4 (held step lane, else the defaults) on its SLAVE
  * voices. A note-off repeats each voice's offset, so the native handling of
  * a non-current note is mirrored, not reinterpreted. */
-static u32 chord_root[8] DATA={0};
-static u8 chord_notes[8][4] DATA={{0}};
-static u32 chord_generation[8] DATA={0};
+static u32 chord_root[12] DATA={0};
+static u8 chord_notes[12][4] DATA={{0}};
+static u32 chord_generation[12] DATA={0};
 
 static u32 poly_live_chord(u32 *event,u32 track,u32 voices)
 {
@@ -376,7 +385,7 @@ static u32 poly_live_chord(u32 *event,u32 track,u32 voices)
         if(chord_notes[track][i]>127)continue;
         note=(s32)chord_notes[track][i]+(s32)root-(s32)chord_root[track];
         if(event[1]==1)note=chord_notes[track][i];
-        if(note<0 || note>127)continue;
+        if(note<0 || note>(track<8?127:84))continue;
         batch[count]=copy_event(event);
         if(!batch[count])break;
         batch[count][2]=track+i;batch[count][18]=track+i;
@@ -423,9 +432,10 @@ u32 poly_preview_locked(u32 *event)
         if(event[1]==0x43464731u) {
             event[5]=poly_record_write_locked(event[2],event[3],event[4]);return 1;
         }
+        if(event[1]==0x414e4c47u) {poly_analog_publish_locked();return 1;}
         if(event[1]==0x53594e43u) {event[5]=poly_sync_locked();return 1;}
     }
-    if(preview_depth || track>=8)return 0;
+    if(preview_depth || track>=12)return 0;
     if(event[3]==2) {
         u32 handled;
         preview_depth=1;
@@ -449,7 +459,7 @@ u32 poly_sound_write_allowed(u32 track)
 {
     volatile u32 allowed=0;
     poly_sync();
-    if(track>=8)return 1;
+    if(track>=12)return 1;
     if(poly_seq_config.owners[track]==track)allowed=1;
     return allowed;
 }

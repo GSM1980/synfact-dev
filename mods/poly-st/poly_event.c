@@ -31,7 +31,8 @@ u32 poly_prepare(const u32 *source,const volatile u8 *sequence,u32 step,
     if(!source || !sequence)return 0;
     if(source[3]!=1 || source[11])return 0;
     track=source[2];root=source[6];
-    if(track>=8 || root>127 || step>=64 || voices<2 || voices>4 || track+voices>8)return 0;
+    if(track>=12 || root>127 || step>=64 || voices<2 || voices>4 ||
+       track+voices>(track<8?8u:11u) || (track>=8 && voices>(track==8?3u:track==9?2u:0u)))return 0;
     for(i=0;i<voices;i++) {
         if(i==0)note=(s32)root;
         else {
@@ -39,8 +40,9 @@ u32 poly_prepare(const u32 *source,const volatile u8 *sequence,u32 step,
             if(raw==255)raw=sequence[track*0x499u+0x3c5u+i];
             if(raw==64 || raw>127)continue;
             note=(s32)root+(s32)raw-64;
-            if(note<0 || note>127)continue;
+            if(note<0 || note>(track<8?127:84))continue;
         }
+        if(track>=8 && note>84)continue;
         out[count]=copy_event(source);
         if(!out[count]) {
             while(count) {count--;native_event_free(out[count]);out[count]=(u32 *)0;}
