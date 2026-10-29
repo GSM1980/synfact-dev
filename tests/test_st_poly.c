@@ -24,12 +24,6 @@ static T rec_step;
 static B rec_model[0x500];
 static B view[512],model[64],header[256];
 static char labels[512];
-static T sound_priority,sound_legato;
-static T kit_mock(T app){assert(app==0x1234);return (T)KIT;}
-static T sound_mock(T kit,T track){assert(kit==(T)KIT && track<8);return (T)(KIT+0x2000);}
-static T priority_mock(T sound){assert(sound==(T)(KIT+0x2000));return sound_priority;}
-static void priority_set(T sound,T p){assert(sound==(T)(KIT+0x2000) && p<3);sound_priority=p;}
-static void legato_set(T sound,T p){assert(sound==(T)(KIT+0x2000) && (p==2 || p==3));sound_legato=p;}
 
 T *native_event_alloc(void)
 {
@@ -114,9 +108,6 @@ static void *poly_test_function(T address)
     case 0x400f8a0c:return text_mock;case 0x400f7df2:case 0x400f7bd6:case 0x400f8104:return shape_mock;
     case 0x40070362:return toggle_mock;case 0x4003a1c2:return page_mock;case 0x400f8dac:return blit_mock;
     case 0x4008da6e:return rec_position;
-    case 0x40018464:return kit_mock;case 0x4000f04c:return sound_mock;
-    case 0x40024932:return priority_mock;case 0x40024962:return priority_set;
-    case 0x400248ae:return legato_set;
     default:fprintf(stderr,"unexpected native function %08x\n",address);abort();
     }
 }
@@ -133,9 +124,8 @@ static void reset(void)
     memset(prep_generation,0,sizeof prep_generation);memset(live_generation,0,sizeof live_generation);
     memset(chord_generation,0,sizeof chord_generation);memset(preview_generation,0,sizeof preview_generation);
     memset(rec_chords,0,sizeof rec_chords);
-    memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_lfo_saved_mask=poly_mono_mask=0;
+    memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_lfo_saved_mask=0;
     for(i=0;i<12;i++)poly_lfo_map[i]=poly_pre_map[i]=poly_post_map[i]=(B)i;
-    sound_priority=0;sound_legato=2;
     *(B **)0x43bd7430u=SEQ;*(B **)0x43bd743cu=KIT;
     *(T *)0x444de434u=0;*(T *)0x444de43cu=64;*(T *)0x402d575cu=0xffffffffu;
     *(T *)0x43bd7424u=0;*(T *)0x43bd73bcu=0;*(T *)0x444e13ecu=0;
@@ -155,9 +145,11 @@ static void play_codec(void)
     for(rank=0;rank<poly_counts[8];rank++) {
         raw[0]=0x50;raw[1]=0x52;raw[2]=(B)(rank>>16);raw[3]=(B)(rank>>8);raw[4]=(B)rank;
         crc=poly_crc(raw);raw[5]=(B)(crc>>8);raw[6]=(B)crc;
-        assert(poly_decode(raw,states,modes) && poly_resolve(states,owners));
+        assert(poly_decode_record(raw,states,modes) && poly_resolve(states,owners));
         assert(poly_rank(states,modes,0)==rank);
-        poly_encode(raw,states,modes);
+        assert(poly_decode(raw,decoded,plays));
+        for(i=0;i<8;i++)assert(decoded[i]==states[i] && plays[i]==(modes[i]==1?1:0));
+        memcpy(modes,plays,8);poly_encode(raw,states,modes);
         assert(poly_decode(raw,decoded,plays));
         assert(!memcmp(states,decoded,8) && !memcmp(modes,plays,8));
     }
@@ -168,7 +160,8 @@ static void play_codec(void)
 
 static void play_modes(void)
 {
-    B original_state[80],working[0x754+13*0x7c],saved[7];T i,mode,e[20],time,result,q=1;
+    B original_state[80],working[0x754+13*0x7c],saved[7],states[8],modes[8];
+    T i,mode,e[20],time,result,q=1,crc,rank,pub[1]={(T)working};
     reset();assert(poly_record_write(0,1,4));
     for(i=0;i<80;i++)((B *)0x444da77cu)[i]=original_state[i]=(B)(i+7);
     assert(poly_mode_write(0,1) && poly_modes[0]==1 && valid(SEQ+0x21381));
@@ -176,21 +169,24 @@ static void play_modes(void)
     assert(poly_native(ST_NATIVE_OWNERS,&q,&result) && result==(T)poly_lfo_map);
     memset((void *)0x444da77cu,0x66,80);
     memcpy(saved,SEQ+0x21381,7);cache_sequence=0;assert(poly_sync() && poly_modes[0]==1);
-    for(mode=2;mode<=3;mode++) {
-        assert(poly_mode_write(0,mode));
-        live(60,1,2);live(64,1,2);assert(queued==2 && queue[0][2]==0 && queue[1][2]==0);drain();
-        memset(e,0,sizeof e);e[0]=1;assert(poly_trig(0,SEQ,(T)KIT,0,e,&time)==e);
-        assert(poly_sequence_enqueue(e,time) && queued==1 && queue[0][2]==0);drain();
-        assert(!PREP_EVENT(1)[1] && !PREP_EVENT(2)[1] && !PREP_EVENT(3)[1]);
-        memset(working,0,sizeof working);poly_play_publish(working,poly_owner_map);
-        assert(*(T *)(working+0x7b4)==(mode==3?3u:2u));
-    }
-    assert(!memcmp((void *)0x444da77cu,original_state,80));
-    memcpy(SEQ+0x21381,saved,7);assert(poly_sync() && poly_modes[0]==1 && poly_lfo_map[1]==1);
     memset(working,0,sizeof working);working[0x1c+0x8e +0x20]=0x55;
-    poly_play_publish(working,poly_owner_map);assert(working[0x1c+0x8e +0x20]==0x55);
+    assert(!poly_native(ST_NATIVE_PUBLISH,pub,&result));assert(working[0x1c+0x8e +0x20]==0x55);
     assert(poly_mode_write(0,0) && SEQ[0x21382]==0x51 && poly_lfo_map[1]==0);
     assert(!memcmp((void *)0x444da77cu,original_state,80));
+    for(mode=2;mode<=3;mode++) {
+        assert(!poly_mode_write(0,mode)); /* no private command can select retired modes */
+        assert(poly_decode(saved,states,modes));modes[0]=(B)mode;
+        rank=poly_rank(states,modes,0);
+        SEQ[0x21381]=0x50;SEQ[0x21382]=0x52;SEQ[0x21383]=(B)(rank>>16);
+        SEQ[0x21384]=(B)(rank>>8);SEQ[0x21385]=(B)rank;
+        crc=poly_crc(SEQ+0x21381);SEQ[0x21386]=(B)(crc>>8);SEQ[0x21387]=(B)crc;
+        assert(poly_sync() && poly_modes[0]==0 && poly_seq_config.states[0]==5);
+        live(60,1,2);live(64,1,2);assert(queued==2 && queue[0][2]!=queue[1][2]);drain();
+        live(60,2,1);live(64,2,1);assert(queued==2);drain();
+        memset(e,0,sizeof e);e[0]=1;assert(poly_trig(0,SEQ,(T)KIT,0,e,&time)==e);
+        assert(poly_sequence_enqueue(e,time) && queued==4);drain();
+    }
+    assert(poly_mode_write(0,1) && poly_modes[0]==1);
     assert(!poly_mode_write(1,1) && !poly_mode_write(8,1) && !poly_mode_write(0,4));
 }
 
@@ -269,17 +265,18 @@ static void ui(void)
     evt[1]=1;assert(poly_ui_encoder(view,evt));assert(poly_seq_config.states[0]==4);
     evt[1]=4;assert(!poly_ui_encoder(view,evt));assert(poly_ui_control(view,4)==0x15);
     labels[0]=0;assert(poly_ui_draw(view,0));assert(strstr(labels,"POLY;") && strstr(labels,"VOICES;"));
-    evt[1]=2;assert(poly_ui_encoder(view,evt) && poly_modes[0]==2 && sound_legato==2);
-    evt[1]=3;assert(poly_ui_encoder(view,evt) && sound_priority==1);
-    evt[1]=2;assert(poly_ui_encoder(view,evt) && poly_modes[0]==3 && sound_legato==3);
-    evt[1]=3;assert(poly_ui_encoder(view,evt) && sound_priority==2);
+    *(T *)(KIT+0x2a+0x10a)=0x12345678;*(T *)(KIT+0x2a+0x10e)=0x87654321;
+    evt[1]=2;evt[2]=(T)-1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==1);
+    assert(poly_ui_encoder(view,evt) && poly_modes[0]==1); /* left bound */
+    labels[0]=0;assert(poly_ui_draw(view,0));
+    assert(strstr(labels,"PLAY;") && strstr(labels,"POLY;") && !strstr(labels,"PRIO;") && !strstr(labels,"MONO;") && !strstr(labels,"LEG;"));
+    evt[2]=1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==0);
+    assert(poly_ui_encoder(view,evt) && poly_modes[0]==0); /* right bound */
     assert(valid(header+0x21) && !memcmp(header+0x21,SEQ+0x21381,7));
-    evt[1]=2;evt[2]=(T)-1;
-    assert(poly_ui_encoder(view,evt) && poly_modes[0]==2 && sound_legato==2);
-    assert(poly_ui_encoder(view,evt) && poly_modes[0]==0);
-    assert(poly_ui_encoder(view,evt) && poly_modes[0]==1);
-    evt[1]=3;assert(poly_ui_encoder(view,evt) && sound_priority==2); /* inactive */
-    evt[1]=2;evt[2]=1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==0);
+    evt[1]=3;assert(poly_ui_encoder(view,evt) && poly_modes[0]==0); /* D is empty */
+    evt[2]=(T)-1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==0);
+    assert(*(T *)(KIT+0x2a+0x10a)==0x12345678 && *(T *)(KIT+0x2a+0x10e)==0x87654321);
+    evt[2]=1;
     tracked=1;labels[0]=0;assert(poly_ui_draw(view,0));assert(strstr(labels,"TRACK IN;") && strstr(labels,"SLAVE MODE;"));
     evt[0]=12;assert(poly_ui_block_key(view,evt));evt[0]=16;assert(!poly_ui_block_key(view,evt));
     evt[1]=4;assert(poly_ui_encoder(view,evt));

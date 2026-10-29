@@ -145,7 +145,7 @@ static u32 poly_ui_settings_write(u8 *view,u32 track,u32 enabled,u32 voices,u32 
     model=(u8 *)(pattern+0x2cu);
     header=((u8 *(*)(void *))(*(u32 **)model)[0x28/4])(model);
     if(!header)return 0;
-    if(!(mode<4?poly_mode_write(track,mode):poly_record_write(track,enabled,voices)))return 0;
+    if(!(mode<2?poly_mode_write(track,mode):poly_record_write(track,enabled,voices)))return 0;
     sequence=*(const volatile u8 **)0x43bd7430u;
     for(i=0;i<7;i++)header[0x21+i]=sequence[0x21381+i];
     ((void (*)(void *,u32))(*(u32 **)model)[0x10/4])(model,0);
@@ -154,23 +154,6 @@ static u32 poly_ui_settings_write(u8 *view,u32 track,u32 enabled,u32 voices,u32 
 
 u32 poly_ui_record_write(u8 *view,u32 track,u32 enabled,u32 voices)
 {return poly_ui_settings_write(view,track,enabled,voices,4);}
-
-/* The Sound menu already owns LEGATO and NOTE PRIORITY. Use its model
- * setters so publication, KIT save/reload and undo follow the native path. */
-static u32 poly_ui_sound(u8 *view)
-{
-    u32 app=*(u32 *)(view+0x68),kit;
-    if(!app)return 0;
-    kit=POLY_CALL(0x40018464u,u32 (*)(u32))(app);
-    return kit?POLY_CALL(0x4000f04cu,u32 (*)(u32,u32))(kit,poly_ui_track(view)):0;
-}
-
-static u32 poly_ui_priority(u8 *view)
-{
-    u32 sound=poly_ui_sound(view),p;
-    if(!sound)return 0;
-    p=POLY_CALL(0x40024932u,u32 (*)(u32))(sound);return p<3?p:0;
-}
 
 u32 poly_ui_encoder(u8 *view,void *event)
 {
@@ -186,7 +169,7 @@ u32 poly_ui_encoder(u8 *view,void *event)
     /* Hidden controls are inert; NOTE and NOT2..NOT4 use the native editor. */
     if(position && !poly_ui_on(view))return 1;
     if(position>=4)return 0;
-    if(position==3 && !poly_mono(poly_ui_track(view)))return 1;
+    if(position==3)return 1;
     policy=POLY_CALL(0x4007b9b2u,u32 (*)(u32))(0x13);
     for(i=0;i<7;i++)increment[i]=((u32 *)*(u32 *)(policy+16))[i];
     delta=POLY_CALL(0x400f66a2u,s32 (*)(void *,u32,u32))(event,*(u32 *)(policy+4),*(u32 *)(policy+8));
@@ -197,18 +180,8 @@ u32 poly_ui_encoder(u8 *view,void *event)
     enabled=0;voices=state+2;
     if(state>=3){enabled=1;voices=state-1;}
     if(position==2) {
-        u32 mode=poly_modes[track],sound;
-        if(mode<2)mode=1-mode; /* UI order: POLY, M.LFO, MONO, LEG */
-        if(delta>0){if(mode<3)mode++;}else if(mode)mode--;
-        if(mode<2)mode=1-mode;
-        if(poly_ui_settings_write(view,track,enabled,voices,mode)) {
-            sound=poly_ui_sound(view);
-            if(sound)POLY_CALL(0x400248aeu,void (*)(u32,u32))(sound,mode==3?3:2);
-        }
-    }else if(position==3) {
-        u32 p=poly_ui_priority(view),sound=poly_ui_sound(view);
-        if(delta>0){if(p<2)p++;}else if(p)p--;
-        if(sound)POLY_CALL(0x40024962u,void (*)(u32,u32))(sound,p);
+        /* UI order: POLY, M.LFO; one bounded selection per native increment. */
+        poly_ui_settings_write(view,track,enabled,voices,delta>0?0:1);
     }else {
     if(position==0) {if(delta>0)enabled=1;else enabled=0;}
     else if(delta>0){if(voices<4)voices++;}
@@ -329,13 +302,11 @@ u32 poly_ui_draw(u8 *view,void *ctx)
         UI_RECT(ctx,50,34,68,50,1);
         number[0]=(char)('0'+voices);number[1]=0;
         UI_TEXT(ctx,(void *)0x443da210u,59,39,2,"%s",number);
-        /* C: PLAY; D: native note priority, meaningful in mono modes. */
+        /* C: PLAY; D: native empty-position bitmap, no control. */
         UI_TEXT(ctx,(void *)0x443da230u,85,27,2,"%s","PLAY");
         UI_TEXT(ctx,(void *)0x443da230u,85,39,2,"%s",
-            poly_modes[track]==0?"M.LFO":poly_modes[track]==1?"POLY":poly_modes[track]==2?"MONO":"LEG");
-        UI_TEXT(ctx,(void *)0x443da230u,111,27,2,"%s","PRIO");
-        value=poly_mono(track)?poly_ui_priority(view):3;
-        UI_TEXT(ctx,(void *)0x443da230u,111,39,2,"%s",value==0?"LAST":value==1?"LOW":value==2?"HIGH":"-");
+            poly_modes[track]?"POLY":"M.LFO");
+        POLY_CALL(0x400f8dacu,void (*)(void *,void *,s32,s32,u32))(ctx,(void *)0x444df0b4u,103,34,0);
         /* E: NOTE; F..H: NOT2..NOT4 labels, then the keyboard over F..H. */
         for(i=0;i<4;i++) {
             id=i?0x1du+i:0x15u;locked=0;

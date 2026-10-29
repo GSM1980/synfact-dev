@@ -78,10 +78,7 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
         *result=poly_sequence_enqueue((u32 *)a[0],a[1]);return 1;
     case ST_NATIVE_IMMEDIATE:*result=poly_preview_locked((u32 *)a[0]);return 1;
     case ST_NATIVE_PUBLISH:
-        if(poly_grouped()) {
-            if(poly_lfo_saved_mask || poly_mono_mask)poly_play_publish((u8 *)a[0],poly_owner_map);
-            else poly_fast_publish((u8 *)a[0],poly_owner_map);
-        }return 0;
+        if(poly_grouped())poly_fast_publish((u8 *)a[0],poly_post_map);return 0;
     case ST_NATIVE_TYPE:
         v=a[0]-0x80002f50u;if(v>=8 || poly_owner_map[v]>=v)return 0;
         *result=poly_effective_type((const volatile u8 *)a[0]);return 1;

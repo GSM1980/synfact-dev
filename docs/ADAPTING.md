@@ -2039,5 +2039,6 @@ Older hosts keep their existing behavior; test the host version before reading
 the new pointer. See [the native contract](../elekloader/sdk/include/syntakt/native.h)
 and [POLY's implementation/tests](../mods/poly-st/README.md). No new native hook
 or serialized SMZ feature bit is needed. Pattern-owned PLAY uses the existing
-PQ/PR record described in [FORMAT](FORMAT.md); native Sound settings still own
-LEGATO and NOTE PRIORITY.
+PQ/PR record described in [FORMAT](FORMAT.md). POLY 0.3 only exposes POLY/M.LFO;
+its retired mono codes decode as M.LFO. Native LEGATO and NOTE PRIORITY remain
+stock Sound settings and are never written by this module.

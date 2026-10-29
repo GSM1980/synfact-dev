@@ -5,7 +5,6 @@
 #include "poly_groups.c"
 #include "poly_pattern.c"
 static u8 poly_modes[8],poly_next_modes[8];
-static u32 poly_mono(u32);
 static void poly_play_maps(const volatile u8 *);
 #include "poly_sequence.c"
 #include "poly_publication.c"
@@ -75,7 +74,7 @@ static u32 poly_record_settings_locked(u32 track,u32 enabled,u32 voices,u32 mode
     /* Keep suspended groups in the persistent record when another master is
      * edited. Runtime states can differ only because of the current MIDI KIT. */
     poly_decode(sequence+0x21381u,states,modes);
-    if(mode<4)modes[track]=(u8)mode;
+    if(mode<2)modes[track]=(u8)mode;
     states[track]=(u8)(voices-2u+(enabled?3u:0u));
     if(!poly_resolve(states,owners))return 0;
     /* Do not silently convert existing MIDI tracks into digital voices. */
@@ -143,7 +142,7 @@ void poly_preview(u32 *event)
     /* CHORUS_CODEC: native long (401055be/cmp.l), -1 = none; the .. byte read
      * took its high byte, i.e. step 0 for any held step. */
     step=*(volatile u32 *)0x402d575cu;
-    if(event[1]==1 && poly_seq_config.states[track]>=3 && !poly_mono(track) && step<64) {
+    if(event[1]==1 && poly_seq_config.states[track]>=3 && step<64) {
         count=poly_prepare(event,(const volatile u8 *)poly_seq_config.sequence,step,
                            poly_seq_config.states[track]-1u,batch);
         if(count && poly_submit(batch,count,0,1)) {
@@ -266,7 +265,6 @@ void poly_rec_ui(void)
     for(t=0;t<8;t++) {
         chord=&rec_chords[t];
         if(!chord->dirty)continue;
-        if(poly_mono(t)){chord->dirty=0;continue;}
         if(chord->sequence!=poly_seq_config.sequence || ++chord->age>2000u){chord->dirty=0;continue;}
         app=*(volatile u32 *)0x444e13f4u;
         if(!app)continue;
@@ -405,7 +403,6 @@ static u32 poly_live_locked(u32 *event)
         return 1;
     }
     if(poly_seq_config.states[track]<3 || note>127)return 0;
-    if(poly_mono(track))return 0; /* stock held-note stack / priority / legato */
     voices=poly_seq_config.states[track]-1u;
     if(event[1]==2 && live_generation[track]==poly_seq_config.generation)
         for(i=0;i<voices;i++)if(live_notes[track][i]==note)return poly_live_keys(event,track,voices,0);
@@ -424,7 +421,7 @@ u32 poly_preview_locked(u32 *event)
             event[5]=poly_record_write_locked(event[2],event[3],event[4]);return 1;
         }
         if(event[1]==0x43464732u) {
-            if(event[2]<8 && event[3]<4 && poly_seq_config.states[event[2]]>=3)
+            if(event[2]<8 && event[3]<2 && poly_seq_config.states[event[2]]>=3)
                 event[5]=poly_record_settings_locked(event[2],1,poly_seq_config.states[event[2]]-1,event[3]);
             return 1;
         }

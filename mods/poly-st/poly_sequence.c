@@ -61,7 +61,6 @@ static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
     volatile u32 i;
     s32 note;
     target[1]=0;
-    if(poly_mono(master))return 0;
     if(!source[1] || source[2]!=master)return 0;
     note=poly_chord_note(sequence,master,prep_step[master],voice,source[6]);
     if(note<0)return 0;
@@ -196,7 +195,6 @@ u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 
     if(poly_seq_config.sequence!=(u32)seq)return result;
     if(generation!=poly_seq_config.generation)return result;
     if(poly_seq_config.states[track]<3)return result;
-    if(poly_mono(track))return result;
     poly_seq_config.pending[track].sequence=(u32)seq;
     poly_seq_config.pending[track].step=step;
     poly_seq_config.pending[track].generation=generation;

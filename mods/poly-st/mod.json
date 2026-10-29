@@ -1,5 +1,5 @@
 {
-  "id": "poly-st", "version": "0.2", "title": "Digital POLY",
+  "id": "poly-st", "version": "0.3", "title": "Digital POLY",
   "device": "syntakt", "os": "1.41",
   "sources": ["main.c", "native.s", "publication.s"],
   "smz_module": {"descriptor": "poly_module"}

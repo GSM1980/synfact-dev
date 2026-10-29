@@ -16,7 +16,7 @@
     "shared core events and bounded native transaction replays",
     "generic current machine transport replaces legacy FM frame",
     "UI input uses existing KEY/ENC view contexts; no runtime patches",
-    "PLAY modes, PRIO through native Sound setters, backward-compatible PQ/PR codec",
+    "POLY/M.LFO choices only, retired mono codes migrate to M.LFO, no Sound-setting overrides",
     "independent LFO guards query LFO owners; early Sound projection, saved slave state lifecycle"
   ]
 }

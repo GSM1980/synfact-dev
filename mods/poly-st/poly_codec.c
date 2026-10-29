@@ -1,5 +1,5 @@
-/* PR: rank the legal group tree, including OFF voice preferences and four
- * PLAY modes per enabled group, inside the existing 24-bit PQ payload.
+/* PR: retain the experimental four-code rank geometry, including OFF voice
+ * preferences, inside the existing 24-bit PQ payload. Only codes 0/1 remain active.
  * No adjacent native header byte is used. PQ still decodes as shared LFO. */
 static const u32 poly_counts[9]={1,3,21,135,873,5319,33561,210519,1320057};
 static const u32 poly_pow3[4]={1,3,9,27};
@@ -14,7 +14,7 @@ static u32 poly_crc(const volatile u8 *p)
     return crc;
 }
 
-static u32 poly_decode(const volatile u8 *p,u8 *states,u8 *modes)
+static u32 poly_decode_record(const volatile u8 *p,u8 *states,u8 *modes)
 {
     u32 i,rank,n,w,block,code,j;
     for(i=0;i<8;i++){states[i]=0;modes[i]=0;}
@@ -47,6 +47,15 @@ static u32 poly_decode(const volatile u8 *p,u8 *states,u8 *modes)
         i+=w;
     }
     return rank==0;
+}
+
+/* Keep the experimental PR geometry readable. Retired mono/legato values
+ * migrate to M.LFO, retaining the group and every OFF voice preference. */
+static u32 poly_decode(const volatile u8 *p,u8 *states,u8 *modes)
+{
+    u32 ok=poly_decode_record(p,states,modes),i;
+    for(i=0;i<8;i++)if(modes[i]>1)modes[i]=0;
+    return ok;
 }
 
 static u32 poly_rank(const u8 *states,const u8 *modes,u32 i)

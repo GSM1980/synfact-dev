@@ -15,25 +15,22 @@ limited to the TRIG ParameterView.
 ## Operation
 
 On a digital track, open the third TRIG page. It preserves Synfact's layout:
-**A: POLY, B: VOICES, C: PLAY, D: PRIO, E: NOTE, F/G/H: NOT2/NOT3/NOT4**, with its keyboard graphic.
+**A: POLY, B: VOICES, C: PLAY, D: empty, E: NOTE, F/G/H: NOT2/NOT3/NOT4**, with its keyboard graphic.
 OFF hides/disables the remaining controls. VOICES selects 2, 3 or 4 contiguous
 digital tracks. The first track is the master; remaining tracks are slaves.
 Groups cannot overlap or cross track 8. Analog tracks have no POLY page.
 
-PLAY follows Digitone OS 1.41 manual 9.5.6, within the allocated Syntakt group:
+PLAY selects LFO behavior within the allocated Syntakt group:
 
 | PLAY | Behavior |
 |---|---|
 | POLY | One held key per voice; LFO1/2 and optional LFO3 have independent voice state. |
 | M.LFO | Polyphonic notes with the master's shared modulation, preserving earlier banks. |
-| MONO | Only the master plays; each note retriggers native envelopes. |
-| LEG | Mono legato using the native Syntakt LEGATO setting; overlapping notes retain envelopes. |
 
-PRIO selects LAST / LOW / HIGH in both mono modes through the native Sound
-model setter. It is inactive in poly modes. Its storage belongs to the Sound/KIT,
-as does the native LEGATO setting updated by PLAY edits. PLAY belongs to the
-pattern's group record. Reserved slaves remain reserved in mono modes; VOICES
-still determines the group size. Chord lanes are ignored in mono modes.
+Both choices remain polyphonic. PLAY belongs to the pattern's group record.
+POLY 0.3 removes the experimental MONO/LEG and PRIO controls and all their
+runtime overrides. D has no control. PLAY edits never alter the native Sound's
+LEGATO or NOTE PRIORITY settings; those remain in the stock Sound menu.
 LFO FREE/TRG/HLD/ONE/HLF keep their native behavior. Independent FREE oscillators
 can have equal phase; POLY does not impose random pan or an artificial spread.
 Use staggered note-ons and TRG to hear independent PAN trajectories.
@@ -52,7 +49,10 @@ suspended while its saved topology remains available for audio mode.
 
 Topology uses the seven-byte PQ/PR record in PatternSettings `21h..27h`,
 with CRC16 and validation. PQ reads as M.LFO. PR ranks the valid groups,
-OFF voice-count preferences and four PLAY choices into the same 24-bit payload;
+OFF voice-count preferences and PLAY choices into the same 24-bit payload;
+the experimental four-choice rank geometry remains readable, with retired
+MONO/LEG codes mapped to M.LFO. New edits only write POLY/M.LFO. There is no
+header migration or topology loss when loading an experimental mono pattern;
 no native header byte outside this record is used. Disabling a group resets its
 PLAY preference to M.LFO when re-enabled. Older banks reject PR and disable POLY
 for that pattern. Invalid/missing/retired analog records load without
@@ -98,12 +98,17 @@ Physical CPU cost and timing remain to be measured.
 `tests/test_st_poly_play_emu.py --bank BANK --stock STOCK --core MAIN --out JSON`
 runs the compiled modulation, native LFO1/2, LFO3 renderer and publication on
 stock/core MAIN against stock independent tracks: 120 cases, 9,600 blocks and
-late-copy negative controls. It also executes stock Sound setters and held-note
-priority for MONO/LEG, with explicit model/queue/allocation doubles. This checks
-parameter and event outputs; it does not certify final audio, envelope continuity
-on hardware or device timing. The JSON's sample pipeline instruction counts
+late-copy negative controls. Host tests verify migration of retired modes,
+polyphonic live/chord/sequencer paths and the absence of Sound-setting writes.
+This checks parameter and event outputs; it does not certify final audio or
+device timing. The JSON's sample pipeline instruction counts
 exclude the owner queries, full scheduler, cache timing and LFO3 rendering; they
 are not CPU percentages.
+
+POLY 0.3 is an SMZ-only update: the core/SYX remains byte-identical to the
+0.12.19 build supplied with POLY 0.2. Independent LFO ownership still requires
+host API 8, introduced by that core; removing the mono controls does not require
+another firmware installation if that core is already installed.
 
 ## Source and build
 

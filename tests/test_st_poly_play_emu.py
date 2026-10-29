@@ -81,39 +81,6 @@ def fixture(lfo,mode,wave):
         if t<4 and lfo<3:struct.pack_into('>8H',data,at+2+16*(lfo-1),*p)
     return bytes(data),struct.pack('>8H',*p)
 
-def mono_probe(native,bank):
-    """Real Sound setters + held-note stack; model/queue/allocation boundaries only."""
-    cases=0
-    for legato in (2,3):
-        for priority in range(3):
-            r=Run(native,bank);u=r.u;u.mem_map(0x45500000,0x100000)
-            obj,vt,kit,event=ARGS+0x3000,ARGS+0x3100,ARGS+0x4000,ARGS+0x6000
-            sound=kit+0x2a;collected=[];serial=[0]
-            r.write32(obj,vt);r.write32(vt+0x28,RETURN+0x100);r.write32(vt+0x10,RETURN+0x110)
-            r.write32(0x800030b8,kit);u.mem_write(0x4553f6e0+0x2e14,b'\xff')
-            def boundary(uc,at,size,user):
-                if at not in (RETURN+0x100,RETURN+0x110,0x4011a4c2,0x4011a722):return
-                sp=uc.reg_read(UC_M68K_REG_A7);ret,arg=struct.unpack('>2I',bytes(uc.mem_read(sp,8)));v=0
-                if at==RETURN+0x100:v=sound
-                elif at==0x4011a4c2:
-                    v=ARGS+0x7000+80*serial[0];serial[0]+=1
-                elif at==0x4011a722:
-                    words=struct.unpack('>20I',bytes(uc.mem_read(arg,80)))
-                    collected.append((words[1],words[6]))
-                uc.reg_write(UC_M68K_REG_D0,v);uc.reg_write(UC_M68K_REG_A7,sp+4);uc.reg_write(UC_M68K_REG_PC,ret)
-            hook=u.hook_add(UC_HOOK_CODE,boundary)
-            r.call(0x400248ae,obj,legato);r.call(0x40024962,obj,priority)
-            assert r.call(0x4002487e,obj)==legato and r.call(0x40024932,obj)==priority
-            for note,on in ((60,1),(64,1),(64,2),(60,2)):
-                u.mem_write(event,struct.pack('>15I',0,note,100,on,*([0]*11)))
-                r.call(0x40119684,event)
-            # Stock forwards the non-current key's release too; the voice's
-            # native note-off matcher ignores it while the lower key sounds.
-            expected=[(1,60),(2,64),(2,60)] if priority==1 else [(1,60),(1,64),(2,64),(1,60),(2,60)]
-            assert collected==expected,(legato,priority,collected)
-            u.hook_del(hook);cases+=1
-    return cases
-
 def costs(native,bank):
     counts={};data,_=fixture(1,1,0)
     for independent in (False,True):
@@ -154,10 +121,9 @@ def main():
     p.add_argument('--core',type=Path);p.add_argument('--out',required=True,type=Path);a=p.parse_args()
     stock=formats.load(a.stock)[0].section(3);images=[('stock',stock)]
     if a.core:images.append(('core',a.core.read_bytes()))
-    results=[];negative=0;mono=0;controllers=0;instructions={}
+    results=[];negative=0;controllers=0;instructions={}
     for image,native in images:
-        print('Checking',image,'mono/controllers',flush=True)
-        mono+=mono_probe(native,a.bank)
+        print('Checking',image,'controllers',flush=True)
         controllers+=controller_probe(native,a.bank,stock)
         instructions[image]=costs(native,a.bank)
         for lfo in (1,2,3):
@@ -184,7 +150,7 @@ def main():
                         assert bytes(actual.u.mem_read(WORK,SIZE))!=expected;negative+=1
                     results.append(dict(image=image,lfo=lfo,mode=mode,wave=wave,different_pan=different))
     assert negative>0
-    a.out.write_text(json.dumps(dict(ok=True,cases=len(results),blocks=len(results)*80,negative_controls=negative,mono_cases=mono,
+    a.out.write_text(json.dumps(dict(ok=True,cases=len(results),blocks=len(results)*80,negative_controls=negative,
                                    pipeline_instructions=instructions,
                                    controller_blocks=controllers,
                                    fixtures=results,device_access=False),indent=2)+'\n')

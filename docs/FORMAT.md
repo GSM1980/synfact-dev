@@ -358,7 +358,8 @@ the legal topology with four modes per active group; its domain is
 `F(n)=3*F(n-1)+4*sum(3^(w-1)*F(n-w))` for legal group widths `w=2..4`.
 OFF preferences form the first ranges, followed by group widths in ascending
 order; each group orders mode, base-3 slave preferences, then suffix rank.
-Mode codes are `0=M.LFO, 1=POLY, 2=MONO, 3=LEG`. Topology states `0..2`
+Mode codes are `0=M.LFO, 1=POLY`; retired experimental codes `2=MONO, 3=LEG`
+decode as M.LFO from POLY 0.3. New edits only write codes 0/1. Topology states `0..2`
 are OFF with VOICES `2..4`, and `3..5` are ON with VOICES `2..4`.
 See [the bounded codec](../mods/poly-st/poly_codec.c) and its exhaustive test.
 Unknown tags, out-of-domain ranks and invalid CRCs disable POLY. Older POLY
