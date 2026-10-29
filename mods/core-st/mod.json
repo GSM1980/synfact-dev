@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "0.12.19",
+  "version": "0.13.0",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -684,11 +684,6 @@
       "order": 55
     },
     {
-      "event": "ev_key",
-      "fn": "core_pool_key",
-      "order": 20
-    },
-    {
       "event": "ev_main_mix",
       "fn": "st_pool_preview_mix",
       "order": 50
@@ -697,11 +692,6 @@
       "event": "ev_tick",
       "fn": "core_machine_tick",
       "order": 50
-    },
-    {
-      "event": "ev_tick",
-      "fn": "core_pool_tick",
-      "order": 40
     }
   ],
   "resources": {

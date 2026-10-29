@@ -376,3 +376,14 @@ stores `4 * PR_rank + analog_code`, where code 0 = no analog group, 1 = tracks
 below 1,320,057. CRC and header extent are unchanged. Writers retain PQ/PX when
 digital PLAY is shared and PR when no analog group is active. Older banks
 reject PS; readers retain all previous PQ, analog flags and PR records.
+
+
+### Syntakt HZFS v2 folders
+
+Core 0.13.0 adds the versioned folder layout documented in
+[HZFS](../mods/core-st/HZFS.md#folder-catalogue-v2-core-0130). HZFS entries,
+POOL references and SMZ geometry are unchanged. Header +28h/+2ch carry folder
+count/next-ID; membership u32s and 48-byte folder records follow sample entries.
+The original catalogue-wide CRC covers all metadata. V1 remains readable;
+v2 requires folder-capable readers/writers. Unknown versions/corrupt metadata
+must not authorize blank initialization or allocation from another stale copy.

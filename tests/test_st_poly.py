@@ -56,8 +56,8 @@ def verify(folder,synfact=None):
            'st_pool_preview_stop','core_event_view','core_clock_snapshot','core_additem',
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
-    names+=['core_parameter_provider_set','core_native']
-    assert read(address('core_machine_host_api'),88)==struct.pack('>22I',8,*[address(n) for n in names])
+    names+=['core_parameter_provider_set','core_native','core_sample_pool_api']
+    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',9,*[address(n) for n in names])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0

@@ -29,7 +29,7 @@ void core_machine_action_select(const u32 *layout)
 static int retired_input(u32 type,int (*encoder)(void *,void *,u32),void (*key)(void *,void *))
 {(void)type;(void)encoder;(void)key;return 0;}
 void core_machine_input_reset(void)
-{u32 i;for(i=0;i<16;i++)codecs[i]=0;core_machine_action_codec=0;}
+{u32 i;core_pool_ui_reset();for(i=0;i<16;i++)codecs[i]=0;core_machine_action_codec=0;}
 u32 core_machine_edit_id;
 u32 core_machine_parameter_slot(u32 id)
 {u32 index;return core_machine_parameter(id,&index)?core_machine_slot(index):0;}

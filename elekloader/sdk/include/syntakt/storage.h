@@ -10,6 +10,20 @@
 #define ST_HZ_DATA 0x602u
 #define ST_HZ_ENTRY 64u
 #define ST_HZ_ENTRIES 0x140u
+/* V2 appends folder memberships and 48-byte folder records after samples.
+ * Header +40: folder count, +44: next folder ID. Root is ID zero. */
+#define ST_HZ_FOLDER_BYTES 48u
+#define ST_HZ_MAX_FOLDERS 1024u
+static __inline__ unsigned int st_hz_word(const unsigned char *p)
+{return (unsigned int)p[0]<<24|(unsigned int)p[1]<<16|(unsigned int)p[2]<<8|p[3];}
+static __inline__ unsigned int st_hz_folder_count(const unsigned char *p)
+{return st_hz_word(p+4)==2?st_hz_word(p+40):0;}
+static __inline__ unsigned int st_hz_member(const unsigned char *p,unsigned int i)
+{return st_hz_word(p+4)==2?st_hz_word(p+ST_HZ_ENTRIES+64*st_hz_word(p+12)+4*i):0;}
+static __inline__ const unsigned char *st_hz_folder_record(const unsigned char *p,unsigned int i)
+{return p+ST_HZ_ENTRIES+68*st_hz_word(p+12)+ST_HZ_FOLDER_BYTES*i;}
+static __inline__ unsigned int st_hz_length(unsigned int version,unsigned int n,unsigned int f)
+{return ST_HZ_ENTRIES+n*64+(version==2?n*4+f*ST_HZ_FOLDER_BYTES:0);}
 #define ST_HZ_MAX_ENTRIES ((ST_HZ_WINDOW-ST_HZ_ENTRIES)/ST_HZ_ENTRY)
 enum {ST_HZ_OK=1,ST_HZ_ABSENT=0,ST_HZ_IO=-1,ST_HZ_CORRUPT=-2,
       ST_HZ_MEMORY=-3,ST_HZ_CAPACITY=-4,ST_HZ_ARGUMENT=-5,ST_HZ_FULL=-6,

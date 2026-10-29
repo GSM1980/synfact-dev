@@ -6,6 +6,7 @@
 #ifndef ELEKLOADER_ST_HOST_H
 #define ELEKLOADER_ST_HOST_H
 #include "storage.h"
+#include "sample-pool.h"
 struct st_machine_host_api {
     unsigned int version;
     const struct st_storage_io *storage;
@@ -68,5 +69,7 @@ struct st_machine_host_api {
      * context and borrowed argument rules as ST_EV_NATIVE; never retain
      * a result past the next native transaction. */
     unsigned int (*native_query)(unsigned int,const unsigned int *);
+    /* Host API 9: pool infrastructure stays in core; optional bank owns UI. */
+    const struct st_sample_pool_api *pool;
 };
 #endif

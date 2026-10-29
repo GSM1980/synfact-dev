@@ -273,3 +273,9 @@ and `--out <comparison.json>`. The 72-case test includes 500ms C4 notes;
 `--short` uses 64 blocks per case for a second linked bank. Instruction counts
 are per-voice update/render after installing a code hook and flushing its JIT
 cache, not device cycles or CPU percentages. The shipped ECO x1 stays unchanged.
+
+
+Core 0.13+: include `--module mods/sample-manager-st` in the complete SMZ bank.
+The optional module supplies Sample Manager UI; HZFS/pool/preview infrastructure
+stays in core. Install the matching core 0.13 SYX before enabling v2 folders.
+Never enable folders solely because a legacy `v6`/`v7` transfer profile connects.

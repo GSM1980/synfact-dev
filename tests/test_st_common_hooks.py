@@ -58,7 +58,8 @@ def verify(folder):
     assert table('core_draw_table')==[address('core_machine_draw')|0x80000000]
     assert not any(k.startswith('system-info-st:') for k in sym) # UI moved to SMZ
     assert address('core_machine_tick') in table('core_tick_table')
-    assert address('core_pool_tick') in table('core_tick_table')
+    assert 'core:core_pool_tick' not in sym  # optional SMZ owns UI ticks
+    assert address('st_pool_preview_mix') in table('core_main_mix_table')
     assert table('core_enc_table')==[] # FM joins this very table once at boot
     # Drawing remains at the native view layer, and key notifications remain
     # after native handling. Both feed their EXISTING event collections.

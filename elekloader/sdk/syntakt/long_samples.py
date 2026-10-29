@@ -31,59 +31,12 @@ RATE=48000
 SAMP_HEADER=64
 
 # ------------------------------------------------------------------ index
-class Index:
-    def __init__(self, seq=0, windows=0, next_id=1, entries=None, slot_map=None):
-        self.seq, self.windows, self.next_id = seq, windows, next_id
-        self.entries = entries or []          # dicts: id first blocks bytes frames crc created flags name
-        self.slot_map = slot_map or [0] * MAP_SLOTS     # reserved association map
-
-    def pack(self):
-        if len(self.entries) > MAX_ENTRIES:
-            raise ValueError('index full')
-        body = bytearray(ENTRIES_OFF + ENTRY * len(self.entries))
-        struct.pack_into(f'>{MAP_SLOTS}I', body, MAP_OFF, *self.slot_map)
-        for n, e in enumerate(self.entries):
-            name = e['name'].encode('utf-8')[:32]
-            struct.pack_into('>8I32s', body, ENTRIES_OFF + n * ENTRY, e['id'], e['first'], e['blocks'], e['bytes'],
-                             e['frames'], e['crc'], e['created'], e['flags'], name)
-        body[0:4] = MAGIC
-        struct.pack_into('>9I', body, 4, VERSION, self.seq, len(self.entries), WINDOW, DATA_FIRST_K, self.windows,
-                         self.next_id, 0, len(body))
-        struct.pack_into('>I', body, CRC_OFF, crc(bytes(body)))      # crc of everything, crc field as 0
-        return bytes(body)
-
-    @classmethod
-    def unpack(cls, raw):
-        """-> Index or None if this copy is not a valid HZFS index."""
-        if len(raw)<ENTRIES_OFF or raw[:4] != MAGIC:
-            return None
-        version, seq, count, block, first, windows, next_id, check, length = struct.unpack_from('>9I', raw, 4)
-        if (version != VERSION or block != WINDOW or first != DATA_FIRST_K or count > MAX_ENTRIES
-                or length != ENTRIES_OFF + ENTRY * count or length > len(raw)):
-            return None
-        if crc(raw[:CRC_OFF] + bytes(4) + raw[CRC_OFF + 4:length]) != check:
-            return None
-        slot_map = list(struct.unpack_from(f'>{MAP_SLOTS}I', raw, MAP_OFF))
-        entries = []
-        for n in range(count):
-            f = struct.unpack_from('>8I32s', raw, ENTRIES_OFF + n * ENTRY)
-            entries.append(dict(id=f[0], first=f[1], blocks=f[2], bytes=f[3], frames=f[4], crc=f[5], created=f[6],
-                                flags=f[7], name=f[8].split(b'\0')[0].decode('utf-8')))
-        return cls(seq, windows, next_id, entries, slot_map)
-
-    def used(self):
-        return [(e['first'], e['first'] + e['blocks']) for e in self.entries]
-
-    def find(self, key):
-        for e in self.entries:
-            if e['name'] == key or (key.isdigit() and e['id'] == int(key)):
-                return e
-        raise KeyError(f'no file {key!r}')
+from .sample_catalog import Index, logical_length, enable_folders
 
 
 def problems(index):
     """Consistency checks of one index -> list of messages (empty = consistent)."""
-    out, spans, names, ids = [], [], set(), set()
+    out, spans, names, ids = index.metadata_problems(), [], set(), set()
     if not (0<index.seq<=0xffffffff and DATA_FIRST_K<index.windows<=0x2000 and 0<index.next_id<=0xffffffff):
         out.append('invalid catalogue sequence/capacity/next id')
     for e in index.entries:
@@ -92,9 +45,9 @@ def problems(index):
             out.append(f"{e['name']}: blocks {lo:#x}..{hi:#x} outside the data area")
         if e['blocks'] != -(-e['bytes'] // WINDOW) or e['bytes'] != SAMP_HEADER + 2 * e['frames']:
             out.append(f"{e['name']}: size fields inconsistent")
-        if e['name'] in names or e['id'] in ids:
+        if (e.get('folder',0),e['name']) in names or e['id'] in ids:
             out.append(f"{e['name']}: duplicate name or id")
-        names.add(e['name'])
+        names.add((e.get('folder',0),e['name']))
         ids.add(e['id'])
         if not e['name'] or not e['id'] or e['id'] >= index.next_id:
             out.append(f"{e['name']}: id {e['id']} >= next_id {index.next_id}")
@@ -337,17 +290,21 @@ def wav_body(path,name):
     rate,mono=read_wav(path)
     return samp_body(to_pcm16be(resample(mono,rate)),name)[0]
 
-def cmd_put(store,wav,name=None):
+def cmd_put(store,wav,name=None,folder=0):
     name=name or Path(wav).stem;body=wav_body(wav,name)
     store.ensure();index,copies=store.current()
     if len(index.entries)>=MAX_ENTRIES or index.next_id==0xffffffff or index.seq==0xffffffff:
         raise ValueError('catalogue full/exhausted')
-    if any(e['name']==name for e in index.entries):raise ValueError('sample name already exists')
+    index.folder(folder)
+    if folder and index.version!=2:raise ValueError('Enable folders first')
+    logical_length(index.version,len(index.entries)+1,len(index.folders))
+    if any(e['name']==name and e.get('folder',0)==folder for e in index.entries):raise ValueError('sample name already exists')
     blocks=(len(body)+WINDOW-1)//WINDOW;first=allocate(blocks,copies,index.windows)
     store.write_at(first,body)
     if store.read_blocks(first,blocks,len(body))!=body:raise RuntimeError('sample readback differs; catalogue unchanged')
     e=dict(id=index.next_id,first=first,blocks=blocks,bytes=len(body),frames=u32(body,8),crc=crc(body),
            created=int(time.time()),flags=0,name=name)
+    if index.version==2:e['folder']=folder
     index.entries.append(e);index.next_id+=1;store.commit(index,copies)
     store.log(f"Stored {name}: {e['frames']/RATE:.3f} s, id {e['id']}")
     return e
@@ -388,12 +345,17 @@ def main(argv=None):
     sub.add_parser('ls');sub.add_parser('init')
     check=sub.add_parser('fsck');check.add_argument('--deep',action='store_true')
     get=sub.add_parser('get');get.add_argument('key');get.add_argument('--out',required=True);get.add_argument('--raw',action='store_true')
-    put=sub.add_parser('put');put.add_argument('wav');put.add_argument('--name')
+    put=sub.add_parser('put');put.add_argument('wav');put.add_argument('--name');put.add_argument('--folder',type=int,default=0)
     rm=sub.add_parser('rm');rm.add_argument('key')
     stock=sub.add_parser('stock');stock.add_argument('wav');stock.add_argument('--slot',type=int,required=True,choices=range(1,65));stock.add_argument('--name')
     for command in (put,rm,stock,sub.choices['init']):command.add_argument('--yes-write-device',action='store_true')
+    migrate=sub.add_parser('folders-enable');migrate.add_argument('--backup',required=True);migrate.add_argument('--confirm-firmware',action='store_true')
+    mkdir=sub.add_parser('mkdir');mkdir.add_argument('name');mkdir.add_argument('--parent',type=int,default=0)
+    move=sub.add_parser('move');move.add_argument('ids',nargs='+',type=int);move.add_argument('--folder',type=int,required=True)
+    rmdir=sub.add_parser('rmdir');rmdir.add_argument('id',type=int)
+    for command in (migrate,mkdir,move,rmdir):command.add_argument('--yes-write-device',action='store_true')
     args=p.parse_args(argv)
-    if args.cmd in ('put','rm','stock','init') and not args.yes_write_device:
+    if args.cmd in ('put','rm','stock','init','folders-enable','mkdir','move','rmdir') and not args.yes_write_device:
         p.error('this command writes eMMC; pass --yes-write-device')
     stock_body=None
     if args.cmd=='stock':
@@ -408,7 +370,14 @@ def main(argv=None):
             if client.read(path)!=stock_body:raise RuntimeError('stock sample readback differs')
         elif args.cmd=='ls':cmd_ls(store)
         elif args.cmd=='init':store.ensure()
-        elif args.cmd=='put':cmd_put(store,args.wav,args.name)
+        elif args.cmd=='put':cmd_put(store,args.wav,args.name,args.folder)
+        elif args.cmd=='folders-enable':enable_folders(store,args.backup,firmware_confirmed=args.confirm_firmware)
+        elif args.cmd in ('mkdir','move','rmdir'):
+            index,copies=store.current()
+            if args.cmd=='mkdir':print(index.mkdir(args.name,args.parent))
+            elif args.cmd=='move':index.move_samples(args.ids,args.folder)
+            else:index.rmdir(args.id)
+            store.commit(index,copies)
         elif args.cmd=='get':cmd_get(store,args.key,args.out,args.raw)
         elif args.cmd=='rm':cmd_rm(store,args.key)
         elif args.cmd=='fsck':return int(bool(cmd_fsck(store,args.deep)))

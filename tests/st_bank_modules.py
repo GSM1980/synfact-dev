@@ -12,6 +12,7 @@ def check_bank_modules(report, raw, allowed):
     modules=report['modules']
     expected=[list(names) for names in allowed]
     expected += [['sp_sampler_input_module',*names] for names in allowed]
+    expected += [names+['sample_manager_module'] for names in list(expected)]
     assert modules in expected, ('unexpected module composition/order',modules)
     directory,count=struct.unpack_from('>II',raw,32)
     assert count==len(modules), 'module directory/report count differs'

@@ -69,3 +69,14 @@ The arp agent works separately in `C:\Desarrollo\synfact-dev-arp` on
 `C:\Desarrollo\synfact-dev` worktree contains unrelated untracked profiling
 mods/tests; the integration leaves them untouched. No worktree is removed and
 no remote push is part of this merge.
+
+
+## Folder implementation (2026-10-29)
+
+`feat/sample-folders` uses `C:\Desarrollo\synfact-dev-pan`; it includes the
+previous feedback-status documentation branches. Core 0.13.0 retains storage,
+pool, preview/audio and all native hooks; `sample-manager-st` is optional UI.
+A separate `feat/sample-folders` in `C:\Desarrollo\synfact-release` contains
+Transfer 0.0.6. Transfer's previous changes were committed and pushed at the
+user's explicit request as `1c39aa6` before this new work. The new folder work
+is not merged or pushed. No instrument IO has been performed.

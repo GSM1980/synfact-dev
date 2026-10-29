@@ -32,6 +32,7 @@ static int bus[64];
 #define UI_OPAQUE fake_opaque
 #define MAIN_BUS bus
 #define CORE_ST_NATIVE_TEST
+#include "../mods/sample-manager-st/ui.c"
 #include "../mods/core-st/sample-manager.c"
 void st_pool_label_invoker(void){}
 
@@ -126,12 +127,25 @@ int main(void)
     reads_before=io_reads;allocs_before=allocated;in_irq=1;st_pool_preview_mix();in_irq=0;
     assert(preview_pos==32 && bus[0]<0 && io_reads==reads_before && allocated==allocs_before);
     assert(ui_view_table[2+11]==((u32 *)0x40240EA0u)[2+11]);
-    preview_pos=PREVIEW_CHUNK;core_pool_tick(manager);assert(preview_loaded==3*PREVIEW_CHUNK);
-    preview_pos=2*PREVIEW_CHUNK;core_pool_tick(manager);assert(preview_loaded==100000);
-    *(u8 **)(manager+0x1c)=manager+0x14;core_pool_tick(manager);assert(!preview_length && !ui_yes_down);
+    preview_pos=PREVIEW_CHUNK;manager_tick(manager);assert(preview_loaded==3*PREVIEW_CHUNK);
+    preview_pos=2*PREVIEW_CHUNK;manager_tick(manager);assert(preview_loaded==100000);
+    *(u8 **)(manager+0x1c)=manager+0x14;manager_tick(manager);assert(!preview_length && !ui_yes_down);
     *(u8 **)(manager+0x1c)=node;assert(st_pool_ui_preview(0x8001)==100000);
     key(12,16);assert(!preview_length);io_failure=1;assert(st_pool_ui_preview(0x8001)<0 && !preview_length);io_failure=0;
-    close_view();core_pool_tick(manager);for(i=0;i<allocated;i++)if(allocations[i])fw_free(allocations[i]);
+    close_view();
+    /* Empty and nested folders navigate without allocating PCM or changing
+     * the numeric project pool. Root rows are [Drums], then parent/[Acoustic]. */
+    put32(index_data+4,2);put32(index_data+40,2);put32(index_data+44,3);
+    put32(index_data+0x180,2); /* membership after one sample */
+    put32(index_data+0x184,1);memcpy(index_data+0x18c,"Drums",6);
+    put32(index_data+0x1b4,2);put32(index_data+0x1b8,1);memcpy(index_data+0x1bc,"Acoustic",9);
+    st_pool_ui_open(menu);assert(ui_count==1 && ui_codes[0]==1);
+    {struct row_capture c={ROW_FILE,0,0};struct fn_capture fn={&c};u16 before[128];
+     memcpy(before,record,sizeof before);row_action(&fn);assert(ui_folder==1 && ui_count==2 && ui_codes[0]==UI_PARENT_FOLDER && ui_codes[1]==2);
+     c.code=1;row_action(&fn);assert(ui_folder==2 && ui_count==2 && ui_codes[1]==0x8001);
+     c.code=0;row_action(&fn);assert(ui_folder==1);row_action(&fn);assert(ui_folder==0);
+     assert(!memcmp(before,record,sizeof before));}
+    close_view();manager_tick(manager);for(i=0;i<allocated;i++)if(allocations[i])fw_free(allocations[i]);
     assert(freed==allocated);assert(VirtualFree((void *)0x40240000u,0,MEM_RELEASE));
     puts("PASS: native-manager C empty row, pane navigation, owned captures, batch pool edits, audition streaming and bounded IRQ mixing");return 0;
 }

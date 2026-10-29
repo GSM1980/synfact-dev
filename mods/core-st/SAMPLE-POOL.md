@@ -1,9 +1,10 @@
 # Project sample pool and Sample Manager (core 0.8.3)
 
-The core owns a 128-position pool, its project record, an on-device Sample
-Manager and the MAIN/AUDIO transport. These services do not come from SMZ4.
-Machine-specific controls, graphics and engines live in the optional bank.
-The core still supplies its sample services when no machine file is installed.
+The core owns the 128-position pool, its project record, storage, preview and
+MAIN/AUDIO transport. From core 0.13.0 the optional sample-manager-st SMZ module
+supplies the on-device browser UI through core services. Machine controls,
+graphics and engines also live in the optional bank. The core still supplies
+storage and pool playback when no machine file is installed.
 
 The explicit Syntakt firmware builder compiles `audio-pool.c` into a 4 KiB
 core service image and includes it through the existing AUDIO companion
@@ -201,3 +202,18 @@ UI polling never waits. A core ownership flag arbitrates the shared window with
 System info and sample transfers. The core lends a cursor only if its PCM
 identity and frame count match the selected project slot. No machine-specific
 graphics or storage reads occur in this service.
+
+
+## UI ownership from core 0.13.0
+
+The project record, playback, HZFS, CRC, IO, rollback and preview audio remain
+core services. The Sample Manager's native views/menu/navigation have moved to
+`mods/sample-manager-st`, an optional SMZ module using host API 9. Include it
+in complete banks to expose the menu. A missing/failed optional bank leaves
+pool playback available; it does not install the browser. No callback from a
+rejected module survives `core_machine_input_reset`.
+
+Folder navigation changes the displayed HZFS library subset only. It never
+renumbers POOL positions or references. Choose a [folder] with YES and `..` to
+return; select samples and ADD TO POOL as before. FUNC+YES calls the core-owned
+preview service. Stock 1–64 remains separate/protected.

@@ -154,3 +154,39 @@ an active upload defers a save. An aborted upload remains conservatively busy
 until a successful high-zone transfer completes or the device reboots. Lease
 publication alone excludes interrupts; block IO, allocation and normalization
 run with interrupts restored. Physical transfer/concurrency testing is pending.
+
+
+## Folder catalogue v2 (core 0.13.0)
+
+Core 0.13 reads both v1 and v2. Existing sample entries remain 64 bytes at
+`140h`; audio extents, body CRCs, flags, file IDs and the reserved association
+map retain their meanings. The project POOL record is unchanged.
+
+For v2 the version word is 2, header `28h` is folder count (0..1024) and
+`2ch` is next monotonic folder ID. After the n sample entries come n big-endian
+u32 folder memberships, then f 48-byte folder records: u32 id, u32 parent,
+32 UTF-8 name bytes, eight zero reserved bytes. Root is 0; folder IDs are
+1..32766. Logical length is `140h + 68*n + 48*f`, never beyond 512 KiB.
+Maximum depth is 16. File names must be unique within their folder; folder
+names within their parent. Cycles and missing memberships/parents are corrupt.
+The maximum sample count now also depends on metadata size; conversion refuses
+an overfull catalogue before the first write. Folder rows are never PCM files.
+
+Transfer/SDK enable folders explicitly after the user confirms folder-capable
+firmware is installed. Both validated metadata copies are saved to a new local
+backup directory, then v2 is published/read back in both A/B windows. No PCM,
+file ID or project is rewritten. On interruption the new firmware reads the
+newest complete copy; repeat the explicit migration with a new backup path to
+finish mirroring. Keep the new firmware installed throughout recovery. Old
+firmware/tools cannot use the completed v2 library. This is not a formatting
+operation and migration is never triggered by boot or a normal upload.
+
+Recorder saves new takes at root and preserves all memberships/folders while
+inserting a sample. Metadata mutations use the existing A/B commit protocol.
+Compaction and full sample backups retain the folder tree and memberships.
+Migration backups contain METADATA ONLY; retain full sample backups separately.
+
+Core owns all parsers, checks, block IO and playback infrastructure. The optional
+[Sample Manager SMZ](../sample-manager-st) owns the native browser UI and uses
+host API 9 services; no new native code site is introduced. It shows folders
+in the HZFS library; the project pool and machine SAMP values remain flat.

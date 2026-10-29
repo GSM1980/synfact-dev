@@ -81,3 +81,5 @@ int main(void)
     core_machine_active=0;core_machine_draw((void *)1,(void *)1);assert(paints==5);
     puts("PASS: SourcePageView resolves all FM/SP pages through one layout service; selector highlight paints nothing/resizes nothing; confirmation enables shared drawing; non-SYN views excluded");return 0;
 }
+
+void core_pool_ui_reset(void){}

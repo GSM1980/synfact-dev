@@ -321,6 +321,28 @@ static void editor_save(void)
     sam_trimmed=0;assert(key_event(13,1) && key_event(13,16) && sam_view[0x30]);
     u8 *view=sam_view;sampler_dispose(view);assert(!sam_view && !sam_enabled && sam_pcm);recorder_ui_tick(manager());
 }
+static void folder_save(void)
+{
+    struct st_hzfs fs;T n,len,k;B *v2,*old;
+    assert(core_hzfs_open(&fs,&storage)==1);old=fs.copy[fs.best];n=be32(old+12);
+    len=ST_HZ_ENTRIES+68*n+48;v2=calloc(1,(len+511)&~511u);assert(v2);
+    memcpy(v2,old,ST_HZ_ENTRIES+64*n);put32(v2+4,2);put32(v2+40,1);put32(v2+44,2);put32(v2+36,len);
+    put32(v2+ST_HZ_ENTRIES+64*n,1); /* original recording belongs to folder 1 */
+    put32(v2+ST_HZ_ENTRIES+68*n,1);memcpy(v2+ST_HZ_ENTRIES+68*n+8,"Takes",6);
+    put32(v2+32,0);put32(v2+32,~core_crc_update(0,v2,len));
+    for(k=0;k<2;k++)memcpy(disk+k*ST_HZ_WINDOW,v2,len);
+    free(v2);core_hzfs_close(&fs);
+    top(base_view,base_view);sampler_open(manager());sam_state=SAM_READY;sam_frames=10;
+    sam_save_frames=10;sam_save_start=0;text_set(sam_save_name,"FOLDER ROOT",16);
+    sam_save_phase=1;sam_save_step();assert(sam_save_phase==2);
+    while(sam_save_phase==2 || sam_save_phase==3)sam_save_step();
+    assert(sam_save_phase==4 && sam_saved_id==2);
+    assert(core_hzfs_open(&fs,&storage)==1);old=fs.copy[fs.best];
+    assert(be32(old+12)==2 && st_hz_folder_count(old)==1);
+    assert(st_hz_member(old,0)==1 && st_hz_member(old,1)==0);
+    assert(!memcmp(st_hz_folder_record(old,0)+8,"Takes",6));
+    core_hzfs_close(&fs);sam_save_cleanup("SAVED");sampler_dispose(sam_view);
+}
 static void storage_arbitration(void)
 {
     T info[32]={0},out[4]={0};B header[32]={0},status[12]={1};T reads=io_reads,writes=io_writes;
@@ -351,7 +373,7 @@ int main(void)
     struct st_machine_ui_api ui={0};struct st_smz_api api={2,&ui};
     assert(initialize(&api));ui.version=5;ui.host=&services;assert(initialize(&api));ui.version=6;assert(!initialize(&api));
     assert(recorder_module.count==7 && core_hzfs_ensure(&storage)==1);
-    gesture();capture();normalize();step_stop();editor_save();storage_arbitration();assert(!irq_depth);
+    gesture();capture();normalize();step_stop();editor_save();folder_save();storage_arbitration();assert(!irq_depth);
     for(T i=0;i<64;i++)if(allocs[i])free_mock(allocs[i]);free(disk);VirtualFree((void *)0x80000000u,0,MEM_RELEASE);
     puts("PASS: SOUND double tap/native release; shared key/encoder/draw/tick/mix; 72 capture differentials; 56 normalization cases; trim/zoom; step-length sequencer STOP; preview bus level; naming/assignment; real HZFS save/CRC/verify/errors; slots 1-64 protected; no IRQ allocation/IO");
     return 0;

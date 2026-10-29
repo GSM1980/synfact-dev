@@ -77,3 +77,5 @@ unsigned int core_native_view(unsigned int op,void *v,unsigned int b){(void)v;(v
 unsigned int fw_parameter_selecting(void *model){(void)model;return 0;}
 
 int core_event_view(unsigned int op,void *v,void *e,unsigned int id){(void)op;(void)v;(void)e;(void)id;return 0;}
+
+void core_pool_ui_reset(void){}

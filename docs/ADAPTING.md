@@ -2050,3 +2050,14 @@ for a ranked digital topology with analog voices, as [FORMAT](FORMAT.md)
 specifies. Analog masters keep their native shared modulation and saved Sounds.
 Only analog slaves enter the copied native kernels' skip bitmap. Digital
 independent groups must keep advancing when analog groups coexist.
+
+
+Host API 9 appends `const struct st_sample_pool_api *pool` at byte 88,
+retaining every earlier offset. The pool service version is 1. It supplies
+validation/sync/cached names, preview start/refill/release and one optional
+menu/progress UI provider. Native hooks, storage, PCM streaming/mixing and
+project references remain in core. A bank-owned Sample Manager uses existing
+KEY/TICK subscriptions for its input/foreground work. Binding is task-only;
+callbacks live in the loaded bank and the core clears them on bind reset or
+failure. Read this field only when host version >= 9; see
+`syntakt/sample-pool.h` and `mods/sample-manager-st`.

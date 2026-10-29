@@ -106,10 +106,10 @@ static void sam_save_init(void)
     best_k=!copies[0] || (copies[1] && be32(copies[1]+8)>be32(copies[0]+8));
     best=copies[best_k];len=lens[best_k];n=be32(best+12);seq=be32(best+8);
     id=be32(best+28);windows=be32(best+24);
-    if(seq==0xffffffffu || !id || id>=HZ_FLAG || len>HZ_MAX_LEN-HZ_ENTRY){error="INDEX FULL";goto fail;}
+    if(seq==0xffffffffu || !id || id>=HZ_FLAG || len>HZ_MAX_LEN-(be32(best+4)==2?68u:64u)){error="INDEX FULL";goto fail;}
     /* Index names are UTF-8; the native selector is restricted here to its
      * ASCII repertoire (16 chars), matching SAMP's 16-byte name field. */
-    for(i=0;i<n;i++)if(sam_name_equal(best+HZ_ENTRIES+i*HZ_ENTRY+32,sam_save_name)){
+    for(i=0;i<n;i++)if(!st_hz_member(best,i) && sam_name_equal(best+HZ_ENTRIES+i*HZ_ENTRY+32,sam_save_name)){
         error="NAME EXISTS";goto fail;
     }
     blocks=(64+2*sam_save_frames+HZ_MAX_LEN-1)/HZ_MAX_LEN;at=HZ_DATA_FIRST;
@@ -121,15 +121,20 @@ static void sam_save_init(void)
         }
     }while(again && at<=windows && blocks<=windows-at);
     if(at>=windows || blocks>windows-at){error="eMMC FULL";goto fail;}
-    next=len+HZ_ENTRY;
+    next=len+(be32(best+4)==2?68u:64u);
     sam_save_index=MALLOC((next+511)&~511u);
     if(!heap_ok(sam_save_index)){sam_save_index=0;error="NO MEMORY";goto fail;}
-    for(i=0;i<((next+511)&~511u);i++)sam_save_index[i]=i<len?best[i]:0;
+    for(i=0;i<((next+511)&~511u);i++)sam_save_index[i]=i<HZ_ENTRIES+64*n?best[i]:0;
+    if(be32(best+4)==2){
+        for(i=0;i<4*n;i++)sam_save_index[HZ_ENTRIES+64*(n+1)+i]=best[HZ_ENTRIES+64*n+i];
+        for(i=0;i<ST_HZ_FOLDER_BYTES*st_hz_folder_count(best);i++)
+            sam_save_index[HZ_ENTRIES+68*(n+1)+i]=best[HZ_ENTRIES+68*n+i];
+    }
     sam_save_io=MALLOC(SAM_IO);if(!heap_ok(sam_save_io)){sam_save_io=0;error="NO MEMORY";goto fail;}
     sam_save_check=MALLOC(SAM_IO);if(!heap_ok(sam_save_check)){sam_save_check=0;error="NO MEMORY";goto fail;}
     put32(sam_save_index+8,seq+1);put32(sam_save_index+12,n+1);
     put32(sam_save_index+28,id+1);put32(sam_save_index+36,next);
-    e=sam_save_index+len;put32(e,id);put32(e+4,at);put32(e+8,blocks);
+    e=sam_save_index+HZ_ENTRIES+64*n;put32(e,id);put32(e+4,at);put32(e+8,blocks);
     put32(e+12,64+2*sam_save_frames);put32(e+16,sam_save_frames);
     for(i=0;i<16 && sam_save_name[i];i++)e[32+i]=(u8)sam_save_name[i];
     sam_save_index_len=next;sam_save_first=at*HZ_BLOCK_SECTORS;sam_save_id=id;
@@ -175,7 +180,7 @@ static void sam_save_step(void)
     sam_save_crc=crc_update(sam_save_crc,sam_save_check,logical);sam_save_pos+=logical;
     if(sam_save_pos!=sam_save_total)return;
     if(sam_save_phase==2) {
-        e=sam_save_index+sam_save_index_len-HZ_ENTRY;put32(e+20,~sam_save_crc);
+        e=sam_save_index+HZ_ENTRIES+64*(be32(sam_save_index+12)-1);put32(e+20,~sam_save_crc);
         put32(sam_save_index+32,0);put32(sam_save_index+32,crc32(sam_save_index,sam_save_index_len));
         sam_save_pos=0;sam_save_total=sam_save_index_len;sam_save_crc=0;sam_save_phase=3;
     }else {sam_saved_id=sam_save_id;sam_save_phase=4;}
