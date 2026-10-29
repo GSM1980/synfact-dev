@@ -275,6 +275,53 @@ def test_the_main_os_is_stored_padded_to_4():
     assert len(seen) > 1, 'the cases do not reach an unaligned stream'
 
 
+def test_syntakt_terminal_zero_packet():
+    """An exact-boundary stock stream needs one zero packet, not zero or two.
+    Other devices retain their existing transport convention.
+    """
+    from dataclasses import replace
+    from elekloader.devices.syntakt import DEVICE
+    body = b'synthetic UI image ' * 40
+    packed = syx.pack_main(body)
+    padding = 800 - 0x80 - ((len(packed) + 15) & ~15)
+    framing = tuple(f[:4] + b'\x16' + f[5:] for f in (FRAMING0, FRAMING1))
+    for extra in (0, 16):
+        cont = _container([(5, 0, b'\xaa' * (padding + extra)),
+                           (3, DEVICE.main_load, packed)])
+        assert len(cont) == 800 + extra
+        stream = struct.pack('>II', len(cont), transport.content_checksum(cont)) + cont
+        tail = bytes(101 - len(stream) % 101)
+        raw = transport.encode_syx(stream + tail, 0x16, *framing)
+        stock = syx.Syx(raw)
+        assert syx.write(stock, packed, DEVICE) == raw
+        syx.verify(raw, stock, body, DEVICE)
+        for bad_tail in (tail + bytes(101), b'\x01' + tail[1:]):
+            invalid = transport.encode_syx(stream + bad_tail, 0x16, *framing)
+            try:
+                syx.verify(invalid, stock, body, DEVICE)
+            except syx.SyxError as e:
+                assert 'after the container' in str(e)
+            else:
+                raise AssertionError('accepted invalid terminal padding')
+        if extra == 0:
+            invalid = transport.encode_syx(stream, 0x16, *framing)
+            try:
+                syx.verify(invalid, stock, body, DEVICE)
+            except syx.SyxError as e:
+                assert 'after the container' in str(e)
+            else:
+                raise AssertionError('accepted missing zero packet')
+            other = replace(DEVICE, terminal_zero_packet=False)
+            assert syx.write(stock, packed, other) == invalid
+        small = replace(DEVICE, flash_limit=DEVICE.flash_at + len(cont) - 1)
+        try:
+            syx.verify(raw, stock, body, small)
+        except syx.SyxError as e:
+            assert 'ends at flash' in str(e)
+        else:
+            raise AssertionError('accepted a container beyond the profile budget')
+
+
 def test_elek_transport_and_card_file_round_trip():
     from elekloader import elek
     body = b'octatrack main os ' * 400

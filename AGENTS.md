@@ -4,6 +4,13 @@ elekloader builds custom firmware for Elektron devices from mods, on the
 user's machine, from the stock OS file they supply. Read README.md first;
 the rest of the docs start at docs/README.md.
 
+**Building for the Syntakt on this workstation** (core-st, SMZ banks):
+follow [docs/SYNTAKT-BUILD.md](docs/SYNTAKT-BUILD.md) exactly. It gives the
+m68k toolchain location (`C:\Desarrollo\syntakt-dev\toolchains\sgdk211\bin`,
+unprefixed GCC 13.2.0), the required `ELEKLOADER_CROSS=''` and
+`GCC_EXEC_PREFIX`, the compiler flags and the build, lint, bank and
+regression commands. Do not change flags or builders to make a build pass.
+
 ## If you are adapting or writing a mod
 
 **Core first, and contributions are welcome.** Before you add a code site

@@ -25,6 +25,8 @@
         .globl  core_settings
 core_settings:
         move.l  %a3, -(%sp)
+        .globl core_settings_table
+core_settings_table:
         lea     ev_settings, %a3
 1:      move.l  (%a3)+, %d0
         beq.s   2f

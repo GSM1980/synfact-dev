@@ -171,6 +171,153 @@ each OS version: look it up for the release you target, and build one
 `.elemod` per device and OS (a mod's `device` and `os`, or one of its
 `ports`, pick the stock file: 3.10).
 
+### Syntakt core 0.10: machine UI and optional modules
+
+Core 0.12's [digital POLY](../mods/poly-st/README.md) uses existing UI events
+and a core-owned native transaction collection for contexts not present in
+raw UI/tick events: sequencer events, pattern headers, effective publication,
+type and native edit guards. Reuse these operations rather than patching from
+an SMZ. [`native.h`](../elekloader/sdk/include/syntakt/native.h) defines the
+borrowed synchronous arguments/results and stock replay service.
+
+Module API 3 adds consuming pre-native KEY (`302h`) alongside the old post-native
+notification. DRAW now follows each complete view; ENC uses the already-owned
+control resolver, including TRIG's wrapper and virtual controls. UI API 6 / host
+API 2 exposes existing telemetry services. System info's UI is now in
+[`system-info-smz-st`](../mods/system-info-smz-st/README.md); `--system-info`
+retains the AUDIO companion. Native replay must use its original task/IRQ
+context. All event lists/operands publish atomically before callbacks activate.
+
+Core 0.11.0 adds UI API 5's host pointer after the unchanged earlier prefix.
+Its versioned table borrows existing core HZFS/IO, CRC, pool, preview and event
+services. Check UI API 5 before accessing it; storage remains task-only.
+[Audio Recorder](../mods/recorder-st/README.md) demonstrates a source-built
+module with seven existing subscriptions, a double-SOUND shortcut on `ev_key`,
+periodic jobs on `ev_tick` and contextual painting below native modals. Its
+manifest contains no firmware sites. Coordinate storage with existing FS
+events; do not duplicate the core's catalogue validator or pool transport.
+
+Core 0.10.0 routes machine input through the existing `ev_enc` and `ev_key`
+subscriptions, contextual machine painting through `ev_draw`, and waveform
+background work through `ev_tick`. Do not use the retired `bind_input` API.
+Module API 2 / UI API 4 supports `ST_EV_VIEW` on DRAW/KEY/ENC subscriptions;
+ordinary subscriptions keep their existing behavior. Native context adapters
+retain view/page ownership, event normalization and modal layering. The extra
+encoder patch and idle-vptr clones are removed. This follows the DT1
+`machine-pages` model of existing periodic events and shared native adapters.
+See [the audit](../mods/core-st/HOOK-AUDIT.md) and
+[phase contracts](../mods/core-st/SMZ4.md). Rebuild old FM banks for 0.10;
+older ordinary modules and sampler descriptors remain supported.
+
+Core 0.9.2 preserves a registered machine's explicit engine ID in native edit
+resolver `40038dae`, preventing a second SYN-1 source-layout translation from
+redirecting controls on later SYN pages. The classifier override is restricted
+to that native call site; normal SYN metadata and stock fallback are retained.
+Existing SMZ banks remain compatible.
+
+Core 0.9.1 resolves LFO and Sound Setup modulation destination captions through
+the registered short-label getter for every file-owned machine parameter. The
+four inline stock lookups are core-owned; machines provide only descriptor
+labels. Native lookups are replayed exactly. No SMZ format or bank change is
+required for the correction.
+
+Core 0.9.0 appends UI API 3 native edit/clear, input-registration and compound
+page-value codec services. All control semantics remain machine-owned; native
+storage, locks, undo and transaction dispatch stay in the core. A machine can
+list inline module symbols under `smz.modules` alongside its descriptors.
+[FM TONE](../mods/fm-tone-st/README.md) demonstrates these services with four
+pages and a paired ratio encoder; its source build needs no Digitone SYX.
+
+Core 0.8.1's UI service API 2 appends `format_context`, distinguishing popup
+value text from direct control text without changing disk descriptors. Read
+the appended field only when `api->version >= 2`; see
+[SMZ4.md](../mods/core-st/SMZ4.md). The same machine-owned formatter can keep
+SAMP fixed on the control and supply a sample name to its modal.
+
+Machine sources may provide `st_machine_ui` descriptors and request
+`machine-ui-v1`. The core manages 1..4 SYN pages and dispatches draw, idle,
+format, dial and encoder-policy callbacks to code in the bank. Layouts select
+defined controls and may repeat them for waveform pages. The current native
+storage mapping supports 28 controls, with 32 IDs/page positions reserved.
+Only defined extended parameters are sent to AUDIO; eight-control machines
+use the native parameter frame without an extension.
+
+Use `--module DIR` with the SMZ builder for an optional MAIN module. It can be
+combined with `--preset samplers`, or used alone. See
+[examples/smz-test-st](../examples/smz-test-st) and the
+[format and callback contracts](../mods/core-st/SMZ4.md). Core services remain
+functional without SMZ. Uploading an SMZ does not change running code; reboot
+to activate it. New feature bits require core 0.8 before uploading the bank.
+
+The Syntakt profile selects the exact MCF54415 with `-O3`, ColdFire V4 tuning
+and a four-iteration full-peel limit for bounded AUDIO code. No FPU or fast-math
+instructions are enabled. Compilation, linked instruction checks and protected
+SYX verification do not substitute for physical UI/audio validation.
+
+### Syntakt core 0.7: sample engines and project pool
+
+Compile the four SP engines with `python -m elekloader.sdk.syntakt.smz --preset
+samplers --out out/samplers.smz4`. This path compiles C/assembler directly and
+requires no SYX. The manifest supports several descriptors sharing an AUDIO
+source set and can request the generic `sample-pool-v1` core service.
+The core provides a 128-position pool in the existing project header, Sample
+Manager entries in SOUND/SETTINGS, stock-preserving boot transfer with the
+native sample bar, and a bounded runtime PCM receiver. See
+[SAMPLE-POOL](../mods/core-st/SAMPLE-POOL.md) and [samplers](../mods/samplers-st/README.md).
+The explicit firmware builder compiles the core AUDIO service from source,
+counts its image in the 64 KiB reserve and reports used/free bytes every build.
+
+### Syntakt core 0.5: long samples and stock-slot bounds
+
+The core mounts/initializes HZFS v1 in the high eMMC zone, independent of SMZ4.
+It exports catalogue enumeration, streamed put/get and deletion, with two
+CRC-checked catalogues and checked native Data windows. Only blank catalogue
+windows may be initialized. The SDK crops stock uploads to five seconds;
+the core rejects overlong stock-slot writes before creating a native writer,
+protecting `/mods` immediately after slot 64. See [HZFS](../mods/core-st/HZFS.md).
+All Syntakt Python tools are in `elekloader/sdk/syntakt/`; mods remain in `mods/`.
+
+### Syntakt core 0.4: optional machine banks
+
+The core loads validated SMZ4 banks from `/mods`, before native
+project/sample loading, with a `loading mods` progress dialog. Missing or invalid
+banks skip activation and the dialog. Ordinary SDK mods remain in the 64 KiB
+reserve and work independently of a bank. The contract reserves 32 controls in
+four SYN pages; 28 have a native Sound/lock storage mapping in this revision.
+See [SMZ4](../mods/core-st/SMZ4.md) and the [core build](../mods/core-st/README.md).
+Host build tools live in `elekloader/sdk`, not in the core source directory.
+
+### Syntakt core 0.3: Data RPC and `/mods` (OS 1.41)
+
+Adds `ev_fs_route`, `ev_fs_write` and `ev_fs_written` for native Data RPC
+extensions, and uses them for one opaque `/mods` file, maximum 16 MiB,
+immediately after the 64 native sample slots in eMMC. Stock samples retain
+their original paths, table and limits. All writes are bounded before stream
+creation. A separate sector records the committed length; interrupted files
+are not published. This does not define or execute SMZ4 content.
+
+See [the source and ABI contract](../mods/core-st/STORAGE.md). Build the core
+with the normal SDK; all implementation is SDK source and a normal manifest.
+The offline `python -m elekloader.sdk.syntakt.mods_object` helper wraps raw bytes in native Data transport.
+Hardware transfer/readback remains to be confirmed; no emulator is used.
+
+### Syntakt core 0.2 (OS 1.41)
+
+`mods/core-st` supplies `ev_tick`, `ev_draw`, `ev_key`, `ev_enc`,
+`ev_settings`, `ev_render_in` and `ev_render_out`. The render events cover
+the MAIN audio interrupt; CPU2 runs a different program. `core_additem`
+uses the shared SETTINGS implementation, with a relocatable inline capture
+manager. `core_clock_snapshot(out[3])` provides coherent cumulative
+timer/idle/MAIN-render-in-idle counters. Native UI services are exported as
+`fw_*`; see [core-st](../mods/core-st).
+
+[System info](../mods/system-info-st) demonstrates a Syntakt SETTINGS row,
+native icon, temporary toggle, header overlay and the clock snapshot.
+It subscribes to the core and owns no MAIN patch sites.
+Its explicit build also installs a read-only AUDIO telemetry companion.
+The generic patch command still accepts MAIN mods only; a `.elemod` does
+not silently authorize replacement of another firmware section.
+
 ### The hook bus on the Octatrack (core-ot 0.2)
 
 The Octatrack's firmware is not the Digitakt's, so its events carry what
@@ -1210,7 +1357,7 @@ active one at a time; opening another's entry hands it the audio.
 
 - **The audio.** fxkit owns the output for the active effect: the inputs
   through the mixer's input stage (IN L, IN R: their levels, on the stock
-  mixer's law for its input levels, 16 (v / 127)², so 32 is unity and 127
+  mixer's law for its input levels, 16 (v / 127)Ã‚Â², so 32 is unity and 127
   +24 dB; L PAN, R PAN: where each sits), the effect's `render`, then MIX
   (the dry against the effect, for an effect that leaves the dry to fxkit),
   WDTH, BAL and VOL (100 unity). A CPU guard (DMA timer 0) bypasses the effect when the render
@@ -1224,14 +1371,14 @@ active one at a time; opening another's entry hands it the audio.
   its tails).
 - **The LFOs** are the stock LFO page's eight controls (SPD, MULT, FADE,
   DEST, WAVE, SPH, MODE, DEP), run with the stock LFO's arithmetic: its
-  phase step `tempo × (SPD − 64.0) × 2 >> (11 − MULT)` (14400 for the tempo
+  phase step `tempo Ãƒâ€” (SPD Ã¢Ë†â€™ 64.0) Ãƒâ€” 2 >> (11 Ã¢Ë†â€™ MULT)` (14400 for the tempo
   from MULT 12, the free rates), a turn of 0x5265c000, the stock waves,
   fades and modes, a trig of the lock track as their TRIG. DEST lists only
   the effect's knobs and the mixer's, by their names.
 - **The p-locks are the pattern's.** fxkit keeps them in one synth track's
   lock table (the lock track: T4 unless the effect's SETUP says otherwise,
   `fx_lock_track_set`), as the firmware's lock setter (0x40024236) does: the
-  value at `fw_pattern + 0x1e80 + 10319 × track + 160 × step + 2 × slot`, the
+  value at `fw_pattern + 0x1e80 + 10319 Ãƒâ€” track + 160 Ãƒâ€” step + 2 Ãƒâ€” slot`, the
   row's count of locks at +0x9e (as 0x40023ed2 counts them), the slot's used
   byte at +0x2800 (0x400241f6), and a lock trig on a step with no trig. So
   the stock saves, loads, copies and pastes them with the pattern, and the
@@ -1839,7 +1986,7 @@ Some differences from an octabam build, by design:
   - To build it: GNU binutils, `configure --target=m68k-elf`, then
     `make all-gas all-ld all-binutils`.
 
-## 5. When the loader refuses: message → fix
+## 5. When the loader refuses: message Ã¢â€ â€™ fix
 
 | message contains | means | fix |
 |---|---|---|

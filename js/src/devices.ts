@@ -32,6 +32,8 @@ export type Device = {
   versionLen: number
   versionAt: number                             // 'ele3': where the version field is in the container header
   versionOptional: boolean                      // true: a build given no version keeps stock's field
+  terminalZeroPacket: boolean                   // a full zero chunk on an exact 101-byte boundary
+  secondary: Record<number, [string, number, number, Range[]]> // stock hash, length, load, patch windows
   protected: [number, number, string][]        // main OS bytes no mod may change
   relocatable: [number, number, number[], string][]
   blobMax: number | null
@@ -53,8 +55,8 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
-  imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null,
+  versionLen: 4, versionAt: 0x14, versionOptional: false, terminalZeroPacket: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
+  imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, secondary: {},
 }
 
 export const DIGITAKT_MK1: Device = {
@@ -169,8 +171,28 @@ export const ANALOG_RYTM_MK2: Device = {
     + 'then send the stock .syx over MIDI DIN (not USB)',
 }
 
+export const SYNTAKT: Device = {
+  ...base,
+  key: 'syntakt', name: 'Syntakt', sysexId: 0x16,
+  releases: [
+    rel('1.41', '8e2488f462c4a5656396a895f113bcd415e9900fa8709340dccf45d4cb9ed19e',
+      '8cf2b4b4ea80d58953da46ca453328454fb3fca5cb5f844a2f7bad4b72241f53', 3438480),
+  ],
+  stage: 0x40200000, flashAt: 0x80000,
+  flashLimit: 0x80000 + 2028880, // stock container size: build budget, not a measured hardware limit
+  versionOptional: true, terminalZeroPacket: true,
+  secondary: {7: ['daf6451cf9587c0b628e901b7bb6b25f4e2633d448c534c0c181dd35ec783bc2',
+    383760, 0x40000400, [[0x4000094a,0x40000950],[0x40000b04,0x40000b0a],
+      [0x40001016,0x40001020],[0x400043b2,0x400043b6],[0x400043fe,0x40004400],
+      [0x40004404,0x40004406],[0x40004408,0x4000440c],[0x40004460,0x40004462],
+      [0x400044ac,0x400044b0],[0x40040860,0x40041050]]]},
+  areas: { ddr: [0x46000000, 0x46010000] },
+  ddr: [0x46000000, 0x46010000],
+  recovery: 'Restore the official Syntakt OS using Elektron\'s documented OS upgrade procedure.',
+}
+
 const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK, MODEL_CYCLES, MODEL_SAMPLES,
-  ANALOG_RYTM_MK2]
+  ANALOG_RYTM_MK2, SYNTAKT]
 
 export const devices = (): Device[] => DEVICES
 

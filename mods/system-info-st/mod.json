@@ -1,0 +1,44 @@
+{
+  "id": "system-info-st",
+  "version": "0.1",
+  "title": "System info",
+  "category": "Interface",
+  "author": "GSM1980; Synfact; digihealth (irpina)",
+  "license": "GPL-2.0-or-later",
+  "description": "SETTINGS switch and icon; header alternates CPU M / CPU A and RAM M / RAM A every two seconds. AUDIO readings require the companion built by build.py.",
+  "device": "syntakt",
+  "os": "1.41",
+  "sources": [
+    "system_info.c",
+    "menu.s"
+  ],
+  "subscribe": [
+    {
+      "event": "ev_settings",
+      "fn": "si_settings",
+      "order": 60
+    },
+    {
+      "event": "ev_tick",
+      "fn": "si_tick",
+      "order": 60
+    },
+    {
+      "event": "ev_draw",
+      "fn": "si_draw",
+      "order": 90
+    }
+  ],
+  "resources": {
+    "names": [
+      "settings:SYSTEM INFO"
+    ],
+    "core": "0.8"
+  },
+  "requires": [
+    "core"
+  ],
+  "weak": [
+    "core_pool_busy"
+  ]
+}

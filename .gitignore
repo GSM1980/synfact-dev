@@ -16,8 +16,12 @@ out/
 mods/*/out/
 elekloader/bundled/
 
+# Private, provenance-pinned assembly/data imported from the user's Synfact build.
+mods/fm-tone-st/imported/
+
 # the TypeScript engine's build output
 js/dist/
 # the minimal example's built kit and catalog copy (js/examples/minimal/main.js)
 js/examples/minimal/elekloader/
 js/examples/minimal/catalog/
+mods/poly-st/imported/

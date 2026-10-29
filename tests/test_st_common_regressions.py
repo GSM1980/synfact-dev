@@ -1,0 +1,123 @@
+"""Offline Syntakt common-event regressions; native host and static checks only.
+
+Requires an already built core/SYX, matching SMZ, lint.json, and i686 clang.
+No target instruction execution, MIDI, device access or firmware installation.
+"""
+import argparse,json,subprocess,sys
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[1]
+
+def verify(folder,cc,synfact=None,previous=None,audio_window=None):
+    out=folder.resolve();checks=[];log=out/'regressions.log'
+    log.write_text('Syntakt common-event native/static regressions.\n')
+    def run(name,args):
+        r=subprocess.run([str(a) for a in args],cwd=ROOT,text=True,
+                         stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        with log.open('a') as f:f.write(name+'\n'+r.stdout+'\n')
+        print(name+': '+('PASS' if not r.returncode else 'FAIL'),flush=True)
+        if r.returncode:raise RuntimeError(name+'\n'+r.stdout)
+        checks.append({'name':name,'ok':True})
+    cases={
+        'common-events':['tests/test_st_common_events.c'],
+        'native-events':['tests/test_st_native.c'],
+        'native-resident':['tests/test_st_native_resident.c'],
+        'machine-services':['tests/test_st_machine_input.c'],
+        'module-merge':['tests/test_st_modules.c'],
+        'registry':['tests/test_core_st_machines.c'],
+        'syn-pages':['tests/test_st_syn_pages.c','mods/fm-tone-st/main.c','mods/fm-tone-st/ui.c',
+                     'mods/samplers-st/main.c','mods/samplers-st/ui.c'],
+        'source-view':['tests/test_st_source_view.c','mods/fm-tone-st/main.c','mods/fm-tone-st/ui.c',
+                       'mods/samplers-st/main.c','mods/samplers-st/ui.c'],
+        'destination-labels':['tests/test_st_destination_labels.c','mods/samplers-st/main.c','mods/fm-tone-st/main.c'],
+        'sampler-format':['tests/test_st_sampler_format.c','mods/core-st/machine-ui.c',
+                          'mods/samplers-st/main.c','mods/samplers-st/ui.c'],
+        'sampler-ui':['tests/test_st_sampler_ui.c'],
+        'sampler-browser':['tests/test_st_sampler_browser.c'],
+        'slice-allocate':['tests/test_st_sampler_allocate.c'],
+        'project-pool':['tests/test_st_pool.c','mods/core-st/crc.c','mods/core-st/hzfs.c'],
+        'sample-manager':['tests/test_st_manager.c','mods/core-st/crc.c'],
+        'audio-pool':['tests/test_st_pool_receiver.c'],
+        'parameter-transport':['tests/test_st_parameters.c'],
+        'sampler-audio':['tests/test_st_samplers.c',*[str(p.relative_to(ROOT)) for p in
+                         sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
+        'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c']}
+    cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
+    has_recorder='recorder_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']
+    if 'poly_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:cases['poly']=['tests/test_st_poly.c']
+    if has_recorder:cases['recorder']=['tests/test_st_recorder.c','mods/core-st/hzfs.c','mods/core-st/crc.c']
+    for name,sources in cases.items():
+        exe=out/(name+'.exe')
+        run('compile '+name,[cc,'-O2','-Wl,--large-address-aware','-I','elekloader/sdk/include',*sources,'-o',exe])
+        args=[out/'synfact-machines.smz4'] if name=='smz-parser' else []
+        legacy=ROOT/'out/smz-module-0.8-final/example.smz4'
+        if name=='smz-parser' and legacy.exists():args.append(legacy)
+        run(name,[exe,*args])
+    for name in ('common_hooks','destination_hooks','syn_page_hook','new_project_hook'):
+        run(name,[sys.executable,'tests/test_st_'+name+'.py',out])
+    run('stock/native fast paths',[sys.executable,'tests/test_st_fast_paths.py',out])
+    skipped=[]
+    if synfact:
+        run('FM source/cache/UI/ratio',[sys.executable,'tests/test_st_fm.py','--bank',
+            out/'synfact-machines.smz4','--synfact',synfact,'--cc',cc])
+    else:skipped.append('FM reference comparison: supply --synfact')
+    if has_recorder:
+        run('recorder source/ABI',[sys.executable,'tests/test_st_recorder.py',out,
+            *(['--synfact',synfact] if synfact else [])])
+    if 'poly_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
+        run('POLY source/ABI',[sys.executable,'tests/test_st_poly.py',out,*(['--synfact',synfact] if synfact else [])])
+    if (out/'synfact-machines-profile-r4.smz4').exists():
+        run('MAIN timing source/ABI/intervals',[sys.executable,'tests/test_st_main_profile.py',out,'--cc',cc])
+    if 'system_info_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
+        run('System info redraw/cadence',[sys.executable,'tests/test_st_system_info.py','--cc',cc])
+    run('units',[sys.executable,'tests/test_units.py'])
+    run('instruction audit',[sys.executable,'tests/test_st_instruction_audit.py'])
+    if previous:
+        new,old=(out/'audio.bin').read_bytes(),(previous/'audio.bin').read_bytes()
+        if audio_window:
+            # Explicit: the core's AUDIO companion changed (machine-parameter
+            # transport). Only its declared runtime window may differ; every
+            # scheduler/boot patch and native byte stays identical, and the
+            # parameter-transport fixture above exercises the new receiver.
+            # Outside it, only the absolute targets of the three existing
+            # companion calls (meter entry, block exit, boot) may move.
+            base=0x40000400;lo,hi=(a-base for a in audio_window)
+            assert len(new)==len(old) and new!=old
+            operands=set()
+            for site in (0x4000094a,0x40000b04,0x40001016):
+                i=site-base;assert new[i:i+2]==old[i:i+2]==b'\x4e\xb9'
+                operands.update(range(i+2,i+6))
+            assert all(new[i]==old[i] or lo<=i<hi or i in operands for i in range(len(new)))
+            checks.append({'name':'AUDIO identical to previous build outside companion window %#x..%#x '
+                           '(except the three companion jsr targets)'%audio_window,'ok':True})
+        else:
+            assert new==old
+            checks.append({'name':'AUDIO identical to previous build','ok':True})
+        oldbank=previous/'synfact-machines.smz4'
+        if oldbank.exists():
+            import struct
+            def audio_section(path):
+                raw=path.read_bytes();at,n=struct.unpack_from('>II',raw,72);return raw[48+at:48+at+n]
+            assert audio_section(out/'synfact-machines.smz4')==audio_section(oldbank)
+            checks.append({'name':'FM/SP AUDIO bank identical to previous build','ok':True})
+    else:skipped.append('AUDIO comparison: supply --previous-build')
+    assert json.loads((out/'lint.json').read_text())['ok']
+    checks.append({'name':'lint','ok':True})
+    (out/'validation.json').write_text(json.dumps({'ok':True,'checks':checks,'skipped':skipped,
+        'target_execution':False,'device_transfer':False},indent=2)+'\n')
+    print('ALL PASS; '+str(len(skipped))+' optional comparisons skipped; no device access',flush=True)
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('folder',type=Path)
+    p.add_argument('--cc',required=True,type=Path);p.add_argument('--synfact',type=Path)
+    p.add_argument('--previous-build',type=Path)
+    p.add_argument('--audio-companion-changed',action='store_true',
+        help='the core AUDIO companion intentionally changed: compare outside its declared window only')
+    a=p.parse_args()
+    window=None
+    if a.audio_companion_changed:
+        sys.path.insert(0,str(ROOT))
+        from elekloader.devices.syntakt import DEVICE
+        window=DEVICE.secondary[7][3][-1]
+        assert window==(0x40040860,0x40041050)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window)

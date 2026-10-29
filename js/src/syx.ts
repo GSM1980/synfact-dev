@@ -164,9 +164,23 @@ export function sealKey(stock: Syx, dev: Device): Uint8Array {
   return c.map((x, k) => x ^ a[k] ^ b[k])
 }
 
-/** -> .syx bytes: `stock` with the main OS section's stored bytes replaced by `storedMain` and, if given, the
- * ELE3 version field set. */
-export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: string | null = null): Uint8Array {
+/** Default: MAIN only. Explicit raw secondary images are bounded by the profile's pinned original,
+ * size and patch windows. Boot sections are never eligible. */
+function checkSecondary(stock: Syx, dev: Device, images: Map<number, Uint8Array>) {
+  for (const [sid, image] of images) {
+    if (!dev.secondary[sid] || [2,4,6,dev.mainSection].includes(sid))
+      throw new SyxError(`section ${sid} is not an allowed secondary image`)
+    const [digest,size,load,ranges] = dev.secondary[sid], original = stock.section(sid)
+    if (sha(original) !== digest || original.length !== size || image.length !== size)
+      throw new SyxError(`section ${sid}: secondary image length or stock hash differs`)
+    for (let i=0;i<size;i++) if (original[i] !== image[i] && !ranges.some(([lo,hi])=>lo<=load+i && load+i<hi))
+      throw new SyxError(`section ${sid}: change outside secondary patch ranges at 0x${hexw(load+i)}`)
+  }
+}
+
+export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: string | null = null,
+  secondary = new Map<number,Uint8Array>()): Uint8Array {
+  checkSecondary(stock,dev,secondary)
   if (dev.trailer !== null && dev.trailer !== 'hmac')
     throw new SyxError(`${dev.name} files are sealed (${dev.trailer}); elekloader cannot write them`)
   const key = dev.trailer === 'hmac' ? sealKey(stock, dev) : null
@@ -184,7 +198,7 @@ export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: 
   parts.push(head)
   let len = head.length
   stock.table.forEach(([sid, , , dest], i) => {
-    const data = sid === dev.mainSection ? storedMain : stock.stored.get(sid)!
+    const data = sid === dev.mainSection ? storedMain : secondary.get(sid) ?? stock.stored.get(sid)!
     const at = TABLE_OFF + ENTRY_SZ * i
     putU32(head, at, sid)
     putU32(head, at + 4, len)
@@ -198,7 +212,8 @@ export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: 
   })
   let cont = concat(parts)
   if (key) cont = concat([cont, hmacSha256(key, cont)])
-  const stream = concat([be32(cont.length, contentChecksum(cont)), cont])
+  let stream = concat([be32(cont.length, contentChecksum(cont)), cont])
+  if (dev.terminalZeroPacket && stream.length % CHUNK === 0) stream = concat([stream, new Uint8Array(CHUNK)])
   return encodeSyx(stream, stock.deviceId, stock.framing[0], stock.framing[1])
 }
 
@@ -243,9 +258,12 @@ export function inplaceDepack(stored: Uint8Array, dev: Device): [Uint8Array, num
 
 const hx = (n: number, w = 8) => '0x' + hexw(n, w)
 
-/** Refuse (SyxError) unless `out` is `stock` with only the main OS changed, and it depacks in place to `wantMain`.
+/** Refuse unless MAIN depacks in place to wantMain, explicit secondary images match exactly inside their
+ * profile bounds, and every remaining section is stock.
  * -> facts (the manifest's "output"). */
-export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: Device, version: string | null = null) {
+export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: Device, version: string | null = null,
+  secondary = new Map<number,Uint8Array>()) {
+  checkSecondary(stock,dev,secondary)
   const o = new Syx(out)                 // every message's shape and the ELE3 magic
   const main = dev.mainSection
   for (const m of o.data) if (m[4] !== stock.deviceId) throw new SyxError(`a data message has device id 0x${hexw(m[4], 2)}`)
@@ -264,7 +282,8 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
   }
   const got = contentChecksum(o.container)
   if (got !== o.checksum) throw new SyxError(`content checksum 0x${hexw(got)} != preamble 0x${hexw(o.checksum)}`)
-  if (o.tail.length >= CHUNK || o.tail.some(x => x !== 0)) throw new SyxError(`${o.tail.length} bytes after the container, or not zero`)
+  const wrongTail = dev.terminalZeroPacket ? o.tail.length !== CHUNK - (8 + o.total) % CHUNK : o.tail.length >= CHUNK
+  if (wrongTail || o.tail.some(x => x !== 0)) throw new SyxError(`${o.tail.length} bytes after the container, or not zero`)
   const order = (t: Entry[]) => t.map(([s, , , d]) => s + ':' + d).join(',')
   if (order(o.table) !== order(stock.table)) throw new SyxError('section order or destinations differ from stock')
   let at = stock.dataStart
@@ -290,6 +309,11 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
     throw new SyxError('the table area after the entries differs from stock')
   for (const sid of stock.stored.keys()) {
     if (sid === main) continue
+    if (secondary.has(sid)) {
+      if (!equal(o.stored.get(sid)!,secondary.get(sid)!) || !equal(o.section(sid),secondary.get(sid)!))
+        throw new SyxError(`section ${sid} does not match the requested secondary image`)
+      continue
+    }
     if (!o.stored.has(sid) || !equal(o.stored.get(sid)!, stock.stored.get(sid)!)) throw new SyxError(`section ${sid} is not stock`)
     if (!equal(o.section(sid), stock.section(sid))) throw new SyxError(`section ${sid} does not depack as stock`)
   }
@@ -301,7 +325,7 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
   if (gap! <= 0) throw new SyxError(`the main OS: the in-place depack overwrites unread input (gap ${gap})`)
   // 'sections' is keyed by section id in table order, which a plain object would sort: a Map keeps it
   const sections = new Map<string, Section>()
-  for (const [s, , l] of o.table) sections.set(String(s), { stored: l, stored_sha256: sha(o.stored.get(s)!), stock: s !== main })
+  for (const [s, , l] of o.table) sections.set(String(s), { stored: l, stored_sha256: sha(o.stored.get(s)!), stock: s !== main && equal(o.stored.get(s)!,stock.stored.get(s)!) })
   const facts: Facts = {
     sha256: sha(out), bytes: out.length, messages: o.data.length + 2,
     content_checksum: hx(o.checksum), container_len: o.total,

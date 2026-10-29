@@ -12,6 +12,15 @@ Every mod names its **target**: the stock release it was made for, by hash.
 elekloader refuses a mod whose target it does not know, or a set of mods
 made for different releases.
 
+The `.elemod` format still targets MAIN only. Syntakt's explicit MAIN/AUDIO
+build additionally supplies a raw AUDIO image to `syx.write` / `syx.verify`
+(`secondary={7: image}`; TypeScript: a Map as `write`'s fifth argument or
+`verify`'s sixth argument). This is
+an API argument, not a new mod field. The profile pins the secondary's
+original hash, fixed length and permitted patch windows. Without that
+explicit expected image the verifier still rejects any AUDIO change.
+Sections 2/4/6 and MAIN cannot be supplied as secondary images.
+
 ## Shared fields
 
 | field | |
@@ -88,7 +97,7 @@ A format-2 mod is a relocatable object:
      `reserve`: the Octatrack's sample memory), a core may take only what
      the mods use. When a mod imports one of the profile's reserve
      symbols, and none exports one, the linker counts n, the units the
-     mods' RAM fills (at least one), and defines each symbol as a + b·n;
+     mods' RAM fills (at least one), and defines each symbol as a + bÃ‚Â·n;
      the layout then says `reserve: {units, end}`. The Octatrack's are
      `arena_base`, `__arena_pages`, `__arena_fill` and `__arena_clear`
      (core-ot 0.3). The RAM budget is still the device's `ddr`.
@@ -269,3 +278,68 @@ DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):
 | event | site | handler |
 |---|---|---|
 | `ev_dsp_rx` | payload A's P:0x88 (0x400ef758), the head of every audio frame | DSP code from `jsr`, ending in `rts`; it may change `a`, `x1`, `r0`, `r1` |
+
+## Syntakt machine banks
+
+SMZ4 is a separate optional runtime machine format, not a replacement for
+`.elemod`. Its envelope, relocation rules, AUDIO section and 32
+reserved control positions are specified in [SMZ4.md](../mods/core-st/SMZ4.md).
+Ordinary mods retain the SDK format and core hook bus. The first mapping supports
+28 active controls; four positions remain reserved for a storage extension.
+
+
+## Syntakt long-sample storage
+
+HZFS v1 is an independent eMMC filesystem implemented by the Syntakt core,
+not part of an `.elemod` or SMZ4 machine bank. Its big-endian catalogue, two
+copies, CRC rule and SAMP body layout are specified in [HZFS.md](../mods/core-st/HZFS.md).
+Native Data envelopes are used only for transfer. Stock slot uploads retain
+SAMP/native envelopes but are cropped to 240,000 frames before sizes and CRC
+are calculated. No high-zone file length is accepted in a stock destination.
+
+
+Core 0.6 uses SMZ4 envelope word +24 as a feature mask (bit 0: generic project
+sample-pool v1), with all other bits rejected. Old banks with zero still work;
+old cores reject new feature requests. Multi-machine source manifests and the
+firmware-free generator are described in [SMZ4.md](../mods/core-st/SMZ4.md).
+The separate 128-position project record in header f0..200, its CRC/reference
+encoding and the core-owned AUDIO table are specified in
+[SAMPLE-POOL.md](../mods/core-st/SAMPLE-POOL.md). None extends the machine file
+with filesystem implementation or arbitrary runtime patch plans.
+
+Core 0.8 adds SMZ4 features `machine-ui-v1` (bit 1) and `modules-v1` (bit 2).
+Envelope +28 points to per-machine UI descriptors; +32/+36 describe optional
+MAIN modules and bounded event subscriptions. A module-only file has zero
+machines. Existing zero-feature banks remain readable; older cores reject
+unknown features. [SMZ4.md](../mods/core-st/SMZ4.md) defines all fields, pointer
+validation, page layouts and callback contracts. Machine graphics belong to
+the bank; core storage/loading remains usable without a bank.
+
+Core 0.9.0 appends UI service API 3 edit/clear/input/compound-value services in
+memory only. The serialized descriptors, envelope, features and ABI identifier
+remain unchanged; consumers check the service version during module init.
+Inline `smz.modules` source-manifest entries emit the existing module directory.
+
+Core 0.10.0 supplies UI API 4 / module service API 2 and retires the private
+input registration. Optional subscriptions may use event IDs `101h..103h`:
+the existing DRAW/KEY/ENC events with `ST_EV_VIEW=100h`, selecting native-view
+context. Ordinary event IDs and signatures remain unchanged. Other flag
+combinations are invalid; older cores reject these IDs. Existing banks remain
+readable; the old FM initializer requires rebuilding because the retired
+`bind_input` field now declines safely. The SMZ envelope, feature bits,
+descriptor geometry, pointer validation and ABI identifier stay unchanged.
+See [SMZ4.md](../mods/core-st/SMZ4.md) for phase signatures and dispatch rules.
+
+Core 0.11.0 appends UI API 5's borrowed host-service pointer at offset 40.
+The versioned table exposes existing storage/CRC/pool/preview/event services to
+SMZ modules; serialized geometry and features are unchanged. The optional
+[recorder](../mods/recorder-st/README.md) uses seven existing events and checks
+UI API 5 before reading that pointer. Older API prefixes remain valid.
+
+Core 0.12 supplies UI API 6 / module API 3 / host API 2, adding ordinary native
+transaction event 11 and pre-native consuming KEY ID `302h`. Other PRE flags
+remain invalid. Existing ordinary and post-view callbacks retain their ABI.
+DRAW context follows each complete view. The host table appends telemetry and
+native stock replay services; its earlier 44-byte prefix is unchanged. Old cores
+reject the new IDs; no descriptor geometry, envelope or feature-bit change is
+needed. See [SMZ4](../mods/core-st/SMZ4.md) for signatures and native contexts.

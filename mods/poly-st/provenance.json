@@ -1,0 +1,20 @@
+{
+  "source": "Synfact authored digital POLY",
+  "source_sha256": {
+    "src/current/poly_core.c": "4fcccd3e52d9cba344e5f754b554a553def85098e0600796164d305c15ba8d39",
+    "src/current/poly_event.c": "51e44829b2f841ceb38bd98629ad694665849fdd41302ce291ff2e2c42025610",
+    "src/current/poly_groups.c": "3ec25ea85c50f01f62ecb0325b745a36f3a7ee94419c06b5f9648c28735c49df",
+    "src/current/poly_pattern.c": "d9a2a8d5a624f33e85cbe045c4245b790c8d71b4c4ca29e34d55face6c36cc32",
+    "src/current/poly_sequence.c": "8f61f1b50f1af816ffb21b1b23f0fc76110077a0321cfdb19b4c1b21ede51687",
+    "src/current/poly_publication.c": "e8712c7259355e613f9be420151d2da031ab6d67f2b63d700ec8a5b1bd06cd2d",
+    "src/current/poly_type.c": "de148e7c0b7597059dc719597098eeb632bb4080a26281edcc25d41b09338ff3",
+    "src/current/poly_ui.c": "4d37a4328cbee0cab31c6684293340d33f92b33673303c043991a413c7aa34a1",
+    "src/features/lfo3/poly/publication.s": "043e8c34da99f7228da5f89494137bc976dbb150442176bc81b924196c8ad59b",
+    "src/features/lfo3/poly/guards.s": "b86c71f8b7d6b581dafdcd0d17227502417a1acb65b58a8f20a30bf20db51a0f"
+  },
+  "changes": [
+    "shared core events and bounded native transaction replays",
+    "generic current machine transport replaces legacy FM frame",
+    "UI input uses existing KEY/ENC view contexts; no runtime patches"
+  ]
+}

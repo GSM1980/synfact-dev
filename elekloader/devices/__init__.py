@@ -52,6 +52,8 @@ class Device:
     version_len: int = 4         # the characters of the version field the unit shows
     version_at: int = 0x14       # 'ele3': where that field is in the container header
     version_optional: bool = False   # True: a build given no version keeps stock's field
+    terminal_zero_packet: bool = False  # a full zero chunk when preamble + container is 101-aligned
+    secondary: dict = field(default_factory=dict)  # section -> (stock sha256, length, load, allowed patch ranges)
     protected: tuple = ()        # ((lo, hi, why), ...): main OS bytes no mod may change
     relocatable: tuple = ()      # ((lo, n, (ref, ...), what), ...): data in a protected range
                                  # the OS reaches only through the 4-byte operands at the refs,
@@ -113,9 +115,9 @@ class Device:
 
 def _all():
     from . import (analog_rytm_mk2, digitakt_mk1, digitakt_mk2, digitone_mk1, model_cycles, model_samples,
-                   octatrack)
+                   octatrack, syntakt)
     return [digitakt_mk1.DEVICE, digitakt_mk2.DEVICE, digitone_mk1.DEVICE, octatrack.DEVICE,
-            model_cycles.DEVICE, model_samples.DEVICE, analog_rytm_mk2.DEVICE]
+            model_cycles.DEVICE, model_samples.DEVICE, analog_rytm_mk2.DEVICE, syntakt.DEVICE]
 
 
 DEVICES = None

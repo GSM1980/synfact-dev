@@ -5,6 +5,10 @@ This folder is elekloader's wiki: everything past the
 Markdown and change through pull requests with the code, so a release's
 docs match its code.
 
+Syntakt development: [feedback and improvements](../improvements.md);
+toolchain, flags and exact build commands:
+[Syntakt builds on this workstation](SYNTAKT-BUILD.md).
+
 ## Using elekloader
 
 - **[Install](INSTALL.md)**: the web page, the Windows and macOS apps, or

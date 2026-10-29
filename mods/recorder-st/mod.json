@@ -1,0 +1,9 @@
+{
+  "id": "recorder-st",
+  "version": "0.1",
+  "title": "Audio Recorder",
+  "device": "syntakt",
+  "os": "1.41",
+  "sources": ["main.c", "irq.s"],
+  "smz_module": {"descriptor": "recorder_module"}
+}

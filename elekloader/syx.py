@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Elektron OS .syx files: read, rebuild with a new main OS, verify.
 
-The writer changes one thing: the stored bytes of the device's main OS
-section. Every other section's stored bytes, the ELE3 header (but its
+By default the writer changes the stored bytes of the device's main OS
+section. An explicit secondary image is accepted only inside its profile's
+pinned hash, fixed size and patch windows; boot sections are never eligible.
+Every remaining section's stored bytes, the ELE3 header (but its
 4-character version field) and the framing messages (but their message
 count) are copied from the stock file.
 
@@ -22,8 +24,8 @@ running OS on an upgrade. The key is derived from the stock file's own
 bootstrap (seal_key), as the device derives it (digikit, dt2/authcode.py).
 
 verify() re-reads an output file with the decoder, not the writer. It
-refuses the file unless every other section is stock and the main OS
-depacks, in place as the bootloader does it, to the expected image.
+refuses the file unless every remaining section is stock, an explicitly
+requested secondary is exact, and MAIN depacks in place to the expected image.
 """
 import hashlib
 import hmac
@@ -181,9 +183,29 @@ def _digest(key, data):
     return hmac.new(key, data, hashlib.sha256).digest()
 
 
-def write(stock, stored_main, dev, version=None):
-    """-> .syx bytes: `stock` (a Syx) with the main OS section's stored bytes
-    replaced by `stored_main` and, if given, the ELE3 version field set."""
+def _check_secondary(stock, dev, images):
+    """Explicit companion images, pinned to the profile's original and patch windows.
+
+    Default builds still change MAIN alone. No profile permits a boot section.
+    """
+    for sid, image in images.items():
+        if sid not in dev.secondary or sid in (2, 4, 6, dev.main_section):
+            raise SyxError('section %d is not an allowed secondary image' % sid)
+        digest, size, load, ranges = dev.secondary[sid]
+        original = stock.section(sid)
+        if sha(original) != digest or len(original) != size or len(image) != size:
+            raise SyxError('section %d: secondary image length or stock hash differs' % sid)
+        for i, (a, b) in enumerate(zip(original, image)):
+            if a != b and not any(lo <= load + i < hi for lo, hi in ranges):
+                raise SyxError('section %d: change outside secondary patch ranges at 0x%08x'
+                               % (sid, load + i))
+
+
+def write(stock, stored_main, dev, version=None, secondary=None):
+    """-> .syx bytes with MAIN replaced, optional profile-bounded raw secondary
+    images, and (if given) a new ELE3 version. Default: MAIN only."""
+    secondary = secondary or {}
+    _check_secondary(stock, dev, secondary)
     if dev.trailer not in (None, 'hmac'):
         raise SyxError('%s files are sealed (%s); elekloader cannot write them'
                        % (dev.name, dev.trailer))
@@ -199,13 +221,16 @@ def write(stock, stored_main, dev, version=None):
     cont = bytearray(stock.container[:stock.data_start])   # the table area as stock has it
     cont[:COUNT_OFF] = header
     for i, (sid, _o, _l, dest) in enumerate(stock.table):
-        data = stored_main if sid == dev.main_section else stock.stored[sid]
+        data = (stored_main if sid == dev.main_section else
+                bytes(secondary[sid]) if sid in secondary else stock.stored[sid])
         struct.pack_into('>IIII', cont, TABLE_OFF + ENTRY_SZ * i, sid, len(cont), len(data), dest)
         cont += data
         cont += bytes(-len(cont) % 16)
     if key is not None:
         cont += _digest(key, bytes(cont))
     stream = struct.pack('>II', len(cont), transport.content_checksum(bytes(cont))) + bytes(cont)
+    if dev.terminal_zero_packet and len(stream) % CHUNK == 0:
+        stream += bytes(CHUNK)
     return transport.encode_syx(stream, stock.device_id, stock.framing[0], stock.framing[1])
 
 
@@ -253,9 +278,11 @@ def inplace_depack(stored, dev):
     return bytes(out), gap
 
 
-def verify(out, stock, want_main, dev, version=None):
-    """Refuse (SyxError) unless `out` (bytes) is `stock` (a Syx) with only the
-    main OS changed, and it depacks in place to `want_main`. -> facts."""
+def verify(out, stock, want_main, dev, version=None, secondary=None):
+    """Refuse unless MAIN depacks in place to `want_main`, explicit secondary
+    images match exactly within profile bounds, and all other sections are stock."""
+    secondary = secondary or {}
+    _check_secondary(stock, dev, secondary)
     o = Syx(out)                       # every message's shape and the ELE3 magic
     main = dev.main_section
     for m in o.data:
@@ -277,7 +304,9 @@ def verify(out, stock, want_main, dev, version=None):
     got = transport.content_checksum(o.container)
     if got != o.checksum:
         raise SyxError('content checksum 0x%08x != preamble 0x%08x' % (got, o.checksum))
-    if len(o.tail) >= CHUNK or any(o.tail):
+    wrong_tail = (len(o.tail) != CHUNK - (8 + o.total) % CHUNK
+                  if dev.terminal_zero_packet else len(o.tail) >= CHUNK)
+    if wrong_tail or any(o.tail):
         raise SyxError('%d bytes after the container, or not zero' % len(o.tail))
     if [(s, d) for s, _o, _l, d in o.table] != [(s, d) for s, _o, _l, d in stock.table]:
         raise SyxError('section order or destinations differ from stock')
@@ -308,6 +337,10 @@ def verify(out, stock, want_main, dev, version=None):
     for sid in stock.stored:
         if sid == main:
             continue
+        if sid in secondary:
+            if o.stored[sid] != bytes(secondary[sid]) or o.section(sid) != bytes(secondary[sid]):
+                raise SyxError('section %d does not match the requested secondary image' % sid)
+            continue
         if o.stored[sid] != stock.stored[sid]:
             raise SyxError('section %d is not stock' % sid)
         if o.section(sid) != stock.section(sid):
@@ -330,6 +363,7 @@ def verify(out, stock, want_main, dev, version=None):
         'ele3_version': o.version,
         'main': {'section': main, 'stored': len(s3), 'image': len(img), 'sha256': sha(img),
                  'staged_to': '0x%08x' % (dev.stage + len(s3)), 'inplace_min_gap': gap},
-        'sections': {str(s): {'stored': l, 'stored_sha256': sha(o.stored[s]), 'stock': s != main}
+        'sections': {str(s): {'stored': l, 'stored_sha256': sha(o.stored[s]),
+                            'stock': s != main and o.stored[s] == stock.stored[s]}
                      for s, _o, l, _d in o.table},
     }

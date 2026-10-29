@@ -79,6 +79,8 @@ boot:
         .globl  core_tick
 core_tick:
         move.l  %a2, -(%sp)
+        .globl core_tick_table
+core_tick_table:
         lea     ev_tick, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f
@@ -103,9 +105,14 @@ core_draw:
         jsr     DRAWALL                 | every visible view, as before
         addq.l  #8, %sp
         move.l  %a2, -(%sp)
+        .globl core_draw_table
+core_draw_table:
         lea     ev_draw, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f
+        .ifdef ST_CONTEXT_EVENTS
+        bmi.s   1b                    | same collection, native-view phase
+        .endif
         move.l  8(%sp), -(%sp)          | ctrl
         move.l  16(%sp), -(%sp)         | bmp
         movea.l %d0, %a0
@@ -123,6 +130,8 @@ core_draw:
         .globl  core_key, core_enc
 core_key:
         move.l  %a2, -(%sp)
+        .globl core_key_table
+core_key_table:
         lea     ev_key, %a2
         bsr.s   dispatch
         movea.l (%sp)+, %a2
@@ -133,6 +142,8 @@ core_key:
 
 core_enc:
         move.l  %a2, -(%sp)
+        .globl core_enc_table
+core_enc_table:
         lea     ev_enc, %a2
         bsr.s   dispatch
         movea.l (%sp)+, %a2
@@ -146,6 +157,9 @@ core_enc:
 dispatch:
 1:      move.l  (%a2)+, %d0
         beq.s   2f
+        .ifdef ST_CONTEXT_EVENTS
+        bmi.s   1b
+        .endif
         move.l  16(%sp), -(%sp)         | the event
         move.l  16(%sp), -(%sp)         | brain
         movea.l %d0, %a0

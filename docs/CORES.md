@@ -1,4 +1,4 @@
-[elekloader docs](README.md) › Cores
+[elekloader docs](README.md) Ã¢â‚¬Âº Cores
 
 # Cores
 
@@ -38,6 +38,7 @@ There is one core file per device and OS:
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
+| Syntakt | 1.41 | `core-0.12.13.elemod` | experimental: UI, SETTINGS, MAIN accounting, [a 16 MiB /mods file](../mods/core-st/STORAGE.md), optional [SMZ4 machines/modules](../mods/core-st/SMZ4.md), [FM TONE](../mods/fm-tone-st), [Audio Recorder](../mods/recorder-st), [digital POLY](../mods/poly-st), [long-sample storage](../mods/core-st/HZFS.md) and a [project pool/manager](../mods/core-st/SAMPLE-POOL.md); the SDK builds the explicit AUDIO companion |
 
 Each core keeps all of the one before it: the same sites with the same
 bytes, the same events and tables, and every symbol where the older core
@@ -155,7 +156,8 @@ device's addresses ([mods/core](../mods/core) for the Digitakt mk1,
 [mods/core-dn1](../mods/core-dn1) for the Digitone mk1,
 [mods/core-dt2](../mods/core-dt2) for the Digitakt II,
 [mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-mc](../mods/core-mc)
-and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples). Each `mod.json`
+and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples,
+[mods/core-st](../mods/core-st) for Syntakt). Each `mod.json`
 gives the addresses of every OS it supports (its `os`, and its `ports`):
 the stock file you build with picks them. The Octatrack's has its own
 source. Build any of them with the SDK, which needs the device's cross
@@ -169,6 +171,7 @@ python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'
+python -m elekloader.sdk.build mods/core-st --stock Syntakt_OS1.41.syx                       # the Syntakt's
 python -m elekloader.sdk.build mods/dspbus-ot --stock OCTATRACK_OS1.40C.syx                  # its DSP bus (optional)
 ```
 

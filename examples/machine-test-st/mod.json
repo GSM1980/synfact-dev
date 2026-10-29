@@ -1,0 +1,9 @@
+{
+  "id": "machine-test-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "Machine loader test", "category": "Synth", "author": "GSM1980",
+  "description": "A silent 28-control machine for checking four SYN pages, independent of the resident firmware.",
+  "device": "syntakt", "os": "1.41", "sources": ["main.c"], "cflags": ["-fno-jump-tables"],
+  "smz": {"descriptor": "machine_test_st", "audio": {
+    "sources": ["audio.s"], "update": "machine_test_update", "render": "machine_test_render"
+  }}
+}

@@ -1,0 +1,17 @@
+{
+  "source": "Synfact authored recorder C, ported to the Elekloader event bus",
+  "source_sha256": {
+    "src/current/pool/sampling.c": "9610e60e15cbb0a5b45a65f0a333398ed5f32dbb87f70c1991a4be07f9ff887f",
+    "src/current/pool/sampling_trim.c": "4c93710dec05dfac1e47f63764a46eed1bc02a975350bad9551ac67cd85dbabc",
+    "src/current/pool/sampling_save.c": "135c2aa14da3ddaa60a4bb6cb5148bb33d4f1f3d4364322a04f8a438a18f91f2",
+    "src/features/ui-performance/headroom/runtime.c": "11b269cefb5154358acb69fe3f9b445e71628958b0b51bee5fca202347637925",
+    "src/features/lfo3/recorder_normalize/runtime.c": "90a62ff1dc1d28efd4efb87480e819043b809b130043a15c76e77a6881c5e3ec"
+  },
+  "changes": [
+    "shared ev_key/ev_enc/ev_tick/ev_draw/ev_main_mix subscriptions",
+    "core HZFS validation, CRC, IO, pool and preview services",
+    "SP ONE SAMP engine id 0x23c; free pool slots start at 65",
+    "no binary overlays, runtime firmware patches or extra hook sites",
+    "original UI/trim and optimized capture/normalization arithmetic retained"
+  ]
+}

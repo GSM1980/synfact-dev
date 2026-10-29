@@ -1,0 +1,5 @@
+{
+  "id": "smz-test-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "SMZ module example", "device": "syntakt", "os": "1.41",
+  "sources": ["main.c"], "smz_module": {"descriptor": "test_module"}
+}

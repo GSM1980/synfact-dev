@@ -22,6 +22,8 @@ and a hook bus of its own.
 | `core_ddr` | from a core's version on, the linker's area in place of `ddr` | core 4.0: `0x47BC0000-0x47C00000`, the gap between the sample pool's end and the audio input ring |
 | `recovery` | how to get back to stock, shown to the user | FUNC at power-on |
 | `container`, `version_len` | the file family (`'ele3'`, `'elek'`) and the version field's length | the container header |
+| `terminal_zero_packet` | include a full zero packet when preamble + container is exactly 101-aligned; enforce that padding when reading back | Syntakt 1.41's byte-exact stock transport |
+| `secondary` | explicitly requested companion sections: original hash, fixed length, load address and allowed patch windows; no boot sections | Syntakt AUDIO telemetry only |
 | `protected` | main OS ranges no mod may change, with the reason | none on the mk1 |
 | `relocatable` | data inside a protected range that the OS reaches only through the listed 4-byte operands and never writes, so a mod may serve its own copy through them (sdk.octabam does, for a poke there) | none on the mk1 |
 | `blob_max` | a cap on the appended blob, if the DDR areas do not give one | none on the mk1 |
@@ -405,6 +407,57 @@ Digitakt's in the places elekloader depends on.
   1.74 builds of core-ar2 with hello-marker-ar2 (HM74) and with
   hooks-check-ar2 (HC74) work as the 1.73 ones do; in rytm-emu both boot
   as stock 1.74 does, differing only where the mod draws.
+
+## The Syntakt (1.41)
+
+The experimental profile `devices/syntakt.py` and `mods/core-st` use the
+shared UI hook bus and SETTINGS implementation. Core 0.2 adds MAIN render
+events and idle accounting. `NO_DTIM0` leaves MAIN's stock timer alone.
+Core 0.3 adds native Data RPC extension events and a single opaque `/mods`
+file (16 MiB maximum) in eMMC at `02400000`, followed by a separate length
+record sector. [Storage contract and sources](../mods/core-st/STORAGE.md).
+The explicit [System info build](../mods/system-info-st) adds a small,
+read-only telemetry companion on AUDIO; the ordinary patch CLI stays MAIN-only.
+
+- **Pinned input.** Official OS SHA256
+  `8e2488f462c4a5656396a895f113bcd415e9900fa8709340dccf45d4cb9ed19e`.
+  MAIN SHA256
+  `8cf2b4b4ea80d58953da46ca453328454fb3fca5cb5f844a2f7bad4b72241f53`,
+  3,438,480 bytes at `0x40000400`.
+- **Files.** Device byte `0x16`, ELE3 order 5, 2, 1, 3, 4, 6, 7, 8,
+  no trailer. Ordinary builds change section 3 only. The System info build
+  explicitly requests section 7 as well. Sections 1, 2, 4, 5, 6 and 8
+  must stay byte-identical. The version is optional: omitting it preserves
+  the official header's `1.41`.
+- **Transport.** Preamble + stock container fills 20,088 chunks of 101
+  bytes, followed by a complete zero chunk. `terminal_zero_packet` models
+  this convention explicitly. The writer must reproduce the whole stock
+  SYX byte for byte; the verifier rejects missing, nonzero or extra padding.
+  Other devices retain their previous padding policy.
+- **Memory.** Native SRAM copy sources end at `0x40347b90`; native BSS
+  clearing ends at `0x45565490`, below the stack at `0x48000000`. The mod
+  window is 64 KiB at `0x46000000`, following SyntHack-OS's documented
+  `mods/modarea` (reference revision
+  `b536fa598cc2587d718905144e4c597947a5770c`). The stock copy and clear
+  routines are unchanged; elekloader's normal boot copier runs before
+  them and places the core in that window.
+- **Staging.** Bootstrap and updater stage MAIN at `0x40200000`.
+  In-place decompression must not catch unread input. Package size and
+  decompression margin are separate constraints.
+- **Packaging budget.** Container at flash `0x80000`. For this first
+  integration, `flash_limit` is deliberately `0x80000 + 2,028,880`: no
+  package larger than the known official container. This is a build
+  policy, not a measured flash or receive limit. The built-in compressor
+  makes a larger container and verification refuses it. Compact packages
+  produced with elektron-firmware-tool have loaded on a unit; see the
+  external packaging step in [core-st](../mods/core-st). Integrating a
+  compact compressor is separate work.
+- **Event IDs.** Native `KeyEvent` IDs differ from button-name indices.
+  YES=12, NO=13 and FUNC=1; the full mapping relevant to mods is in
+  [core-st](../mods/core-st). Hardware reports flags `01` (press), `09`
+  (held repeat), `10` (release); all nine encoder turns have worked in the
+  diagnostic mod. A package loading does not validate the entire update
+  path or every byte of the reserved RAM window.
 
 ## What a new device needs besides its profile
 

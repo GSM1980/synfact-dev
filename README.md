@@ -8,10 +8,10 @@ file on your own machine, and you flash it the way you flash any OS update.
   its author's bytes, the short instruction fragments needed to hook the OS,
   and hashes of the stock bytes it expects. Every build starts from your own
   stock file, recognised by its hash.
-- **The bootloader is never touched.** Mods can only change the main OS:
-  the file format has no way to say anything else. Each output file is
-  re-read and verified before it is written. So the stock OS file always
-  recovers the device.
+- **The bootloader is never touched.** Ordinary mods change MAIN only.
+  Syntakt's explicit System info build also includes a bounded AUDIO
+  companion. Bootstrap, updater and boot stub remain byte-identical.
+  Each output file is re-read and verified before delivery.
 - **Mods are checked against each other before anything is built.** Two
   mods may not touch the same bytes, claim the same memory or the same
   named resource, or leave a requirement unmet.
@@ -24,6 +24,7 @@ file on your own machine, and you flash it the way you flash any OS update.
 | Octatrack (MKI and MKII) | 1.40C | supported: whole builds (format-1 mods); linkable mods with its own core: boots on an MKII, not yet run on an MKI |
 | Model:Cycles, Model:Samples | 1.13 | supported: linkable mods with their own core (the hook bus's tick, draw, key and encoder events); builds work on both units (Transfer over USB) |
 | Analog Rytm MKII | 1.73, 1.74 | experimental: linkable mods with its own core, a proof of concept (the hook bus's tick, draw, key, encoder, SETTINGS and render events); builds with the core work on a unit (Transfer over USB) |
+| Syntakt | 1.41 | experimental core 0.12.13: UI, SETTINGS, MAIN accounting, [an optional SMZ4 bank with machine UI/modules](mods/core-st/SMZ4.md), [source-built SP machines](mods/samplers-st), [FM TONE](mods/fm-tone-st), [Audio Recorder](mods/recorder-st), [digital POLY](mods/poly-st), [long-sample storage](mods/core-st/HZFS.md) and a [project sample pool/manager](mods/core-st/SAMPLE-POOL.md); [System info](mods/system-info-smz-st) adds CPU/RAM header pages and an optional AUDIO companion |
 | other Elektron devices | | planned: see [docs/DEVICES.md](docs/DEVICES.md) |
 
 ## Get started

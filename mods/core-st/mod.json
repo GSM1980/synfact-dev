@@ -1,0 +1,745 @@
+{
+  "id": "core",
+  "version": "0.12.18",
+  "license": "GPL-2.0-or-later",
+  "title": "core",
+  "category": "Framework",
+  "author": "GSM1980",
+  "description": "Syntakt hook bus, optional machine banks, bounded stock samples and HZFS long-sample storage.",
+  "device": "syntakt",
+  "os": "1.41",
+  "sources": [
+    "../core/core.s",
+    "settings.s",
+    "accounting.s",
+    "fw.s",
+    "files.s",
+    "storage.c",
+    "files.c",
+    "smz.c",
+    "machines.c",
+    "machine-hooks.s",
+    "machine-destination-labels.s",
+    "machine-boot.c",
+    "machine-boot.s",
+    "machine-pages.c",
+    "machine-pages.s",
+    "machine-params.c",
+    "hzfs.c",
+    "high-storage.c",
+    "high-storage.s",
+    "sample-pool.c",
+    "sample-manager.c",
+    "sample-hooks.s",
+    "sample-ui.s",
+    "machine-host.c",
+    "machine-ui.c",
+    "machine-events.c",
+    "machine-ui.s",
+    "sample-wave.c",
+    "crc.c",
+    "modules.c",
+    "modules.s",
+    "native.c",
+    "native.s",
+    "view-draw.s",
+    "preview.s"
+  ],
+  "defsym": {
+    "DRAWALL": "0x401007ce",
+    "KEYDISP": "0x4000839e",
+    "ENCDISP": "0x400083f0",
+    "NO_DTIM0": "1",
+    "VBR_FN": "0x40001d28",
+    "OP_NEW": "0x40103788",
+    "ITEM_CTOR": "0x400fa688",
+    "MENU_ADD": "0x400f9ebe",
+    "SETTINGS_RET": "0x4005f104",
+    "FS_ROUTE_RET": "0x400b8090",
+    "FS_WRITE_RET": "0x400b6194",
+    "FW_FS_WRITTEN": "0x4019c40a",
+    "ST_CONTEXT_EVENTS": "1"
+  },
+  "sites": [
+    {
+      "addr": "0x4007c272",
+      "stock": "0c82000001f955c041f94022d59c7100c48070344c0028002f302830",
+      "op": "jmp",
+      "target": "core_machine_lfo_label"
+    },
+    {
+      "addr": "0x4007c3c0",
+      "stock": "0c82000001f955c041f94022d59c7100c48070344c0028002f302830",
+      "op": "jmp",
+      "target": "core_machine_mod_label"
+    },
+    {
+      "addr": "0x400dffda",
+      "stock": "bbfc000001f86204200d6002428072344c01080041f94022d59c2a3c00007f00207008302f480030",
+      "op": "jmp",
+      "target": "core_machine_mod_row_label"
+    },
+    {
+      "addr": "0x400de5e0",
+      "stock": "0c84000001f955c041f94022d59c7100c88070344c0048002f304830",
+      "op": "jmp",
+      "target": "core_machine_mod_pair_label"
+    },
+    {
+      "addr": "0x40000538",
+      "stock": "4eb940001d28",
+      "op": "jsr",
+      "target": "boot"
+    },
+    {
+      "addr": "0x4000a220",
+      "stock": "4eb940100798",
+      "op": "jsr",
+      "target": "core_tick"
+    },
+    {
+      "addr": "0x4000a286",
+      "stock": "4eb9401007ce",
+      "op": "jsr",
+      "target": "core_draw"
+    },
+    {
+      "addr": "0x4000b420",
+      "stock": "4eb94000839e",
+      "op": "jsr",
+      "target": "core_key"
+    },
+    {
+      "addr": "0x4000b468",
+      "stock": "4eb9400083f0",
+      "op": "jsr",
+      "target": "core_enc"
+    },
+    {
+      "target": "core_settings",
+      "stock": "205248780002",
+      "addr": "0x4005f0fe",
+      "op": "jmp"
+    },
+    {
+      "target": "core_task_switch",
+      "stock": "203cffffdfff",
+      "addr": "0x40000438",
+      "op": "jsr"
+    },
+    {
+      "target": "core_render_in",
+      "stock": "4e56ff5c48d73fff",
+      "addr": "0x400a3856",
+      "op": "jmp"
+    },
+    {
+      "target": "core_render_out",
+      "stock": "4cee3fffff5c",
+      "addr": "0x400a54a0",
+      "op": "jmp"
+    },
+    {
+      "addr": "0x400b8088",
+      "stock": "4e56ffd848d73c0c",
+      "op": "jmp",
+      "target": "core_fs_route"
+    },
+    {
+      "addr": "0x400b618c",
+      "stock": "4e56ffb448d71c3c",
+      "op": "jmp",
+      "target": "core_fs_write"
+    },
+    {
+      "addr": "0x4010b8da",
+      "stock": "4eb94019c40a",
+      "op": "jsr",
+      "target": "core_fs_written"
+    },
+    {
+      "addr": "0x400a668c",
+      "stock": "722c202f0004b280",
+      "op": "jmp",
+      "target": "core_machine_name_full"
+    },
+    {
+      "addr": "0x400a66ac",
+      "stock": "722c202f0004b280",
+      "op": "jmp",
+      "target": "core_machine_name_short"
+    },
+    {
+      "addr": "0x400a66cc",
+      "stock": "722c202f0004b280",
+      "op": "jmp",
+      "target": "core_machine_group_name"
+    },
+    {
+      "addr": "0x4002eeb4",
+      "stock": "722c202f0004b280",
+      "op": "jmp",
+      "target": "core_machine_menu_category"
+    },
+    {
+      "addr": "0x400a647a",
+      "stock": "2f02742c202f0008",
+      "op": "jmp",
+      "target": "core_machine_availability"
+    },
+    {
+      "addr": "0x400a63c4",
+      "stock": "7223202f0004b280",
+      "op": "jmp",
+      "target": "core_machine_digital_kind"
+    },
+    {
+      "addr": "0x400a634e",
+      "stock": "202f00040c80000002df",
+      "op": "jmp",
+      "target": "core_machine_ui_to_engine"
+    },
+    {
+      "addr": "0x400a5c4a",
+      "stock": "222f00040c81000001f9",
+      "op": "jmp",
+      "target": "core_machine_local_slot"
+    },
+    {
+      "addr": "0x400a5c6c",
+      "stock": "222f00040c81000001f9",
+      "op": "jmp",
+      "target": "core_machine_owner"
+    },
+    {
+      "addr": "0x400a636a",
+      "stock": "202f00040c80000001f8",
+      "op": "jmp",
+      "target": "core_machine_engine_to_ui"
+    },
+    {
+      "addr": "0x400a63ec",
+      "stock": "2f0a2f02242f0010",
+      "op": "jmp",
+      "target": "core_machine_slot_to_engine"
+    },
+    {
+      "addr": "0x400a655a",
+      "stock": "2f02740c222f0008",
+      "op": "jmp",
+      "target": "core_machine_page_local"
+    },
+    {
+      "addr": "0x400a6520",
+      "stock": "2f02702c2408222f0008",
+      "op": "jmp",
+      "target": "core_machine_page_copy"
+    },
+    {
+      "addr": "0x400a62c8",
+      "stock": "2f02202f00080c80000001f9",
+      "op": "jmp",
+      "target": "core_machine_range_copy"
+    },
+    {
+      "addr": "0x400a64de",
+      "stock": "202f00040c80000001f8",
+      "op": "jmp",
+      "target": "core_machine_valid_owner"
+    },
+    {
+      "addr": "0x4007b9ea",
+      "stock": "722c202f0004b280",
+      "op": "jmp",
+      "target": "core_machine_source_layout"
+    },
+    {
+      "addr": "0x4007b9b2",
+      "stock": "222f00040c81000001f9",
+      "op": "jmp",
+      "target": "core_machine_cached_parameter"
+    },
+    {
+      "addr": "0x40012b24",
+      "stock": "222f00080c81000001f9",
+      "op": "jmp",
+      "target": "core_machine_parameter_label"
+    },
+    {
+      "addr": "0x400a6178",
+      "stock": "222f00040c81000001f9",
+      "op": "jmp",
+      "target": "core_machine_synth_parameter"
+    },
+    {
+      "addr": "0x40011a82",
+      "stock": "2f02705c206f0008",
+      "op": "jmp",
+      "target": "core_machine_parameter_long_label"
+    },
+    {
+      "addr": "0x400a666a",
+      "stock": "222f00040c81000001f9",
+      "op": "jmp",
+      "target": "core_machine_modulation_flags"
+    },
+    {
+      "addr": "0x40178b12",
+      "stock": "2f0a206f00082008",
+      "op": "jmp",
+      "target": "core_machine_menu_rank"
+    },
+    {
+      "addr": "0x400826a6",
+      "stock": "4eb9400bd6d6",
+      "op": "jsr",
+      "target": "core_storage_boot"
+    },
+    {
+      "addr": "0x40082f3e",
+      "stock": "24394d84f2c1",
+      "op": "jsr",
+      "target": "core_pool_count"
+    },
+    {
+      "addr": "0x40082f56",
+      "stock": "203941bbe42433c01000000ce3a8",
+      "op": "jsr",
+      "target": "core_pool_map"
+    },
+    {
+      "addr": "0x400a7036",
+      "stock": "220052817381b48152c1143c0003",
+      "op": "jsr",
+      "target": "core_machine_sound_type"
+    },
+    {
+      "addr": "0x400264ca",
+      "stock": "487800b44eb940103788",
+      "op": "jsr",
+      "target": "core_machine_menu_alloc"
+    },
+    {
+      "addr": "0x40026508",
+      "stock": "0682000000b4",
+      "op": "jsr",
+      "target": "core_machine_menu_capacity"
+    },
+    {
+      "addr": "0x40026554",
+      "stock": "5282702db082",
+      "op": "jsr",
+      "target": "core_machine_menu_bound"
+    },
+    {
+      "addr": "0x4002f2b2",
+      "stock": "722d2f0a2f02",
+      "op": "jmp",
+      "target": "core_machine_cursor_bound"
+    },
+    {
+      "addr": "0x4002fbb2",
+      "stock": "742d22005281",
+      "op": "jsr",
+      "target": "core_machine_highlight_bound"
+    },
+    {
+      "addr": "0x4001232e",
+      "stock": "0c84000001f8",
+      "op": "jsr",
+      "target": "core_machine_relative_bound4"
+    },
+    {
+      "addr": "0x400123f6",
+      "stock": "0c82000001f8",
+      "op": "jsr",
+      "target": "core_machine_relative_bound2"
+    },
+    {
+      "addr": "0x40037d9e",
+      "stock": "2f027008206f0008",
+      "op": "jmp",
+      "target": "core_machine_page_nav_37d9e"
+    },
+    {
+      "addr": "0x400385dc",
+      "stock": "2f0a70ff2f02246f000c",
+      "op": "jmp",
+      "target": "core_machine_page_op_385dc"
+    },
+    {
+      "addr": "0x40038642",
+      "stock": "4feffff470ff48d7040c",
+      "op": "jmp",
+      "target": "core_machine_page_op_38642"
+    },
+    {
+      "addr": "0x400391a8",
+      "stock": "42af00204878001c",
+      "op": "jmp",
+      "target": "core_preview_selected"
+    },
+    {
+      "addr": "0x4003a244",
+      "stock": "4fefffb048d77cfc",
+      "op": "jmp",
+      "target": "core_machine_page_op_3a244"
+    },
+    {
+      "addr": "0x4003b1f0",
+      "stock": "4e56fff070ff2f0a",
+      "op": "jmp",
+      "target": "core_machine_page_op_3b1f0"
+    },
+    {
+      "addr": "0x4003b29e",
+      "stock": "4e56fff070ff2f0a",
+      "op": "jmp",
+      "target": "core_machine_page_op_3b29e"
+    },
+    {
+      "addr": "0x4003b3b8",
+      "stock": "4e56fff070ff2f0a",
+      "op": "jmp",
+      "target": "core_machine_page_op_3b3b8"
+    },
+    {
+      "addr": "0x4003bc74",
+      "stock": "4e56ffa848d73cfc",
+      "op": "jmp",
+      "target": "core_machine_page_op_3bc74"
+    },
+    {
+      "addr": "0x4007b9d0",
+      "stock": "7224202f0004b280",
+      "op": "jmp",
+      "target": "core_machine_page_layout"
+    },
+    {
+      "addr": "0x400a7366",
+      "stock": "4fefffe048d77c1c",
+      "op": "jmp",
+      "target": "core_machine_sound_save"
+    },
+    {
+      "addr": "0x400a6f7e",
+      "stock": "4fefffe048d77c1c",
+      "op": "jmp",
+      "target": "core_machine_sound_load"
+    },
+    {
+      "addr": "0x400a4d78",
+      "stock": "41f9402d7010",
+      "op": "jsr",
+      "target": "core_machine_frame_tail"
+    },
+    {
+      "addr": "0x400a6cf4",
+      "target": "core_machine_slot_to_storage",
+      "op": "jmp",
+      "stock": "2f02740c222f0008"
+    },
+    {
+      "addr": "0x400a6cba",
+      "target": "core_machine_id_to_slot",
+      "op": "jmp",
+      "stock": "2f02740c222f0008"
+    },
+    {
+      "addr": "0x400a7fc6",
+      "target": "core_machine_lane_bound",
+      "op": "jmp",
+      "stock": "7a467380ba816562"
+    },
+    {
+      "addr": "0x400a8152",
+      "target": "core_machine_lane_compress",
+      "op": "jsr",
+      "stock": "4bf9402340a4"
+    },
+    {
+      "addr": "0x400a82be",
+      "target": "core_machine_lane_update",
+      "op": "jsr",
+      "stock": "45f9402340a4"
+    },
+    {
+      "addr": "0x40082802",
+      "stock": "4ebafab84eb940082e24",
+      "op": "jsr",
+      "target": "core_pool_blob"
+    },
+    {
+      "addr": "0x400979e6",
+      "stock": "b280660c31690042001e",
+      "op": "jmp",
+      "target": "core_machine_raw"
+    },
+    {
+      "addr": "0x400a4ca0",
+      "stock": "123c002cb280",
+      "op": "jsr",
+      "target": "core_machine_length"
+    },
+    {
+      "addr": "0x4001d16a",
+      "stock": "4e56ffa848d71c3c",
+      "op": "jmp",
+      "target": "core_pool_initialize"
+    },
+    {
+      "addr": "0x40018ab0",
+      "stock": "4fefffe848d71c1c",
+      "op": "jmp",
+      "target": "core_pool_new"
+    },
+    {
+      "addr": "0x4019ffd4",
+      "stock": "206f0004202f0008",
+      "op": "jmp",
+      "target": "core_pool_snapshot"
+    },
+    {
+      "addr": "0x400afa7e",
+      "stock": "4fefffd448d77c0c",
+      "op": "jmp",
+      "target": "core_pool_validate"
+    },
+    {
+      "addr": "0x4001d6fe",
+      "stock": "4fefffdc48d7043c",
+      "op": "jmp",
+      "target": "core_pool_load"
+    },
+    {
+      "addr": "0x4001a7be",
+      "stock": "4eb9400c1c10",
+      "op": "jsr",
+      "target": "core_pool_save"
+    },
+    {
+      "addr": "0x40064918",
+      "stock": "4fefff5848d77cfc",
+      "op": "jmp",
+      "target": "core_pool_sound_menu"
+    },
+    {
+      "addr": "0x4007bb6a",
+      "stock": "222f00040c81000001f9",
+      "op": "jmp",
+      "target": "core_pool_value"
+    },
+    {
+      "addr": "0x4008fb04",
+      "stock": "486efed848798000e0f0",
+      "op": "jmp",
+      "target": "core_main_mix"
+    },
+    {
+      "addr": "0x400265b6",
+      "stock": "200a4cef1c3c0008",
+      "op": "jmp",
+      "target": "core_machine_menu_finish"
+    },
+    {
+      "addr": "0x40011e74",
+      "stock": "4fefffec48d7007c",
+      "op": "jmp",
+      "target": "core_machine_sample_dial"
+    },
+    {
+      "addr": "0x40011f58",
+      "stock": "4cd70c1c4fef00144ed1",
+      "op": "jmp",
+      "target": "core_machine_direct_tail"
+    },
+    {
+      "addr": "0x4008b882",
+      "stock": "4fefffc848d77cfc",
+      "op": "jmp",
+      "target": "core_native_trig"
+    },
+    {
+      "addr": "0x4008cfc4",
+      "stock": "4eb94011a648",
+      "op": "jsr",
+      "target": "core_native_enqueue"
+    },
+    {
+      "addr": "0x400a4ade",
+      "stock": "49f9800046884285",
+      "op": "jmp",
+      "target": "core_native_publish"
+    },
+    {
+      "addr": "0x400a4bce",
+      "stock": "7119e1883140003e",
+      "op": "jmp",
+      "target": "core_native_type"
+    },
+    {
+      "addr": "0x400a79cc",
+      "stock": "4feffff448d70c04",
+      "op": "jmp",
+      "target": "core_native_header_load"
+    },
+    {
+      "addr": "0x400b36ce",
+      "stock": "206f00044a88",
+      "op": "jmp",
+      "target": "core_native_header_reset"
+    },
+    {
+      "addr": "0x40013304",
+      "stock": "4e56ffd848d704fc",
+      "op": "jmp",
+      "target": "core_native_sound_set"
+    },
+    {
+      "addr": "0x4011a734",
+      "stock": "2479444de4344a8a",
+      "op": "jmp",
+      "target": "core_native_immediate"
+    },
+    {
+      "addr": "0x400a4c96",
+      "stock": "712b0da07225b280",
+      "op": "jmp",
+      "target": "core_native_src_type"
+    },
+    {
+      "addr": "0x40025594",
+      "stock": "4fefffd848d77c7c",
+      "op": "jmp",
+      "target": "core_native_machine_select"
+    },
+    {
+      "addr": "0x40097afc",
+      "stock": "4fefffc448d77cfc",
+      "op": "jmp",
+      "target": "core_native_modulation"
+    },
+    {
+      "addr": "0x40119266",
+      "stock": "4fefffc048d77cfc",
+      "op": "jmp",
+      "target": "core_native_lfo"
+    },
+    {
+      "addr": "0x40100830",
+      "stock": "2f0c4e952653",
+      "op": "jmp",
+      "target": "core_view_draw"
+    },
+    {
+      "addr": "0x4003b8c6",
+      "stock": "206800bc4e90",
+      "op": "jsr",
+      "target": "core_machine_editor_resolve"
+    }
+  ],
+  "collections": {
+    "ev_tick": 4,
+    "ev_draw": 4,
+    "ev_key": 4,
+    "ev_enc": 4,
+    "ev_settings": 4,
+    "ev_render_in": 4,
+    "ev_render_out": 4,
+    "ev_fs_route": 4,
+    "ev_fs_write": 4,
+    "ev_fs_written": 4,
+    "ev_main_mix": 4,
+    "ev_native": 4
+  },
+  "subscribe": [
+    {
+      "event": "ev_fs_route",
+      "fn": "core_mods_route",
+      "order": 50
+    },
+    {
+      "event": "ev_fs_write",
+      "fn": "core_mods_write",
+      "order": 50
+    },
+    {
+      "event": "ev_fs_written",
+      "fn": "core_mods_finish",
+      "order": 50
+    },
+    {
+      "event": "ev_fs_route",
+      "fn": "core_high_route",
+      "order": 60
+    },
+    {
+      "event": "ev_fs_write",
+      "fn": "core_sample_write_guard",
+      "order": 40
+    },
+    {
+      "event": "ev_settings",
+      "fn": "core_pool_menu",
+      "order": 55
+    },
+    {
+      "event": "ev_key",
+      "fn": "core_pool_key",
+      "order": 20
+    },
+    {
+      "event": "ev_main_mix",
+      "fn": "st_pool_preview_mix",
+      "order": 50
+    },
+    {
+      "event": "ev_tick",
+      "fn": "core_machine_tick",
+      "order": 50
+    },
+    {
+      "event": "ev_tick",
+      "fn": "core_pool_tick",
+      "order": 40
+    }
+  ],
+  "resources": {
+    "names": [
+      "drive:/mods",
+      "emmc:0x02400000..0x03400200",
+      "emmc:0x30000000..card-end",
+      "drive:/samples/high-windows",
+      "project:0xf0..0x200",
+      "settings:SAMPLE MANAGER",
+      "sound:SAMPLE MANAGER",
+      "audio:0x42100750..0x4404f750",
+      "drive:/mod-status:read-only",
+      "ui:sample-manager:three-pane",
+      "main-mix:sample-preview"
+    ]
+  },
+  "weak": [
+    "core_machine_audio_abi",
+    "core_pool_image"
+  ],
+  "cflags": [
+    "-fno-jump-tables"
+  ],
+  "contribute": [
+    {
+      "to": "ev_draw",
+      "order": 50,
+      "data": "00000000",
+      "relocs": [
+        [
+          0,
+          "abs32",
+          "sym:core_machine_draw",
+          2147483648
+        ]
+      ],
+      "claims": []
+    }
+  ]
+}
