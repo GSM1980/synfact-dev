@@ -3,7 +3,7 @@
 typedef unsigned int u32;
 typedef unsigned char u8;
 struct pending {u32 event,sequence,step,generation;};
-struct config {u32 generation,sequence;u8 states[8],owners[12];struct pending pending[13];};
+struct config {u32 generation,sequence;u8 states[12],owners[12];struct pending pending[13];};
 extern volatile struct config poly_seq_config;
 extern void native_event_free(u32 *);
 extern u32 poly_prepare(const u32 *,const volatile u8 *,u32,u32,u32 **);
@@ -20,8 +20,8 @@ extern void native_publish_sound(const volatile u8 *,u32);
  * 4008cfc4 chord expansion. SLAVE statics are filled from their master. */
 #define PREP_EVENT(t) ((volatile u32 *)(0x444e2438u+(t)*0x50u))
 #define PREP_TIME(t) (*(volatile s32 *)(0x444e2848u+(t)*4u))
-static u8 prep_step[8] DATA={0};
-static u32 prep_generation[8] DATA={0};
+static u8 prep_step[12] DATA={0};
+static u32 prep_generation[12] DATA={0};
 
 /* Interval lane of one chord voice: step value, default when inherited. */
 static s32 poly_chord_note(const volatile u8 *sequence,u32 track,u32 step,u32 voice,volatile u32 root)
@@ -33,7 +33,7 @@ static s32 poly_chord_note(const volatile u8 *sequence,u32 track,u32 step,u32 vo
     if(root>127)return -1;
     if(raw==64 || raw>127)return -1;
     note=(s32)root+(s32)raw-64;
-    return note<=127?note:-1;
+    return note>=0 && note<=(track<8?127:84)?note:-1;
 }
 
 /* Delay the native start adds when a track starts inside its own step. */
@@ -67,7 +67,7 @@ static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
     time+=prep_delay(sequence,master)-prep_delay(sequence,master+voice);
     if(time<0)return 0;
     for(i=0;i<20;i++)target[i]=source[i];
-    target[2]=master+voice;target[18]=master+voice;target[6]=(u32)note;
+    poly_voice_target(target,master,voice);target[6]=(u32)note;
     PREP_TIME(master+voice)=time;
     return 1;
 }
@@ -99,33 +99,41 @@ static void prep_rebuild(const volatile u8 *sequence,u32 track)
     if(poly_seq_config.states[track]>=3)prep_fill_group(sequence,track,PREP_TIME(track));
 }
 
+/* Published together with owners under the native IRQ exclusion. */
+volatile u8 poly_has_groups DATA=0;
+volatile u8 poly_analog_active DATA=0;
+u32 poly_publish_end DATA=1;
+u32 poly_publish_first DATA=1;
+u32 poly_slave_mask DATA=0;
+static u8 poly_analog_type[2] DATA={0,0};
+
 extern void poly_native_interest(void);
 u32 poly_commit(u32 sequence,const volatile u8 *states)
 {
-    u8 owners[12],old_roots[8],new_roots[8],affected[8];
+    u8 owners[12],old_roots[12],new_roots[12],affected[12];
     volatile u32 i,changed=0,on;
     u32 old;
     volatile u32 *bucket;
     u32 *event;
     if(!poly_resolve(states,owners))return 0;
     if(sequence!=poly_seq_config.sequence)changed=1;
-    for(i=0;i<8;i++) {
+    for(i=0;i<12;i++) {
         old_roots[i]=0;new_roots[i]=0;
-        if(states[i]!=poly_seq_config.states[i] || poly_modes[i]!=poly_next_modes[i])changed=1;
+        if(states[i]!=poly_seq_config.states[i] || (i<8 && poly_modes[i]!=poly_next_modes[i]))changed=1;
     }
     if(!changed)return 1;
-    for(i=0;i<8;i++) {
+    for(i=0;i<12;i++) {
         old=poly_seq_config.owners[i];
         if(old>i)return 0; /* Caller must initialize an identity map. */
         on=0;
         if(states[i]>=3)on=1;
         if(poly_seq_config.states[i]>=3)on=1;
         if((sequence!=poly_seq_config.sequence && (on || old!=i || owners[i]!=i)) || old!=owners[i] ||
-           (on && (states[i]!=poly_seq_config.states[i] || poly_modes[i]!=poly_next_modes[i]))) {
+           (on && (states[i]!=poly_seq_config.states[i] || (i<8 && poly_modes[i]!=poly_next_modes[i])))) {
             old_roots[old]=1;new_roots[owners[i]]=1;
         }
     }
-    for(i=0;i<8;i++) {
+    for(i=0;i<12;i++) {
         affected[i]=0;
         if(!old_roots[poly_seq_config.owners[i]] && !new_roots[owners[i]])continue;
         affected[i]=1;
@@ -140,13 +148,31 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
         native_release_track(i,0x7fffu);
         /* Destructive setup: copy new voices, never restore removed voices.
          * A PLAY-only change or a decrease makes no new base Sound copy. */
-        if(owners[i]<i && (owners[i]!=poly_seq_config.owners[i] || sequence!=poly_seq_config.sequence))
-            poly_copy_group(i,owners[i]);
+        if(i<8) {
+            if(owners[i]<i && (owners[i]!=poly_seq_config.owners[i] || sequence!=poly_seq_config.sequence))
+                poly_copy_group(i,owners[i]);
+        }else if(poly_seq_config.owners[i]<i && owners[i]==i) {
+            u32 kit=*(volatile u32 *)0x43bd743cu;
+            if(kit)native_publish_sound((const volatile u8 *)(kit+0x2au+i*0x123u),i);
+        }
     }
-    for(i=0;i<8;i++)poly_seq_config.states[i]=states[i];
+    for(i=0;i<12;i++)poly_seq_config.states[i]=states[i];
     for(i=0;i<12;i++)poly_seq_config.owners[i]=owners[i];
     for(i=0;i<8;i++)poly_modes[i]=poly_next_modes[i];
     poly_play_maps(poly_seq_config.owners);
+    poly_has_groups=0;poly_analog_active=0;poly_publish_end=1;poly_slave_mask=0;
+    for(i=1;i<12;i++)if(owners[i]<i) {
+        if(!poly_has_groups)poly_publish_first=i;
+        poly_has_groups=1;poly_publish_end=i+1;
+        if(i>=8)poly_slave_mask|=1u<<i;
+        if(i>=8)poly_analog_active=1;
+    }
+    /* Analog TYPE is native, so publish its master's Sound at group apply. */
+    for(i=8;i<12;i++)if(owners[i]<i) {
+        u32 kit=*(volatile u32 *)0x43bd743cu;
+        if(kit)native_publish_sound((const volatile u8 *)(kit+0x2au+owners[i]*0x123u),i);
+    }
+    for(i=8;i<10;i++)poly_analog_type[i-8]=*(volatile u8 *)(0x80002f50u+i);
     poly_native_interest();
     poly_seq_config.sequence=sequence;
     poly_seq_config.generation++;
@@ -155,22 +181,21 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
      * under the previous topology. Only the same sequence is rebuilt: a new
      * pattern is prepared by its own native 4008c0b0 pass. */
     if(sequence==*(volatile u32 *)0x43bd7430u) {
-        for(i=0;i<8;i++)
+        for(i=0;i<12;i++)
             if(affected[i] && owners[i]<i && *(volatile u32 *)(0x43bd73c8u+i*4u)!=1)PREP_EVENT(i)[1]=0;
-        for(i=0;i<8;i++)
+        for(i=0;i<12;i++)
             if(affected[i] && owners[i]==i)prep_rebuild((const volatile u8 *)sequence,i);
     }
     return 1;
 }
 
-u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 *time)
+static u32 *poly_trig_synced(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 *time)
 {
     u32 generation,i;
     u32 *result;
-    poly_sync();
     generation=poly_seq_config.generation;
     if(track<13)poly_seq_config.pending[track].event=0;
-    if(track<8 && poly_seq_config.sequence==(u32)seq && poly_seq_config.owners[track]<track) {
+    if(track<12 && poly_seq_config.sequence==(u32)seq && poly_seq_config.owners[track]<track) {
         u32 master=poly_seq_config.owners[track];
         /* Static first-step preparation of a SLAVE: take the master's. */
         if(event==(u32 *)PREP_EVENT(track) && time && prep_generation[master]==generation &&
@@ -182,7 +207,7 @@ u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 
         return (u32 *)0;
     }
     result=stock_trig(track,seq,kit,step,event,time);
-    if(track<8 && event==(u32 *)PREP_EVENT(track) && poly_seq_config.sequence==(u32)seq &&
+    if(track<12 && event==(u32 *)PREP_EVENT(track) && poly_seq_config.sequence==(u32)seq &&
        generation==poly_seq_config.generation && poly_seq_config.states[track]>=3) {
         /* Master preparation: 4008c0b0 has not yet published its time. */
         prep_step[track]=(u8)step;
@@ -191,7 +216,7 @@ u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 
         else for(i=1;i+1u<poly_seq_config.states[track];i++)PREP_EVENT(track+i)[1]=0;
     }
     if(!result)return result;
-    if(track>=8)return result;
+    if(track>=12)return result;
     if(poly_seq_config.sequence!=(u32)seq)return result;
     if(generation!=poly_seq_config.generation)return result;
     if(poly_seq_config.states[track]<3)return result;
@@ -202,6 +227,12 @@ u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 
     return result;
 }
 
+u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 *time)
+{
+    poly_sync();
+    return poly_trig_synced(track,seq,kit,step,event,time);
+}
+
 /* Bound specifically to the main sequencer's enqueue call at 4008cfc4.
  * Other enqueue callers retain the original function and ABI unchanged. */
 u32 poly_sequence_enqueue(u32 *event,u32 time)
@@ -209,7 +240,7 @@ u32 poly_sequence_enqueue(u32 *event,u32 time)
     u32 track=event[2],count,i;
     u32 *batch[4];
     volatile struct pending *pending;
-    if(track>=8)return stock_enqueue(event,time);
+    if(track>=12)return stock_enqueue(event,time);
     pending=&poly_seq_config.pending[track];
     if(pending->event!=(u32)event)return stock_enqueue(event,time);
     pending->event=0;

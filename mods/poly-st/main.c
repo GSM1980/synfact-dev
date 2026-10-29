@@ -23,13 +23,7 @@ extern void poly_fast_publish(u8 *,const volatile u8 *);
 extern void poly_native_shared(void),poly_native_all(void),poly_mod_shared(void);
 static u32 poly_grouped(void)
 {
-    typedef u32 owner_word __attribute__((may_alias));
-    const volatile owner_word *o=(const volatile owner_word *)poly_owner_map;
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return o[0]!=0x00010203u || o[1]!=0x04050607u;
-#else
-    return o[0]!=0x03020100u || o[1]!=0x07060504u;
-#endif
+    return poly_has_groups;
 }
 static void poly_frame(void){poly_sync();}
 static int poly_native(u32 op,const u32 *a,u32 *result);
@@ -52,6 +46,7 @@ void poly_native_interest(void)
         mask|=POLY_NATIVE_GROUPED;
         if(!poly_shared_mask)mask&=~((1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_MODULATION)|
             (1u<<ST_NATIVE_LFO)|(1u<<ST_NATIVE_OWNERS));
+        if(poly_analog_active)mask|=(1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO);
         /* New voices already own a native Sound/type; no TYPE dispatcher. */
     }
     if(mask==poly_interest || !poly_host || poly_host->version<5)return;
@@ -71,7 +66,7 @@ static int poly_key(void *view,void *event,u32 phase)
     }
     return poly_ui_block_key(view,event);
 }
-static void poly_tick(void *ctrl){(void)ctrl;poly_copy_ui();poly_rec_ui();}
+static void poly_tick(void *ctrl){(void)ctrl;poly_copy_ui();poly_rec_ui();poly_analog_ui();}
 static u32 poly_context[16],poly_depth;
 static int poly_native(u32 op,const u32 *a,u32 *result)
 {
@@ -82,13 +77,13 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
             if(a[0]<13)poly_seq_config.pending[a[0]].event=0;
             return 0;
         }
-        *result=(u32)poly_trig(a[0],(const volatile u8 *)a[1],a[2],a[3],(u32 *)a[4],(u32 *)a[5]);return 1;
+        *result=(u32)poly_trig_synced(a[0],(const volatile u8 *)a[1],a[2],a[3],(u32 *)a[4],(u32 *)a[5]);return 1;
     case ST_NATIVE_ENQUEUE:
         if(!poly_grouped())return 0;
         *result=poly_sequence_enqueue((u32 *)a[0],a[1]);return 1;
     case ST_NATIVE_IMMEDIATE:*result=poly_preview_locked((u32 *)a[0]);return 1;
     case ST_NATIVE_PUBLISH:
-        if(poly_shared_mask)poly_fast_publish_span((u8 *)a[0],poly_post_map,poly_publish_span);return 0;
+        if(poly_shared_mask)poly_publish_entry((u8 *)a[0],poly_post_map,poly_publish_span);return 0;
     case ST_NATIVE_TYPE:
         v=a[0]-0x80002f50u;if(v>=8 || poly_owner_map[v]>=v)return 0;
         *result=poly_effective_type((const volatile u8 *)a[0]);return 1;
@@ -109,7 +104,10 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
         if(!poly_shared_mask)return 0;
         *result=(u32)(a && a[0]==1?poly_lfo_map:poly_post_map);return 1;
     case ST_NATIVE_MODULATION:case ST_NATIVE_LFO:
-        return 0; /* Both PLAY modes use the native per-track engines. */
+        /* Preserve the validated analog skip kernels. Their bitmap excludes
+         * digital voices, which keep native per-track modulation in either PLAY. */
+        if(!poly_analog_active)return 0;
+        *result=(u32)(op==ST_NATIVE_MODULATION?poly_mod_shared:poly_native_shared);return 1;
     default:return 0;
     }
     return 0; /* Notifications continue to later native subscribers. */
@@ -130,4 +128,4 @@ static const struct st_smz_subscription poly_subscriptions[]={
     {ST_EV_KEY|ST_EV_VIEW|ST_EV_PRE,(void (*)(void))poly_key},
     {ST_EV_TICK,(void (*)(void))poly_tick},
     {ST_EV_NATIVE,(void (*)(void))poly_native}};
-const struct st_smz_module poly_module={"DIGITAL POLY",poly_initialize,poly_subscriptions,6};
+const struct st_smz_module poly_module={"POLY",poly_initialize,poly_subscriptions,6};

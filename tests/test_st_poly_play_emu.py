@@ -62,6 +62,7 @@ class Run:
         self.u.mem_write(self.sym['poly_modes'],bytes([int(independent)])+bytes(7))
         mask=self.sym.get('poly_independent_mask',self.sym.get('poly_lfo_saved_mask'))
         if mask:self.write32(mask,14 if independent else 0)
+        if 'poly_has_groups' in self.sym:self.u.mem_write(self.sym['poly_has_groups'],b'\1')
         if 'poly_shared_mask' in self.sym:self.write32(self.sym['poly_shared_mask'],0 if independent else 14)
         if 'poly_publish_span' in self.sym:self.write32(self.sym['poly_publish_span'],0x0808 if independent else 0x0104)
     def publish(self):
@@ -131,6 +132,31 @@ def mixed_probe(native,bank,stock):
         assert actual.block(bytes(poisoned),trigs,True,False)==expected,('mixed',block)
     return 80
 
+def analog_mixed_probe(native,bank,stock):
+    ref=Run(stock,bank);actual=Run(native,bank);actual.group(True)
+    owners=bytes([0,0,2,3,4,5,6,7,8,8,8,11])
+    post=bytes([0,1,2,3,4,5,6,7,8,8,8,11])
+    if 'poly_analog_active' not in actual.sym:return 0
+    actual.u.mem_write(actual.sym['poly_seq_config']+8,bytes([3,0,0,0,0,0,0,0,4,0,0,0]))
+    for key,value in [('poly_owner_map',owners),('poly_lfo_map',post),('poly_post_map',post)]:
+        actual.u.mem_write(actual.sym[key],value)
+    actual.u.mem_write(actual.sym['poly_modes'],bytes([1])+bytes(7))
+    actual.u.mem_write(actual.sym['poly_analog_active'],b'\1')
+    actual.u.mem_write(actual.sym['poly_has_groups'],b'\1')
+    actual.write32(actual.sym['poly_slave_mask'],(1<<9)|(1<<10))
+    actual.write32(actual.sym['poly_shared_mask'],(1<<9)|(1<<10))
+    actual.write32(actual.sym['poly_publish_span'],0x090b)
+    ref.u.mem_write(ref.sym['poly_post_map'],post)
+    data,_=fixture(1,1,0);data=bytearray(data)
+    for t in (8,9,10):data[28+142*t+2:28+142*t+18]=data[30:46]
+    for block in range(80):
+        trigs={0:1,11:2,29:256,43:512,51:1024}.get(block,0)
+        ref.block(bytes(data),trigs,False,False)
+        ref.call('poly_fast_publish',WORK,ref.sym['poly_post_map'])
+        expected=bytes(ref.u.mem_read(WORK,SIZE))
+        assert actual.block(bytes(data),trigs,True,False)==expected,('analog+independent',block)
+    return 80
+
 def controller_probe(native,bank,stock):
     ref=Run(stock,bank);actual=Run(native,bank);actual.group(True)
     data,_=fixture(1,1,0);data=bytearray(data)
@@ -170,6 +196,7 @@ def main():
         print('Checking',image,'controllers',flush=True)
         controllers+=controller_probe(native,a.bank,stock)
         mixed+=mixed_probe(native,a.bank,stock)
+        mixed+=analog_mixed_probe(native,a.bank,stock)
         instructions[image]=costs(native,a.bank,stock)
         for lfo in (1,2,3):
             print('Checking',image,'LFO',lfo,flush=True)

@@ -20,7 +20,7 @@ static void *poly_test_function(T);
 static T events[128][20],used[128],queue[256][20],queued,releases,publishes,cancelled;
 static T fail_after,allocations,refcount=1,trig_calls,model_notifies,draws,immediate_calls;
 static T policy[13],increments[7],native_layout[11],tracked=0;
-static T rec_step;
+static T rec_step,rec_track;
 static B rec_model[0x500];
 static B view[512],model[64],header[256];
 static char labels[512];
@@ -45,16 +45,20 @@ static void sink(T *e)
 void native_enqueue(T *e,T time){(void)time;sink(e);}
 void native_immediate(T *e){immediate_calls++;if(!poly_preview_locked(e))sink(e);}
 void native_cancel_track(T *e,T t){(void)e;(void)t;cancelled++;}
-void native_release_track(T t,T n){assert(t<8 && n==0x7fff);releases++;}
+void native_release_track(T t,T n){assert(t<12 && n==0x7fff);releases++;}
 void native_publish_sound(const volatile B *s,T t)
-{T i;assert(t<8 && s>=KIT+0x2a && s<KIT+0x2a+8*0x123);publishes++;
+{T i,owner=poly_seq_config.owners[t];assert(t<12 && s>=KIT+0x2a && s<KIT+0x2a+12*0x123);publishes++;
  for(i=0;i<0x8e;i++)((B *)0x800021ccu)[t*0x8eu+i]=s[i];
- *(B *)(0x80002f50+t)=s[0xa2];}
+ if(t>=8 && owner<t && s==KIT+0x2a+owner*0x123)
+     *(B *)(0x80002f50u+t)=*(B *)(0x80002f50u+owner);
+ else *(B *)(0x80002f50u+t)=s[0xa2];}
 static T projections;
 void poly_fast_publish(B *w,const volatile B *o){projections++;poly_publish(w,o);}
 void poly_fast_publish_span(B *w,const volatile B *o,T span)
-{T t;for(t=1;t<8;t++)if(o[t]<t)assert(t>=(span>>8) && t<(span&255));
+{T t;for(t=1;t<12;t++)if(o[t]<t)assert(t>=(span>>8) && t<(span&255));
  poly_fast_publish(w,o);}
+void poly_fast_publish_one(B *w,const volatile B *o,T span)
+{assert((span&255)==(span>>8)+1);poly_fast_publish_span(w,o,span);}
 void poly_native_shared(void){}void poly_mod_shared(void){}
 void poly_native_all(void){}void poly_mod_all(void){}
 
@@ -90,7 +94,7 @@ static int increment_mock(void *v,T pos,int delta,void *inc,T down)
 static void dirty_mock(void *v){assert(v==view);}
 static T key_mock(T *e){return e[0];}
 static T zero_mock(void *v,T pos){(void)v;(void)pos;return 0;}
-static T get_mock(void *v,T id,B *locked){assert(v==view);*locked=0;return id==0x15?60:68;}
+static T get_mock(void *v,T id,B *locked){assert(v==view);*locked=0;return id==0x15 || id==0x14?60:68;}
 static void text_mock(void *ctx,void *font,int x,int y,T flags,const char *fmt,const char *s)
 {(void)ctx;(void)font;(void)x;(void)y;(void)flags;(void)fmt;strcat(labels,s);strcat(labels,";");draws++;}
 static void shape_mock(void *ctx,int x,int y,int xx,int yy,T color)
@@ -102,8 +106,8 @@ static void widget_mock(void *v,void *ctx,int x,int y,T id,T value,T state,T loc
 {(void)v;(void)ctx;(void)x;(void)y;(void)id;(void)value;(void)state;(void)lock;(void)turning;(void)hide;}
 static void page_mock(void *v,void *ctx,T a,T b,T c){(void)v;(void)ctx;(void)a;(void)b;(void)c;}
 static void blit_mock(void *ctx,void *bmp,int x,int y,T flag){(void)ctx;(void)bmp;(void)x;(void)y;(void)flag;}
-static void rec_position(T clock,T track,B *out){(void)clock;assert(track<8);memset(out,0,4);}
-static B *rec_model_mock(T track){assert(track==(T)PATTERN+0x70);return rec_model;}
+static void rec_position(T clock,T track,B *out){(void)clock;assert(track<12);memset(out,0,4);}
+static B *rec_model_mock(T track){assert(track==(T)PATTERN+(rec_track+1)*0x70);return rec_model;}
 static void *poly_test_function(T address)
 {
     switch(address){
@@ -125,9 +129,10 @@ static void reset(void)
     T i;
     memset(SEQ,0,0x22000);memset(KIT,0,0x1600);
     memset(events,0,sizeof events);memset(used,0,sizeof used);queued=releases=publishes=cancelled=0;
-    fail_after=allocations=trig_calls=0;refcount=1;poly_test_origin=0;
+    fail_after=allocations=trig_calls=rec_track=0;refcount=1;poly_test_origin=0;
     memset((void *)&poly_seq_config,0,sizeof poly_seq_config);
     poly_seq_config.generation=1;for(i=0;i<12;i++)poly_seq_config.owners[i]=(B)i;
+    poly_has_groups=poly_analog_active=0;poly_publish_end=1;
     cache_sequence=0;cache_midi_mask=0xffffffffu;preview_depth=0;
     memset(prep_generation,0,sizeof prep_generation);memset(live_generation,0,sizeof live_generation);
     memset(chord_generation,0,sizeof chord_generation);memset(preview_generation,0,sizeof preview_generation);
@@ -138,7 +143,7 @@ static void reset(void)
     *(B **)0x43bd7430u=SEQ;*(B **)0x43bd743cu=KIT;
     *(T *)0x444de434u=0;*(T *)0x444de43cu=64;*(T *)0x402d575cu=0xffffffffu;
     *(T *)0x43bd7424u=0;*(T *)0x43bd73bcu=0;*(T *)0x444e13ecu=0;
-    for(i=0;i<8;i++){
+    for(i=0;i<12;i++){
         B *tr=SEQ+i*0x499;tr[0x3c5]=60;tr[0x3c6]=68;tr[0x3c7]=71;tr[0x3c8]=76;
         memset(tr+0x2c0,255,256);*(T *)(0x43bd73c8u+i*4)=0;
         *(B *)(0x43bd74efu+i)=0;*(B *)(0x43bd74fcu+i)=0;
@@ -150,7 +155,7 @@ static void live(T note,T on,T origin)
 {T e[20]={1,on,0,2,0,0,note};poly_test_origin=origin;native_immediate(e);}
 static void play_codec(void)
 {
-    B raw[7],states[8],modes[8],decoded[8],plays[8],owners[12];T rank,crc,i;
+    B raw[7],states[12],modes[8],decoded[12],plays[8],owners[12];T rank,crc,i;
     for(rank=0;rank<poly_counts[8];rank++) {
         raw[0]=0x50;raw[1]=0x52;raw[2]=(B)(rank>>16);raw[3]=(B)(rank>>8);raw[4]=(B)rank;
         crc=poly_crc(raw);raw[5]=(B)(crc>>8);raw[6]=(B)crc;
@@ -169,7 +174,7 @@ static void play_codec(void)
 
 static void play_modes(void)
 {
-    B original_state[80],working[0x754+13*0x7c],saved[7],states[8],modes[8];
+    B original_state[80],working[0x754+13*0x7c],saved[7],states[12],modes[8];
     T i,mode,e[20],time,result,q=1,crc,rank,pub[1]={(T)working};
     reset();assert(poly_record_write(0,1,4));
     for(i=0;i<80;i++)((B *)0x444da77cu)[i]=original_state[i]=(B)(i+7);
@@ -233,18 +238,30 @@ static void copy_on_change(void)
 
 static void topology(void)
 {
-    T code,i,j,count=0,valids=0;B states[8],owners[12];
+    T code,i,j,count=0,valids=0;B states[12]={0},owners[12];
     for(code=0;code<65536;code++){
         T n=code;
         for(i=0;i<8;i++){states[i]=(B)(n&3u);n>>=2;states[i]=states[i]?states[i]+2:0;}
         if(!poly_resolve(states,owners))continue;
         /* Bounds are cached during configuration, never found in the IRQ. */
         for(T modes=0;modes<256;modes++) {
-            T first=8,end=8;
+            T first=12,end=12;
             for(T t=0;t<8;t++)poly_modes[t]=(B)((modes>>t)&1);
             poly_play_maps(owners);
-            for(T t=1;t<8;t++)if(poly_post_map[t]<t){if(first==8)first=t;end=t+1;}
+            for(T t=1;t<12;t++)if(poly_post_map[t]<t){if(first==12)first=t;end=t+1;}
             assert(poly_publish_span==((first<<8)|end));
+            assert(poly_publish_entry==(end==first+1?poly_fast_publish_one:poly_fast_publish_span));
+            for(T analog=0;analog<4;analog++) {
+                B all[12],decoded[12],raw[7],plays[8];
+                memcpy(all,states,12);
+                if(analog==1)all[8]=3;
+                if(analog==2)all[8]=4;
+                if(analog==3)all[9]=3;
+                poly_encode(raw,all,poly_modes);
+                assert(valid(raw) && poly_decode(raw,decoded,plays));
+                assert(!memcmp(all,decoded,12));
+                for(T k=0;k<8;k++)if(all[k]>=3)assert(plays[k]==poly_modes[k]);
+            }
         }
         valids++;
         for(i=0;i<8;i++)if(states[i]>=3){for(j=1;j<states[i]-1u;j++)assert(owners[i+j]==i);i+=states[i]-2u;}
@@ -252,7 +269,7 @@ static void topology(void)
         count++;
     }
     assert(valids==108 && count==108);
-    for(i=0;i<8;i++){memset(states,0,8);states[i]=6;assert(!poly_resolve(states,owners));}
+    for(i=0;i<8;i++){memset(states,0,sizeof states);states[i]=6;assert(!poly_resolve(states,owners));}
     assert(poly_note(60,68)==64 && poly_note(127,65)==128 && poly_note(0,63)==128 && poly_note(60,64)==128);
 }
 static void groups_and_notes(void)
@@ -336,12 +353,33 @@ static void ui(void)
     assert(strstr(labels,"POLY;") && !strstr(labels,"VOICES;"));
     tracked=8;poly_ui_sync(view);assert(*(T **)(view+0x80)==pages+2 && !*(T *)(view+0x90));
     for(i=0;i<8;i++)assert(poly_ui_control(view,i)==0xffffffffu);
+    /* Analog TRIG bank [1,3] extends only for masters 9/10. */
+    pages[0]=1;tracked=8;poly_ui_sync(view);pages=*(T **)(view+0x7c);
+    assert(*(T **)(view+0x80)==pages+3);*(T *)(view+0x90)=2;
+    evt[1]=0;evt[2]=1;assert(poly_ui_encoder(view,evt));
+    assert(poly_seq_config.states[8]==3 && poly_ui_control(view,4)==0x14);
+    evt[1]=1;assert(poly_ui_encoder(view,evt));assert(poly_seq_config.states[8]==4);
+    assert(poly_ui_encoder(view,evt) && poly_seq_config.states[8]==4);
+    for(tracked=9;tracked<=10;tracked++) {
+        T result=0,args[1]={(T)view};
+        assert(poly_ui_slave(view) && poly_native(ST_NATIVE_PAGE_GUARD,args,&result) && result==1);
+        labels[0]=0;assert(poly_ui_draw(view,0) && strstr(labels,"SLAVE MODE;"));
+        args[0]=tracked;result=99;assert(poly_native(ST_NATIVE_SOUND_ALLOWED,args,&result) && !result);
+        result=99;assert(poly_native(ST_NATIVE_MACHINE_ALLOWED,args,&result) && !result);
+    }
+    tracked=8;poly_ui_sync(view);*(T *)(view+0x90)=2;evt[1]=0;evt[2]=(T)-1;assert(poly_ui_encoder(view,evt));
+    tracked=9;evt[2]=1;assert(poly_ui_encoder(view,evt));
+    assert(poly_seq_config.states[9]==3);evt[1]=1;assert(poly_ui_encoder(view,evt) && poly_seq_config.states[9]==3);
+    for(tracked=10;tracked<12;tracked++) {
+        poly_ui_sync(view);assert(!poly_ui_third(view) && *(T **)(view+0x80)==pages+2);
+    }
+    tracked=8;pages[0]=26;poly_ui_sync(view);assert(*(T **)(view+0x80)==pages+2);
     free(pages);
 }
 static void recording_and_publication(void)
 {
     T vt[16]={0},notes[4]={60,64,67,72},i,t,j,seed=0x12345678u;
-    B states[8]={5,0,0,0,5,0,0,0},owners[12];
+    B states[12]={5,0,0,0,5,0,0,0},owners[12];
     B before[0x754+8*0x7c],expected[sizeof before],working[sizeof before];
     reset();assert(poly_record_write(0,1,4));
     *(T *)0x43bd7424u=1;*(T *)0x444e13ecu=0x46000100u;*(B *)(0x46000100u+0x169)=1;
@@ -363,7 +401,7 @@ static void recording_and_publication(void)
         memcpy(expected+d,before+s,100);expected[d+100]=before[s+100];
         for(j=104;j<123;j++)expected[d+j]=before[s+j];
     }
-    poly_publish(working,owners);assert(!memcmp(working,expected,sizeof working));
+    poly_publish_end=8;poly_publish(working,owners);assert(!memcmp(working,expected,sizeof working));
     assert(working[0x754+0x7c+101]==before[0x754+0x7c+101]);
 }
 static void inactive_native(void)
@@ -412,6 +450,141 @@ static void native_interest_changes(void)
     assert(interest_calls==5);
     poly_host=&services;poly_interest=0;
 }
+/* Analog topologies and all event routes use the same production allocator. */
+static void analog(void)
+{
+    B states[12]={0},owners[12],raw[7],saved[7],copy[256],decoded[12];
+    T t,v,i,result,args[6],event[20],time,commands,before;
+    assert(poly_max_voices(8)==3 && poly_max_voices(9)==2 && !poly_max_voices(10) && !poly_max_voices(11));
+    for(t=8;t<10;t++)for(v=2;v<=poly_max_voices(t);v++) {
+        memset(states,0,sizeof states);states[t]=(B)(v+1);
+        assert(poly_resolve(states,owners));
+        for(i=1;i<v;i++)assert(owners[t+i]==t && poly_owner(owners,t+i)==t);
+        record_encode(states,raw);assert(raw[1]==(t==9?0x59:v==2?0x5c:0x5e) && valid(raw));
+        record_states(raw,decoded);assert(!memcmp(states,decoded,12));
+        memcpy(copy+0x21,raw,7);poly_header_load(header,copy);assert(!memcmp(header+0x21,raw,7));
+        header[0x27]^=1;assert(!valid(header+0x21));
+        reset();*(B *)(0x80002f50u+t)=35;
+        assert(poly_record_write(t,1,v));assert(poly_has_groups && poly_analog_active && poly_publish_end==t+v);
+        assert(publishes==v-1);
+        for(i=t+1;i<t+v;i++)assert(*(B *)(0x80002f50u+i)==35 && !poly_sound_write_allowed(i));
+        /* Same on-disk bytes as old Synfact; first TRIG loads them. */
+        memcpy(saved,SEQ+0x21381,7);assert(poly_record_write(t,0,v));
+        memcpy(SEQ+0x21381,saved,7);memset(event,0,sizeof event);event[0]=1;
+        assert(poly_trig(t,SEQ,(T)KIT,0,event,&time)==event);
+        assert(poly_sequence_enqueue(event,time) && queued==v);
+        for(i=0;i<v;i++)assert(queue[i][2]==t+i && queue[i][18]==t+i);drain();
+        for(i=0;i<v;i++) {
+            T e[20]={1,1,t,2,0,0,60+i};poly_test_origin=2;native_immediate(e);
+        }
+        assert(queued==v);for(i=0;i<v;i++)assert(queue[i][2]==t+i);drain();
+        for(i=0;i<v;i++) {
+            T e[20]={1,2,t,2,0,0,60+i};poly_test_origin=1;native_immediate(e);
+        }
+        assert(queued==v);drain();
+        {T e[20]={1,1,t,2,0,0,60};poly_test_origin=0;native_immediate(e);assert(queued==v);drain();}
+        /* Preview at a held step, then matching releases. */
+        *(T *)0x402d575cu=0;{T e[20]={1,1,t,1,0,0,60};native_immediate(e);assert(queued==v);drain();
+        e[1]=2;native_immediate(e);assert(queued==v);drain();}*(T *)0x402d575cu=0xffffffffu;
+        /* First-step statics are filled from the master as well. */
+        assert(poly_trig(t,SEQ,(T)KIT,0,(T *)PREP_EVENT(t),&time));
+        assert(poly_trig(t+1,SEQ,(T)KIT,0,(T *)PREP_EVENT(t+1),&time));
+        assert(PREP_EVENT(t+1)[2]==t+1 && PREP_EVENT(t+1)[6]==64);
+        /* Frame and publication never read/repair machine changes. UI does. */
+        before=publishes;commands=immediate_calls;*(B *)(0x80002f50u+t)=37;
+        for(i=0;i<1500;i++)poly_frame();assert(publishes==before && immediate_calls==commands);
+        poly_tick(0);assert(publishes==before+v-1 && immediate_calls==commands+1);
+        poly_tick(0);assert(immediate_calls==commands+1);
+        /* Suspension keeps the PQ and restores each slave's saved Sound. */
+        for(i=t;i<t+v;i++) {
+            *(unsigned short *)(KIT+0x1550)=(unsigned short)(1u<<i);
+            assert(poly_sync() && !poly_grouped() && !poly_analog_active && !memcmp(saved,SEQ+0x21381,7));
+            assert(!poly_record_write(t,1,v));
+            *(unsigned short *)(KIT+0x1550)=0;assert(poly_sync() && poly_owner_map[t+1]==t);
+        }
+        assert(poly_record_write(t,0,v));assert(SEQ[0x21382]==0x51 && !poly_grouped());
+    }
+    for(t=8;t<10;t++) {
+        T vt[16]={0};reset();rec_track=t;assert(poly_record_write(t,1,2));
+        *(T *)0x43bd7424u=1;*(T *)0x444e13ecu=0x46000100u;*(B *)(0x46000100u+0x169)=1;
+        *(T *)0x444e13f4u=0x1234u;vt[0x28/4]=(T)rec_model_mock;*(T **)(PATTERN+(t+1)*0x70)=vt;
+        memset(rec_model,255,sizeof rec_model);
+        for(i=0;i<2;i++){T e[20]={1,1,t,2,0,0,60+i*4};poly_test_origin=2;native_immediate(e);}
+        assert(rec_chords[t].dirty && rec_chords[t].count==2);rec_model[0x2c0]=64;poly_rec_ui();
+        assert(!rec_chords[t].dirty && rec_model[0x2c0]==60 && rec_model[0x300]==68);
+        assert(SEQ[t*0x499+0x2c0]==60 && SEQ[t*0x499+0x300]==68);drain();
+    }
+    /* CRC-valid malformed flags must fail independently of the checksum. */
+    for(i=0;i<8;i++) {
+        T crc=65535,j,k;memset(raw,0,7);raw[0]=0x50;raw[1]=(B)(0x58+i);
+        for(j=0;j<5;j++){crc^=(T)raw[j]<<8;for(k=0;k<8;k++)crc=((crc<<1)^((crc&32768)?0x1021:0))&65535;}
+        raw[5]=(B)(crc>>8);raw[6]=(B)crc;
+        assert(valid(raw)==(i==0 || i==1 || i==4 || i==6));
+    }
+    memset(states,0,12);states[8]=3;states[9]=3;assert(!poly_resolve(states,owners));
+    states[8]=4;assert(!poly_resolve(states,owners));
+    for(t=10;t<12;t++){memset(states,0,12);states[t]=3;assert(!poly_resolve(states,owners));}
+    memset(states,0,12);states[7]=3;assert(!poly_resolve(states,owners));
+    reset();assert(!poly_record_write(10,1,2) && !poly_record_write(11,1,2));
+    assert(!poly_record_write(8,1,4) && !poly_record_write(9,1,3));
+    assert(poly_record_write(8,1,3) && !poly_record_write(9,1,2));
+    assert(poly_record_write(8,0,3) && poly_record_write(9,1,2) && !poly_record_write(8,1,2));
+    reset();assert(poly_record_write(8,1,3));*(unsigned short *)(KIT+0x1550)=1u<<9;
+    assert(poly_sync() && !poly_grouped());assert(poly_record_write(0,1,2));
+    assert(SEQ[0x21382]==0x5e && valid(SEQ+0x21381));
+    *(unsigned short *)(KIT+0x1550)=0;assert(poly_sync() && poly_owner_map[10]==8 && poly_owner_map[1]==0);
+    /* 84 is valid; 85+ and negative chord notes are omitted. */
+    reset();assert(poly_record_write(8,1,3));
+    SEQ[8*0x499+0x3c5]=80;SEQ[8*0x499+0x3c6]=68;SEQ[8*0x499+0x3c7]=69;
+    assert(poly_trig(8,SEQ,(T)KIT,0,event,&time) && poly_sequence_enqueue(event,time));
+    assert(queued==2 && queue[0][6]==80 && queue[1][6]==84);drain();
+    assert(poly_chord_note(SEQ,8,0,2,80)==-1);
+    {T e[20]={1,1,8,2,0,0,80};poly_test_origin=0;native_immediate(e);assert(queued==2 && queue[1][6]==84);drain();}
+    /* Analog TYPE never subscribes to digital per-track dispatch bits. */
+    poly_native_interest();assert(!(poly_interest&0xff000000u));
+    args[0]=0x80002f59u;assert(!poly_native(ST_NATIVE_TYPE,args,&result));
+}
+
+/* Distinct saved slave Sounds must survive, but never be chosen by a
+ * retargeted keyboard/MIDI/chord/preview/first-step note. */
+static void analog_event_sounds(void)
+{
+    T master,voices,k,pass,origin,note,kind,e[20],time,sound,explicit_sound=(T)KIT+0x1580;
+    for(master=8;master<=9;master++)for(voices=2;voices<=poly_max_voices(master);voices++) {
+        reset();sound=(T)KIT+0x2a+master*0x123;
+        for(k=8;k<=10;k++)KIT[0x2a+k*0x123+0xa2]=(B)(8+k-8);
+        assert(poly_record_write(master,1,voices));
+        for(origin=1;origin<=2;origin++)for(pass=0;pass<3;pass++)for(k=0;k<voices;k++) {
+            memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=master;e[3]=2;e[6]=60+k;
+            poly_test_origin=origin;native_immediate(e);
+            assert(queued==1 && queue[0][2]==master+k && queue[0][6]==60+k);
+            assert(queue[0][10]==(k?sound:0));drain();
+            e[1]=2;e[2]=master;e[18]=master;e[10]=0;native_immediate(e);
+            assert(queued==1 && queue[0][2]==master+k);drain();
+        }
+        for(kind=1;kind<=2;kind++) {
+            memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=master;e[3]=kind;e[6]=60;
+            *(T *)0x402d575cu=0;poly_test_origin=0;native_immediate(e);
+            assert(queued==voices);
+            for(k=0;k<voices;k++)assert(queue[k][10]==(k?sound:0));drain();
+        }
+        /* Native sequencer mock also emits a null Sound, to cover fallback. */
+        assert(poly_trig(master,SEQ,(T)KIT,0,e,&time) && poly_sequence_enqueue(e,time));
+        for(k=0;k<voices;k++)assert(queue[k][10]==(k?sound:0));drain();
+        assert(poly_trig(master,SEQ,(T)KIT,0,(T *)PREP_EVENT(master),&time));
+        for(k=1;k<voices;k++)assert(PREP_EVENT(master+k)[10]==sound);
+        /* Explicit/pool Sounds keep their native references; no forced kit fallback. */
+        for(note=0;note<3;note++) {
+            memset(e,0,sizeof e);e[10]=note==0?explicit_sound:0;e[11]=note==1?explicit_sound:0;
+            poly_voice_target(e,master,1);
+            assert(e[10]==(note==0?explicit_sound:note==1?0:sound));
+            assert(e[11]==(note==1?explicit_sound:0));
+        }
+        for(k=8;k<=10;k++)assert(KIT[0x2a+k*0x123+0xa2]==8+k-8);
+    }
+    memset(e,0,sizeof e);poly_voice_target(e,0,1);assert(!e[10] && !e[11]);
+}
+
 int main(void)
 {
     SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);
@@ -425,7 +598,7 @@ int main(void)
      ui.host=&services;assert(poly_initialize(&api));ui.version=7;assert(!poly_initialize(&api));
      h.version=8;h.native_interest=interest_mock;h.native_page_view=page_view_mock;
      ui.host=&h;assert(!poly_initialize(&api));}
-    play_codec();play_modes();copy_on_change();topology();groups_and_notes();ui();recording_and_publication();inactive_native();native_interest_changes();
-    puts("PASS: 108 POLY topologies, 2/3/4 voices, live/chord/sequence paths, stealing/off, rollback, CRC persistence, MIDI suspension, page/controls/slave guards, native interest by group state");
+    play_codec();play_modes();copy_on_change();topology();groups_and_notes();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();
+    puts("PASS: analog event/Sound/UI regressions and 110592 mixed topology/mode/record cases; 108 POLY topologies, 2/3/4 voices, live/chord/sequence paths, stealing/off, rollback, CRC persistence, MIDI suspension, page/controls/slave guards, native interest by group state");
     return 0;
 }

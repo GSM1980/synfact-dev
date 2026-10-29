@@ -17,6 +17,11 @@ def kernel_layout(s):
 
 def verify(folder,synfact=None):
     folder=folder.resolve();mod=ROOT/'mods/poly-st'
+    provenance=json.loads((mod/'provenance.json').read_text())
+    for name,digest in provenance['local_sha256'].items():
+        data=(mod/name).read_bytes()
+        if provenance.get('local_sha256_eol')=='lf':data=data.replace(b'\r\n',b'\n')
+        assert hashlib.sha256(data).hexdigest()==digest,name
     report=json.loads((folder/'synfact-machines.smz4.json').read_text())
     check_bank_modules(report,(folder/'synfact-machines.smz4').read_bytes(),(
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
@@ -118,7 +123,10 @@ def verify(folder,synfact=None):
         # with the donor bank and a separate field/padding oracle for all maps.
         guard=(synfact/'src/features/lfo3/poly/guards.s').read_text(encoding='utf-8')
         fragment=guard[guard.index('poly_mod_first_guard:'):guard.index('poly_native_dispatch:')]+guard[guard.index('poly_native_lfo_guard:'):]
-        assert fragment.replace('poly_fast_owners','poly_lfo_map') in (mod/'imported/kernels.s').read_text(encoding='utf-8')
+        fragment=fragment.replace('cmpi.l #8,%d0','cmpi.l #12,%d0')
+        fragment=fragment.replace(' lea poly_fast_owners,%a0\n moveq #0,%d1\n move.b (%a0,%d0.l),%d1\n cmp.l %d0,%d1\n bhs.s ',
+                                  ' move.l poly_slave_mask,%d1\n btst %d0,%d1\n beq.s ')
+        assert fragment in (mod/'imported/kernels.s').read_text(encoding='utf-8')
     print('PASS: POLY source provenance; 6 existing/new shared subscriptions; 12 core-owned native bridges; exact replay ABI; host API 2; telemetry moved to SMZ; imported native guards; compact publication; -O3')
 
 if __name__=='__main__':

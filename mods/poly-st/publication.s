@@ -4,7 +4,7 @@
 .globl poly_fast_publish
 .globl poly_fast_publish_span
 poly_fast_publish:
- move.l #0x0108,%d0
+ move.l #0x010c,%d0
  bra.s publish_enter
 poly_fast_publish_span:
  move.l 12(%sp),%d0
@@ -31,12 +31,8 @@ publish_track:
  move.b (%a5,%d2.l),%d0
  cmp.l %d2,%d0
  bhs.w publish_next
- move.l %d0,%d1
- lsl.l #1,%d1
- lea (%a2,%d1.l),%a0
- move.l %d2,%d1
- lsl.l #1,%d1
- move.w (%a0),(%a2,%d1.l)
+ lea (%a2,%d0.l*2),%a0
+ move.w (%a0),(%a2,%d2.l*2)
  cmp.l %d3,%d0
  beq.s publish_sources
  move.l %d0,%d3
@@ -90,4 +86,48 @@ publish_advance:
 publish_done:
  movem.l (%sp),%d2-%d4/%a2-%a6
  lea 32(%sp),%sp
+ rts
+
+| A single shared slave is always adjacent to its master (opposite parity).
+| No per-block owner loop or alignment test is needed for this topology.
+.globl poly_fast_publish_one
+poly_fast_publish_one:
+ lea -20(%sp),%sp
+ movem.l %d2/%a2-%a5,(%sp)
+ movea.l 24(%sp),%a2
+ movea.l 28(%sp),%a3
+ move.l 32(%sp),%d2
+ lsr.l #8,%d2
+ moveq #0,%d1
+ move.b (%a3,%d2.l),%d1
+ lea (%a2,%d1.l*2),%a0
+ move.w (%a0),(%a2,%d2.l*2)
+ move.l %d2,%d0
+ mulu.w #142,%d0
+ lea 28(%a2,%d0.l),%a1
+ mulu.w #124,%d2
+ lea (%a2,%d2.l),%a5
+ lea 1876(%a5),%a5
+ move.l %d1,%d0
+ mulu.w #142,%d0
+ lea 28(%a2,%d0.l),%a0
+ mulu.w #124,%d1
+ lea (%a2,%d1.l),%a4
+ lea 1876(%a4),%a4
+ .rept 71
+ move.w (%a0)+,(%a1)+
+ .endr
+ .rept 25
+ move.l (%a4)+,(%a5)+
+ .endr
+ move.b (%a4),(%a5)
+ lea 4(%a4),%a4
+ lea 4(%a5),%a5
+ .rept 4
+ move.l (%a4)+,(%a5)+
+ .endr
+ move.w (%a4)+,(%a5)+
+ move.b (%a4),(%a5)
+ movem.l (%sp),%d2/%a2-%a5
+ lea 20(%sp),%sp
  rts

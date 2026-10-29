@@ -2042,3 +2042,11 @@ or serialized SMZ feature bit is needed. Pattern-owned PLAY uses the existing
 PQ/PR record described in [FORMAT](FORMAT.md). POLY 0.3 only exposes POLY/M.LFO;
 its retired mono codes decode as M.LFO. Native LEGATO and NOTE PRIORITY remain
 stock Sound settings and are never written by this module.
+
+
+POLY 0.8 combines the digital PLAY record and analog topology in the same seven
+PatternSettings bytes. Preserve legacy PQ/analog-flag and PR readers; use PS
+for a ranked digital topology with analog voices, as [FORMAT](FORMAT.md)
+specifies. Analog masters keep their native shared modulation and saved Sounds.
+Only analog slaves enter the copied native kernels' skip bitmap. Digital
+independent groups must keep advancing when analog groups coexist.

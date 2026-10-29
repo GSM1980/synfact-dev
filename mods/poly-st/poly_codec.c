@@ -16,16 +16,25 @@ static u32 poly_crc(const volatile u8 *p)
 
 static u32 poly_decode_record(const volatile u8 *p,u8 *states,u8 *modes)
 {
-    u32 i,rank,n,w,block,code,j;
-    for(i=0;i<8;i++){states[i]=0;modes[i]=0;}
+    u32 i,rank,n,w,block,code,j,analog=0;
+    for(i=0;i<12;i++)states[i]=0;
+    for(i=0;i<8;i++)modes[i]=0;
     if(p[0]!=0x50)return 0;
     rank=((u32)p[2]<<16)+((u32)p[3]<<8)+p[4];
-    if(p[1]==0x51) {
+    if(p[1]==0x51 || (p[1]&0xf8u)==0x58u) {
         if(!legacy_valid(p))return 0;
         for(i=0;i<8;i++)states[i]=(u8)((rank>>(21-3*i))&7u);
+        if(p[1]!=0x51) {
+            if(p[1]&4u)states[8]=(p[1]&2u)?4:3;
+            if(p[1]&1u)states[9]=3;
+        }
         return 1;
     }
-    if(p[1]!=0x52 || poly_crc(p)!=(((u32)p[5]<<8)+p[6]) || rank>=poly_counts[8])return 0;
+    if(p[1]==0x53){analog=rank&3u;rank>>=2;}
+    if((p[1]!=0x52 && p[1]!=0x53) || poly_crc(p)!=(((u32)p[5]<<8)+p[6]) || rank>=poly_counts[8])return 0;
+    if(analog==1)states[8]=3;
+    if(analog==2)states[8]=4;
+    if(analog==3)states[9]=3;
     i=0;
     while(i<8) {
         n=8-i;block=3*poly_counts[n-1];
@@ -73,16 +82,26 @@ static u32 poly_rank(const u8 *states,const u8 *modes,u32 i)
 
 static void poly_encode(u8 *p,const u8 *states,const u8 *modes)
 {
-    u32 i,bits=0,extended=0,crc;
+    u32 i,bits=0,extended=0,crc,analog=states[8]>=3?(states[8]==4?2u:1u):states[9]>=3?3u:0u;
     for(i=0;i<8;i++) {
         bits=(bits<<3)+states[i];
         if(states[i]>=3 && modes[i])extended=1;
     }
     if(extended)bits=poly_rank(states,modes,0);
     p[0]=0x50;p[1]=(u8)(extended?0x52:0x51);
+    if(analog) {
+        if(extended){bits=(bits<<2)|analog;p[1]=0x53;}
+        else p[1]=(u8)(analog==1?0x5c:analog==2?0x5e:0x59);
+    }
     p[2]=(u8)(bits>>16);p[3]=(u8)(bits>>8);p[4]=(u8)bits;
     crc=poly_crc(p);p[5]=(u8)(crc>>8);p[6]=(u8)crc;
 }
 
 static u32 valid(const volatile u8 *p)
-{u8 states[8],modes[8];return poly_decode(p,states,modes);}
+{u8 states[12],modes[8];return poly_decode(p,states,modes);}
+
+/* Legacy analog callers retain the same PQ/PX serialization. */
+static void record_states(const volatile u8 *p,u8 *states)
+{u8 modes[8];poly_decode(p,states,modes);}
+static void record_encode(const u8 *states,u8 *p)
+{const u8 modes[8]={0};poly_encode(p,states,modes);}

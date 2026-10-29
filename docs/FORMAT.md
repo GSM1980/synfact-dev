@@ -364,3 +364,15 @@ are OFF with VOICES `2..4`, and `3..5` are ON with VOICES `2..4`.
 See [the bounded codec](../mods/poly-st/poly_codec.c) and its exhaustive test.
 Unknown tags, out-of-domain ranks and invalid CRCs disable POLY. Older POLY
 banks reject PR safely. NOTE PRIORITY remains in the native Sound/KIT record.
+
+
+POLY 0.8 integrates the legacy analog flags with digital PLAY. Tags `58h..5fh`
+retain the PQ digital payload; only `58h`, `59h`, `5ch`, `5eh` are legal.
+Bit 2 enables track 9, bit 1 selects its third voice (requires bit 2), and bit 0
+enables track 10 (forbidden with bit 2). All imply shared modulation. For a
+ranked digital topology together with an analog group, tag `PS` (`50h 53h`)
+stores `4 * PR_rank + analog_code`, where code 0 = no analog group, 1 = tracks
+9–10, 2 = tracks 9–10–11, and 3 = tracks 10–11. The decoded PR rank must remain
+below 1,320,057. CRC and header extent are unchanged. Writers retain PQ/PX when
+digital PLAY is shared and PR when no analog group is active. Older banks
+reject PS; readers retain all previous PQ, analog flags and PR records.

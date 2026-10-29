@@ -27,7 +27,7 @@ def maps(at=0,owners=None):
 
 def oracle(data,owners):
     result=bytearray(data)
-    for t in range(1,8):
+    for t in range(1,12):
         o=owners[t]
         if o>=t:continue
         result[2*t:2*t+2]=data[2*o:2*o+2]
@@ -49,7 +49,7 @@ def measured(r,owners,span=None):
     r.u.ctl_flush_tb()
     try:
         if span is None:r.call('poly_fast_publish',WORK,owners)
-        else:r.call('poly_fast_publish_span',WORK,owners,span)
+        else:r.call('poly_fast_publish_one' if 'poly_fast_publish_one' in r.sym and (span&255)==(span>>8)+1 else 'poly_fast_publish_span',WORK,owners,span)
     finally:r.u.hook_del(h)
     return dict(instructions=counts[0],executed_instruction_bytes=counts[1])
 
@@ -61,17 +61,27 @@ def main():
     def alignment(u,access,at,size,value,user):
         if WORK<=at<WORK+SIZE and size==4:assert not at&3,hex(at)
     for r in (old,new):r.u.hook_add(UC_HOOK_MEM_READ|UC_HOOK_MEM_WRITE,alignment)
-    rng=random.Random(0x54415);cases=0;topologies=list(maps())
+    rng=random.Random(0x54415);cases=0;topologies=[]
+    for digital in maps():
+        for master,width in ((8,1),(8,2),(8,3),(9,2)):
+            row=bytearray(digital)
+            for t in range(master+1,master+width):row[t]=master
+            topologies.append(bytes(row))
     for owners in topologies:
-        shared=[t for t in range(1,8) if owners[t]<t]
-        span=(shared[0]<<8)|(shared[-1]+1) if shared else 0x0808
+        shared=[t for t in range(1,12) if owners[t]<t]
+        span=(shared[0]<<8)|(shared[-1]+1) if shared else 0x0c0c
         for seed in range(3):
             data=bytes(rng.getrandbits(8) for _ in range(SIZE));expected=oracle(data,owners)
             for r in (old,new):
                 r.u.mem_write(WORK,data);r.u.mem_write(r.sym['poly_post_map'],owners)
             old.call('poly_fast_publish',WORK,old.sym['poly_post_map'])
-            assert bytes(old.u.mem_read(WORK,SIZE))==expected,('donor',owners)
+            if all(owners[t]==t for t in range(8,12)):
+                assert bytes(old.u.mem_read(WORK,SIZE))==expected,('donor',owners)
             new.call('poly_fast_publish_span',WORK,new.sym['poly_post_map'],span)
+            if 'poly_fast_publish_one' in new.sym and (span&255)==(span>>8)+1:
+                assert bytes(new.u.mem_read(WORK,SIZE))==expected
+                new.u.mem_write(WORK,data)
+                new.call('poly_fast_publish_one',WORK,new.sym['poly_post_map'],span)
             assert bytes(new.u.mem_read(WORK,SIZE))==expected,('span',owners,seed)
             new.u.mem_write(WORK,data)
             new.call('poly_fast_publish',WORK,new.sym['poly_post_map'])
@@ -85,7 +95,7 @@ def main():
         ('odd_master',bytes([0,1,1,1,4,5,6,7,8,9,10,11])),
         ('last_group',bytes([0,1,2,3,4,5,5,5,8,9,10,11])),
         ('two_groups',bytes([0,0,0,3,4,4,4,7,8,9,10,11]))):
-        shared=[t for t in range(1,8) if owners[t]<t];span=(shared[0]<<8)|(shared[-1]+1)
+        shared=[t for t in range(1,12) if owners[t]<t];span=(shared[0]<<8)|(shared[-1]+1)
         for r in (old,new):r.u.mem_write(r.sym['poly_post_map'],owners)
         before=measured(old,old.sym['poly_post_map']);after=measured(new,new.sym['poly_post_map'],span)
         assert after['instructions']<before['instructions'],(label,before,after)

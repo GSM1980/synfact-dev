@@ -56,21 +56,16 @@ and per-voice pan) conflict when merged.
   its tests and the cost checks before it merges.
 - No agent pushes, merges or opens a pull request unless the user asks.
 
-## Current assignment (2026-10-29)
+## Integration (2026-10-29)
 
-| Branch | Folder | Task |
-|---|---|---|
-| `feat/poly-analog-st` | `C:\Desarrollo\synfact-dev` (stays) | POLY on analog tracks 9 and 10 with no added CPU |
-| `perf/mlfo-publication` | `C:\Desarrollo\synfact-dev-pan` | compact M.LFO publication; retain native per-track engines |
+Analog POLY and its keyboard Sound fix are already in main (`1128465`).
+The pan work's POLY 0.7 was physically accepted at MAIN 91% POLY / 93% M.LFO.
+`integrate/poly-analog-mlfo` in `C:\Desarrollo\synfact-dev-pan` resolves both
+histories as POLY 0.8 before main advances. It retains analog setup/restore,
+its native skip kernels, and the digital copy-on-change/native voice paths.
 
-The original feature branches start at `dbf6e12`. The pan work continues from
-`096efaa` (PLAY modes) and `1efc52c` (remove MONO/LEG/PRIO); the current performance
-branch includes both commits. Its bank still uses the same host-API-8 core/SYX.
-At the time of the original assignment, the uncommitted
-changes in `C:\Desarrollo\synfact-dev` are the analog POLY work; none of
-them mentions pan. The pan agent checks there is nothing of its own among
-them before it moves:
-
-```bash
-git -C /c/Desarrollo/synfact-dev worktree add ../synfact-dev-pan feat/poly-pan-per-voice
-```
+The arp agent works separately in `C:\Desarrollo\synfact-dev-arp` on
+`feat/arp-digitone-st`; do not switch or modify its worktree. The primary
+`C:\Desarrollo\synfact-dev` worktree contains unrelated untracked profiling
+mods/tests; the integration leaves them untouched. No worktree is removed and
+no remote push is part of this merge.
