@@ -23,13 +23,7 @@ extern void poly_fast_publish(u8 *,const volatile u8 *);
 extern void poly_native_shared(void),poly_mod_shared(void);
 static u32 poly_grouped(void)
 {
-    typedef u32 owner_word __attribute__((may_alias));
-    const volatile owner_word *o=(const volatile owner_word *)poly_owner_map;
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return o[0]!=0x00010203u || o[1]!=0x04050607u;
-#else
-    return o[0]!=0x03020100u || o[1]!=0x07060504u;
-#endif
+    return poly_has_groups;
 }
 static void poly_frame(void){poly_sync();}
 static int poly_native(u32 op,const u32 *a,u32 *result);
@@ -41,7 +35,7 @@ static int poly_native(u32 op,const u32 *a,u32 *result);
 #define POLY_NATIVE_ALWAYS ((1u<<ST_NATIVE_TRIG)|(1u<<ST_NATIVE_IMMEDIATE)| \
     (1u<<ST_NATIVE_HEADER_LOAD)|(1u<<ST_NATIVE_HEADER_RESET)|(1u<<ST_NATIVE_PAGE_SYNC)| \
     (1u<<ST_NATIVE_PAGE_NAV)|(1u<<ST_NATIVE_PAGE_LAYOUT)|(1u<<ST_NATIVE_PAGE_BEGIN)|(1u<<ST_NATIVE_PAGE_END))
-#define POLY_NATIVE_GROUPED ((1u<<ST_NATIVE_ENQUEUE)|(1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_TYPE)| \
+#define POLY_NATIVE_GROUPED ((1u<<ST_NATIVE_ENQUEUE)|(1u<<ST_NATIVE_PUBLISH)| \
     (1u<<ST_NATIVE_SOUND_ALLOWED)|(1u<<ST_NATIVE_MACHINE_ALLOWED)|(1u<<ST_NATIVE_PAGE_GUARD)| \
     (1u<<ST_NATIVE_OWNERS)|(1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO))
 static u32 poly_interest;
@@ -50,7 +44,7 @@ void poly_native_interest(void)
     u32 i,mask=POLY_NATIVE_ALWAYS;
     if(poly_grouped()){
         mask|=POLY_NATIVE_GROUPED;   /* TYPE only for slave digital tracks */
-        for(i=1;i<8;i++)if(poly_owner_map[i]<i)mask|=1u<<(24+i);
+        for(i=1;i<8;i++)if(poly_owner_map[i]<i)mask|=(1u<<ST_NATIVE_TYPE)|(1u<<(24+i));
     }
     if(mask==poly_interest || !poly_host || poly_host->version<5)return;
     poly_interest=mask;poly_host->native_interest((void (*)(void))poly_native,mask);
@@ -61,7 +55,7 @@ static int poly_encoder(void *view,void *event,u32 id)
 {(void)id;return poly_ui_encoder(view,event);}
 static int poly_key(void *view,void *event,u32 phase)
 {(void)phase;return poly_ui_block_key(view,event);}
-static void poly_tick(void *ctrl){(void)ctrl;poly_rec_ui();}
+static void poly_tick(void *ctrl){(void)ctrl;poly_rec_ui();poly_analog_ui();}
 static u32 poly_context[16],poly_depth;
 static int poly_native(u32 op,const u32 *a,u32 *result)
 {
@@ -72,7 +66,7 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
             if(a[0]<13)poly_seq_config.pending[a[0]].event=0;
             return 0;
         }
-        *result=(u32)poly_trig(a[0],(const volatile u8 *)a[1],a[2],a[3],(u32 *)a[4],(u32 *)a[5]);return 1;
+        *result=(u32)poly_trig_synced(a[0],(const volatile u8 *)a[1],a[2],a[3],(u32 *)a[4],(u32 *)a[5]);return 1;
     case ST_NATIVE_ENQUEUE:
         if(!poly_grouped())return 0;
         *result=poly_sequence_enqueue((u32 *)a[0],a[1]);return 1;
@@ -119,4 +113,4 @@ static const struct st_smz_subscription poly_subscriptions[]={
     {ST_EV_KEY|ST_EV_VIEW|ST_EV_PRE,(void (*)(void))poly_key},
     {ST_EV_TICK,(void (*)(void))poly_tick},
     {ST_EV_NATIVE,(void (*)(void))poly_native}};
-const struct st_smz_module poly_module={"DIGITAL POLY",poly_initialize,poly_subscriptions,6};
+const struct st_smz_module poly_module={"POLY",poly_initialize,poly_subscriptions,6};

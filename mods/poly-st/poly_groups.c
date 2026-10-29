@@ -5,21 +5,30 @@ typedef unsigned short u16;
 typedef signed int s32;
 
 
+/* Track limits are topology rules, evaluated only on changes/events. */
+u32 poly_max_voices(u32 track)
+{
+    if(track<8)return 4;
+    if(track==8)return 3;
+    if(track==9)return 2;
+    return 0;
+}
 u32 poly_resolve(const volatile u8 *states,volatile u8 *owners)
 {
     u32 t,j,width;
     for(t=0;t<12;t++)owners[t]=(u8)t;
-    for(t=0;t<8;t++)if(states[t]>5)return 0;
+    for(t=0;t<12;t++)if(states[t]>(poly_max_voices(t)?poly_max_voices(t)+1u:2u))return 0;
     t=0;
-    while(t<8) {
+    while(t<12) {
         if(states[t]<3){t++;continue;}
         width=states[t]-1u;
-        if(t+width>8)return 0;
+        if(!poly_max_voices(t) || width>poly_max_voices(t) ||
+           t+width>(t<8?8u:11u))return 0;
         for(j=1;j<width;j++)if(states[t+j]>=3)return 0;
         t+=width;
     }
     t=0;
-    while(t<8) {
+    while(t<12) {
         if(states[t]<3){t++;continue;}
         width=states[t]-1u;
         for(j=1;j<width;j++)owners[t+j]=(u8)t;
@@ -31,7 +40,7 @@ u32 poly_resolve(const volatile u8 *states,volatile u8 *owners)
 u32 poly_owner(const volatile u8 *owners,u32 track)
 {
     u32 owner;
-    if(track>=8)return track;
+    if(track>=12)return track;
     owner=owners[track];
     return owner<=track?owner:track;
 }

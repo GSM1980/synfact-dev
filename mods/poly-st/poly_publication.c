@@ -32,7 +32,7 @@ void poly_publish(u8 *working,const volatile u8 *owners)
     u32 t,owner,j;
     u8 *dst;
     const u8 *src;
-    for(t=1;t<8;t++) {
+    for(t=1;t<poly_publish_end;t++) {
         owner=owners[t];
         if(owner>=t)continue;
         ((u16 *)working)[t]=((const u16 *)working)[owner];

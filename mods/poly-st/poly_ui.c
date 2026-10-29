@@ -13,6 +13,7 @@ static u32 poly_trig_layout[11] DATA={0};
  * Top: POLY, VOICES. Bottom: NOTE, then NOT2/NOT3/NOT4 under the keyboard.
  * POLY OFF leaves only POLY: the other controls are neither drawn nor edited. */
 static const u32 poly_control_ids[9]={0,0,0,0,0x15,0x1e,0x1f,0x20,10};
+static const u32 poly_analog_ids[9]={0,0,0,0,0x14,0x1e,0x1f,0x20,10};
 static const u32 poly_off_ids[9]={0,0,0,0,0,0,0,0,10};
 
 u32 poly_ui_parameter_view(u8 *view)
@@ -37,7 +38,7 @@ u32 poly_ui_slave(u8 *view)
     volatile u32 answer=0;
     if(!poly_ui_parameter_view(view))return 0;
     track=poly_ui_track(view);
-    if(track>=8)return 0;
+    if(track>=12)return 0;
     poly_sync();
     if(poly_seq_config.owners[track]<track)answer=1;
     return answer;
@@ -60,7 +61,7 @@ void poly_ui_sync(u8 *view)
     /* MainScreen 4003209c selects bank +140h for digital tracks 0..7:
      * ROM 401c7f84 [2,3]. Analog is +f8h / 401c7fcc [1,3];
      * MIDI is +188h / 401c7f74 [26,3]. All share this TRIG vtable. */
-    if(track>=8 || pages[0]!=2u) {
+    if(track>=10 || pages[0]!=(track<8?2u:1u)) {
         if(count==3 && pages[2]==3u) {
             *(u32 *)(view+0x80)=(u32)(pages+2);
             if(*(u32 *)(view+0x90)>1)*(u32 *)(view+0x90)=0;
@@ -84,7 +85,7 @@ u32 poly_ui_third(u8 *view)
 {
     volatile u32 answer=0;
     if(*(u32 *)view!=0x401c97fcu)return 0;
-    if(poly_ui_track(view)>=8)return 0;
+    if(poly_ui_track(view)>=10)return 0;
     if(*(u32 *)(view+0x90)==2)answer=1;
     return answer;
 }
@@ -94,7 +95,7 @@ static u32 poly_ui_on(u8 *view)
 {
     u32 track=poly_ui_track(view);
     volatile u32 answer=0;
-    if(track>=8)return 0;
+    if(track>=12)return 0;
     poly_sync();
     if(poly_seq_config.states[track]>=3)answer=1;
     return answer;
@@ -102,7 +103,7 @@ static u32 poly_ui_on(u8 *view)
 
 static const u32 *poly_ui_ids(u8 *view)
 {
-    if(poly_ui_on(view))return poly_control_ids;
+    if(poly_ui_on(view))return poly_ui_track(view)<8?poly_control_ids:poly_analog_ids;
     return poly_off_ids;
 }
 
@@ -177,7 +178,7 @@ u32 poly_ui_encoder(u8 *view,void *event)
     enabled=0;voices=state+2;
     if(state>=3){enabled=1;voices=state-1;}
     if(position==0) {if(delta>0)enabled=1;else enabled=0;}
-    else if(delta>0){if(voices<4)voices++;}
+    else if(delta>0){if(voices<poly_max_voices(track))voices++;}
     else if(voices>2)voices--;
     poly_ui_record_write(view,track,enabled,voices);
     POLY_CALL(0x400ffc5eu,void (*)(void *))(view);
@@ -298,7 +299,7 @@ u32 poly_ui_draw(u8 *view,void *ctx)
         for(i=2;i<4;i++)POLY_CALL(0x400f8dacu,void (*)(void *,void *,s32,s32,u32))(ctx,(void *)0x444df0b4u,25+26*(s32)i,34,0);
         /* E: NOTE; F..H: NOT2..NOT4 labels, then the keyboard over F..H. */
         for(i=0;i<4;i++) {
-            id=i?0x1du+i:0x15u;locked=0;
+            id=i?0x1du+i:(track<8?0x15u:0x14u);locked=0;
             value=UI_GET(view,id,&locked);
             notes[i]=value;
             poly_ui_widget(view,ctx,4+i,id,value,locked,i?1:0);
