@@ -8,6 +8,7 @@ docs match its code.
 Syntakt development: [feedback and improvements](../improvements.md);
 toolchain, flags and exact build commands:
 [Syntakt builds on this workstation](SYNTAKT-BUILD.md).
+Several agents at once: [parallel agents on this workstation](PARALLEL-AGENTS.md).
 
 ## Using elekloader
 
