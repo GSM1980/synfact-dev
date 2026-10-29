@@ -64,5 +64,9 @@ struct st_machine_host_api {
      * a successful native Sound encode {record, sound, 1}; 26 after a decode
      * {sound, record, 1}; 27 after NEW PROJECT {project container}. */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
+    /* Host API 8: synchronous shared native queries/notifications. Same
+     * context and borrowed argument rules as ST_EV_NATIVE; never retain
+     * a result past the next native transaction. */
+    unsigned int (*native_query)(unsigned int,const unsigned int *);
 };
 #endif

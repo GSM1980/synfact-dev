@@ -54,7 +54,7 @@ def main():
     guards=(a.synfact/'src/features/lfo3/poly/guards.s').read_text(encoding='utf-8')
     guards=guards[guards.index('poly_mod_first_guard:'):guards.index('poly_native_dispatch:')]+guards[guards.index('poly_native_lfo_guard:'):]
     text='| Private source import. Pinned OS 1.41 kernels; authored Synfact guards.\n'+ '\n'.join(asm)+'\n'+guards
-    (out/'kernels.s').write_text(text.replace('poly_fast_owners','poly_owner_map'),encoding='utf-8')
+    (out/'kernels.s').write_text(text.replace('poly_fast_owners','poly_lfo_map'),encoding='utf-8')
     (out/'provenance.json').write_text(json.dumps({'stock_sha256':stock.sha256,
         'source':'src/features/lfo3/poly/guards.s','guards_sha256':hashlib.sha256((a.synfact/'src/features/lfo3/poly/guards.s').read_bytes()).hexdigest(),
         'ranges':{'native_lfo':'40119266..4011958c','modulation':'40097afc..40097c1a'},

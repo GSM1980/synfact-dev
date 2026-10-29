@@ -50,7 +50,7 @@ static __attribute__((noinline)) void publish_block(u32 trigs)
 {
     volatile u8 *tail=(void *)0x800021a9u;
     volatile u32 *bank,*r;u32 t,j,n,b,type,tag,mask,changed=0,sum,words,owner,w,bits,all=0,*row,rows=0,todo,full,lfo=0;
-    const unsigned char *owners;const struct core_machine_def *m;
+    const unsigned char *owners,*lfo_owners;const struct core_machine_def *m;
     const u16 *working,*mirror;
     /* The native boot sender owns the whole 0x800..0xfff page until AUDIO
      * has acknowledged it: nothing in either bank survives that. */
@@ -58,6 +58,7 @@ static __attribute__((noinline)) void publish_block(u32 trigs)
         stale[0]=stale[1]=~0u;published=0;active=routed=cadence=0;*tail=0;return;}
     /* Every block: the profiler's D/C boundary and POLY's owner table. */
     owners=(const unsigned char *)core_native(ST_NATIVE_OWNERS,0);
+    {const u32 query=1;lfo_owners=(const unsigned char *)core_native(ST_NATIVE_OWNERS,&query);}
     full=!(cadence++&3u);
     todo=full?0xffu:(trigs|routed)&0xffu;
     if(!todo){*tail=published?(u8)generation:0;return;}
@@ -82,10 +83,10 @@ static __attribute__((noinline)) void publish_block(u32 trigs)
             /* Slot 0 is the native None destination: modulation routed to
              * None lands in working[0]; the stored value is the mirror's. */
             w=(u32)mirror[0]<<16;
-            if(n>25)w|=special(working,mirror,m,owner,25,0x11);
+            if(n>25)w|=special(working,mirror,m,lfo_owners?lfo_owners[t]:owner,25,0x11);
             bits|=row[9]^w;row[9]=w;
             if(n>26){
-                w=special(working,mirror,m,owner,26,0x18)<<16;
+                w=special(working,mirror,m,lfo_owners?lfo_owners[t]:owner,26,0x18)<<16;
                 if(n>27)w|=working[0x46];
                 bits|=row[10]^w;row[10]=w;
             }

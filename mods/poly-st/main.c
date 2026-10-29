@@ -78,7 +78,10 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
         *result=poly_sequence_enqueue((u32 *)a[0],a[1]);return 1;
     case ST_NATIVE_IMMEDIATE:*result=poly_preview_locked((u32 *)a[0]);return 1;
     case ST_NATIVE_PUBLISH:
-        if(poly_grouped())poly_fast_publish((u8 *)a[0],poly_owner_map);return 0;
+        if(poly_grouped()) {
+            if(poly_lfo_saved_mask || poly_mono_mask)poly_play_publish((u8 *)a[0],poly_owner_map);
+            else poly_fast_publish((u8 *)a[0],poly_owner_map);
+        }return 0;
     case ST_NATIVE_TYPE:
         v=a[0]-0x80002f50u;if(v>=8 || poly_owner_map[v]>=v)return 0;
         *result=poly_effective_type((const volatile u8 *)a[0]);return 1;
@@ -95,10 +98,10 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
     case ST_NATIVE_PAGE_END:
         if(poly_depth && --poly_depth<16)poly_ui_action_end(poly_context[poly_depth]);break;
     case ST_NATIVE_PAGE_GUARD:if(!poly_ui_slave((u8 *)a[0]))return 0;*result=1;return 1;
-    case ST_NATIVE_OWNERS:*result=(u32)poly_owner_map;return 1;
+    case ST_NATIVE_OWNERS:*result=(u32)(a && a[0]==1?poly_lfo_map:poly_owner_map);return 1;
     case ST_NATIVE_MODULATION:case ST_NATIVE_LFO:
         if(!poly_grouped())return 0;
-        *result=(u32)(op==ST_NATIVE_MODULATION?poly_mod_shared:poly_native_shared);return 1;
+        *result=op==ST_NATIVE_MODULATION?(poly_lfo_saved_mask?(u32)poly_modulate:(u32)poly_mod_shared):(u32)poly_native_shared;return 1;
     default:return 0;
     }
     return 0; /* Notifications continue to later native subscribers. */
@@ -106,7 +109,7 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
 static int poly_initialize(const struct st_smz_api *api)
 {
     if(!api || api->version<3 || !api->ui || api->ui->version<7 ||
-       !api->ui->host || api->ui->host->version<2)return 1;
+       !api->ui->host || api->ui->host->version<8)return 1;
     poly_host=api->ui->host;poly_native_interest();
     /* Host API 6: POLY's page handlers act only on the TRIG ParameterView. */
     if(poly_host->version>=6)poly_host->native_page_view((void (*)(void))poly_native,0x401c97fcu);

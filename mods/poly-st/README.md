@@ -2,9 +2,9 @@
 
 Source port of Synfact's digital POLY, including its optimized scalar
 publication and shared native modulation/LFO guards. Requires Syntakt OS 1.41,
-**core 0.12.2 / UI API 7 / module API 3 / host API 2**, and the matching AUDIO
+**core 0.12.19 / UI API 7 / module API 3 / host API 8**, and the matching AUDIO
 companion. Code and state live in the optional SMZ, alongside the other mods.
-No LFO3 or chorus is included. With host API 5 (core 0.12.11+) POLY narrows
+LFO3 remains a separate optional module; chorus is not included. With host API 5 (core 0.12.11+) POLY narrows
 its native subscription: without a group only TRIG, IMMEDIATE, the pattern
 header and the POLY page operations reach its handler; the voice-routing
 operations (TYPE, ENQUEUE, PUBLISH, OWNERS, MODULATION, LFO...) are added while
@@ -15,10 +15,28 @@ limited to the TRIG ParameterView.
 ## Operation
 
 On a digital track, open the third TRIG page. It preserves Synfact's layout:
-**A: POLY, B: VOICES, E: NOTE, F/G/H: NOT2/NOT3/NOT4**, with its keyboard graphic.
+**A: POLY, B: VOICES, C: PLAY, D: PRIO, E: NOTE, F/G/H: NOT2/NOT3/NOT4**, with its keyboard graphic.
 OFF hides/disables the remaining controls. VOICES selects 2, 3 or 4 contiguous
 digital tracks. The first track is the master; remaining tracks are slaves.
 Groups cannot overlap or cross track 8. Analog tracks have no POLY page.
+
+PLAY follows Digitone OS 1.41 manual 9.5.6, within the allocated Syntakt group:
+
+| PLAY | Behavior |
+|---|---|
+| POLY | One held key per voice; LFO1/2 and optional LFO3 have independent voice state. |
+| M.LFO | Polyphonic notes with the master's shared modulation, preserving earlier banks. |
+| MONO | Only the master plays; each note retriggers native envelopes. |
+| LEG | Mono legato using the native Syntakt LEGATO setting; overlapping notes retain envelopes. |
+
+PRIO selects LAST / LOW / HIGH in both mono modes through the native Sound
+model setter. It is inactive in poly modes. Its storage belongs to the Sound/KIT,
+as does the native LEGATO setting updated by PLAY edits. PLAY belongs to the
+pattern's group record. Reserved slaves remain reserved in mono modes; VOICES
+still determines the group size. Chord lanes are ignored in mono modes.
+LFO FREE/TRG/HLD/ONE/HLF keep their native behavior. Independent FREE oscillators
+can have equal phase; POLY does not impose random pan or an artificial spread.
+Use staggered note-ons and TRG to hear independent PAN trajectories.
 
 Keyboard and MIDI note input allocate one voice per held note, rotate free
 voices, steal the oldest occupied voice and absorb releases of stolen notes.
@@ -32,8 +50,12 @@ Sounds and sequences are retained. Leaving a group releases pending voices and
 restores the track's own Sound. A group containing a MIDI-mode track is
 suspended while its saved topology remains available for audio mode.
 
-Topology uses Synfact's seven-byte PQ record in PatternSettings `21h..27h`,
-with CRC16 and validation. Invalid/missing/retired analog records load without
+Topology uses the seven-byte PQ/PR record in PatternSettings `21h..27h`,
+with CRC16 and validation. PQ reads as M.LFO. PR ranks the valid groups,
+OFF voice-count preferences and four PLAY choices into the same 24-bit payload;
+no native header byte outside this record is used. Disabling a group resets its
+PLAY preference to M.LFO when re-enabled. Older banks reject PR and disable POLY
+for that pattern. Invalid/missing/retired analog records load without
 POLY. Pattern copy/reset/undo/save use the native backing and notifications.
 This record does not overlap the project's sample-pool record.
 
@@ -56,11 +78,15 @@ recorder's private draw bridge. KEY pre/post subscribers share the same list.
 All lists and assembly operands publish in one existing IRQ exclusion, so a
 render callback cannot observe an unbound native transaction list.
 
-Publication copies the master's effective scalar parameters while retaining
-independent voice synthesis state. Hidden slave modulation/LFO work is skipped;
-their LFO states pause and resume when released. Only masters/independent tracks
-consume random-stream steps, matching the optimized Synfact reference. LFO1/2
-remain present; adding LFO3 is separate work.
+M.LFO copies the master's effective scalar parameters and skips hidden native
+slave modulation/LFO work. POLY instead projects master parameters before
+modulation and runs the slave oscillators on their own note triggers, pitch and
+velocity. Controller inputs inherit the master for that calculation. Saved slave
+Sounds and controller inputs are untouched; their original LFO states are saved
+on entry and restored on exit/reparenting. LFO3 projects the effective master's
+parameter-lock bank while retaining a separate oscillator state for each voice.
+The shared core OWNERS query distinguishes Sound ownership from LFO-state
+ownership, including FM's extended ratio-offset transport.
 
 The current generic machine transport supplies effective type and 28-parameter
 snapshots for FM TONE and SP machines. The obsolete FM-only mailbox is excluded.
@@ -68,6 +94,16 @@ Target flags remain **`-O3 -mcpu=54415 -mtune=cfv4`** with the bounded loop-peel
 policy. No filesystem IO or general heap allocation is introduced in render;
 note expansion uses the bounded native event pools and rollback on exhaustion.
 Physical CPU cost and timing remain to be measured.
+
+`tests/test_st_poly_play_emu.py --bank BANK --stock STOCK --core MAIN --out JSON`
+runs the compiled modulation, native LFO1/2, LFO3 renderer and publication on
+stock/core MAIN against stock independent tracks: 120 cases, 9,600 blocks and
+late-copy negative controls. It also executes stock Sound setters and held-note
+priority for MONO/LEG, with explicit model/queue/allocation doubles. This checks
+parameter and event outputs; it does not certify final audio, envelope continuity
+on hardware or device timing. The JSON's sample pipeline instruction counts
+exclude the owner queries, full scheduler, cache timing and LFO3 rendering; they
+are not CPU percentages.
 
 ## Source and build
 

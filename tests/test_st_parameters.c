@@ -12,6 +12,8 @@ static struct core_machine_param param[28];
 static struct core_machine_def defs[6];
 static unsigned char test_owners[8]={0,1,2,3,4,5,6,7};
 static u32 use_owners;
+static unsigned char test_lfo_owners[8]={0,1,2,3,4,5,6,7};
+static u32 use_lfo_owners;
 /* The production index -> Sound slot table (machines.c). */
 static const u32 test_slots[28]={0x12,0x13,0x14,0x15,0x16,0x17,0x1a,0x19,
     0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,0x40,0x41,0x42,0x43,0x44,0x45,
@@ -54,7 +56,7 @@ static u32 effective(u32 t,u32 owner,u32 index)
     if(!slot)return mirror(owner)[0];                    /* None destination: unmodulated */
     if(slot!=0x11 && slot!=0x18)return working(t)[slot];
     v=mirror(owner)[slot];
-    for(n=0;n<2;n++)if((working(t)[n?12:4]>>8)==slot)v+=*lfo(owner,n);
+    for(n=0;n<2;n++)if((working(t)[n?12:4]>>8)==slot)v+=*lfo(use_lfo_owners?test_lfo_owners[t]:owner,n);
     if(v<0)v=0;
     if(v>0x7f00)v=0x7f00;
     return (u32)v;
@@ -195,6 +197,9 @@ int main(void)
     assert(bank_of(tag)[4+15*3]==(19u<<16|67u));
     for(i=1;i<11;i++)assert(bank_of(tag)[4+15*3+i]==bank_of(tag)[4+15*2+i]);
     audio_machine_receive();offered(3,2);offered(2,2);
+    use_lfo_owners=1;tag=publish();audio_machine_receive();offered(3,2);offered(2,2);
+    assert(bank_of(tag)[4+15*3+9]!=bank_of(tag)[4+15*2+9]); /* same Sound, own LFO */
+    use_lfo_owners=0;
     working(2)[4]=working(3)[4]=0;*lfo(2,0)=*lfo(3,0)=0;
     test_owners[3]=7;set_type(3,65);tag=publish();                     /* invalid forward owner */
     assert(bank_of(tag)[4+15*3]==(20u<<16|65u));audio_machine_receive();offered(3,3);
@@ -262,5 +267,6 @@ int main(void)
     return 0;
 }
 
-unsigned int core_native(unsigned int op,const unsigned int *a){(void)a;return op==15 && use_owners?(u32)test_owners:0;}
+unsigned int core_native(unsigned int op,const unsigned int *a)
+{return op==15 && use_owners?(u32)(a && a[0]==1 && use_lfo_owners?test_lfo_owners:test_owners):0;}
 unsigned int core_native_view(unsigned int op,void *v,unsigned int b){(void)v;(void)b;return op==10?0xffffffffu:0;}

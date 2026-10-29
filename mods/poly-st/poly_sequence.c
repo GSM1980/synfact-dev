@@ -61,6 +61,7 @@ static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
     volatile u32 i;
     s32 note;
     target[1]=0;
+    if(poly_mono(master))return 0;
     if(!source[1] || source[2]!=master)return 0;
     note=poly_chord_note(sequence,master,prep_step[master],voice,source[6]);
     if(note<0)return 0;
@@ -111,7 +112,7 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
     if(sequence!=poly_seq_config.sequence)changed=1;
     for(i=0;i<8;i++) {
         old_roots[i]=0;new_roots[i]=0;
-        if(states[i]!=poly_seq_config.states[i])changed=1;
+        if(states[i]!=poly_seq_config.states[i] || poly_modes[i]!=poly_next_modes[i])changed=1;
     }
     if(!changed)return 1;
     for(i=0;i<8;i++) {
@@ -121,7 +122,7 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
         if(states[i]>=3)on=1;
         if(poly_seq_config.states[i]>=3)on=1;
         if((sequence!=poly_seq_config.sequence && (on || old!=i || owners[i]!=i)) || old!=owners[i] ||
-           (on && states[i]!=poly_seq_config.states[i])) {
+           (on && (states[i]!=poly_seq_config.states[i] || poly_modes[i]!=poly_next_modes[i]))) {
             old_roots[old]=1;new_roots[owners[i]]=1;
         }
     }
@@ -145,6 +146,8 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
     }
     for(i=0;i<8;i++)poly_seq_config.states[i]=states[i];
     for(i=0;i<12;i++)poly_seq_config.owners[i]=owners[i];
+    for(i=0;i<8;i++)poly_modes[i]=poly_next_modes[i];
+    poly_play_maps(poly_seq_config.owners);
     poly_native_interest();
     poly_seq_config.sequence=sequence;
     poly_seq_config.generation++;
@@ -193,6 +196,7 @@ u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 
     if(poly_seq_config.sequence!=(u32)seq)return result;
     if(generation!=poly_seq_config.generation)return result;
     if(poly_seq_config.states[track]<3)return result;
+    if(poly_mono(track))return result;
     poly_seq_config.pending[track].sequence=(u32)seq;
     poly_seq_config.pending[track].step=step;
     poly_seq_config.pending[track].generation=generation;

@@ -1,4 +1,12 @@
-# Syntakt core 0.12.13
+# Syntakt core 0.12.19
+
+Version 0.12.19 adds host API 8 `native_query`, a pointer to the existing
+synchronous native bus. It adds no hook site or operation number. OWNERS with
+null arguments still returns the Sound owner map; `{1}` requests the LFO-state
+owner map. POLY and LFO3 use it to share Sound configuration while running
+independent voice oscillators. Extended parameter slots 17/24 use the Sound
+owner's base value and the LFO state's own output. Module/UI APIs and the host API's earlier prefix remain
+unchanged. Banks using independent POLY require this core and host API 8.
 
 Core for Syntakt OS 1.41. Its sources and `mod.json` use the normal elekloader
 SDK, like the other cores. Python build/packaging tools live in the SDK.

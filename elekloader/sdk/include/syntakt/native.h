@@ -23,6 +23,9 @@
  * pointer; zero means no override.
  * PAGE_GUARD: view,zero -> 1 consumes the native page mutation.
  * OWNERS: null args -> borrowed 12-byte track-owner map, or zero (MAIN IRQ).
+ * Core 0.12.19: args {1} requests LFO state owners instead. Sound/configuration
+ * owners remain unchanged; independent voices own their own LFO state.
+ * Modules may query both through host API 8 native_query, in MAIN IRQ only.
  * MODULATION/LFO: optional replacement entry pointer; zero uses the core's
  * original prologue/continuation with the original stack arguments. MODULATION
  * args are null; LFO args are the native {working, tempo, trigs} (core 0.12.14+,

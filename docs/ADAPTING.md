@@ -2027,3 +2027,17 @@ Some differences from an octabam build, by design:
 - [ ] Your sources hold no copied firmware code, and no firmware file is
       committed anywhere.
 - [ ] The build ran in an emulator or on a device you can recover.
+
+## Syntakt: independent voice modulation (core 0.12.19)
+
+Host API 8 appends `native_query` to the API 7 table. Modules can query the
+existing `ST_NATIVE_OWNERS` operation from MAIN IRQ with null arguments for
+Sound owners or `{1}` for LFO-state owners. Do not infer oscillator ownership
+from Sound ownership: a POLY slave can use its master's configuration and its
+own LFO state. Preserve the returned map only for the synchronous transaction.
+Older hosts keep their existing behavior; test the host version before reading
+the new pointer. See [the native contract](../elekloader/sdk/include/syntakt/native.h)
+and [POLY's implementation/tests](../mods/poly-st/README.md). No new native hook
+or serialized SMZ feature bit is needed. Pattern-owned PLAY uses the existing
+PQ/PR record described in [FORMAT](FORMAT.md); native Sound settings still own
+LEGATO and NOTE PRIORITY.

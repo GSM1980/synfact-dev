@@ -12,7 +12,7 @@ static u32 xor_bits(u32 a,u32 b)
     return (a+b)-(both+both);
 }
 
-static u32 valid(const volatile u8 *p)
+static u32 legacy_valid(const volatile u8 *p)
 {
     u32 crc=65535u,j,state,width,position=0;
     volatile u32 i,bits;
@@ -37,6 +37,8 @@ static u32 valid(const volatile u8 *p)
     return 1;
 }
 
+#include "poly_codec.c"
+
 u32 poly_header_load(u8 *destination,const u8 *source)
 {
     u32 result=stock_header_load(destination,source),i,ok;

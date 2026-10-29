@@ -43,6 +43,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None):
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
         'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c']}
     cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
+    cases['lfo3-poly']=['tests/test_st_lfo3_poly.c']
     has_recorder='recorder_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']
     if 'poly_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:cases['poly']=['tests/test_st_poly.c']
     if has_recorder:cases['recorder']=['tests/test_st_recorder.c','mods/core-st/hzfs.c','mods/core-st/crc.c']

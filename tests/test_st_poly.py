@@ -51,7 +51,8 @@ def verify(folder,synfact=None):
            'st_pool_preview_stop','core_event_view','core_clock_snapshot','core_additem',
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
-    assert read(address('core_machine_host_api'),80)==struct.pack('>20I',7,*[address(n) for n in names])   # host API 7
+    names+=['core_parameter_provider_set','core_native']
+    assert read(address('core_machine_host_api'),88)==struct.pack('>22I',8,*[address(n) for n in names])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
@@ -108,10 +109,11 @@ def verify(folder,synfact=None):
     if synfact:
         p=json.loads((mod/'provenance.json').read_text())
         for name,digest in p['source_sha256'].items():assert hashlib.sha256((synfact/name).read_bytes()).hexdigest()==digest,name
-        assert (mod/'publication.s').read_bytes()==(synfact/'src/features/lfo3/poly/publication.s').read_bytes()
+        # Git worktrees may use CRLF; assembled instructions must stay identical.
+        assert (mod/'publication.s').read_text()==(synfact/'src/features/lfo3/poly/publication.s').read_text()
         guard=(synfact/'src/features/lfo3/poly/guards.s').read_text(encoding='utf-8')
         fragment=guard[guard.index('poly_mod_first_guard:'):guard.index('poly_native_dispatch:')]+guard[guard.index('poly_native_lfo_guard:'):]
-        assert fragment.replace('poly_fast_owners','poly_owner_map') in (mod/'imported/kernels.s').read_text(encoding='utf-8')
+        assert fragment.replace('poly_fast_owners','poly_lfo_map') in (mod/'imported/kernels.s').read_text(encoding='utf-8')
     print('PASS: POLY source provenance; 6 existing/new shared subscriptions; 12 core-owned native bridges; exact replay ABI; host API 2; telemetry moved to SMZ; imported optimized guards/publication; -O3')
 
 if __name__=='__main__':

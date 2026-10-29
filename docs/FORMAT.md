@@ -343,3 +343,23 @@ DRAW context follows each complete view. The host table appends telemetry and
 native stock replay services; its earlier 44-byte prefix is unchanged. Old cores
 reject the new IDs; no descriptor geometry, envelope or feature-bit change is
 needed. See [SMZ4](../mods/core-st/SMZ4.md) for signatures and native contexts.
+
+Core 0.12.19 appends host API 8's `native_query` after the API 7 provider
+pointer (offset 84, total 88 bytes). It dispatches through the existing native
+bus. OWNERS with `{1}` returns LFO-state ownership; null arguments retain Sound
+ownership. SMZ geometry, operation IDs and feature bits remain unchanged.
+
+POLY 0.2 uses only PatternSettings bytes `0x21..0x27`. The first two bytes
+are `PQ` (legacy) or `PR` (PLAY modes); the next three form a big-endian
+24-bit payload, followed by CRC16-CCITT (initial `ffff`) over the first five
+bytes. PQ stores eight 3-bit topology states and implies shared LFOs. PR ranks
+the legal topology with four modes per active group; its domain is
+`0..1320056`. The recurrence is `F(0)=1`,
+`F(n)=3*F(n-1)+4*sum(3^(w-1)*F(n-w))` for legal group widths `w=2..4`.
+OFF preferences form the first ranges, followed by group widths in ascending
+order; each group orders mode, base-3 slave preferences, then suffix rank.
+Mode codes are `0=M.LFO, 1=POLY, 2=MONO, 3=LEG`. Topology states `0..2`
+are OFF with VOICES `2..4`, and `3..5` are ON with VOICES `2..4`.
+See [the bounded codec](../mods/poly-st/poly_codec.c) and its exhaustive test.
+Unknown tags, out-of-domain ranks and invalid CRCs disable POLY. Older POLY
+banks reject PR safely. NOTE PRIORITY remains in the native Sound/KIT record.
