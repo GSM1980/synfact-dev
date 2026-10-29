@@ -11,6 +11,9 @@ unprefixed GCC 13.2.0), the required `ELEKLOADER_CROSS=''` and
 `GCC_EXEC_PREFIX`, the compiler flags and the build, lint, bank and
 regression commands. Do not change flags or builders to make a build pass.
 
+**Several agents at once**: each works in its own git worktree, never in a
+folder another agent uses; see [docs/PARALLEL-AGENTS.md](docs/PARALLEL-AGENTS.md).
+
 ## If you are adapting or writing a mod
 
 **Core first, and contributions are welcome.** Before you add a code site
