@@ -61,7 +61,7 @@ and per-voice pan) conflict when merged.
 | Branch | Folder | Task |
 |---|---|---|
 | `feat/poly-analog-st` | `C:\Desarrollo\synfact-dev` (stays) | POLY on analog tracks 9 and 10 with no added CPU |
-| `perf/poly-sram-native-lfos` | `C:\Desarrollo\synfact-dev-pan` | per-voice LFOs, POLY/M.LFO only, SRAM performance fix |
+| `refactor/poly-copy-on-change` | `C:\Desarrollo\synfact-dev-pan` | copy-on-change POLY/M.LFO; native per-track engines |
 
 The original feature branches start at `dbf6e12`. The pan work continues from
 `096efaa` (PLAY modes) and `1efc52c` (remove MONO/LEG/PRIO); the current performance

@@ -146,6 +146,7 @@ static u32 poly_ui_settings_write(u8 *view,u32 track,u32 enabled,u32 voices,u32 
     header=((u8 *(*)(void *))(*(u32 **)model)[0x28/4])(model);
     if(!header)return 0;
     if(!(mode<2?poly_mode_write(track,mode):poly_record_write(track,enabled,voices)))return 0;
+    poly_copy_ui();
     sequence=*(const volatile u8 **)0x43bd7430u;
     for(i=0;i<7;i++)header[0x21+i]=sequence[0x21381+i];
     ((void (*)(void *,u32))(*(u32 **)model)[0x10/4])(model,0);

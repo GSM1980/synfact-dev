@@ -57,21 +57,27 @@ class Run:
         self.u.mem_write(self.sym['poly_seq_config']+8,bytes([5,0,0,0,0,0,0,0]))
         self.u.mem_write(self.sym['poly_owner_map'],owners)
         self.u.mem_write(self.sym['poly_lfo_map'],identity if independent else owners)
-        self.u.mem_write(self.sym['poly_pre_map'],owners if independent else identity)
+        if 'poly_pre_map' in self.sym:self.u.mem_write(self.sym['poly_pre_map'],owners if independent else identity)
         self.u.mem_write(self.sym['poly_post_map'],identity if independent else owners)
         self.u.mem_write(self.sym['poly_modes'],bytes([int(independent)])+bytes(7))
-        self.write32(self.sym.get('poly_independent_mask',self.sym.get('poly_lfo_saved_mask')),14 if independent else 0)
+        mask=self.sym.get('poly_independent_mask',self.sym.get('poly_lfo_saved_mask'))
+        if mask:self.write32(mask,14 if independent else 0)
         if 'poly_shared_mask' in self.sym:self.write32(self.sym['poly_shared_mask'],0 if independent else 14)
     def publish(self):
         self.write32(ARGS,WORK);self.call('poly_native',3,ARGS,ARGS+16)
     def block(self,data,trigs,which,third):
         self.u.mem_write(WORK,data)
-        self.call('poly_modulate' if which else 0x40097afc,WORK)
+        if which and 'poly_copy_pending' in self.sym:
+            if self.call('poly_native',16,0,ARGS+16):
+                fn=struct.unpack('>I',bytes(self.u.mem_read(ARGS+16,4)))[0]
+            else:fn=self.sym['poly_mod_all']
+            self.call(fn,WORK)
+        else:self.call('poly_modulate' if which else 0x40097afc,WORK)
         if third:self.call('lfo3_render',WORK,0x3840,trigs,self.params,self.third,self.third+520)
         if which:
             self.u.mem_write(ARGS,struct.pack('>3I',WORK,0x3840,trigs))
-            assert self.call('poly_native',17,ARGS,ARGS+16)
-            fn=struct.unpack('>I',bytes(self.u.mem_read(ARGS+16,4)))[0]
+            consumed=self.call('poly_native',17,ARGS,ARGS+16)
+            fn=struct.unpack('>I',bytes(self.u.mem_read(ARGS+16,4)))[0] if consumed else self.sym['poly_native_all']
             self.call(fn,WORK,0x3840,trigs)
         else:self.call(0x40119266,WORK,0x3840,trigs)
         if which:self.publish()
@@ -97,8 +103,9 @@ def costs(native,bank,stock):
         r=Run(native,bank);r.group(independent);total=[0]
         h=r.u.hook_add(UC_HOOK_CODE,lambda *unused:total.__setitem__(0,total[0]+1))
         r.u.mem_write(WORK,data)
-        r.call('poly_modulate' if independent else 'poly_mod_shared',WORK)
-        r.call('poly_native_all' if independent and 'poly_native_all' in r.sym else 'poly_native_shared',WORK,0x3840,3)
+        native_copy='poly_copy_pending' in r.sym
+        r.call('poly_mod_all' if native_copy else 'poly_modulate' if independent else 'poly_mod_shared',WORK)
+        r.call('poly_native_all' if native_copy or independent and 'poly_native_all' in r.sym else 'poly_native_shared',WORK,0x3840,3)
         if not independent or 'poly_shared_mask' not in r.sym:r.publish()
         r.u.hook_del(h);counts['poly' if independent else 'master_lfo']=total[0]
     return counts
@@ -109,15 +116,16 @@ def mixed_probe(native,bank,stock):
     actual.u.mem_write(actual.sym['poly_seq_config']+8,bytes([3,0,3,0,0,0,0,0]))
     for key,value in [('poly_owner_map',owners),('poly_lfo_map',post),
                       ('poly_pre_map',bytes([0,0,2,3,4,5,6,7,8,9,10,11])),('poly_post_map',post)]:
-        actual.u.mem_write(actual.sym[key],value)
+        if key in actual.sym:actual.u.mem_write(actual.sym[key],value)
     actual.u.mem_write(actual.sym['poly_modes'],bytes([1,0,0,0,0,0,0,0]))
-    actual.write32(actual.sym['poly_independent_mask'],2);actual.write32(actual.sym['poly_shared_mask'],8)
+    if 'poly_independent_mask' in actual.sym:actual.write32(actual.sym['poly_independent_mask'],2)
+    actual.write32(actual.sym['poly_shared_mask'],8)
     ref.u.mem_write(ref.sym['poly_post_map'],post);data,_=fixture(1,1,0)
     for block in range(80):
         trigs={0:1,11:2,29:4,43:8}.get(block,0)
         ref.block(data,trigs,False,False);ref.call('poly_fast_publish',WORK,ref.sym['poly_post_map'])
         expected=bytes(ref.u.mem_read(WORK,SIZE));poisoned=bytearray(data)
-        for t in (1,3):poisoned[0x1c+t*142:0x1c+(t+1)*142]=bytes(142)
+        for t in ((3,) if 'poly_copy_pending' in actual.sym else (1,3)):poisoned[0x1c+t*142:0x1c+(t+1)*142]=bytes(142)
         assert actual.block(bytes(poisoned),trigs,True,False)==expected,('mixed',block)
     return 80
 
@@ -131,18 +139,20 @@ def controller_probe(native,bank,stock):
             r.u.mem_write(0x80004670+2*t,struct.pack('>H',0x1000+t*0x1000))
             r.write32(0x800046b8+4*t,(48+t*7)<<16)
         for j,at in enumerate(inputs):
-            ref.u.mem_write(at+2*t,struct.pack('>H',0x700*(j+1)))
+            ref.u.mem_write(at+2*t,struct.pack('>H',0x700*(j+1) if not t or 'poly_copy_pending' not in actual.sym else 0x3000+t*0x100))
             actual.u.mem_write(at+2*t,struct.pack('>H',0x700*(j+1) if not t else 0x3000+t*0x100))
     original=bytearray(actual.u.mem_read(inputs[0],104))
     # Direct inheritance is deliberately retained in the slaves after POLY.
-    for at in inputs:
-        for t in range(1,4):original[at-inputs[0]+2*t:at-inputs[0]+2*t+2]=original[at-inputs[0]:at-inputs[0]+2]
+    if 'poly_copy_pending' not in actual.sym:
+        for at in inputs:
+            for t in range(1,4):original[at-inputs[0]+2*t:at-inputs[0]+2*t+2]=original[at-inputs[0]:at-inputs[0]+2]
     for block in range(8):
         expected=ref.block(bytes(data),1<<block if block<4 else 0,False,False)
         poisoned=bytearray(data)
-        for t in range(1,4):
-            poisoned[0x1c+t*142:0x1c+(t+1)*142]=bytes(142)
-            poisoned[0x754+t*124:0x754+(t+1)*124]=bytes(124)
+        if 'poly_copy_pending' not in actual.sym:
+            for t in range(1,4):
+                poisoned[0x1c+t*142:0x1c+(t+1)*142]=bytes(142)
+                poisoned[0x754+t*124:0x754+(t+1)*124]=bytes(124)
         assert actual.block(bytes(poisoned),1<<block if block<4 else 0,True,False)==expected
         assert bytes(actual.u.mem_read(inputs[0],104))==original
     assert len({struct.unpack_from('>H',expected,0x1c+t*142+0x5e)[0] for t in range(4)})>1
@@ -172,7 +182,8 @@ def main():
                         expected=ref.block(data,trigs,False,lfo==3)
                         # Poison saved slave configs: they must never leak into POLY.
                         poisoned=bytearray(data)
-                        for t in range(1,4):poisoned[0x1c+t*142:0x1c+(t+1)*142]=bytes(142)
+                        if 'poly_copy_pending' not in actual.sym:
+                            for t in range(1,4):poisoned[0x1c+t*142:0x1c+(t+1)*142]=bytes(142)
                         got=actual.block(bytes(poisoned),trigs,True,lfo==3)
                         assert got==expected,(image,lfo,mode,wave,block,next(i for i,(x,y) in enumerate(zip(got,expected)) if x!=y))
                         pans=[struct.unpack_from('>H',got,0x1c+t*142+0x5e)[0] for t in range(4)]

@@ -32,6 +32,8 @@ class Callback(Run):
             self.write32(SRAM_BANK+40*t+16,0x3fffffff)
             p=(0x7800,0x300,0x4000,0x2f00,2<<8,0,1<<8,0x6000) if t==0 else (0x7000,0x300,0x4000,0x7f00,0,0,0,0x4000)
             self.u.mem_write(self.params+t*16,struct.pack('>8H',*p))
+        if 'poly_copy_pending' in self.sym:
+            for t in range(1,4):self.u.mem_write(self.params+16*t,bytes(self.u.mem_read(self.params,16)))
         self.write32(SRAM_BANK+520,0x12345678);self.write32(SRAM_BANK+524,0x9abcdef0)
         self.source=0;self.instructions=self.parameter_ddr_reads=self.parameter_sram_reads=0
         self.u.hook_add(UC_HOOK_CODE,self.code);self.u.hook_add(UC_HOOK_MEM_READ,self.read)
@@ -70,6 +72,8 @@ def main():
         if name=='neutral':
             for r in (before,after):
                 r.u.mem_write(r.params,struct.pack('>8H',0x7000,0x300,0x4000,0x7f00,0,0,0,0x4000))
+                if 'poly_copy_pending' in r.sym:
+                    for t in range(1,4):r.u.mem_write(r.params+16*t,bytes(r.u.mem_read(r.params,16)))
         # First entry includes old snapshot setup; compare steady state after it.
         rows=[]
         for block in range(128):

@@ -6,9 +6,11 @@
 #include "poly_pattern.c"
 static u8 poly_modes[8],poly_next_modes[8];
 static void poly_play_maps(const volatile u8 *);
+static void poly_copy_group(u32,u32);
 #include "poly_sequence.c"
 #include "poly_publication.c"
 #include "poly_play.c"
+#include "poly_copy.c"
 #include "poly_type.c"
 /* Generic core parameter transport owns all machine frames. */
 
@@ -417,6 +419,9 @@ u32 poly_preview_locked(u32 *event)
 {
     u32 track=event[2];
     if(event[0]==0x504f4c59u) {
+        if(event[1]==0x434f5059u) {
+            event[5]=poly_copy_pending;poly_copy_pending=0;return 1;
+        }
         if(event[1]==0x43464731u) {
             event[5]=poly_record_write_locked(event[2],event[3],event[4]);return 1;
         }
@@ -452,7 +457,10 @@ u32 poly_sound_write_allowed(u32 track)
     volatile u32 allowed=0;
     poly_sync();
     if(track>=8)return 1;
-    if(poly_seq_config.owners[track]==track)allowed=1;
+    if(poly_seq_config.owners[track]==track) {
+        allowed=1;
+        if(poly_seq_config.states[track]>=3)poly_copy_mark(track);
+    }
     return allowed;
 }
 

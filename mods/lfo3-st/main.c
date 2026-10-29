@@ -245,12 +245,11 @@ static u32 install_hooks(void)
     lfo3_sync();lfo3_unlock(sr);
     return 0;
 }
-#include "poly.c"
 static int lfo3_native(u32 op,const u32 *a,u32 *result)
 {
     if(op==ST_NATIVE_LFO){
         if(a && render && !lfo3_engine_busy())
-            render((u8 *)a[0],a[1],a[2],lfo3_voice_bank(lfo3_events_bank()),&lfo3_bank->state[0][0],lfo3_bank->rng);
+            render((u8 *)a[0],a[1],a[2],lfo3_events_bank(),&lfo3_bank->state[0][0],lfo3_bank->rng);
         return 0;                                 /* POLY or native LFO1/LFO2 continue */
     }
     return hooks_installed?lfo3_page_native(op,a,result):0;

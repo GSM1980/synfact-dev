@@ -1,9 +1,9 @@
 # Digital POLY for Syntakt
 
 Source port of Synfact's digital POLY, including its optimized scalar
-publication and shared native modulation/LFO guards. Requires Syntakt OS 1.41,
-**core 0.12.19 / UI API 7 / module API 3 / host API 8**, and the matching AUDIO
-companion. Code and state live in the optional SMZ, alongside the other mods.
+publication. Playback uses native per-track modulation/LFO engines. Requires Syntakt OS 1.41,
+**UI API 7 / module API 3 / host API 2+**, and the matching AUDIO
+companion (the full bank with LFO3 needs host API 7). Code and state live in the optional SMZ, alongside the other mods.
 LFO3 remains a separate optional module; chorus is not included. With host API 5 (core 0.12.11+) POLY narrows
 its native subscription: without a group only TRIG, IMMEDIATE, the pattern
 header and the POLY page operations reach its handler; the voice-routing
@@ -43,9 +43,10 @@ first-step preparation. Live recording writes NOTE and relative note lanes.
 
 Slaves show TRACK IN / SLAVE MODE and block parameter edits, page mutations,
 machine selection and Sound writes according to the reference. Their saved
-Sounds and sequences are retained. Leaving a group releases pending voices and
-publishes the track's own Sound. Previous slave LFO phases and controller inputs
-are not restored (the user-approved performance policy from POLY 0.4). A group containing a MIDI-mode track is
+Sounds are overwritten with the master's parameters when the voices join.
+Leaving or shrinking a group releases pending voices and keeps the copied
+Sounds; it never restores the previous slave Sounds. Sequences remain separate.
+A group containing a MIDI-mode track is
 suspended while its saved topology remains available for audio mode.
 
 Topology uses the seven-byte PQ/PR record in PatternSettings `21h..27h`,
@@ -79,19 +80,29 @@ recorder's private draw bridge. KEY pre/post subscribers share the same list.
 All lists and assembly operands publish in one existing IRQ exclusion, so a
 render callback cannot observe an unbound native transaction list.
 
-M.LFO copies the master's effective scalar parameters and skips hidden native
-slave modulation/LFO work. POLY instead projects master parameters before
-modulation and runs the slave oscillators on their own note triggers, pitch and
-velocity. Controller inputs inherit the master directly. No snapshot/restore of
-slave controllers or LFO phases is performed. With no M.LFO group, modulation
-and LFO1/2 replay stock directly without the shared-voice guards; the PUBLISH
-operation is removed from POLY's native interest mask, eliminating the late pass.
-Mixed groups retain the guarded kernels and only publish shared slaves.
-LFO3 projects the master's effective parameter-lock rows in place in its own
-SRAM bank/overlay, retaining each voice's native state. The previous DDR copy
-of all thirteen parameter rows is removed; slave configuration may be overwritten.
-The shared core OWNERS query distinguishes Sound ownership from LFO-state
-ownership, including FM's extended ratio-offset transport.
+POLY 0.6 installs the master's complete native Sound (291 bytes and LFO3's
+shadow record) when a voice joins the group. Increasing VOICES only sets up new
+slaves; decreasing/disabling does not restore anything. Master Sound edits mark
+a pending bit in the existing native setter gate; the UI task propagates the
+completed edit once, through native Sound copy/publication, outside the audio IRQ.
+Reload/paste keys also queue that propagation. The task flush has a null fast
+path with no record comparisons. Configuration changes prepare sequencer Sounds
+immediately; the UI copy completes their live KIT/shadow metadata.
+
+Both PLAY choices run the native per-track modulation and LFO1/2 engines.
+LFO3 uses its original SRAM parameter bank directly. POLY declines MODULATION,
+LFO, PUBLISH and OWNERS: no per-block parameter copy, controller adaptation,
+type override or ownership query is activated for an independent-only group.
+Native note copies retain the master's reference-counted lock object, so each
+voice receives its own native p-lock application, including captured LFO3 locks.
+Controller inputs, phases and velocity follow the native per-track behavior.
+
+M.LFO adds a late copy of the master's effective parameters to its slaves and
+reports shared owners for the extended FM sender. Its unused slave LFO results
+are discarded; the native engines stay in ROM instead of running copied guarded
+kernels in DDR. This preserves shared modulation but changes the random-stream
+advancement relative to older M.LFO banks, which skipped slave oscillators.
+Mixed groups only copy the M.LFO members. POLY groups retain their own outputs.
 
 The current generic machine transport supplies effective type and 28-parameter
 snapshots for FM TONE and SP machines. The obsolete FM-only mailbox is excluded.
@@ -104,27 +115,34 @@ Physical CPU cost and timing remain to be measured.
 runs the compiled modulation, native LFO1/2, LFO3 renderer and publication on
 stock/core MAIN against stock independent tracks: 120 cases, 9,600 blocks and
 late-copy negative controls. Host tests verify migration of retired modes,
-polyphonic live/chord/sequencer paths and the absence of Sound-setting writes.
+polyphonic live/chord/sequencer paths, unchanged master LEGATO/PRIO and destructive
+Sound copies only for setup/edits.
 This checks parameter and event outputs; it does not certify final audio or
 device timing. The JSON's sample pipeline instruction counts
 exclude the owner queries, full scheduler, cache timing and LFO3 rendering; they
 are not CPU percentages.
 
-POLY 0.3 is an SMZ-only update: the core/SYX remains byte-identical to the
-0.12.19 build supplied with POLY 0.2. Independent LFO ownership still requires
-host API 8, introduced by that core; removing the mono controls does not require
-another firmware installation if that core is already installed.
+POLY 0.6 is an SMZ-only update and uses the same delivered core/SYX. Its
+independent mode no longer needs the API 8 owner-state query: slave Sounds
+already contain their own base values. The full bank still uses LFO3's API 7
+parameter service. No new core hook or firmware update is introduced here.
 
-POLY 0.4 keeps that same core/SYX and implements the performance policy above.
-`tests/test_st_poly_lfo3_source_emu.py --before BANK --after BANK --core MAIN
---out JSON` executes both banks' actual LFO3 callback and SRAM kernel. The
-256-block comparison (neutral and PAN fixtures) retains identical working output
-while moving the render parameter source from DDR to SRAM. The measured callback
-falls from 1,850 to 1,201 instructions with neutral LFO3, and from 2,106 to 1,457
-with PAN modulation (221/209 bytes of guest parameter reads per sample block).
-The LFO1/2 differential also exercises mixed POLY/M.LFO groups. These are offline
-comparisons; only the instrument can confirm whether the reported five MAIN
-CPU percentage points have disappeared. No zero-overhead claim is made.
+`test_st_poly_copy_events_emu.py` executes production UI Sound copies with the
+real LFO3 shadow-copy backend and checks repeated task calls make no idle copy.
+It also applies one native lock object to three tracks with native and sparse
+LFO3 locks, retaining the reference count. `test_st_poly_main_cost_emu.py`
+includes actual native bus dispatch, LFO3, type queries and extended transport,
+and distinguishes one-FM-plus-two-stock from three-FM baselines. It deliberately
+excludes conversion, scheduling and cache timing; it cannot predict the MAIN
+percentage on hardware. The user reported MAIN 91–92% OFF, 96% M.LFO, 97% POLY
+with three voices and different original slave machines on the previous bank.
+That physical comparison must be repeated with this implementation.
+
+The neutral three-voice fixture measures 11,778 instructions both with three
+independent FM tracks and with POLY active; M.LFO measures 12,335. A one-FM plus
+two-stock OFF baseline measures 11,625: creating two more FM voices costs extra
+extended transport even when the native modulation work is identical. The
+test rejects any additional steady block work in POLY against three FM tracks.
 
 ## Source and build
 

@@ -46,7 +46,10 @@ void native_enqueue(T *e,T time){(void)time;sink(e);}
 void native_immediate(T *e){immediate_calls++;if(!poly_preview_locked(e))sink(e);}
 void native_cancel_track(T *e,T t){(void)e;(void)t;cancelled++;}
 void native_release_track(T t,T n){assert(t<8 && n==0x7fff);releases++;}
-void native_publish_sound(const volatile B *s,T t){assert(s==KIT+0x2a+t*0x123);publishes++;}
+void native_publish_sound(const volatile B *s,T t)
+{T i;assert(t<8 && s>=KIT+0x2a && s<KIT+0x2a+8*0x123);publishes++;
+ for(i=0;i<0x8e;i++)((B *)0x800021ccu)[t*0x8eu+i]=s[i];
+ *(B *)(0x80002f50+t)=s[0xa2];}
 static T projections;
 void poly_fast_publish(B *w,const volatile B *o){projections++;poly_publish(w,o);}
 void poly_native_shared(void){}void poly_mod_shared(void){}
@@ -109,6 +112,7 @@ static void *poly_test_function(T address)
     case 0x400f8a0c:return text_mock;case 0x400f7df2:case 0x400f7bd6:case 0x400f8104:return shape_mock;
     case 0x40070362:return toggle_mock;case 0x4003a1c2:return page_mock;case 0x400f8dac:return blit_mock;
     case 0x4008da6e:return rec_position;
+    case 0x40115f78:return memcpy;
     default:fprintf(stderr,"unexpected native function %08x\n",address);abort();
     }
 }
@@ -125,8 +129,9 @@ static void reset(void)
     memset(prep_generation,0,sizeof prep_generation);memset(live_generation,0,sizeof live_generation);
     memset(chord_generation,0,sizeof chord_generation);memset(preview_generation,0,sizeof preview_generation);
     memset(rec_chords,0,sizeof rec_chords);
-    memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_independent_mask=poly_shared_mask=0;
-    for(i=0;i<12;i++)poly_lfo_map[i]=poly_pre_map[i]=poly_post_map[i]=(B)i;
+    memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_shared_mask=poly_copy_pending=0;
+    *(T *)0x800030b8=0;
+    for(i=0;i<12;i++)poly_lfo_map[i]=poly_post_map[i]=(B)i;
     *(B **)0x43bd7430u=SEQ;*(B **)0x43bd743cu=KIT;
     *(T *)0x444de434u=0;*(T *)0x444de43cu=64;*(T *)0x402d575cu=0xffffffffu;
     *(T *)0x43bd7424u=0;*(T *)0x43bd73bcu=0;*(T *)0x444e13ecu=0;
@@ -166,8 +171,8 @@ static void play_modes(void)
     reset();assert(poly_record_write(0,1,4));
     for(i=0;i<80;i++)((B *)0x444da77cu)[i]=original_state[i]=(B)(i+7);
     assert(poly_mode_write(0,1) && poly_modes[0]==1 && valid(SEQ+0x21381));
-    assert(poly_owner_map[1]==0 && poly_lfo_map[1]==1 && poly_pre_map[1]==0 && poly_post_map[1]==1);
-    assert(poly_native(ST_NATIVE_OWNERS,&q,&result) && result==(T)poly_lfo_map);
+    assert(poly_owner_map[1]==0 && poly_lfo_map[1]==1 && poly_post_map[1]==1);
+    assert(!poly_native(ST_NATIVE_OWNERS,&q,&result));
     assert(!memcmp((void *)0x444da77cu,original_state,80));
     memset((void *)0x444da77cu,0x66,80);memset(original_state,0x66,80);
     memcpy(saved,SEQ+0x21381,7);cache_sequence=0;assert(poly_sync() && poly_modes[0]==1);
@@ -190,6 +195,37 @@ static void play_modes(void)
     }
     assert(poly_mode_write(0,1) && poly_modes[0]==1);
     assert(!poly_mode_write(1,1) && !poly_mode_write(8,1) && !poly_mode_write(0,4));
+}
+
+static void copy_on_change(void)
+{
+    T i,n,args[3]={0},result=0;B removed[0x123],working[0x754+13*0x7c];
+    reset();*(T *)0x800030b8=(T)KIT;
+    for(i=0;i<0x123;i++)KIT[0x2a+i]=(B)(i*3);KIT[0x2a+0xa2]=65;
+    memset(KIT+0x2a+0x123,0x55,0x123*3);
+    assert(poly_record_write(0,1,3));
+    assert(!memcmp(KIT+0x2a,KIT+0x2a+0x123,0x123));
+    assert(!memcmp(KIT+0x2a,KIT+0x2a+2*0x123,0x123));
+    assert(KIT[0x2a+3*0x123]==0x55);
+    poly_copy_ui();assert(!poly_copy_pending);n=publishes;
+    assert(poly_mode_write(0,1));
+    args[0]=(T)working;memset(working,0x73,sizeof working);
+    for(i=0;i<1500;i++) {
+        poly_frame();poly_copy_ui();
+        assert(!poly_native(ST_NATIVE_MODULATION,0,&result));
+        assert(!poly_native(ST_NATIVE_LFO,args,&result));
+        assert(!poly_native(ST_NATIVE_PUBLISH,args,&result));
+    }
+    assert(publishes==n && !poly_copy_pending);
+    /* An edit is propagated after the native UI setter has finished. */
+    assert(poly_sound_write_allowed(0) && poly_copy_pending);
+    KIT[0x2a+20]^=0x7f;poly_copy_ui();assert(!poly_copy_pending && publishes==n+2);
+    assert(!memcmp(KIT+0x2a,KIT+0x2a+0x123,0x123));n=publishes;
+    assert(poly_record_write(0,1,4));assert(publishes==n+1); /* only new voice */
+    poly_copy_ui();memcpy(removed,KIT+0x2a+3*0x123,0x123);n=publishes;
+    assert(poly_record_write(0,1,2));poly_copy_ui();assert(publishes==n); /* no restore */
+    assert(!memcmp(removed,KIT+0x2a+3*0x123,0x123));
+    assert(poly_record_write(0,0,2));poly_copy_ui();assert(publishes==n);
 }
 
 static void topology(void)
@@ -354,8 +390,11 @@ static void native_interest_changes(void)
     assert(interest_calls==1 && interest_fn==(T)poly_native && interest_mask==always);
     assert(always&(1u<<ST_NATIVE_IMMEDIATE) && !(always&(1u<<ST_NATIVE_TYPE)) && !(always&grouped));
     poly_native_interest();assert(interest_calls==1);                         /* unchanged: no call */
-    assert(poly_record_write(0,1,2) && poly_grouped() && interest_mask==(always|grouped|1u<<25)); /* TYPE: slave 1 */
-    assert(poly_mode_write(0,1) && !(interest_mask&(1u<<ST_NATIVE_PUBLISH)));
+    assert(poly_record_write(0,1,2) && poly_grouped() && interest_mask==(always|grouped));
+    assert(!(interest_mask&(1u<<ST_NATIVE_TYPE))); /* direct native type projection */
+    assert(!(interest_mask&((1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO))));
+    *(B *)0x80002f50=65;*(B *)0x80002f51=1;*(B *)0x80002f52=2;
+    assert(poly_mode_write(0,1) && !(interest_mask&((1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO)|(1u<<ST_NATIVE_OWNERS))));
     assert(poly_mode_write(0,0) && (interest_mask&(1u<<ST_NATIVE_PUBLISH)));
     memcpy(pq,SEQ+0x21381,7);
     assert(poly_record_write(0,0,2) && !poly_grouped() && interest_mask==always);
@@ -372,10 +411,10 @@ int main(void)
     assert(ram==(void *)0x40000000u && bus==(void *)0x80000000u);
     {struct st_machine_ui_api ui={6};struct st_smz_api api={3,&ui};
      struct st_machine_host_api h=services;
-     ui.host=&services;assert(poly_initialize(&api));ui.version=7;assert(poly_initialize(&api));
+     ui.host=&services;assert(poly_initialize(&api));ui.version=7;assert(!poly_initialize(&api));
      h.version=8;h.native_interest=interest_mock;h.native_page_view=page_view_mock;
      ui.host=&h;assert(!poly_initialize(&api));}
-    play_codec();play_modes();topology();groups_and_notes();ui();recording_and_publication();inactive_native();native_interest_changes();
+    play_codec();play_modes();copy_on_change();topology();groups_and_notes();ui();recording_and_publication();inactive_native();native_interest_changes();
     puts("PASS: 108 POLY topologies, 2/3/4 voices, live/chord/sequence paths, stealing/off, rollback, CRC persistence, MIDI suspension, page/controls/slave guards, native interest by group state");
     return 0;
 }

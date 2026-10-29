@@ -41,17 +41,18 @@ static int poly_native(u32 op,const u32 *a,u32 *result);
 #define POLY_NATIVE_ALWAYS ((1u<<ST_NATIVE_TRIG)|(1u<<ST_NATIVE_IMMEDIATE)| \
     (1u<<ST_NATIVE_HEADER_LOAD)|(1u<<ST_NATIVE_HEADER_RESET)|(1u<<ST_NATIVE_PAGE_SYNC)| \
     (1u<<ST_NATIVE_PAGE_NAV)|(1u<<ST_NATIVE_PAGE_LAYOUT)|(1u<<ST_NATIVE_PAGE_BEGIN)|(1u<<ST_NATIVE_PAGE_END))
-#define POLY_NATIVE_GROUPED ((1u<<ST_NATIVE_ENQUEUE)|(1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_TYPE)| \
+#define POLY_NATIVE_GROUPED ((1u<<ST_NATIVE_ENQUEUE)|(1u<<ST_NATIVE_PUBLISH)| \
     (1u<<ST_NATIVE_SOUND_ALLOWED)|(1u<<ST_NATIVE_MACHINE_ALLOWED)|(1u<<ST_NATIVE_PAGE_GUARD)| \
-    (1u<<ST_NATIVE_OWNERS)|(1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO))
+    (1u<<ST_NATIVE_OWNERS))
 static u32 poly_interest;
 void poly_native_interest(void)
 {
-    u32 i,mask=POLY_NATIVE_ALWAYS;
+    u32 mask=POLY_NATIVE_ALWAYS;
     if(poly_grouped()){
-        mask|=POLY_NATIVE_GROUPED;   /* TYPE only for slave digital tracks */
-        if(!poly_shared_mask)mask&=~(1u<<ST_NATIVE_PUBLISH);
-        for(i=1;i<8;i++)if(poly_owner_map[i]<i)mask|=1u<<(24+i);
+        mask|=POLY_NATIVE_GROUPED;
+        if(!poly_shared_mask)mask&=~((1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_MODULATION)|
+            (1u<<ST_NATIVE_LFO)|(1u<<ST_NATIVE_OWNERS));
+        /* New voices already own a native Sound/type; no TYPE dispatcher. */
     }
     if(mask==poly_interest || !poly_host || poly_host->version<5)return;
     poly_interest=mask;poly_host->native_interest((void (*)(void))poly_native,mask);
@@ -61,8 +62,16 @@ static void poly_draw(void *view,void *bitmap,u32 phase)
 static int poly_encoder(void *view,void *event,u32 id)
 {(void)id;return poly_ui_encoder(view,event);}
 static int poly_key(void *view,void *event,u32 phase)
-{(void)phase;return poly_ui_block_key(view,event);}
-static void poly_tick(void *ctrl){(void)ctrl;poly_rec_ui();}
+{
+    u32 track;(void)phase;
+    /* Reload/paste/Sound selection finishes in the same UI task before tick. */
+    if(poly_ui_parameter_view(view)) {
+        track=poly_ui_track(view);
+        if(track<8 && poly_seq_config.states[track]>=3)poly_copy_mark(track);
+    }
+    return poly_ui_block_key(view,event);
+}
+static void poly_tick(void *ctrl){(void)ctrl;poly_copy_ui();poly_rec_ui();}
 static u32 poly_context[16],poly_depth;
 static int poly_native(u32 op,const u32 *a,u32 *result)
 {
@@ -96,11 +105,11 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
     case ST_NATIVE_PAGE_END:
         if(poly_depth && --poly_depth<16)poly_ui_action_end(poly_context[poly_depth]);break;
     case ST_NATIVE_PAGE_GUARD:if(!poly_ui_slave((u8 *)a[0]))return 0;*result=1;return 1;
-    case ST_NATIVE_OWNERS:*result=(u32)(a && a[0]==1?poly_lfo_map:poly_owner_map);return 1;
+    case ST_NATIVE_OWNERS:
+        if(!poly_shared_mask)return 0;
+        *result=(u32)(a && a[0]==1?poly_lfo_map:poly_post_map);return 1;
     case ST_NATIVE_MODULATION:case ST_NATIVE_LFO:
-        if(!poly_grouped())return 0;
-        *result=op==ST_NATIVE_MODULATION?(poly_independent_mask?(u32)poly_modulate:(u32)poly_mod_shared):
-            (poly_shared_mask?(u32)poly_native_shared:(u32)poly_native_all);return 1;
+        return 0; /* Both PLAY modes use the native per-track engines. */
     default:return 0;
     }
     return 0; /* Notifications continue to later native subscribers. */
@@ -108,7 +117,7 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
 static int poly_initialize(const struct st_smz_api *api)
 {
     if(!api || api->version<3 || !api->ui || api->ui->version<7 ||
-       !api->ui->host || api->ui->host->version<8)return 1;
+       !api->ui->host || api->ui->host->version<2)return 1;
     poly_host=api->ui->host;poly_native_interest();
     /* Host API 6: POLY's page handlers act only on the TRIG ParameterView. */
     if(poly_host->version>=6)poly_host->native_page_view((void (*)(void))poly_native,0x401c97fcu);
