@@ -5,7 +5,7 @@
 The exact toolchain, flags and commands used for the Syntakt OS 1.41 core
 (`mods/core-st`) and its SMZ4 machine/module banks on this Windows host.
 Every command below was run as written (Git Bash, from
-`C:\Desarrollo\elekloader-fork`). If a step fails, fix the environment;
+`C:\Desarrollo\synfact-dev`). If a step fails, fix the environment;
 do not change flags or the builders to make it pass.
 
 ## Toolchain
