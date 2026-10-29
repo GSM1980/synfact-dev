@@ -44,7 +44,8 @@ first-step preparation. Live recording writes NOTE and relative note lanes.
 Slaves show TRACK IN / SLAVE MODE and block parameter edits, page mutations,
 machine selection and Sound writes according to the reference. Their saved
 Sounds and sequences are retained. Leaving a group releases pending voices and
-restores the track's own Sound. A group containing a MIDI-mode track is
+publishes the track's own Sound. Previous slave LFO phases and controller inputs
+are not restored (the user-approved performance policy from POLY 0.4). A group containing a MIDI-mode track is
 suspended while its saved topology remains available for audio mode.
 
 Topology uses the seven-byte PQ/PR record in PatternSettings `21h..27h`,
@@ -81,10 +82,14 @@ render callback cannot observe an unbound native transaction list.
 M.LFO copies the master's effective scalar parameters and skips hidden native
 slave modulation/LFO work. POLY instead projects master parameters before
 modulation and runs the slave oscillators on their own note triggers, pitch and
-velocity. Controller inputs inherit the master for that calculation. Saved slave
-Sounds and controller inputs are untouched; their original LFO states are saved
-on entry and restored on exit/reparenting. LFO3 projects the effective master's
-parameter-lock bank while retaining a separate oscillator state for each voice.
+velocity. Controller inputs inherit the master directly. No snapshot/restore of
+slave controllers or LFO phases is performed. With no M.LFO group, modulation
+and LFO1/2 replay stock directly without the shared-voice guards; the PUBLISH
+operation is removed from POLY's native interest mask, eliminating the late pass.
+Mixed groups retain the guarded kernels and only publish shared slaves.
+LFO3 projects the master's effective parameter-lock rows in place in its own
+SRAM bank/overlay, retaining each voice's native state. The previous DDR copy
+of all thirteen parameter rows is removed; slave configuration may be overwritten.
 The shared core OWNERS query distinguishes Sound ownership from LFO-state
 ownership, including FM's extended ratio-offset transport.
 
@@ -109,6 +114,17 @@ POLY 0.3 is an SMZ-only update: the core/SYX remains byte-identical to the
 0.12.19 build supplied with POLY 0.2. Independent LFO ownership still requires
 host API 8, introduced by that core; removing the mono controls does not require
 another firmware installation if that core is already installed.
+
+POLY 0.4 keeps that same core/SYX and implements the performance policy above.
+`tests/test_st_poly_lfo3_source_emu.py --before BANK --after BANK --core MAIN
+--out JSON` executes both banks' actual LFO3 callback and SRAM kernel. The
+256-block comparison (neutral and PAN fixtures) retains identical working output
+while moving the render parameter source from DDR to SRAM. The measured callback
+falls from 1,850 to 1,201 instructions with neutral LFO3, and from 2,106 to 1,457
+with PAN modulation (221/209 bytes of guest parameter reads per sample block).
+The LFO1/2 differential also exercises mixed POLY/M.LFO groups. These are offline
+comparisons; only the instrument can confirm whether the reported five MAIN
+CPU percentage points have disappeared. No zero-overhead claim is made.
 
 ## Source and build
 

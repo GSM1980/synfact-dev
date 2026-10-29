@@ -90,6 +90,10 @@ def verify(folder,synfact=None):
         except AssertionError:pass
         else:raise AssertionError('accepted relaxed native kernel: '+label)
     def bank_read(name,size):return section.data[sy[name].value:sy[name].value+size]
+    # Pure POLY replays stock directly; shared groups retain the audited guards.
+    for name,prefix,target in [('poly_mod_all','4fefffc448d77cfc',0x40097b04),
+                               ('poly_native_all','4fefffc048d77cfc',0x4011926e)]:
+        assert bank_read(name,14)==bytes.fromhex(prefix)+struct.pack('>HI',0x4ef9,target)
     # Compare every imported instruction byte against stock's preserved body,
     # replacing only the three guards and external PC-relative dependencies.
     native=bytearray(read(0x40119266,0x326));native[:8]=bytes.fromhex('4fefffc048d77cfc')

@@ -1,40 +1,20 @@
-/* Shared Sound ownership, independent per-voice oscillator state. This is
- * queried through the core; no dependency on POLY's symbols or allocations. */
-static u16 lfo3_voice_params[13][8];
-static u8 lfo3_saved_voice[8][40];
-static u32 lfo3_saved_voices;
-static u8 lfo3_voice_owner[8];
-
+/* Shared configuration in the existing SRAM bank, private oscillator state.
+ * No DDR parameter copy: the renderer keeps its original source pointer.
+ * Slave configuration may be overwritten (user-approved performance policy). */
+typedef u32 lfo3_param_word __attribute__((may_alias));
 static const u16 *lfo3_voice_bank(const u16 *params)
 {
-    const u8 *owners,*states;u32 query=1,t,o,i,mask=0,bit;
+    const u8 *owners,*states;u32 query=1,t,o;lfo3_param_word *d;const lfo3_param_word *s;
     if(host->version<8 || !host->native_query)return params;
     owners=(const u8 *)host->native_query(ST_NATIVE_OWNERS,0);
-    states=owners?(const u8 *)host->native_query(ST_NATIVE_OWNERS,&query):0;
-    if(owners && states)for(t=1;t<8;t++)
-        if(owners[t]<t && states[t]==t)mask|=1u<<t;
-    if(!mask && !lfo3_saved_voices)return params;
-    for(t=1;t<8;t++)if((lfo3_saved_voices&(1u<<t)) &&
-        (!(mask&(1u<<t)) || lfo3_voice_owner[t]!=owners[t])) {
-        for(i=0;i<40;i++)lfo3_bank->state[t][i]=lfo3_saved_voice[t][i];
-        lfo3_saved_voices&=~(1u<<t);
+    if(!owners)return params;
+    states=(const u8 *)host->native_query(ST_NATIVE_OWNERS,&query);
+    if(!states)return params;
+    /* Both base and lock-overlay rows are mutable, four-byte-aligned SRAM
+     * records supplied by lfo3_events_bank (or the same bank's DDR fallback). */
+    for(t=1;t<8;t++)if((o=owners[t])<t && states[t]==t) {
+        d=(lfo3_param_word *)(params+t*8);s=(const lfo3_param_word *)(params+o*8);
+        d[0]=s[0];d[1]=s[1];d[2]=s[2];d[3]=s[3];
     }
-    for(t=1;t<8;t++) {
-        bit=1u<<t;
-        if((mask&bit) && !(lfo3_saved_voices&bit)) {
-            o=owners[t];
-            lfo3_voice_owner[t]=(u8)o;
-            for(i=0;i<40;i++) {
-                lfo3_saved_voice[t][i]=lfo3_bank->state[t][i];
-                lfo3_bank->state[t][i]=lfo3_bank->state[o][i];
-            }
-        }
-    }
-    lfo3_saved_voices=mask;
-    if(!mask)return params;
-    for(t=0;t<13;t++) {
-        o=(mask&(1u<<t))?owners[t]:t;
-        for(i=0;i<8;i++)lfo3_voice_params[t][i]=params[o*8+i];
-    }
-    return &lfo3_voice_params[0][0];
+    return params;
 }

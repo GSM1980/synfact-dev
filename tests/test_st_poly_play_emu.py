@@ -60,14 +60,20 @@ class Run:
         self.u.mem_write(self.sym['poly_pre_map'],owners if independent else identity)
         self.u.mem_write(self.sym['poly_post_map'],identity if independent else owners)
         self.u.mem_write(self.sym['poly_modes'],bytes([int(independent)])+bytes(7))
-        self.write32(self.sym['poly_lfo_saved_mask'],14 if independent else 0)
+        self.write32(self.sym.get('poly_independent_mask',self.sym.get('poly_lfo_saved_mask')),14 if independent else 0)
+        if 'poly_shared_mask' in self.sym:self.write32(self.sym['poly_shared_mask'],0 if independent else 14)
     def publish(self):
         self.write32(ARGS,WORK);self.call('poly_native',3,ARGS,ARGS+16)
     def block(self,data,trigs,which,third):
         self.u.mem_write(WORK,data)
         self.call('poly_modulate' if which else 0x40097afc,WORK)
         if third:self.call('lfo3_render',WORK,0x3840,trigs,self.params,self.third,self.third+520)
-        self.call('poly_native_shared' if which else 0x40119266,WORK,0x3840,trigs)
+        if which:
+            self.u.mem_write(ARGS,struct.pack('>3I',WORK,0x3840,trigs))
+            assert self.call('poly_native',17,ARGS,ARGS+16)
+            fn=struct.unpack('>I',bytes(self.u.mem_read(ARGS+16,4)))[0]
+            self.call(fn,WORK,0x3840,trigs)
+        else:self.call(0x40119266,WORK,0x3840,trigs)
         if which:self.publish()
         return bytes(self.u.mem_read(WORK,SIZE))
 
@@ -81,16 +87,39 @@ def fixture(lfo,mode,wave):
         if t<4 and lfo<3:struct.pack_into('>8H',data,at+2+16*(lfo-1),*p)
     return bytes(data),struct.pack('>8H',*p)
 
-def costs(native,bank):
+def costs(native,bank,stock):
     counts={};data,_=fixture(1,1,0)
+    r=Run(stock,bank);total=[0]
+    h=r.u.hook_add(UC_HOOK_CODE,lambda *unused:total.__setitem__(0,total[0]+1))
+    r.u.mem_write(WORK,data);r.call(0x40097afc,WORK);r.call(0x40119266,WORK,0x3840,3)
+    r.u.hook_del(h);counts['stock_independent']=total[0]
     for independent in (False,True):
         r=Run(native,bank);r.group(independent);total=[0]
         h=r.u.hook_add(UC_HOOK_CODE,lambda *unused:total.__setitem__(0,total[0]+1))
         r.u.mem_write(WORK,data)
         r.call('poly_modulate' if independent else 'poly_mod_shared',WORK)
-        r.call('poly_native_shared',WORK,0x3840,3);r.publish()
+        r.call('poly_native_all' if independent and 'poly_native_all' in r.sym else 'poly_native_shared',WORK,0x3840,3)
+        if not independent or 'poly_shared_mask' not in r.sym:r.publish()
         r.u.hook_del(h);counts['poly' if independent else 'master_lfo']=total[0]
     return counts
+
+def mixed_probe(native,bank,stock):
+    ref=Run(stock,bank);actual=Run(native,bank);actual.group(True)
+    owners=bytes([0,0,2,2,4,5,6,7,8,9,10,11]);post=bytes([0,1,2,2,4,5,6,7,8,9,10,11])
+    actual.u.mem_write(actual.sym['poly_seq_config']+8,bytes([3,0,3,0,0,0,0,0]))
+    for key,value in [('poly_owner_map',owners),('poly_lfo_map',post),
+                      ('poly_pre_map',bytes([0,0,2,3,4,5,6,7,8,9,10,11])),('poly_post_map',post)]:
+        actual.u.mem_write(actual.sym[key],value)
+    actual.u.mem_write(actual.sym['poly_modes'],bytes([1,0,0,0,0,0,0,0]))
+    actual.write32(actual.sym['poly_independent_mask'],2);actual.write32(actual.sym['poly_shared_mask'],8)
+    ref.u.mem_write(ref.sym['poly_post_map'],post);data,_=fixture(1,1,0)
+    for block in range(80):
+        trigs={0:1,11:2,29:4,43:8}.get(block,0)
+        ref.block(data,trigs,False,False);ref.call('poly_fast_publish',WORK,ref.sym['poly_post_map'])
+        expected=bytes(ref.u.mem_read(WORK,SIZE));poisoned=bytearray(data)
+        for t in (1,3):poisoned[0x1c+t*142:0x1c+(t+1)*142]=bytes(142)
+        assert actual.block(bytes(poisoned),trigs,True,False)==expected,('mixed',block)
+    return 80
 
 def controller_probe(native,bank,stock):
     ref=Run(stock,bank);actual=Run(native,bank);actual.group(True)
@@ -104,7 +133,10 @@ def controller_probe(native,bank,stock):
         for j,at in enumerate(inputs):
             ref.u.mem_write(at+2*t,struct.pack('>H',0x700*(j+1)))
             actual.u.mem_write(at+2*t,struct.pack('>H',0x700*(j+1) if not t else 0x3000+t*0x100))
-    original=bytes(actual.u.mem_read(inputs[0],104))
+    original=bytearray(actual.u.mem_read(inputs[0],104))
+    # Direct inheritance is deliberately retained in the slaves after POLY.
+    for at in inputs:
+        for t in range(1,4):original[at-inputs[0]+2*t:at-inputs[0]+2*t+2]=original[at-inputs[0]:at-inputs[0]+2]
     for block in range(8):
         expected=ref.block(bytes(data),1<<block if block<4 else 0,False,False)
         poisoned=bytearray(data)
@@ -121,11 +153,12 @@ def main():
     p.add_argument('--core',type=Path);p.add_argument('--out',required=True,type=Path);a=p.parse_args()
     stock=formats.load(a.stock)[0].section(3);images=[('stock',stock)]
     if a.core:images.append(('core',a.core.read_bytes()))
-    results=[];negative=0;controllers=0;instructions={}
+    results=[];negative=0;controllers=0;mixed=0;instructions={}
     for image,native in images:
         print('Checking',image,'controllers',flush=True)
         controllers+=controller_probe(native,a.bank,stock)
-        instructions[image]=costs(native,a.bank)
+        mixed+=mixed_probe(native,a.bank,stock)
+        instructions[image]=costs(native,a.bank,stock)
         for lfo in (1,2,3):
             print('Checking',image,'LFO',lfo,flush=True)
             for mode in range(5):
@@ -153,6 +186,7 @@ def main():
     a.out.write_text(json.dumps(dict(ok=True,cases=len(results),blocks=len(results)*80,negative_controls=negative,
                                    pipeline_instructions=instructions,
                                    controller_blocks=controllers,
+                                   mixed_blocks=mixed,
                                    fixtures=results,device_access=False),indent=2)+'\n')
     print('PASS:',len(results),'native differential cases;',len(results)*80,'blocks;',negative,'late-copy negative controls')
 if __name__=='__main__':main()

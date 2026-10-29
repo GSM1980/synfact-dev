@@ -17,25 +17,19 @@ static const struct st_machine_host_api *host=&services;
 #include "../mods/lfo3-st/poly.c"
 int main(void)
 {
-    u16 input[13][8];u8 saved[13][40];const u16 *out;u32 t,i;
-    for(t=0;t<13;t++)for(i=0;i<8;i++)input[t][i]=(u16)(100*t+i);
+    u16 input[13][8],original[13][8];u8 saved[13][40];const u16 *out;u32 t,i;
+    for(t=0;t<13;t++)for(i=0;i<8;i++)original[t][i]=input[t][i]=(u16)(100*t+i);
     for(t=0;t<13;t++)for(i=0;i<40;i++)saved[t][i]=bank.state[t][i]=(u8)(9*t+i);
-    out=lfo3_voice_bank(&input[0][0]);assert(out!=&input[0][0]);
-    for(t=0;t<13;t++) {
-        assert(!memcmp(out+8*t,input[t==1 || t==2?0:t],16));
-        assert(!memcmp(bank.state[t],saved[t==1 || t==2?0:t],40));
-    }
-    memset(bank.state[1],0xa5,40);input[0][7]=0x1234;
-    out=lfo3_voice_bank(&input[0][0]);assert(out[15]==0x1234 && bank.state[1][0]==0xa5);
-    /* Switch to shared, then remove groups: each saved slave resumes exactly. */
-    states[1]=states[2]=0;
-    assert(lfo3_voice_bank(&input[0][0])==&input[0][0]);
-    assert(!memcmp(bank.state,saved,sizeof saved));
+    out=lfo3_voice_bank(&input[0][0]);assert(out==&input[0][0]);
+    for(t=0;t<13;t++)assert(!memcmp(out+8*t,original[t==1 || t==2?0:t],16));
+    assert(!memcmp(bank.state,saved,sizeof saved)); /* native private phases untouched */
+    input[0][7]=0x1234;out=lfo3_voice_bank(&input[0][0]);assert(out==&input[0][0] && out[15]==0x1234);
+    states[1]=states[2]=0;assert(lfo3_voice_bank(&input[0][0])==&input[0][0]);
+    assert(input[1][7]==0x1234); /* no restore of the old slave configuration */
     states[1]=1;states[2]=2;out=lfo3_voice_bank(&input[0][0]);assert(out[15]==0x1234);
-    owners[1]=1;owners[2]=1; /* reparent slave 2 to a former slave */
-    out=lfo3_voice_bank(&input[0][0]);assert(out[23]==input[1][7]);
-    assert(!memcmp(bank.state[1],saved[1],40) && !memcmp(bank.state[2],saved[1],40));
+    owners[1]=1;owners[2]=1;input[1][7]=0x5678;
+    out=lfo3_voice_bank(&input[0][0]);assert(out==&input[0][0] && out[23]==0x5678);
     available=0;assert(lfo3_voice_bank(&input[0][0])==&input[0][0]);
     assert(!memcmp(bank.state,saved,sizeof saved) && queries==11);
-    puts("PASS: LFO3 inherits effective master locks/configuration, keeps voice state and restores saved slaves");
+    puts("PASS: LFO3 projects master locks in place, keeps its SRAM pointer and private phases, no slave restoration");
 }

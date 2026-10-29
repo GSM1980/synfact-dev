@@ -61,9 +61,12 @@ and per-voice pan) conflict when merged.
 | Branch | Folder | Task |
 |---|---|---|
 | `feat/poly-analog-st` | `C:\Desarrollo\synfact-dev` (stays) | POLY on analog tracks 9 and 10 with no added CPU |
-| `feat/poly-pan-per-voice` | `C:\Desarrollo\synfact-dev-pan` (new worktree) | per-voice pan for POLY |
+| `perf/poly-sram-native-lfos` | `C:\Desarrollo\synfact-dev-pan` | per-voice LFOs, POLY/M.LFO only, SRAM performance fix |
 
-Both branches start at `dbf6e12`. At the time of writing, the uncommitted
+The original feature branches start at `dbf6e12`. The pan work continues from
+`096efaa` (PLAY modes) and `1efc52c` (remove MONO/LEG/PRIO); the current performance
+branch includes both commits. Its bank still uses the same host-API-8 core/SYX.
+At the time of the original assignment, the uncommitted
 changes in `C:\Desarrollo\synfact-dev` are the analog POLY work; none of
 them mentions pan. The pan agent checks there is nothing of its own among
 them before it moves:

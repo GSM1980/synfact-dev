@@ -11,4 +11,15 @@
         .set native_cancel_track,0x4008a9b0
         .set native_release_track,0x400a5708
         .set native_publish_sound,0x400a31a2
+        | Exact native replays for groups with no shared LFO voices. The core
+        | owns both entry hooks; these only replay their stock continuations.
+        .globl poly_mod_all,poly_native_all
+poly_mod_all:
+        lea -60(%sp),%sp
+        movem.l %d2-%d7/%a2-%a6,(%sp)
+        jmp 0x40097b04
+poly_native_all:
+        lea -64(%sp),%sp
+        movem.l %d2-%d7/%a2-%a6,(%sp)
+        jmp 0x4011926e
         .include "imported/kernels.s"

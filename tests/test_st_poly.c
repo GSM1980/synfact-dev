@@ -50,6 +50,7 @@ void native_publish_sound(const volatile B *s,T t){assert(s==KIT+0x2a+t*0x123);p
 static T projections;
 void poly_fast_publish(B *w,const volatile B *o){projections++;poly_publish(w,o);}
 void poly_native_shared(void){}void poly_mod_shared(void){}
+void poly_native_all(void){}void poly_mod_all(void){}
 
 static T original(T op,const T *a)
 {
@@ -124,7 +125,7 @@ static void reset(void)
     memset(prep_generation,0,sizeof prep_generation);memset(live_generation,0,sizeof live_generation);
     memset(chord_generation,0,sizeof chord_generation);memset(preview_generation,0,sizeof preview_generation);
     memset(rec_chords,0,sizeof rec_chords);
-    memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_lfo_saved_mask=0;
+    memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_independent_mask=poly_shared_mask=0;
     for(i=0;i<12;i++)poly_lfo_map[i]=poly_pre_map[i]=poly_post_map[i]=(B)i;
     *(B **)0x43bd7430u=SEQ;*(B **)0x43bd743cu=KIT;
     *(T *)0x444de434u=0;*(T *)0x444de43cu=64;*(T *)0x402d575cu=0xffffffffu;
@@ -167,7 +168,8 @@ static void play_modes(void)
     assert(poly_mode_write(0,1) && poly_modes[0]==1 && valid(SEQ+0x21381));
     assert(poly_owner_map[1]==0 && poly_lfo_map[1]==1 && poly_pre_map[1]==0 && poly_post_map[1]==1);
     assert(poly_native(ST_NATIVE_OWNERS,&q,&result) && result==(T)poly_lfo_map);
-    memset((void *)0x444da77cu,0x66,80);
+    assert(!memcmp((void *)0x444da77cu,original_state,80));
+    memset((void *)0x444da77cu,0x66,80);memset(original_state,0x66,80);
     memcpy(saved,SEQ+0x21381,7);cache_sequence=0;assert(poly_sync() && poly_modes[0]==1);
     memset(working,0,sizeof working);working[0x1c+0x8e +0x20]=0x55;
     assert(!poly_native(ST_NATIVE_PUBLISH,pub,&result));assert(working[0x1c+0x8e +0x20]==0x55);
@@ -353,9 +355,11 @@ static void native_interest_changes(void)
     assert(always&(1u<<ST_NATIVE_IMMEDIATE) && !(always&(1u<<ST_NATIVE_TYPE)) && !(always&grouped));
     poly_native_interest();assert(interest_calls==1);                         /* unchanged: no call */
     assert(poly_record_write(0,1,2) && poly_grouped() && interest_mask==(always|grouped|1u<<25)); /* TYPE: slave 1 */
+    assert(poly_mode_write(0,1) && !(interest_mask&(1u<<ST_NATIVE_PUBLISH)));
+    assert(poly_mode_write(0,0) && (interest_mask&(1u<<ST_NATIVE_PUBLISH)));
     memcpy(pq,SEQ+0x21381,7);
     assert(poly_record_write(0,0,2) && !poly_grouped() && interest_mask==always);
-    assert(interest_calls==3);
+    assert(interest_calls==5);
     poly_host=&services;poly_interest=0;
 }
 int main(void)

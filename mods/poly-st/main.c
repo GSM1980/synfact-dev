@@ -20,7 +20,7 @@ static const u32 *stock_page_layout(u32 page)
 {return (const u32 *)poly_host->native_original(ST_NATIVE_PAGE_LAYOUT,&page);}
 #include "poly_core.c"
 extern void poly_fast_publish(u8 *,const volatile u8 *);
-extern void poly_native_shared(void),poly_mod_shared(void);
+extern void poly_native_shared(void),poly_native_all(void),poly_mod_shared(void);
 static u32 poly_grouped(void)
 {
     typedef u32 owner_word __attribute__((may_alias));
@@ -50,6 +50,7 @@ void poly_native_interest(void)
     u32 i,mask=POLY_NATIVE_ALWAYS;
     if(poly_grouped()){
         mask|=POLY_NATIVE_GROUPED;   /* TYPE only for slave digital tracks */
+        if(!poly_shared_mask)mask&=~(1u<<ST_NATIVE_PUBLISH);
         for(i=1;i<8;i++)if(poly_owner_map[i]<i)mask|=1u<<(24+i);
     }
     if(mask==poly_interest || !poly_host || poly_host->version<5)return;
@@ -78,7 +79,7 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
         *result=poly_sequence_enqueue((u32 *)a[0],a[1]);return 1;
     case ST_NATIVE_IMMEDIATE:*result=poly_preview_locked((u32 *)a[0]);return 1;
     case ST_NATIVE_PUBLISH:
-        if(poly_grouped())poly_fast_publish((u8 *)a[0],poly_post_map);return 0;
+        if(poly_shared_mask)poly_fast_publish((u8 *)a[0],poly_post_map);return 0;
     case ST_NATIVE_TYPE:
         v=a[0]-0x80002f50u;if(v>=8 || poly_owner_map[v]>=v)return 0;
         *result=poly_effective_type((const volatile u8 *)a[0]);return 1;
@@ -98,7 +99,8 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
     case ST_NATIVE_OWNERS:*result=(u32)(a && a[0]==1?poly_lfo_map:poly_owner_map);return 1;
     case ST_NATIVE_MODULATION:case ST_NATIVE_LFO:
         if(!poly_grouped())return 0;
-        *result=op==ST_NATIVE_MODULATION?(poly_lfo_saved_mask?(u32)poly_modulate:(u32)poly_mod_shared):(u32)poly_native_shared;return 1;
+        *result=op==ST_NATIVE_MODULATION?(poly_independent_mask?(u32)poly_modulate:(u32)poly_mod_shared):
+            (poly_shared_mask?(u32)poly_native_shared:(u32)poly_native_all);return 1;
     default:return 0;
     }
     return 0; /* Notifications continue to later native subscribers. */
