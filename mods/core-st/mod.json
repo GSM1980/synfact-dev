@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "0.12.19",
+  "version": "0.12.22",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -43,7 +43,8 @@
     "native.c",
     "native.s",
     "view-draw.s",
-    "preview.s"
+    "preview.s",
+    "note-events.s"
   ],
   "defsym": {
     "DRAWALL": "0x401007ce",
@@ -636,6 +637,12 @@
       "stock": "206800bc4e90",
       "op": "jsr",
       "target": "core_machine_editor_resolve"
+    },
+    {
+      "addr": "0x400a423e",
+      "stock": "202a00247201",
+      "op": "jmp",
+      "target": "core_native_note_accept"
     }
   ],
   "collections": {

@@ -1,7 +1,7 @@
 /* Ordinary resident native subscribers remain active without any SMZ module. */
 #include <assert.h>
 #include <stdio.h>
-#include <syntakt/modules.h>
+#include <syntakt/native.h>
 typedef st_u32 u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
@@ -17,7 +17,7 @@ void core_machine_input_reset(void){}
 void core_event_publish(const u32 *p)
 {
     u32 k;for(k=0;p[k];k+=2)*(u32 *)p[k]=p[k+1];                     /* interest + page view words */
-    assert(k==2*6);publications++;
+    assert(k==2*((ST_NATIVE_OPERATION_LIMIT+3)/4+1));publications++;
 }
 #include "../mods/core-st/modules.c"
 static int interest_open(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(i<ST_NATIVE_OPERATION_COUNT?core_native_interest[i]!=1:i==ST_NATIVE_OPERATION_COUNT+1 && !core_native_interest[i])return 0;return 1;}

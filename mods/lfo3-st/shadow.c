@@ -1,3 +1,5 @@
+#include <syntakt/sound-meta.h>
+extern void lfo3_meta_notify(unsigned int,unsigned int,unsigned int,unsigned int);
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Imported from Synfact src/features/lfo3/shadow_owned.c (sha256 5a7ceca4...).
  * Module changes are marked "elekloader:". Configuration is set by main.c. */
@@ -257,6 +259,7 @@ static u32 set_records(u32 a, u32 n, const rec_t *r, u32 known);
 
 void lfo3_sound_new(u32 sound)
 {
+    lfo3_meta_notify(ST_SOUND_NEW,sound,0,SOUND_SIZE);
     u32 i, off;
     side_t *s;
     if (!sound)
@@ -278,6 +281,7 @@ void lfo3_sound_new(u32 sound)
 
 void lfo3_kit_new(u32 kit)
 {
+    lfo3_meta_notify(ST_SOUND_NEW,kit,0,KIT_SIZE);
     u32 i;
     if (!kit)
         return;
@@ -386,12 +390,18 @@ void lfo3_finish_relocate(u32 dst, u32 src, u32 n, u32 mask)
         }
     }
     lfo3_shadow_owner_relocate(dst,src,n);
+    lfo3_meta_notify(ST_SOUND_RELOCATE,dst,src,n);
 }
 
 static u32 project_copy(u32 dst, u32 src, u32 n);
+static u32 meta_container(u32 record);
 
 void lfo3_after_copy(u32 dst, u32 src, u32 n)
 {
+    lfo3_meta_notify(ST_SOUND_COPY,dst,src,n);
+    if(n==KIT_SLOT)lfo3_meta_notify(ST_SOUND_KIT_RECORD_COPY,dst,src,meta_container(src));
+    if(n==0x107u)lfo3_meta_notify(ST_SOUND_RECORD_COPY,dst,src,meta_container(src));
+    if(n==KIT_SLOT || n==0x107u)lfo3_meta_notify(ST_SOUND_RECORD_BIND,dst,n,meta_container(dst));
     const rec_t *source;
     u32 count;
 
@@ -481,6 +491,15 @@ static u32 subslot(u32 record,u32 fx,u32 *track)
     }
     return 0;
 }
+static u32 meta_container(u32 record)
+{
+    u32 i,base;
+    for(i=0;i<(container_scope_callback?0xffffffffu:CONTAINERS+3);i++) {
+        base=container_at(i);if(container_scope_callback && !base)break;
+        if(base && record>=base && record-base<0x3a5604u)return base;
+    }
+    return 0;
+}
 static u32 valid_trailer(const trailer_t *t)
 {return t->magic==MAGIC && record_format(t->version) && t->count==TRACKS &&
     t->hash==hash((const u8 *)t,sizeof(trailer_t)-4);}
@@ -515,6 +534,7 @@ void lfo3_fx_decoded(u32 fx,u32 record,u32 ok)
 /* after the native kit encode(storage, kit, flag) -> ok */
 void lfo3_kit_encoded(u32 storage, u32 kit, u32 ok)
 {
+    if(ok&255u)lfo3_meta_notify(ST_SOUND_KIT_ENCODE,storage,kit,meta_container(storage));
     trailer_t *t = (trailer_t *)(storage + TRAILER);
     const rec_t *r;
     if (!(ok & 0xffu))
@@ -543,8 +563,8 @@ void lfo3_kit_encoded(u32 storage, u32 kit, u32 ok)
  * +Drive sounds (S1): the save 40111b08(mmcfs, record, index) writes from s1_buf =
  * native record + 24-byte LFO3 trailer {u16 'LS', u8 ver, u8 present, rec_t, u32 hash}
  * at the odd offset 0x107 (built aligned, copied bytewise); the size operand at 40111b80
- * becomes 0x11f (one sector either way). The load 40110ac4(mmcfs, buffer, index) reads
- * 0x11f B (size operand at 40110b1c) into s1_buf,
+ * becomes 0x13f (one sector either way; shared optional metadata). The load 40110ac4(mmcfs, buffer, index) reads
+ * 0x13f B (size operand at 40110b1c) into s1_buf,
  * copies the native 0x107 B to the caller's buffer and remembers the trailer for the
  * decode of that buffer (association validated by a hash of the native bytes).
  */
@@ -617,6 +637,7 @@ static int pool_index(u32 record, pool_section_t **section)
 /* after the native Sound encode(record, sound, flag) -> ok */
 void lfo3_sound_encoded(u32 record, u32 sound, u32 ok)
 {
+    if((ok&255u) && !kit_codec_depth)lfo3_meta_notify(ST_SOUND_ENCODE,record,sound,meta_container(record));
     const rec_t *r;
     pool_section_t *s;
     int p;
@@ -644,6 +665,7 @@ void lfo3_sound_encoded(u32 record, u32 sound, u32 ok)
 /* after native standalone Sound decode: known metadata, otherwise defaults. */
 void lfo3_sound_decoded(u32 sound, u32 record, u32 ok)
 {
+    if((ok&255u) && !kit_codec_depth)lfo3_meta_notify(ST_SOUND_DECODE,sound,record,meta_container(record));
     pool_section_t *s;
     rec_t work;
     int p;
@@ -712,6 +734,7 @@ static void carriers_restore(u32 container)
  * Once consumed, canonical LP owns the records again. */
 void lfo3_project_open(u32 container)
 {
+    lfo3_meta_notify(ST_SOUND_PROJECT_READY,container,0,0);
     u32 p;
     if (!container)               /* native decode rejects a missing cache */
         return;
@@ -772,6 +795,7 @@ static u32 project_copy(u32 dst, u32 src, u32 n)
  * Clear only extension marks after it returns, including every kit trailer. */
 void lfo3_project_new(u32 container)
 {
+    lfo3_meta_notify(ST_SOUND_PROJECT_NEW,container,0,0);
     u32 k;
     carrier_t c;
     u32 full = full_container(container);
@@ -807,12 +831,17 @@ u32 lfo3_s1_prepare(u32 record,u32 output)
     t.hash = hash((const u8 *)&t, sizeof(t) - 4);
     bytes_copy(buffer + SOUND_STORED, (const u8 *)&t, sizeof(t));
     sound_stats[t.present ? 3 : 4]++;
+    /* The stack scratch is 512 bytes; zero the optional namespace even when
+     * no subscriber exists, then let it supply its versioned record. */
+    {u32 i;for(i=0;i<ST_SOUND_S1_EXTENSION_BYTES;i++)buffer[ST_SOUND_S1_EXTENSION+i]=0;}
+    lfo3_meta_notify(ST_SOUND_S1_SAVE,record,output,meta_container(record));
     return output;
 }
 
 /* +Drive load, after the native read into s1_buf: give the caller its 0x107 B */
 void lfo3_s1_loaded(u32 buffer, u32 ok,u32 input)
 {
+    lfo3_meta_notify(ST_SOUND_S1_LOAD,buffer,input,ok);
     s1_trailer_t trailer, *t = &trailer;
     bytes_copy((u8 *)buffer, (const u8 *)input, SOUND_STORED);
     bytes_copy((u8 *)&trailer, (const u8 *)input + SOUND_STORED, sizeof(trailer));
@@ -840,6 +869,7 @@ void lfo3_s1_loaded(u32 buffer, u32 ok,u32 input)
 /* after the native kit decode(kit, storage) -> ok */
 void lfo3_kit_decoded(u32 kit, u32 storage, u32 ok)
 {
+    if(ok&255u)lfo3_meta_notify(ST_SOUND_KIT_DECODE,kit,storage,meta_container(storage));
     const trailer_t *t = (const trailer_t *)(storage + TRAILER);
     rec_t work[TRACKS];
     rec_t *to;
@@ -871,6 +901,7 @@ void lfo3_kit_decoded(u32 kit, u32 storage, u32 ok)
 
 void lfo3_shadow_forget_extent(u32 base,u32 bytes)
 {
+    lfo3_meta_notify(ST_SOUND_FREE,base,0,bytes);
     u32 i;
     for(i=0;i<SIDE;i++)if(side[i].addr-base<bytes)side[i].addr=0;
     if(encoded.addr-base<bytes)encoded.valid=0;

@@ -77,18 +77,20 @@ static void sound_codec_notify(u32 q,const void *a,const void *b)
 void core_machine_sound_saved(void *record,const void *sound)
 {
     u8 *r=record;const u8 *s=sound;u32 i;const struct core_machine_def *m;
+    m=core_machine_find(s[0xa2]);if(m){
+        for(i=0;i<32;i++)r[0x88+i]=s[0x80+i];
+        r[0xa8]=s[0xa0];r[0xa9]=s[0xa1];
+        if(m->params>24){r[0x1c]=s[0x14];r[0x1d]=s[0x15];}
+    }
     sound_codec_notify(25,record,sound);
-    m=core_machine_find(s[0xa2]);if(!m)return;
-    for(i=0;i<32;i++)r[0x88+i]=s[0x80+i];
-    r[0xa8]=s[0xa0];r[0xa9]=s[0xa1];
-    if(m->params>24){r[0x1c]=s[0x14];r[0x1d]=s[0x15];}
 }
 void core_machine_sound_loaded(void *sound,const void *record)
 {
     u8 *s=sound;const u8 *r=record;u32 i;const struct core_machine_def *m;
+    m=core_machine_find(s[0xa2]);if(m){
+        for(i=0;i<32;i++)s[0x80+i]=r[0x88+i];
+        s[0xa0]=r[0xa8];s[0xa1]=r[0xa9];
+        if(m->params>24){s[0x14]=r[0x1c];s[0x15]=r[0x1d];}
+    }
     sound_codec_notify(26,sound,record);
-    m=core_machine_find(s[0xa2]);if(!m)return;
-    for(i=0;i<32;i++)s[0x80+i]=r[0x88+i];
-    s[0xa0]=r[0xa8];s[0xa1]=r[0xa9];
-    if(m->params>24){s[0x14]=r[0x1c];s[0x15]=r[0x1d];}
 }

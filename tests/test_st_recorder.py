@@ -15,7 +15,8 @@ def verify(folder,synfact=None):
     check_bank_modules(report,raw,(
         ['fm_tone_module','recorder_module'],
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
-        ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module']))
+        ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module'],
+        ['fm_tone_module','recorder_module','lfo3_module','arp_module','poly_module','system_info_module']))
     assert report['machines']==[66,67,68,69,65] and not report['firmware_required']
     for name,digest in report['source_sha256'].items():
         assert Path(name).is_relative_to(ROOT) and hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest,name
@@ -46,7 +47,7 @@ def verify(folder,synfact=None):
     assert struct.unpack('>I',read(ui,4))[0]==7 and struct.unpack('>I',read(ui+40,4))[0]==host
     names=('core_hzfs_native_io','core_hzfs_open','core_hzfs_close','core_crc_update',
            'core_pool_read','core_pool_write','core_pool_ready','st_pool_live_sync','st_pool_preview_stop','core_event_view')
-    assert read(host,44)==struct.pack('>11I',8,*[s['core:'+name] for name in names])   # host API 8, prefix retained
+    assert read(host,44)==struct.pack('>11I',10,*[s['core:'+name] for name in names])   # API 10, unchanged prefix ABI
     assert read(s['core:core_high_written'],2)==bytes.fromhex('4e75')
     # The existing native close notification is conditional on a valid
     # written capture. The high-zone descriptor now supplies that no-op.

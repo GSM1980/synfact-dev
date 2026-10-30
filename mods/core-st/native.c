@@ -38,7 +38,7 @@ __attribute__((noinline)) u32 core_native(u32 op,const u32 *a)
 {
     u32 *p=native_profile,start=0,result=0;
     if(p)start=CORE_NATIVE_TIMER();
-    if(op>=ST_NATIVE_OPERATION_COUNT || !core_native_interest[op] || !core_event_native(op,a,&result))
+    if(op>=ST_NATIVE_OPERATION_LIMIT || !core_native_interest[op] || !core_event_native(op,a,&result))
         result=core_native_original(op,a);
     if(p && op<ST_NATIVE_OPERATION_COUNT){p[op]+=CORE_NATIVE_TIMER()-start;p[ST_NATIVE_OPERATION_COUNT+op]++;}
     return result;

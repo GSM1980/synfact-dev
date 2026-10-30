@@ -246,10 +246,10 @@ lfo3_decode_project_entry:
 
 | ---- +Drive sounds (Synfact S1, final form of build_package.py): the save
 | 40111b08(mmcfs, record, index) writes a 512-byte stack scratch holding the
-| record + LFO3 trailer (0x11f B, one sector); the load 40110ac4(mmcfs,
+| record + LFO3 and optional Sound metadata (0x13f B, one sector); the load 40110ac4(mmcfs,
 | buffer, index) reads into the scratch and hands the caller its 0x107 B.
 | lfo3_s1_prepare(record, output) / lfo3_s1_loaded(buffer, ok, input).
-| main.c patches the two size operands 0x107 -> 0x11f with the hooks.
+| main.c patches the two size operands 0x107 -> 0x13f with the hooks.
         .globl  lfo3_s1_save_entry,lfo3_s1_load_entry
 lfo3_s1_save_entry:
         lea     -516(%sp),%sp

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
-#include <syntakt/modules.h>
+#include <syntakt/native.h>
 #include "../mods/core-st/machines.h"
 typedef st_u32 u32;
 static u32 raw_calls,enc_calls,key_calls,draw_calls,late_calls,init_calls,publish_calls;
@@ -28,7 +28,7 @@ void *fw_malloc(u32 n)
 {allocations++;return VirtualAlloc((void *)0x47000000u,n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
 void core_event_publish(const u32 *p)
-{u32 n=0;while(p[2*n])n++;assert(n==6+6);for(n=0;n<3;n++)*(const u32 **)p[4*n+2]=(const u32 *)p[4*n+3];
+{u32 n=0;while(p[2*n])n++;assert(n==6+(ST_NATIVE_OPERATION_LIMIT+3)/4+1);for(n=0;n<3;n++)*(const u32 **)p[4*n+2]=(const u32 *)p[4*n+3];
  for(n=12;p[n];n+=2){assert(!p[n+1]);*(u32 *)p[n]=p[n+1];}publish_calls++;}   /* no native subscriber */
 #include "../mods/core-st/modules.c"
 static int init(const struct st_smz_api *a){assert(a->version==2 && a->ui->version==4);init_calls++;return 0;}

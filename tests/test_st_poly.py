@@ -25,7 +25,8 @@ def verify(folder,synfact=None):
     report=json.loads((folder/'synfact-machines.smz4.json').read_text())
     check_bank_modules(report,(folder/'synfact-machines.smz4').read_bytes(),(
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
-        ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module']))
+        ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module'],
+        ['fm_tone_module','recorder_module','lfo3_module','arp_module','poly_module','system_info_module']))
     assert report['machines']==[66,67,68,69,65] and report['optimization']=='-O3'
     for name,digest in report['source_sha256'].items():
         assert Path(name).is_relative_to(ROOT) and hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest,name
@@ -56,15 +57,15 @@ def verify(folder,synfact=None):
            'st_pool_preview_stop','core_event_view','core_clock_snapshot','core_additem',
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
-    names+=['core_parameter_provider_set','core_native']
-    assert read(address('core_machine_host_api'),88)==struct.pack('>22I',8,*[address(n) for n in names])
+    assert read(address('core_machine_host_api'),88)==struct.pack('>22I',10,*[address(n) for n in names],address('core_parameter_provider_set'),address('core_native'))
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
     native_sites=[s for s in manifest['sites'] if s['target'].startswith('core_native_')]
-    assert len(native_sites)==12 and len(manifest['sites'])==96 and len(manifest['collections'])==12
+    assert len(native_sites)==13 and len(manifest['sites'])==97 and len(manifest['collections'])==12
+    assert any(s['addr']=='0x400a423e' and s['target']=='core_native_note_accept' for s in native_sites)
     for site in native_sites:
         assert read(int(site['addr'],16),6)==struct.pack('>HI',0x4eb9 if site['op']=='jsr' else 0x4ef9,address(site['target']))
     # Complete stock entry prefixes/replays retain the native register masks.
