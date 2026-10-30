@@ -376,3 +376,16 @@ stores `4 * PR_rank + analog_code`, where code 0 = no analog group, 1 = tracks
 below 1,320,057. CRC and header extent are unchanged. Writers retain PQ/PX when
 digital PLAY is shared and PR when no analog group is active. Older banks
 reject PS; readers retain all previous PQ, analog flags and PR records.
+
+
+Core 0.12.22 / host API 10 preserves the 88-byte host record. `native_query`
+and `native_dispatch` are aliases of the same pointer at offset 84. The native
+collection adds NOTE_ACCEPT (20) and SOUND_META (21), reserving TYPE filter
+bytes 18/19 and retaining API 4's 36-word profiler. Serialized SMZ geometry
+and feature bits do not change.
+
+The optional ARP module stores Sound-owned settings in APC1 project carriers
+and an ARP1 extension after the existing +Drive LFO3 trailer. Native Sound/Kit
+records and snapshot lengths remain fixed; absent/corrupt metadata gives OFF.
+The complete byte layout, validation and compatibility contract are in
+[ARP-SOUND-PERSISTENCE](ARP-SOUND-PERSISTENCE.md).

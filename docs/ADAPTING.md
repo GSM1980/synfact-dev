@@ -2050,3 +2050,18 @@ for a ranked digital topology with analog voices, as [FORMAT](FORMAT.md)
 specifies. Analog masters keep their native shared modulation and saved Sounds.
 Only analog slaves enter the copied native kernels' skip bitmap. Digital
 independent groups must keep advancing when analog groups coexist.
+
+
+## Syntakt: Sound metadata and note generation (core 0.12.22)
+
+Host API 10 retains API 8's native query pointer at offset 84, also exposed as
+`native_dispatch`. Both names address the existing native bus. Check the host
+version before subscribing to NOTE_ACCEPT (20) or SOUND_META (21), and follow
+`syntakt/native.h` and `syntakt/sound-meta.h` for context and borrowed lifetimes.
+NOTE_ACCEPT consumption reaches the native event cleanup once; observers must
+not free the accepted event. LFO3's established object/codec adapters publish
+Sound lifecycle events, avoiding competing hooks. ARP uses these services for
+a monophonic generator on all twelve audio tracks and Sound persistence.
+Build it with `--module mods/lfo3-st --module mods/arp-st --module mods/poly-st`
+in that order, alongside the ordinary recorder and System info modules.
+See [ARP](../mods/arp-st/README.md) for tests, native boundaries and persistence.

@@ -3,6 +3,11 @@
 #include <stdio.h>
 #include <windows.h>
 #include <syntakt/native.h>
+#include <syntakt/host.h>
+#include <stddef.h>
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==88 &&
+    offsetof(struct st_machine_host_api,native_query)==84 &&
+    offsetof(struct st_machine_host_api,native_dispatch)==84 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)

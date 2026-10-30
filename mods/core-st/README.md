@@ -1,4 +1,4 @@
-# Syntakt core 0.12.19
+# Syntakt core 0.12.22
 
 Version 0.12.19 adds host API 8 `native_query`, a pointer to the existing
 synchronous native bus. It adds no hook site or operation number. OWNERS with
@@ -823,3 +823,11 @@ Host API 10 (core 0.12.22) adds logical `ST_NATIVE_SOUND_META` notifications on
 publishes them, without another firmware site or pointer field. The host is
 still 88 bytes and API 4 profiling remains 36 words. Sound codec observers see
 final extended machine words. ARP uses this lifecycle for Sound persistence.
+
+
+Main integration retains independent/shared POLY and its API 8 `native_query`
+name. API 10's `native_dispatch` is an alias in the same 4-byte slot at offset
+84; both call `core_native`, and the host remains 88 bytes. The Sound codec
+notification helper is shared out of line; its extended controls plus final
+word are copied as one contiguous 34-byte range before notification. This
+keeps the combined core within its unchanged 64 KiB reserve and build flags.

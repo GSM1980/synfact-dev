@@ -69,3 +69,16 @@ The arp agent works separately in `C:\Desarrollo\synfact-dev-arp` on
 `C:\Desarrollo\synfact-dev` worktree contains unrelated untracked profiling
 mods/tests; the integration leaves them untouched. No worktree is removed and
 no remote push is part of this merge.
+
+
+## ARP integration (2026-10-30)
+
+User authorized merging and pushing ARP to main after TEST06. The ARP branch
+rebases on `10f3590`, preserving POLY 0.8, independent/shared digital LFOs and
+analog groups. Host API 10 aliases native_query/native_dispatch at the same
+offset 84, retaining the 88-byte record. Its Sound codec directions share a
+bounded helper to keep the combined core inside the unchanged 64 KiB reserve.
+Validation output: `out/core-st-0.12.22-arp-main-validated/` in the ARP worktree.
+This integration advances main by fast-forward only after verification. The
+untracked profiling work in the primary worktree and the sample-folder worktree
+remain untouched; no worktree is removed.
