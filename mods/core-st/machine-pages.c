@@ -74,21 +74,17 @@ extern int (*core_parameter_provider)(u32,u32 *,void *,u32 *);
  * provider (LFO3) sees query 25 {record, sound} or 26 {sound, record}. */
 static void sound_codec_notify(u32 q,const void *a,const void *b)
 {u32 args[3];if(core_parameter_provider){args[0]=(u32)a;args[1]=(u32)b;args[2]=1;core_parameter_provider(q,args,0,0);}}
-void core_machine_sound_saved(void *record,const void *sound)
+/* Both codec directions copy the same 34-byte contiguous region and optional
+ * slot-zero word. Share task-side code to retain the fixed resident budget. */
+__attribute__((noinline)) static void sound_codec(void *destination,const void *source,u32 load)
 {
-    u8 *r=record;const u8 *s=sound;u32 i;const struct core_machine_def *m;
-    sound_codec_notify(25,record,sound);
-    m=core_machine_find(s[0xa2]);if(!m)return;
-    for(i=0;i<32;i++)r[0x88+i]=s[0x80+i];
-    r[0xa8]=s[0xa0];r[0xa9]=s[0xa1];
-    if(m->params>24){r[0x1c]=s[0x14];r[0x1d]=s[0x15];}
+    u8 *d=destination;const u8 *s=source;u32 i,to=load?0x80:0x88,from=load?0x88:0x80;
+    const struct core_machine_def *m=core_machine_find((load?d:s)[0xa2]);
+    if(m){
+        for(i=0;i<34;i++)d[to+i]=s[from+i];
+        if(m->params>24){to=load?0x14:0x1c;from=load?0x1c:0x14;d[to]=s[from];d[to+1]=s[from+1];}
+    }
+    sound_codec_notify(load?26:25,destination,source);
 }
-void core_machine_sound_loaded(void *sound,const void *record)
-{
-    u8 *s=sound;const u8 *r=record;u32 i;const struct core_machine_def *m;
-    sound_codec_notify(26,sound,record);
-    m=core_machine_find(s[0xa2]);if(!m)return;
-    for(i=0;i<32;i++)s[0x80+i]=r[0x88+i];
-    s[0xa0]=r[0xa8];s[0xa1]=r[0xa9];
-    if(m->params>24){s[0x14]=r[0x1c];s[0x15]=r[0x1d];}
-}
+void core_machine_sound_saved(void *record,const void *sound){sound_codec(record,sound,0);}
+void core_machine_sound_loaded(void *sound,const void *record){sound_codec(sound,record,1);}

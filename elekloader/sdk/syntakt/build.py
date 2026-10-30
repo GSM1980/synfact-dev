@@ -46,7 +46,7 @@ def main():
                  'files.c','storage.c','hzfs.c','high-storage.c','high-storage.s',
                  'sample-pool.c','sample-manager.c','sample-hooks.s','sample-ui.s',
                  'machine-ui.c','machine-ui.s','sample-wave.c','crc.c','modules.c','modules.s',
-                 'machine-host.c','native.c','native.s','view-draw.s'):
+                 'machine-host.c','native.c','native.s','view-draw.s','note-events.s'):
         obj=elf.Elf.load(ROOT/'mods/core-st/out/core.work'/(name+'.o'))
         section=obj.section('.text' if name.endswith('.c') else '.run')
         if not section:continue

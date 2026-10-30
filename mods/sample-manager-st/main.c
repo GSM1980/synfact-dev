@@ -26,7 +26,7 @@ static const struct st_pool_ui_callbacks callbacks={1,menu,st_pool_ui_progress_b
 static int manager_key(void *app,void *ev){return st_pool_ui_pre_event(app,ev);}
 static int initialize(const struct st_smz_api *api)
 {
-    if(!api || api->version<1 || !api->ui || api->ui->version<5 || !api->ui->host || api->ui->host->version<9 || !api->ui->host->pool || api->ui->host->pool->version!=1)return 1;
+    if(!api || api->version<1 || !api->ui || api->ui->version<5 || !api->ui->host || api->ui->host->version<11 || !api->ui->host->pool || api->ui->host->pool->version!=1)return 1;
     host=api->ui->host;return !host->pool->bind_ui(&callbacks);
 }
 static const struct st_smz_subscription subscriptions[]={

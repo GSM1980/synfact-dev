@@ -15,6 +15,16 @@ const char *core_machine_format(u32 id,u32 raw){(void)id;(void)raw;return 0;}
 u32 core_machine_policy(u32 id){return id==0x1fd?0x1f1:CORE_SMZ_NONE;}
 static u32 type=64,resets;
 static u32 allocations;
+static u32 codec_notifications;
+static int codec_final(u32 q,u32 *a,void *result,u32 *value)
+{
+    u8 *record=(u8 *)a[q==25?0:1],*sound=(u8 *)a[q==25?1:0];u32 i;
+    (void)result;(void)value;assert(q==25 || q==26);assert(a[2]==1);
+    for(i=0;i<32;i++)assert(record[0x88+i]==sound[0x80+i]);
+    assert(record[0xa8]==sound[0xa0] && record[0xa9]==sound[0xa1]);
+    assert(record[0x1c]==sound[0x14] && record[0x1d]==sound[0x15]);
+    codec_notifications++;return 0;
+}
 void *fw_malloc(u32 n){return VirtualAlloc((void *)(0x48000000u+0x100000u*allocations++),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){if((u32)p>=0x40000000u)assert(VirtualFree(p,0,MEM_RELEASE));else free(p);}
 u32 fw_view_machine(void *v){(void)v;return type;}
@@ -100,8 +110,12 @@ int main(void)
     type=1;assert(!core_machine_sync(view));assert(*(u32 **)(view+0x80)-*(u32 **)(view+0x7c)==1);
     fw_free(*(void **)(view+0x7c));sound[0xa2]=64;
     for(i=0;i<32;i++)sound[0x80+i]=(u8)(i+1);sound[0xa0]=77;sound[0xa1]=88;
+    sound[0x14]=0x12;sound[0x15]=0x34;
+    core_parameter_provider=codec_final;
     core_machine_sound_saved(record,sound);memset(sound,0x11,0xa2);core_machine_sound_loaded(sound,record);
+    assert(codec_notifications==2);core_parameter_provider=0;
     for(i=0;i<32;i++)assert(sound[0x80+i]==i+1);assert(sound[0xa0]==77 && sound[0xa1]==88);
+    assert(sound[0x14]==0x12 && sound[0x15]==0x34);
     assert(core_machine_lanes[54]==0x47 && core_machine_lanes[70]==0x57);
     assert(core_machine_storage_slot(0,0x57)==0x46 && core_machine_storage_id(0,0x46)==0x46);
     core_machine_active=0;assert(!core_machine_query(ST_NAME,args,0,&value));

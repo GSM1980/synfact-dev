@@ -39,6 +39,20 @@ enum st_native_operation {
  ST_NATIVE_SOUND_ALLOWED, ST_NATIVE_MACHINE_ALLOWED,
  ST_NATIVE_PAGE_SYNC, ST_NATIVE_PAGE_NAV, ST_NATIVE_PAGE_LAYOUT,
  ST_NATIVE_PAGE_BEGIN, ST_NATIVE_PAGE_END, ST_NATIVE_PAGE_GUARD,
- ST_NATIVE_OWNERS, ST_NATIVE_MODULATION, ST_NATIVE_LFO, ST_NATIVE_OPERATION_COUNT
+ ST_NATIVE_OWNERS, ST_NATIVE_MODULATION, ST_NATIVE_LFO, ST_NATIVE_OPERATION_COUNT,
+ /* 18/19 remain the TYPE filter bytes, including for older bank binaries.
+  * OPERATION_COUNT stays 18: host API 4 profiler buffers are 36 words. */
+ ST_NATIVE_NOTE_ACCEPT=20, ST_NATIVE_SOUND_META, ST_NATIVE_OPERATION_LIMIT
 };
+/* Host API 8, MAIN IRQ, after track mute/staleness and Sound resolution, before
+ * note gate/pitch/lock effects. args = {event, sound, effective_time, frame_end}.
+ * Native time is a wrapping 32-bit musical
+ * clock; quarter note = 21600000 units. frame_end is the native saved deadline.
+ * All pointers are borrowed; do not free or retain an event or Sound pointer.
+ * A subscriber returning nonzero supplies *result: zero replays stock, nonzero
+ * skips its effects and reaches the SAME native event release. Observers return
+ * zero. This is acceptance of any audio-track event, including releases/legato;
+ * inspect the event's action/type/flags before interpreting it as note-on.
+ * No event construction or ownership change is implied by this notification.
+ */
 #endif

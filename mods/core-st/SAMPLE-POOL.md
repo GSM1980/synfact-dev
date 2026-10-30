@@ -208,7 +208,7 @@ graphics or storage reads occur in this service.
 
 The project record, playback, HZFS, CRC, IO, rollback and preview audio remain
 core services. The Sample Manager's native views/menu/navigation have moved to
-`mods/sample-manager-st`, an optional SMZ module using host API 9. Include it
+`mods/sample-manager-st`, an optional SMZ module using host API 11. Include it
 in complete banks to expose the menu. A missing/failed optional bank leaves
 pool playback available; it does not install the browser. No callback from a
 rejected module survives `core_machine_input_reset`.

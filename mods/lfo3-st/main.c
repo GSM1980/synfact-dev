@@ -12,6 +12,7 @@
  */
 #include <syntakt/native.h>
 #include <syntakt/host.h>
+#include <syntakt/sound-meta.h>
 typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;
 #ifndef LFO3_MEM
 #define LFO3_MEM(a) ((volatile u8 *)(a))
@@ -223,8 +224,8 @@ static const struct site {u32 at;u8 bytes;u8 stock[10];void (*target)(void);u8 c
     {0x40013690u,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1},
     {0x400136f8u,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1},
     {0x4001924cu,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1}};
-/* +Drive record size operands (pea 0x107 -> 0x11f) of the save/load above. */
-static const struct {u32 at;u16 stock,value;} operands[]={{0x40111b82u,0x0107,0x011f},{0x40110b1eu,0x0107,0x011f}};
+/* +Drive record size operands (pea 0x107 -> 0x13f) of the save/load above. */
+static const struct {u32 at;u16 stock,value;} operands[]={{0x40111b82u,0x0107,ST_SOUND_S1_BYTES},{0x40110b1eu,0x0107,ST_SOUND_S1_BYTES}};
 #define SITES (sizeof sites/sizeof sites[0])
 static u32 hooks_installed;
 static u32 install_hooks(void)
@@ -244,6 +245,13 @@ static u32 install_hooks(void)
     }
     lfo3_sync();lfo3_unlock(sr);
     return 0;
+}
+/* Shared Sound metadata uses the core's existing bus, no private registry. */
+void lfo3_meta_notify(u32 kind,u32 a,u32 b,u32 n)
+{
+    u32 args[4]={kind,a,b,n};
+    if(host && host->version>=10 && host->native_dispatch)
+        host->native_dispatch(ST_NATIVE_SOUND_META,args);
 }
 static int lfo3_native(u32 op,const u32 *a,u32 *result)
 {

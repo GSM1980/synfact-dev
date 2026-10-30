@@ -2052,12 +2052,26 @@ Only analog slaves enter the copied native kernels' skip bitmap. Digital
 independent groups must keep advancing when analog groups coexist.
 
 
-Host API 9 appends `const struct st_sample_pool_api *pool` at byte 88,
+Host API 11 appends `const struct st_sample_pool_api *pool` at byte 88,
 retaining every earlier offset. The pool service version is 1. It supplies
 validation/sync/cached names, preview start/refill/release and one optional
 menu/progress UI provider. Native hooks, storage, PCM streaming/mixing and
 project references remain in core. A bank-owned Sample Manager uses existing
 KEY/TICK subscriptions for its input/foreground work. Binding is task-only;
 callbacks live in the loaded bank and the core clears them on bind reset or
-failure. Read this field only when host version >= 9; see
+failure. Read this field only when host version >= 11; see
 `syntakt/sample-pool.h` and `mods/sample-manager-st`.
+
+## Syntakt: Sound metadata and note generation (core 0.12.22)
+
+Host API 10 retains API 8's native query pointer at offset 84, also exposed as
+`native_dispatch`. Both names address the existing native bus. Check the host
+version before subscribing to NOTE_ACCEPT (20) or SOUND_META (21), and follow
+`syntakt/native.h` and `syntakt/sound-meta.h` for context and borrowed lifetimes.
+NOTE_ACCEPT consumption reaches the native event cleanup once; observers must
+not free the accepted event. LFO3's established object/codec adapters publish
+Sound lifecycle events, avoiding competing hooks. ARP uses these services for
+a monophonic generator on all twelve audio tracks and Sound persistence.
+Build it with `--module mods/lfo3-st --module mods/arp-st --module mods/poly-st`
+in that order, alongside the ordinary recorder and System info modules.
+See [ARP](../mods/arp-st/README.md) for tests, native boundaries and persistence.

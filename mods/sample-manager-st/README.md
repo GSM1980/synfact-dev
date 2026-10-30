@@ -1,7 +1,7 @@
 # Sample Manager (Syntakt)
 
 Optional SMZ UI for the core-owned project sample pool and HZFS library.
-Requires core 0.13.0 (host API 9), Syntakt OS 1.41. No firmware sites,
+Requires core 0.13.1 (host API 11), Syntakt OS 1.41. No firmware sites,
 patch installer, storage implementation, audio renderer or alternate pool.
 
 This module owns native views, menu rows, navigation, selection and progress
@@ -22,4 +22,4 @@ complete bank. Previous banks can load but do not supply this new menu.
 
 Tests: native production UI + core preview fixtures in test_st_manager.c,
 linked initializer/core binding in test_st_sample_manager_module_emu.py. The
-latter rejects host 8 and verifies provider cleanup/rebind. No hardware access.
+latter rejects host 10 and verifies provider cleanup/rebind. No hardware access.

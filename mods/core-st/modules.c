@@ -25,15 +25,15 @@ static struct {const u32 *list;const unsigned char *operand;} events[]={
  * Bytes are published atomically with the native list, and fail open before
  * application initialization, so a subscriber can never miss an operation
  * it asked for (POLY's private commands travel as IMMEDIATE operations). */
-#define NATIVE_WORDS ((ST_NATIVE_OPERATION_COUNT+3)/4)
-/* Bytes 18/19 (padding of the last word) filter TYPE: 18 = digital tracks
+#define NATIVE_WORDS ((ST_NATIVE_OPERATION_LIMIT+3)/4)
+/* Reserved bytes 18/19 filter TYPE: 18 = digital tracks
  * 0..7 whose type cursor is dispatched, 19 nonzero = every cursor. Host API 5
  * mask bits 24..31 narrow a TYPE subscriber to those tracks (0 or 0xff: all).
  * native.s tests these bytes by address. */
 #define NATIVE_TYPE_TRACKS ST_NATIVE_OPERATION_COUNT
-typedef char native_type_bytes[4*NATIVE_WORDS==ST_NATIVE_OPERATION_COUNT+2?1:-1];
+typedef char native_type_bytes[ST_NATIVE_OPERATION_COUNT==18 && ST_NATIVE_NOTE_ACCEPT==20?1:-1];
 unsigned char core_native_interest[4*NATIVE_WORDS] __attribute__((aligned(4)))=
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0xff,1};
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0xff,1,1,1};
 /* Per subscriber: operation mask (host API 5) and page view class (API 6).
  * A full table leaves the newcomer at every operation and view (open). */
 #define NATIVE_SLOTS 4
@@ -57,7 +57,7 @@ __attribute__((noinline)) static u32 native_fill(unsigned char *out,const u32 *l
         if(own&NATIVE_PAGE_OPS){if(!view || (pv && pv!=view))any=1;pv=view;}
     }
 #pragma GCC unroll 1
-    for(i=0;i<ST_NATIVE_OPERATION_COUNT;i++,m>>=1)out[i]=(unsigned char)(m&1u);
+    for(i=0;i<4*NATIVE_WORDS;i++,m>>=1)out[i]=(unsigned char)(m&1u);
     out[NATIVE_TYPE_TRACKS]=(unsigned char)t;out[NATIVE_TYPE_TRACKS+1]=(unsigned char)(t>>8);
     return any?0:pv;
 }

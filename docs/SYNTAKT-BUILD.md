@@ -89,7 +89,7 @@ $PY -m elekloader.lint mods/core-st/out/core-X.Y.Z.elemod \
 
 ```bash
 $PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
-    --module mods/recorder-st --module mods/lfo3-st --module mods/poly-st --module mods/system-info-smz-st \
+    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
     --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
@@ -279,3 +279,6 @@ Core 0.13+: include `--module mods/sample-manager-st` in the complete SMZ bank.
 The optional module supplies Sample Manager UI; HZFS/pool/preview infrastructure
 stays in core. Install the matching core 0.13 SYX before enabling v2 folders.
 Never enable folders solely because a legacy `v6`/`v7` transfer profile connects.
+
+Core 0.13.1 combines folders and ARP with host API 11. In complete banks,
+LFO3 precedes ARP, which precedes POLY; Sample Manager may follow System info.

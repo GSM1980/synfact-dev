@@ -1,4 +1,4 @@
-# Syntakt core 0.12.19
+# Syntakt core 0.12.22
 
 Version 0.12.19 adds host API 8 `native_query`, a pointer to the existing
 synchronous native bus. It adds no hook site or operation number. OWNERS with
@@ -773,3 +773,61 @@ It catches an off-by-one length, a wrong 0x52 exception and swapped
 selection words. Firmware AUDIO and the bank AUDIO are unchanged.
 Candidate: `out/core-st-0.12.18-preview-noheap/`, RAM **65,400 / 65,536**
 (136 free). CPU on the Syntakt not measured yet.
+
+## Core 0.12.20: shared note acceptance (experimental, not an ARP release)
+
+Host API 8 adds `ST_NATIVE_NOTE_ACCEPT=20` to the existing native collection.
+`note-events.s` owns `400a423e`, after track mute/stale checks and Sound selection,
+before note effects. Borrowed arguments are `{event, sound, effective_time,
+frame_end}`. Observers return zero. A handler supplying nonzero result bypasses
+the effects and reaches the original `400a471e` cleanup; it must not free or
+retain the event itself. This covers audio-track events, including releases;
+it is not a notification that every event is a note-on. Effects/synthesis and
+complete lock/Sound lifetime validation remain separate.
+
+Bytes 18/19 retain the TYPE filter ABI. The old `ST_NATIVE_OPERATION_COUNT=18`
+and 36-word API 4 profiler buffers remain unchanged; new operations are outside
+that legacy profile. `ST_NATIVE_OPERATION_LIMIT` sizes dispatch storage.
+The pointer layout of host API 7 is unchanged. Existing narrowed POLY/LFO3
+subscriptions do not opt into NOTE_ACCEPT. No additional collection is added.
+
+The experiment `out/core-st-0.12.20-note-accept-r4/` uses 65,512/65,536 resident
+bytes (24 free), with source/audit flags unchanged and protected firmware
+sections verified. `tests/test_st_note_accept_emu.py` compares 384 acceptance
+slices with stock, tests observer/consume paths and executes native release once
+in four consumed cases. The condition predicate and C dispatcher are doubles;
+host tests separately run the real native dispatcher. Off costs four extra
+instructions per accepted event in this slice, not a measured CPU percentage.
+This is groundwork for ARP; no generator is connected or ready for device use.
+
+## Core 0.12.21: shared native dispatch export
+
+Host API 9 appends `native_dispatch` (offset 84, total 88 bytes) to the existing
+host service record. It calls the existing `core_native` collection, unlike
+`native_original`, which bypasses mods. Context restrictions remain the same;
+OWNERS is MAIN IRQ-only. The previous host record prefix and API 4 profiler
+buffer size remain unchanged. This lets ARP inspect POLY ownership through the
+shared bus instead of linking to POLY internals or inventing another registry.
+
+The experimental ARP module now uses NOTE_ACCEPT and native pools/queue; its
+UI uses the existing KEY/ENC/complete-view DRAW events. This does not make the
+full Digitone port device-ready. See [arp-st](../arp-st/README.md) for unsupported
+paths and explicit emulator doubles. Core resident use remains 65,512/65,536
+bytes with unchanged build flags/reserve. Current offline results are under
+`out/core-st-0.12.21-arp-view-checked/`; protected sections are stock and both core
+and bank AUDIO retain the prior delivery's bytes.
+
+
+Host API 10 (core 0.12.22) adds logical `ST_NATIVE_SOUND_META` notifications on
+`native_dispatch`; see `syntakt/sound-meta.h`. The shared object/codec adapter
+publishes them, without another firmware site or pointer field. The host is
+still 88 bytes and API 4 profiling remains 36 words. Sound codec observers see
+final extended machine words. ARP uses this lifecycle for Sound persistence.
+
+
+Main integration retains independent/shared POLY and its API 8 `native_query`
+name. API 10's `native_dispatch` is an alias in the same 4-byte slot at offset
+84; both call `core_native`, and the host remains 88 bytes. The Sound codec
+notification helper is shared out of line; its extended controls plus final
+word are copied as one contiguous 34-byte range before notification. This
+keeps the combined core within its unchanged 64 KiB reserve and build flags.

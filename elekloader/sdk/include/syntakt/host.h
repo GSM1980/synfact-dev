@@ -65,11 +65,17 @@ struct st_machine_host_api {
      * a successful native Sound encode {record, sound, 1}; 26 after a decode
      * {sound, record, 1}; 27 after NEW PROJECT {project container}. */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
-    /* Host API 8: synchronous shared native queries/notifications. Same
-     * context and borrowed argument rules as ST_EV_NATIVE; never retain
-     * a result past the next native transaction. */
-    unsigned int (*native_query)(unsigned int,const unsigned int *);
-    /* Host API 9: pool infrastructure stays in core; optional bank owns UI. */
+    /* API 8 native_query and the ARP branch's native_dispatch are aliases
+     * for the same existing bus at offset 84. Both prefixes stay compatible.
+     * Use the operation's native context; OWNERS is MAIN IRQ-only. Results
+     * are borrowed and expire at the next native transaction.
+     * API 10 adds NOTE_ACCEPT and SOUND_META without enlarging the record.
+     * API 4 profiling retains its original 18-operation/36-word layout. */
+    union {
+        unsigned int (*native_query)(unsigned int,const unsigned int *);
+        unsigned int (*native_dispatch)(unsigned int,const unsigned int *);
+    };
+    /* API 11 appends pool infrastructure; APIs 8/10 keep their prefix. */
     const struct st_sample_pool_api *pool;
 };
 #endif

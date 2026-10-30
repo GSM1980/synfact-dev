@@ -80,3 +80,30 @@ A separate `feat/sample-folders` in `C:\Desarrollo\synfact-release` contains
 Transfer 0.0.6. Transfer's previous changes were committed and pushed at the
 user's explicit request as `1c39aa6` before this new work. The new folder work
 is not merged or pushed. No instrument IO has been performed.
+
+## ARP integration (2026-10-30)
+
+User authorized merging and pushing ARP to main after TEST06. The ARP branch
+rebases on `10f3590`, preserving POLY 0.8, independent/shared digital LFOs and
+analog groups. Host API 10 aliases native_query/native_dispatch at the same
+offset 84, retaining the 88-byte record. Its Sound codec directions share a
+bounded helper to keep the combined core inside the unchanged 64 KiB reserve.
+Validation output: `out/core-st-0.12.22-arp-main-validated/` in the ARP worktree.
+This integration advances main by fast-forward only after verification. The
+untracked profiling work in the primary worktree and the sample-folder worktree
+remain untouched; no worktree is removed.
+
+## Folder/ARP integration (2026-10-30)
+
+The folder and ARP branches meet in core 0.13.1, host API 11. The native
+query/dispatch union stays at byte 84; the pool service is appended at byte 88.
+Sample Manager requires API 11 so API 10 cannot expose an out-of-bounds pointer.
+The complete bank includes LFO3, ARP, POLY and Sample Manager together.
+
+Validation: `out/folders-arp-main-20261030/` in the pan worktree. Full common
+regressions (including units), linked UI provider lifecycle, 9,600 POLY blocks,
+native note admission, ARP Sound persistence and analog ARP pass. POLY MAIN
+fixture: 12,286 instructions before/after; resident 55,876/65,536 bytes.
+Transfer stays outside main: remote `move-transfer-to-elekloader` at `7210e52`
+includes folders, the prior Elekloader conversion/upload work and the user-
+authorized browser preview. Synfact-release main remains `142c68d`.

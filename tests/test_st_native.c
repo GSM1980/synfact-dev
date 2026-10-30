@@ -3,6 +3,12 @@
 #include <stdio.h>
 #include <windows.h>
 #include <syntakt/native.h>
+#include <syntakt/host.h>
+#include <stddef.h>
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==92 &&
+    offsetof(struct st_machine_host_api,native_query)==84 &&
+    offsetof(struct st_machine_host_api,native_dispatch)==84 &&
+    offsetof(struct st_machine_host_api,pool)==88 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
@@ -10,6 +16,7 @@ EV(fs_route) EV(fs_write) EV(fs_written) EV(main_mix)
 const u32 ev_native[]={0};
 const struct st_machine_ui_api core_machine_ui_api={6};
 static u32 publications,pre,post,native_calls,replays;
+static u32 note_consumed;
 extern int core_event_native(u32,const u32 *,u32 *);
 void *fw_malloc(u32 n){return VirtualAlloc((void *)0x47000000u,n,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
@@ -17,7 +24,7 @@ void core_event_publish(const u32 *a)
 {
     u32 track=2,result=99;
     assert(a[0]==(u32)(core_key_table+2) && a[1] && a[2] && a[3]==a[1] && a[4] && a[5]);
-    {u32 k;for(k=6;a[k];k+=2)*(u32 *)a[k]=a[k+1];assert(k==6+2*6);}    /* interest words, same section */
+    {u32 k;for(k=6;a[k];k+=2)*(u32 *)a[k]=a[k+1];assert(k==6+2*((ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
     *(const u32 **)a[2]=(const u32 *)a[3];*(const u32 **)a[4]=(const u32 *)a[5];
     /* Simulate an IRQ immediately when the publisher unmasks, before bind
      * returns. Its native services must already be visible in the C list. */
@@ -38,7 +45,8 @@ static int interest_closed(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(core_nati
 static int initialize(const struct st_smz_api *a){assert(a->version==3 && a->ui->version==6);return 0;}
 static int first(u32 op,const u32 *a,u32 *out){(void)op;(void)a;(void)out;native_calls++;return 0;}
 static int second(u32 op,const u32 *a,u32 *out)
-{native_calls++;if(op==ST_NATIVE_SOUND_ALLOWED){assert(a[0]==2);*out=0;return 1;}return 0;}
+{native_calls++;if(op==ST_NATIVE_SOUND_ALLOWED){assert(a[0]==2);*out=0;return 1;}
+ if(op==ST_NATIVE_NOTE_ACCEPT){*out=note_consumed;return 1;}return 0;}
 static int before(void *v,void *e,u32 phase){assert(v==(void *)1 && e==(void *)2 && phase==1);pre++;return 1;}
 static void after(void *v,void *e,u32 phase){assert(v==(void *)1 && e==(void *)2 && !phase);post++;}
 int main(void)
@@ -91,5 +99,17 @@ int main(void)
     core_native_interest_set((void (*)(void))second,1u<<ST_NATIVE_TRIG);assert(core_native_page_view==0x1234);
     core_native_interest_set((void (*)(void))second,~0u);core_native_page_view_set((void (*)(void))first,0);
     core_native_page_view_set((void (*)(void))second,0);assert(!core_native_page_view && interest_open());
+    /* New notifications do not overrun legacy host API 4 profiler buffers. */
+    {u32 guarded[38]={0},before=native_calls;guarded[0]=guarded[37]=0x12345678;
+     core_native_profile(guarded+1);assert(!core_native(ST_NATIVE_NOTE_ACCEPT,a));
+     assert(!core_native(ST_NATIVE_SOUND_META,a));
+     assert(native_calls==before+4 && guarded[0]==0x12345678 && guarded[37]==0x12345678);
+     for(v=1;v<37;v++)assert(!guarded[v]);core_native_profile(0);
+     assert(!core_native(ST_NATIVE_OPERATION_LIMIT,a));}
+    core_native_interest_set((void (*)(void))first,1u<<ST_NATIVE_TRIG);
+    core_native_interest_set((void (*)(void))second,1u<<ST_NATIVE_NOTE_ACCEPT);
+    assert(core_native_interest[20] && !core_native_interest[18] && !core_native_interest[19]);
+    note_consumed=1;assert(core_native(ST_NATIVE_NOTE_ACCEPT,a)==1);
+    note_consumed=0;assert(!core_native(ST_NATIVE_NOTE_ACCEPT,a));
     puts("PASS: per-operation interest (fail open, atomic with the list, union, stock replay); shared native list order/consume/stock fallback; API 3 negotiation; consuming pre-KEY isolated from legacy post-KEY; no additional input registry");return 0;
 }

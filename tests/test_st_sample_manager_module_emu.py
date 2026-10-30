@@ -18,12 +18,13 @@ def main():
     assert raw[image+name:raw.index(0,image+name)]==b'Sample Manager' and n==2
     events=[struct.unpack_from('>2I',raw,image+subs+8*i)[0] for i in range(n)]
     assert events==[2,0],events
-    assert word(host)==9 and word(host+88)==sym['core:core_sample_pool_api']
+    assert word(host)==11 and word(host+88)==sym['core:core_sample_pool_api']
     assert word(pointer)==0
+    # API 10 advertises ARP support but has no appended pool pointer.
     # Borrow the real native UI/host table; no OS view is constructed at init.
     r.u.mem_write(ARGS,struct.pack('>2I',1,sym['core:core_machine_ui_api']))
-    r.write32(host,8);assert r.call(BANK+init,ARGS)!=0 and word(pointer)==0
-    r.write32(host,9);assert r.call(BANK+init,ARGS)==0
+    r.write32(host,10);assert r.call(BANK+init,ARGS)!=0 and word(pointer)==0
+    r.write32(host,11);assert r.call(BANK+init,ARGS)==0
     published=word(pointer);assert BANK<=published<BANK+report['main_bytes']
     assert r.call(BANK+init,ARGS)!=0 and word(pointer)==published
     r.call(sym['core:core_pool_ui_reset']);assert word(pointer)==0
@@ -33,5 +34,5 @@ def main():
         assert lo<=sym['core:'+name]<hi,('infrastructure outside core',name)
     for name in ('st_pool_ui_open','st_pool_item_label','st_pool_ui_draw'):
         assert 'core:'+name not in sym,('UI still resident',name)
-    print('PASS: linked optional manager uses host 9; old-host refusal, one provider, rollback/reset and rebind; all infrastructure in core')
+    print('PASS: linked optional manager uses host 11; old-host refusal, one provider, rollback/reset and rebind; all infrastructure in core')
 if __name__=='__main__':main()

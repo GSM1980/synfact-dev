@@ -24,7 +24,8 @@ def verify(bank,synfact,cc):
     check_bank_modules(report,bank.read_bytes(),(
         ['fm_tone_module'],['fm_tone_module','recorder_module'],
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
-        ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module']))
+        ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module'],
+        ['fm_tone_module','recorder_module','lfo3_module','arp_module','poly_module','system_info_module']))
     assert not report['firmware_required']
     assert all(flag in report['cflags'] for flag in ('-O3','-mcpu=54415','-mtune=cfv4'))
     for path,digest in report['source_sha256'].items():
