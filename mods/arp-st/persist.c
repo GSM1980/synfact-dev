@@ -21,7 +21,10 @@
 struct cell {arp_u32 address,bank;struct arp_settings p[2];};
 struct assoc {arp_u32 address,hash,loaded;struct arp_settings p;};
 struct kit_assoc {arp_u32 address,hash,tags[12];struct arp_settings p[12];};
-static struct cell live[1664] DATA={{0}},side[SIDE] DATA={{0}};
+/* GCC may compare an induction pointer to a field just beyond live[1663].
+ * Keep that sentinel address inside the SMZ image: its relocation must be in
+ * bounds even when ARP is the last module in a bank. It is never a live slot. */
+static struct cell live[1665] DATA={{0}},side[SIDE] DATA={{0}};
 static struct assoc encoded[16] DATA={{0}};
 static struct kit_assoc encoded_kit[16] DATA={{0}};
 static unsigned int next_assoc DATA=0,next_kit DATA=0;

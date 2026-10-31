@@ -192,6 +192,8 @@ def build(directories,stock_path=None,output=None,module_directories=()):
             'features':features,'modules':modules,'optimization':'-O3','cpu':'54415','cflags':dev.toolchain['cflags'],
             'source_sha256':inputs,'instruction_audits':audits,
             'firmware_required':False,'sha256':hashlib.sha256(data).hexdigest()}
+    report['object_sha256']={str(Path(path).resolve()):hashlib.sha256(Path(path).read_bytes()).hexdigest()
+                             for path in main_objs+audio_objs}
     output.with_suffix(output.suffix+'.json').write_text(json.dumps(report,indent=2)+'\n')
     return report
 

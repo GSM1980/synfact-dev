@@ -5,6 +5,8 @@
 import { Bridge } from '../bridge.ts'
 import { sha } from '../bytes.ts'
 import { VERSION } from '../version.ts'
+import { buildSyntakt } from '../syntakt-build.ts'
+import { buildSmzSelection } from '../smz-catalog.ts'
 import { parseCatalog, type Catalog } from './catalog.ts'
 import { PROTOCOL, type Built, type Call, type Ready } from './protocol.ts'
 
@@ -59,6 +61,20 @@ export function createService(get: Fetcher) {
     if (call.call === 'init') return init(args)
     if (!bridge) throw new Error('the builder is not loaded: call init first')
     if (call.call === 'add_catalog_mod') return addCatalogMod(args)
+    if (call.call === 'build_smz') {
+      const file=String(args.catalog ?? ''), pin=String(args.sha256 ?? '')
+      if(!/^[\w.-]+\.json$/.test(file)||!Array.isArray(args.selected))throw Error('SMZ build needs a pinned catalog and selection')
+      const result=await buildSmzSelection(await get(new URL(file,base).href),pin,args.selected as string[],
+        name=>get(new URL(name,base).href))
+      return {...result,data:result.data.slice().buffer}
+    }
+    if (call.call === 'build_syntakt') {
+      const file=String(args.manifest ?? ''), pin=String(args.sha256 ?? '')
+      if (!/^[\w.-]+\.json$/.test(file) || !call.data) throw new Error('Syntakt build needs a manifest file and stock bytes')
+      const result=await buildSyntakt(new Uint8Array(call.data),await get(new URL(file,base).href),pin,
+        name=>get(new URL(name,base).href),progress)
+      return {...result,data:result.data.slice().buffer}
+    }
     if (!BRIDGE_CALLS.has(call.call)) throw new Error(`no call ${call.call}`)
     const result = await bridge.call(call.call, args, call.data ? new Uint8Array(call.data) : undefined, progress)
     if (call.call !== 'build' || !(result as { ok: boolean }).ok) return result

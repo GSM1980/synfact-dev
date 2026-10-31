@@ -33,7 +33,10 @@ self.onmessage = async (event: MessageEvent<Call>) => {
   try {
     const result = await handle(event.data, line => post({ id, log: line }))
     const files = (result as { files?: { data?: unknown }[] } | null)?.files ?? []
-    post({ id, ok: true, result }, files.map(f => f.data).filter((d): d is ArrayBuffer => d instanceof ArrayBuffer))
+    const transfers = files.map(f => f.data).filter((d): d is ArrayBuffer => d instanceof ArrayBuffer)
+    const data = (result as {data?:unknown} | null)?.data
+    if (data instanceof ArrayBuffer) transfers.push(data)
+    post({ id, ok: true, result }, transfers)
   } catch (error) {
     post({ id, ok: false, error: error instanceof Error ? error.message : String(error) })
   }

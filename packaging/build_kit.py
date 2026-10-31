@@ -9,8 +9,8 @@ The zip holds, from HEAD (git archive HEAD js: committed files only):
   - dist/: the same as plain JavaScript (js/tools/build.ts), for a site
     without one. dist/kit/worker.js is the worker, dist/kit/index.js the
     page's side;
-  - tools/kit.ts and tools/build.ts: feed, sync, verify and lock, and the
-    build of dist/;
+  - tools/kit.ts, tools/build.ts and tools/syntakt_package.py: catalog, build
+    and private Syntakt artifact packaging;
   - examples/minimal/: the smallest site;
   - LICENSE (GPL-3.0-or-later, the kit's), NOTICE (elekloader's), README.md
     (docs/INTEGRATING.md);
@@ -33,7 +33,7 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NODE_MIN = (22, 18)
-TAKE = ('js/src/', 'js/tools/kit.ts', 'js/tools/build.ts', 'js/examples/minimal/', 'js/LICENSE')
+TAKE = ('js/src/', 'js/config/', 'js/tools/kit.ts', 'js/tools/build.ts', 'js/tools/syntakt_package.py', 'js/tools/smz_artifacts.py', 'js/tools/smz_approve.py', 'js/tools/smz_matrix.py', 'js/tools/smz_merge.py', 'js/tools/smz_candidate.ts', 'js/examples/minimal/', 'js/LICENSE')
 
 
 def sha(b):

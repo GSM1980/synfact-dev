@@ -23,6 +23,9 @@ import { PCREL, decodeColdFire, readerAt } from './isa/coldfire.ts'
 import { AttributeError, KeyError, PyException, ValueError, hex8, pyType, repr, str } from './py.ts'
 import * as store from './store.ts'
 
+// The SMZ path uses the same ColdFire relocation types with a distinct image layout.
+export {linkSmzImage, type SmzObject, type SmzImage} from './smz-link.ts'
+
 /** Python's struct.error. */
 export class StructError extends PyException {}
 

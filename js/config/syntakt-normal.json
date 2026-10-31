@@ -1,0 +1,12 @@
+{
+  "modules": [
+    {"id": "samplers-st", "path": "mods/samplers-st", "kind": "machine"},
+    {"id": "fm-tone-st", "path": "mods/fm-tone-st", "kind": "machine"},
+    {"id": "recorder-st", "path": "mods/recorder-st", "kind": "module"},
+    {"id": "lfo3-st", "path": "mods/lfo3-st", "kind": "module"},
+    {"id": "arp-st", "path": "mods/arp-st", "kind": "module"},
+    {"id": "poly-st", "path": "mods/poly-st", "kind": "module"},
+    {"id": "system-info-smz-st", "path": "mods/system-info-smz-st", "kind": "module"},
+    {"id": "sample-manager-st", "path": "mods/sample-manager-st", "kind": "module"}
+  ]
+}

@@ -1,5 +1,7 @@
 # elekloader in TypeScript
 
+The experimental Syntakt 1.41 core route additionally builds its AUDIO companion and uses a compact compressor. It requires a separately pinned artifact manifest from a verified desktop build; see [docs/INTEGRATING.md](../docs/INTEGRATING.md). A separate experimental SMZ linker accepts audited precompiled objects; the worker returns only selections previously compared with the reference builder and pinned in a validated catalog. Its optional core reference test uses `SYNTAKT_STOCK`, `SYNTAKT_ARTIFACTS` and `SYNTAKT_REFERENCE`; without them it is skipped.
+
 elekloader's mod manager as a TypeScript package with no dependencies, for web pages and workers. It covers:
 - Elektron OS files: the Digitakt mk1 and II, the Digitone mk1, the Octatrack and the Analog Rytm MKII;
 - the `.elemod` checks and the linker;

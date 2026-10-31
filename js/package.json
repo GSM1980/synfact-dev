@@ -11,10 +11,18 @@
   },
   "files": [
     "src",
+    "config",
     "tools/build.ts",
     "tools/kit.ts",
+    "tools/syntakt_package.py",
+    "tools/smz_artifacts.py",
+    "tools/smz_approve.py",
+    "tools/smz_matrix.py",
+    "tools/smz_merge.py",
+    "tools/smz_candidate.ts",
     "examples/minimal",
     "LICENSE",
+    "LICENSE-compact-MIT.txt",
     "README.md"
   ],
   "engines": {
