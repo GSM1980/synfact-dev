@@ -1,5 +1,13 @@
+Synfact
+Copyright (C) 2026 GSM1980 and contributors
+
+Synfact is the Syntakt's part of elekloader, with its own core and mods,
+under the same licences. Everything else in this file is elekloader's notice,
+which applies to the code that comes from it.
+
 elekloader
 Copyright (C) 2026 irpina and contributors
+https://github.com/irpina/elekloader
 
 elekloader is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
@@ -44,11 +52,8 @@ octabam
 -------
 Facts about the Octatrack come from sambanks/octabam
 (https://github.com/sambanks/octabam, MIT, (c) 2026 Sam Banks), and are
-marked "octabam" where they are used (elekloader/devices/octatrack.py).
-mods/core-ot makes the same 27 arena writes as octabam's platform, for the
-same reservation. elekloader/sdk/octabam.py reads octabam's module manifests
-from a checkout the user supplies, and copies their sources into the mod
-folders it writes, with octabam's licence beside them. No octabam code is
+marked "octabam" where they are used (elekloader/devices/octatrack.py, in
+the engine this repository keeps from elekloader). No octabam code is
 included here.
 
 Elektron

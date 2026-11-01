@@ -1,12 +1,13 @@
 # Notes for coding agents
 
-elekloader builds custom firmware for Elektron devices from mods, on the
-user's machine, from the stock OS file they supply. Read README.md first;
-the rest of the docs start at docs/README.md.
+Synfact builds custom firmware and mods for the Elektron Syntakt (OS 1.41), on
+the user's machine or in their browser, from the stock OS file they supply. It
+is built on elekloader's engine and keeps only the Syntakt. Read README.md
+first; the rest of the docs start at docs/README.md.
 
-**Building for the Syntakt on this workstation** (core-st, SMZ banks):
-follow [docs/SYNTAKT-BUILD.md](docs/SYNTAKT-BUILD.md) exactly. It gives the
-m68k toolchain location (`C:\Desarrollo\syntakt-dev\toolchains\sgdk211\bin`,
+**Building on this workstation** (core-st, SMZ banks): follow
+[docs/SYNTAKT-BUILD.md](docs/SYNTAKT-BUILD.md) exactly. It gives the m68k
+toolchain location (`C:\Desarrollo\syntakt-dev\toolchains\sgdk211\bin`,
 unprefixed GCC 13.2.0), the required `ELEKLOADER_CROSS=''` and
 `GCC_EXEC_PREFIX`, the compiler flags and the build, lint, bank and
 regression commands. Do not change flags or builders to make a build pass.
@@ -16,118 +17,73 @@ folder another agent uses; see [docs/PARALLEL-AGENTS.md](docs/PARALLEL-AGENTS.md
 
 ## If you are adapting or writing a mod
 
-**Core first, and contributions are welcome.** Before you add a code site
-to a mod, check whether the core already has an event, a table or a
-firmware export for it, and if not, whether another mod could want the
-same thing. If one could, build that part in the core's shape, in a file
-of its own, so that it can move into the core
-([docs/CORE-CONTRIBUTING.md](docs/CORE-CONTRIBUTING.md)). Then tell the
-user, and offer to open a pull request on elekloader that moves it there.
-**Pull requests to elekloader are welcome and encouraged**: they are how
-the core grows, so do not drop one because it would change someone else's
-project. Open it when the user says yes. `lint` lists each
-code site a mod hooks itself under `core_candidates`;
-`python -m elekloader.sdk.coresites` lists the sites several mods hook;
-and `python -m elekloader.sdk.bounties` lists every routine mods still hook
-themselves: the community's to-do list for the core.
+**Core first.** Before you add a code site to a mod, check whether the core
+(`mods/core-st`) already has an event, a table or a firmware export for it,
+and if not, whether another mod could want the same thing. If one could,
+build that part in the core's shape, in a file of its own, so that it can
+move into the core ([docs/CORE-CONTRIBUTING.md](docs/CORE-CONTRIBUTING.md)),
+and tell the user.
 
-Follow [docs/ADAPTING.md](docs/ADAPTING.md). It has:
-- the rules;
-- the build, lint and patch commands, with the output each should print;
-- a table from each refusal message to its fix;
-- a definition of done.
+Follow [docs/ADAPTING.md](docs/ADAPTING.md): the rules, the Syntakt core's
+events and tables, a table from each refusal message to its fix, and a
+definition of done. `examples/machine-test-st` and `examples/smz-test-st`
+are small starting points; the bank and regression commands are in
+SYNTAKT-BUILD.md.
 
-Start from `examples/hello-marker/`. Your loop is:
+## If you are changing the engine
 
-```bash
-python -m elekloader.sdk.build <moddir> --stock <stock.syx>
-python -m elekloader.lint <mod.elemod> --stock <stock.syx> --with <core.elemod> --json
-python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.elemod> --out test.syx --version XXXX
-```
-
-## If you are changing elekloader itself
+The engine (`elekloader/`, `js/`) comes from
+[elekloader](https://github.com/irpina/elekloader) and still supports every
+device it did; only the Syntakt's products are kept here. Change it as
+little as possible, and offer the user a pull request on elekloader for any
+engine change, so the two stay comparable.
 
 | path | what |
 |---|---|
-| `elekloader/devices/` | everything device-specific: one profile per product, releases by hash |
-| `elekloader/formats.py` | one interface over the OS file families (`Device.container`); `load` also takes Elektron's zip |
-| `elekloader/syx.py` | the Digitakt mk1's, Digitone mk1's, Digitakt II's and Analog Rytm MKII's family (ELE3, SysEx; the II's sealed with an HMAC): parse, write (only the main OS changes), verify |
-| `elekloader/elek.py` | the Octatrack's family (ELEK, legacy SysEx, the ELUP card file): the same |
-| `elekloader/elemod.py` | the mod format: shared validation, format 1, the instruction check, `summarize` |
-| `elekloader/link.py` | format 2: the linker and its checks |
-| `elekloader/dsp.py` | the DSP code inside a main OS (the Octatrack's payloads): the linker places mods' DSP code in it |
-| `elekloader/patch.py` | the command line; `build()` is what the window calls too |
-| `elekloader/gui.py` | the window (Tkinter); `LoaderModel` is its logic without Tk |
-| `elekloader/lint.py`, `elekloader/mkmod.py`, `elekloader/sdk/` | tools for mod authors; `sdk/octabam.py` converts octabam's modules |
+| `elekloader/devices/` | everything device-specific: one profile per product, releases by hash (`syntakt.py` is ours) |
+| `elekloader/formats.py`, `syx.py` | the OS file families; `syx.py` reads, writes (MAIN and the explicit AUDIO companion) and verifies the Syntakt's ELE3 file |
+| `elekloader/elemod.py`, `link.py` | the mod format and the format-2 linker with its checks |
+| `elekloader/sdk/` | the mod SDK; `sdk/syntakt/` builds the core SYX (`build.py`, `audio.py`) and SMZ4 banks (`smz.py`), and talks to the unit (`mods.py`, `data_rpc.py`) |
+| `elekloader/sdk/include/syntakt/` | the headers mods build against |
+| `elekloader/patch.py`, `gui.py`, `lint.py`, `mkmod.py` | the command line, the window and the mod authors' tools |
 | `elekloader/codec/`, `elekloader/isa/` | code from digikit (GPL-2.0-or-later): change it only with a round-trip test |
-| `mods/core/`, `mods/core-dn1/`, `mods/core-dt2/` | the core mod (the hook bus every format-2 mod needs): one `core.s` (with `settings.s`, `render.s` and `fast.s` where the device uses them), each device's addresses and sites in its `mod.json`, each further OS version's in its `ports`. `elekloader/sdk/include/digitone-mk1/core3.h` and `core3.inc` describe core-dn1 3.0's exports and tables to mods |
-| `mods/core-ar2/` | the Analog Rytm MKII's core, a proof of concept: `core.s`, `settings.s` and `render.s` with the Rytm's addresses |
-| `mods/core-ot/` | the Octatrack's core: its RAM reserve (from 0.3 sized to the mods by the linker: the profile's `reserve`) and `.boot`, and from 0.2 its own hook bus (`bus.s`, with the draw site's gate in `gate.s`) |
-| `mods/dspbus-ot/` | the Octatrack's optional DSP bus: frees SPATIALIZER's DSP words for mods' DSP code and declares `ev_dsp_rx` (data sites only, no code) |
-| `mods/intercepts-ot/` | the Octatrack's intercepts, a companion: 19 sites a mod intercepts, one mod at a time, each an event whose records `{claims, entry}` give it to one mod, with Modwerk's Octatrack base's names (docs/ADAPTING.md, "Intercepts on the Octatrack"); `sdk.octabam --intercepts` moves octabam's detours there |
-| `mods/machine-pages/` | the Digitakt mk1's machine page companion (core 3.0): owns the SRC page's, the LFO page's and the render point's sites once, and draws every added machine's page from its descriptor's tail; `elekloader/sdk/include/digitakt-mk1/core3.h` and `core3.inc` describe it to mods |
-| `mods/machines-dn1/` | the Digitone mk1's machines (core-dn1 3.1): a sound plays a machine mod's voice in place of FM (docs/ADAPTING.md, "Machines on the Digitone") |
-| `mods/digiswarm-dn1/` | DigiSwarm, a whole Digitone mod on core-dn1 3.2's exclusive audio: an effects engine for the inputs: grains, micro-loops and a looper (docs/ADAPTING.md, "Exclusive audio") |
-| `mods/digiprism-dn1/` | DigiPrism, a whole Digitone mod on core-dn1 3.2's exclusive audio: a pedal for the inputs with four reorderable modules of effects (docs/ADAPTING.md, "Exclusive audio") |
-| `mods/digitide-dn1/`, `mods/digitriad-dn1/`, `mods/digireel-dn1/`, `mods/digihoard-dn1/`, `mods/digihalo-dn1/` | five more pedals for the inputs on core-dn1 3.2's exclusive audio: a wet channel and a looper, a three-voice pitch shifter, a tape time-warp, an echo collector and twelve reverbs. They share a pedal shell, a copy in each folder (`pedal.h`, `pedal_dsp.inc`, `pedal_ui.inc`, `pedal_tables.py`): the pages, SETUP, presets, TAP, BYPASS, the CPU guard and the project data |
-| `mods/seq-events/`, `mods/seq-events-dn1/`, `mods/seq-events-dt1/` | step-fire events, so mods that change what the sequencer plays combine: `seq.c` every device's, `-dn1` the Digitone mk1's sites and device layer (`dev.h`), `-dt1` the Digitakt mk1's (docs/ADAPTING.md, "Step-fire events") |
-| `packaging/`, `.github/workflows/windows-build.yml`, `macos-build.yml` | the apps: `elekloader-<version>-windows.exe`, and `elekloader-<version>-macos.dmg` (signed and notarized), with core built in (`elekloader/bundled`, never committed) |
-| `js/` | the engine in TypeScript (GPL-3.0-or-later; js/README.md): the formats, the checks, the linker, the build and the web bridge, ported from the Python and matching it byte for byte, messages included (`js/tools/parity.ts` checks with your stock files) |
-| `js/src/kit/`, `js/tools/kit.ts`, `js/examples/minimal/`, `packaging/build_kit.py`, `.github/workflows/kit-build.yml` | the kit for websites (docs/INTEGRATING.md): the builder worker, the page's client, the catalog format and elekloader's curated catalog, the lock and its checks. It names no website |
-| `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; `catalog.json` is its mod shop's curated list (docs/WEB.md). Everything it loads comes from the site itself |
+| `mods/core-st/` | the Syntakt's core: hook bus, SMZ4 banks, storage, sample pool; `mods/core/` holds the two sources it shares with elekloader's core |
+| `mods/*-st/` | the Syntakt's machines and modules |
+| `js/` | the engine in TypeScript (GPL-3.0-or-later; js/README.md), matching the Python byte for byte; `js/src/syntakt-*.ts` and `smz-*.ts` build the core and the bank in a browser |
+| `web/bridge.py` | the Python reference for the TypeScript engine's bridge; elekloader's page itself is not kept |
+| `js/src/kit/`, `js/tools/`, `js/config/`, `packaging/build_kit.py` | the kit for websites (docs/INTEGRATING.md) and the tools that prepare the browser's core package and SMZ catalog (docs/SYNFACT-WEB.md) |
+| `tools/` | maintenance imports and studies for the Syntakt mods |
 
-Tests:
+Tests (docs/TESTS.md):
 
 ```bash
 python tests/test_units.py                                   # always
-ELEKLOADER_STOCK=... ELEKLOADER_MODS=... python tests/test_link.py
-ELEKLOADER_STOCK=... ELEKLOADER_MODS=... python tests/test_sdk.py    # the example needs the cross compiler
-ELEKLOADER_STOCK=... ELEKLOADER_BUNDLE=... ELEKLOADER_CTOOL_SYX=... python tests/test_patcher.py
-ELEKLOADER_OT_SYX=... ELEKLOADER_OT_BIN=... python tests/test_octatrack.py
-ELEKLOADER_OT_SYX=... ELEKLOADER_OCTABAM=... python tests/test_octabam.py
-ELEKLOADER_DN_SYX=... python tests/test_digitone.py
-ELEKLOADER_DT2_SYX=... python tests/test_digitakt2.py
-ELEKLOADER_AR2_SYX=... python tests/test_rytm_mk2.py
-ELEKLOADER_RELEASES=<folder of stock files> python tests/test_releases.py   # every known release, and the cores for it
-ELEKLOADER_STOCK=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
-python packaging/build_web.py --pyodide pyodide-core-<v>.tar.bz2 --core core-*.elemod --out build/site
-node tests/test_web.mjs build/site                           # the web page's engine, in Pyodide
+cd js && node --test "test/*.test.ts"                        # the TypeScript engine
+python tests/test_st_common_regressions.py <build folder> ...  # the Syntakt's regressions: docs/SYNTAKT-BUILD.md
 ```
 
 A test whose files are not given is skipped, not passed. Say which ran.
 
 Rules:
-- **Never commit firmware.** That means `.syx` files, extracted sections,
-  `.bin` images, built `.elemod` files, or anything derived from a stock
-  OS. `.gitignore` covers the usual names; check `git status` anyway.
+- **Never commit firmware.** That means `.syx` and `.smz4` files, extracted
+  sections, `.bin` images, built `.elemod` files, or anything derived from a
+  stock OS. `.gitignore` covers the usual names; check `git status` anyway.
 - **Never weaken a check to make something pass.** `syx.verify` and the
   checks in `elemod`/`link` are the user's protection: the bootloader must
   stay stock, and mods must not collide. If a check refuses something
   legitimate, fix the check narrowly and add a test for both sides.
 - **Device-specific facts belong in `devices/`**, not in the code paths.
-  A new device needs its profile, a writer that reproduces its stock files
-  byte for byte, and tests (docs/DEVICES.md).
 - **The TypeScript engine (js/) changes with the Python.** A change to what
   the Python accepts, writes or says needs the same change in its js/ port,
-  and `node --test "js/test/*.test.ts"` and the parity run (js/README.md) to
-  pass.
+  and `node --test "js/test/*.test.ts"` to pass.
 - **The kit stays site-agnostic.** Nothing in js/src/kit names a website,
   its pages or its accounts. A change to a call or a reply raises `PROTOCOL`
   (js/src/kit/protocol.ts); a change to the catalog format raises
   `CATALOG_SCHEMA`. docs/INTEGRATING.md changes with them.
 - **A change to the file format** needs docs/FORMAT.md, docs/ADAPTING.md and
-  tests updated with it. Keep reading older files: the legacy `.dtmod`
-  extension and `"dtmod"` key are still accepted.
-- **The writer must stay byte-exact.** With the maintainers' test files,
-  `test_writer_matches_c_tool` and `test_writer_no_change_is_stock` must
-  pass.
-- **The web page stays on its own site.** It loads nothing from anywhere
-  else (no CDN, fonts, analytics or package downloads), sends the user's
-  files nowhere, and only offers downloads: no Web MIDI or USB. Its Python
-  goes through `elekloader` unchanged. The site never holds firmware or a
-  build; the only mods on it are the cores and the shop's
-  (`web/catalog.json`), each from its author's release, pinned by sha256,
-  under a licence that allows passing it on.
+  tests updated with it.
+- **No device access.** Agents never send MIDI or USB, install firmware or
+  write the instrument; the user does.
 
 Done means all of these:
 - the tests that could run pass;

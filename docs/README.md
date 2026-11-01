@@ -1,117 +1,50 @@
-# elekloader docs
+# Synfact docs
 
-This folder is elekloader's wiki: everything past the
-[front page](../README.md), sorted by who it is for. The pages are plain
-Markdown and change through pull requests with the code, so a release's
-docs match its code.
+Everything past the [front page](../README.md). The pages are plain Markdown
+and change with the code, so a commit's docs match its code.
 
-Syntakt development: [feedback and improvements](../improvements.md);
-toolchain, flags and exact build commands:
-[Syntakt builds on this workstation](SYNTAKT-BUILD.md).
-Planned private site and client-side builds: [Synfact web architecture](SYNFACT-WEB.md).
-Several agents at once: [parallel agents on this workstation](PARALLEL-AGENTS.md).
+## Building and testing
 
-## Using elekloader
-
-- **[Install](INSTALL.md)**: the web page, the Windows and macOS apps, or
-  Python from source, and the stock OS file each device needs.
-- **[Build, flash and recover](BUILDING.md)**: building a custom OS in the
-  app or on the command line, sending it to the unit, getting back to stock,
-  and what every build is checked for.
-- **[Cores](CORES.md)**: the core mod each device needs, which file serves
-  which OS, how a build picks one, and what each core adds (the Digitone's
-  Mod Menu, say).
-- **[The web page](WEB.md)**: elekloader in your browser, its mod shop, and
-  how the shop's list is kept.
+- **[Syntakt builds on this workstation](SYNTAKT-BUILD.md)**: the toolchain,
+  the flags, and the exact commands for the core SYX, the SMZ4 bank, the
+  regressions and the emulator checks.
+- **[Tests](TESTS.md)**: each suite and the files it needs.
+- **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
+  per agent.
+- Feedback and improvements: [../improvements.md](../improvements.md).
 
 ## Writing mods
 
-- **[Adapting your mod](ADAPTING.md)**: the path to take, the rules, every
-  command with the output it should print, every refusal with its fix, and a
-  definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
+- **[Adapting your mod](ADAPTING.md)**: the rules, the Syntakt core's events
+  and tables, every command with the output it should print, every refusal
+  with its fix, and a definition of done. Coding agents: start with
+  [AGENTS.md](../AGENTS.md).
 - **[Growing the core](CORE-CONTRIBUTING.md)**: when what your mod needs
-  belongs in the core, how to build it so it can move there, and how to
-  propose it. Pull requests to the core are welcome and encouraged.
-- **[Contribute to elekloader!](CONTRIBUTE.md)**: the ways to help, and the
-  community's to-do list for the core: each piece of stock code a mod still
-  hooks for itself.
+  belongs in the core, and how to build it so it can move there.
 - **[The file format](FORMAT.md)**: `.elemod`, whole builds (format 1) and
   linkable mods (format 2).
-- **[Adding a device](DEVICES.md)**: a device profile, and what was found
-  for each device elekloader supports.
-- **octabam's modules (Octatrack):** `elekloader.sdk.octabam` converts
-  [sambanks/octabam](https://github.com/sambanks/octabam)'s ColdFire modules
-  into linkable mods, each checked against octabam's own account of its
-  bytes ([ADAPTING.md](ADAPTING.md), section 4b).
-- **The cores' own pages:** [mods/core](../mods/core) (Digitakt mk1),
-  [mods/machine-pages](../mods/machine-pages) (its SRC machines' pages, core
-  3.0), [mods/core-dn1](../mods/core-dn1) (Digitone mk1) with
-  [mods/machines-dn1](../mods/machines-dn1) (its machines, core-dn1 3.1),
-  [mods/fxkit-dn1](../mods/fxkit-dn1) (what its effect mods share: a mixer,
-  LFOs, p-locks in the pattern; core-dn1 4.1),
-  [mods/seq-events-dn1](../mods/seq-events-dn1) (its step fire as events;
-  the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1)),
-  [mods/core-dt2](../mods/core-dt2) (Digitakt II),
-  [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII), and
-  [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot)
-  and [mods/intercepts-ot](../mods/intercepts-ot) (Octatrack).
-- **A whole mod on core-dn1 3.2's exclusive audio:**
-  [mods/digiswarm-dn1](../mods/digiswarm-dn1), DigiSwarm, an effects
-  engine for the Digitone mk1's audio inputs (grains, micro-loops, a
-  looper), with its own page in the Mod Menu and MIDI CCs (`ev_midi_cc`).
-- **Another on the same:** [mods/digiprism-dn1](../mods/digiprism-dn1),
-  DigiPrism, a pedal for the inputs with four reorderable modules of
-  effects, its own page and MIDI CCs.
-- **Five more pedals** on a shared pedal shell, each with its own MIDI
-  CCs: [DigiTide](../mods/digitide-dn1) (a wet channel and a
-  micro-looper), [DigiTriad](../mods/digitriad-dn1) (three pitch voices in
-  a key, with delays), [DigiReel](../mods/digireel-dn1) (tape speed,
-  reverse, hold and stutter in time), [DigiHoard](../mods/digihoard-dn1)
-  (echoes from a 3-minute memory) and [DigiHalo](../mods/digihalo-dn1)
-  (twelve reverbs).
-- **Examples to start from** ([examples/](../examples)):
-  - `hello-marker`, one C function on the draw event that puts a small square
-    in the corner of every screen; `hello-marker-dt2`, `hello-marker-ot` and
-    `hello-marker-ar2` do the same on the Digitakt II, the Octatrack and the
-    Analog Rytm MKII;
-  - `hooks-check-ar2`, a test for the Analog Rytm MKII's core: it
-    subscribes to every event core-ar2 has and shows what it counts;
-  - `perform-direct`, a real Digitakt II mod: [PRESET] toggles PERFORM
-    without [FUNC];
-  - `sine-machine`, an SRC machine for core 3.0 that names no firmware
-    address, so its OS 1.54 port is empty;
-  - `dn-sine-machine`, the same for the Digitone mk1: a machine for the
-    machines mod and core-dn1 3.1, with an empty OS 1.44 port;
-  - `dn-thru`, the smallest Digitone mk1 mod that takes the whole output
-    (core-dn1 3.2): the audio inputs straight through, the synths silent;
-  - `dn-tremolo`, the smallest one that takes it as an insert (core-dn1
-    4.0): a tremolo on everything the Digitone plays;
-  - `dn-progchange`, the smallest one that takes program changes
-    (core-dn1 4.0): each shown for two seconds, channel 16's taken;
-  - `dn-fx-gain`, the smallest effect on fxkit (core-dn1 4.1): a level, a
-    tone and a phase on the inputs, with its page, the mixer, the LFOs and
-    p-locks, and an empty OS 1.44 port;
-  - `dn-euclid`, the smallest Digitone mk1 mod on seq-events: track 1 fires 5
-    steps of every 16, with an empty OS 1.44 port; `euclid` the same on the
-    Digitakt mk1, with an empty OS 1.54 port;
-  - `dsp-tone-ot`, the smallest mod with code on the Octatrack's DSP: a quiet
-    sawtooth in place of input A, through the DSP bus.
+- **[The Syntakt's profile](DEVICES.md)**: what the engine knows about the
+  Syntakt's firmware, and how a new OS version is added.
+- **The core and the mods' own pages:** [mods/core-st](../mods/core-st)
+  (the core: hook bus, SMZ4 banks, storage, sample pool), with
+  [mods/core](../mods/core) (the two sources it shares with elekloader's
+  core), [mods/machines-st](../mods/machines-st), and each mod's folder.
+- **ARP:** [the Digitone ARP port](DIGITONE-ARP-ST.md) and
+  [its Sound persistence](ARP-SOUND-PERSISTENCE.md).
+- **Studies:** [conversion skip](SYNTAKT-CONVERSION-SKIP.md),
+  [CPU and UI](SYNTAKT-CPU-UI-INVESTIGATION-20261028.md),
+  [hook inventory](SYNTAKT-HOOK-INVENTORY-20261029.md).
+- **Examples** ([examples/](../examples)): `machine-test-st`, a test machine,
+  and `smz-test-st`, a test SMZ4 bank.
 
-## Building firmware on your own site
+## Building in the browser
 
-- **[The kit](INTEGRATING.md)**: the builder worker, a client for your
-  pages, and elekloader's curated catalog of cores and mods, each pinned by
-  sha256.
+- **[Synfact web architecture](SYNFACT-WEB.md)**: building the core SYX and
+  the SMZ4 bank in a visitor's browser, and keeping the catalog of validated
+  selections.
+- **[The kit](INTEGRATING.md)**: the builder worker, its calls, and the tools
+  that prepare the core package and the SMZ catalog.
 - **[The engine in TypeScript](../js/README.md)**: the OS files, the mod
   checks, the linker and the build, with no dependencies and no Python. For
   the same stock file and mods it writes the same files as the Python, byte
   for byte. It is GPL-3.0-or-later.
-
-## Maintaining elekloader
-
-- **[Releasing](RELEASING.md)**: the version, the core files a release
-  carries, the workflows that build the apps, the kit and the site, and
-  pre-releases.
-- **[The apps](APPS.md)**: building the Windows and macOS apps, by hand or
-  in the workflows, and the signing secrets.
-- **[Tests](TESTS.md)**: each suite and the files it needs.
