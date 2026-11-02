@@ -331,6 +331,9 @@ u32 poly_ui_block_key(u8 *view,void *event)
     volatile u32 blocked=0;
     u32 key=POLY_CALL(0x400f95c8u,u32 (*)(void *))(event);
     poly_ui_sync(view);
-    if(poly_ui_slave(view) && key!=*(u32 *)(view+0x88) && key!=16 && key!=17)blocked=1;
+    /* A slave track blocks only the other parameter pages (TRIG 19, SYN 20,
+     * FLTR 21, AMP 22, LFO 23); FUNC, TRK, the trigs and the rest pass, so
+     * TRK + trig still selects another track with the keyboard open. */
+    if(poly_ui_slave(view) && key>=19 && key<=23 && key!=*(u32 *)(view+0x88))blocked=1;
     return blocked;
 }

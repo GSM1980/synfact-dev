@@ -49,7 +49,10 @@ native condition/probability decisions, event ownership, cancellation and
 first-step preparation. Live recording writes NOTE and relative note lanes.
 
 Slaves show TRACK IN / SLAVE MODE and block parameter edits, page mutations,
-machine selection and Sound writes according to the reference. Digital slaves' saved
+machine selection and Sound writes according to the reference. Of the keys,
+a slave blocks only the other parameter pages (TRIG, SYN, FLTR, AMP, LFO):
+FUNC, TRK, the trigs and the rest pass, so TRK + trig selects another track
+with the keyboard open. Digital slaves' saved
 Sounds are overwritten with the master's parameters when the voices join.
 Leaving or shrinking a group releases pending voices and keeps the copied
 Sounds. Analog slaves retain their saved Sounds and restore them when the group

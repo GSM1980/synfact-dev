@@ -344,7 +344,13 @@ static void ui(void)
     assert(*(T *)(KIT+0x2a+0x10a)==0x12345678 && *(T *)(KIT+0x2a+0x10e)==0x87654321);
     evt[2]=1;
     tracked=1;labels[0]=0;assert(poly_ui_draw(view,0));assert(strstr(labels,"TRACK IN;") && strstr(labels,"SLAVE MODE;"));
-    evt[0]=12;assert(poly_ui_block_key(view,evt));evt[0]=16;assert(!poly_ui_block_key(view,evt));
+    /* Slave: only the other parameter page keys (19..23) are blocked. */
+    for(i=19;i<=23;i++){evt[0]=i;assert(poly_ui_block_key(view,evt));}
+    evt[0]=1;assert(!poly_ui_block_key(view,evt)); /* FUNC */
+    evt[0]=2;assert(!poly_ui_block_key(view,evt));
+    evt[0]=12;assert(!poly_ui_block_key(view,evt));evt[0]=16;assert(!poly_ui_block_key(view,evt));
+    evt[0]=24;assert(!poly_ui_block_key(view,evt)); /* trig keys */
+    *(T *)(view+0x88)=20;evt[0]=20;assert(!poly_ui_block_key(view,evt));*(T *)(view+0x88)=0x12;
     evt[1]=4;assert(poly_ui_encoder(view,evt));
     tracked=0;evt[1]=0;evt[2]=(T)-1;assert(poly_ui_encoder(view,evt));
     assert(poly_seq_config.states[0]==1 && !poly_ui_slave(view));
