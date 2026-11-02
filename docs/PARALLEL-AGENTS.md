@@ -36,10 +36,9 @@ git -C /c/Desarrollo/synfact-dev worktree list
   `tools/import_poly_kernels.py`) and `out/`. Rebuild them in your own
   worktree as [SYNTAKT-BUILD.md](SYNTAKT-BUILD.md) says. The toolchain in
   `C:\Desarrollo\syntakt-dev\toolchains` is shared and read-only.
-- Untracked files that exist only in `C:\Desarrollo\synfact-dev` (for
-  example `mods/main-profile-st/`, `mods/irq-timer-st/`,
-  `tests/test_st_irq_timer*`). If you need one, ask the user; do not copy
-  or commit someone else's untracked work.
+- Untracked files that exist only in `C:\Desarrollo\synfact-dev`. If you
+  need one, ask the user; do not copy or commit someone else's untracked
+  work.
 - The stock OS files and firmware outputs: they are never committed, in
   any worktree.
 

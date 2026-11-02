@@ -95,19 +95,8 @@ $PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
 
 - **Module order matters**: `lfo3-st` must come **before** `poly-st` (both
   use the core's native LFO operation; LFO3 is non-consuming and runs first).
-- Profiler bank (diagnostics only, it costs CPU): add
-  `--module mods/main-profile-st` first and `--module mods/main-profile-end-st`
-  last, and name it `synfact-machines-profile-*.smz4`.
-- IRQ call-timer bank (diagnostics only): the normal modules plus
-  `--module mods/irq-timer-st` **last** (after System info), named
-  `synfact-machines-timer.smz4`; build the normal bank into the same folder
-  as its reference. Checks: `$PY tests/test_st_irq_timer.py --cc <clang>
-  --bank <timer bank> --reference <normal bank>` and, with the Unicorn
-  environment below, `tests/test_st_irq_timer_emu.py --bank <timer bank>`.
-  See [mods/irq-timer-st/README.md](../mods/irq-timer-st/README.md).
 - Modulation skip ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md)):
-  add `--module mods/modulation-skip-st` (ON) or `mods/modulation-skip-verify-st`
-  (VERIFY, diagnostics) after System info and before `irq-timer-st`. Checks:
+  add `--module mods/modulation-skip-st` after System info. Checks:
   `$PY tests/test_st_modulation_skip.py --cc <clang> --bank <bank> --reference
   <normal bank> --stock <syx> --core <main.bin>` and, with the Unicorn
   environment below, `tests/test_st_modulation_skip_emu.py --bank <bank>`.

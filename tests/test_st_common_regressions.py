@@ -69,8 +69,6 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None):
             *(['--synfact',synfact] if synfact else [])])
     if 'poly_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
         run('POLY source/ABI',[sys.executable,'tests/test_st_poly.py',out,*(['--synfact',synfact] if synfact else [])])
-    if (out/'synfact-machines-profile-r4.smz4').exists():
-        run('MAIN timing source/ABI/intervals',[sys.executable,'tests/test_st_main_profile.py',out,'--cc',cc])
     if 'system_info_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
         run('System info redraw/cadence',[sys.executable,'tests/test_st_system_info.py','--cc',cc])
     run('folder catalogue',[sys.executable,'tests/test_st_sample_folders.py'])

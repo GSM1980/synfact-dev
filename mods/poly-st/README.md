@@ -276,8 +276,7 @@ to recognize saved group changes; it creates no queue command when unchanged.
 Host tests check 1,500 OFF frames without event allocation, immediate commands,
 commits or projections, plus first-trig recognition of a newly loaded PQ record.
 This removes unnecessary work but does not establish the cause of the reported
-persistent 100% MAIN load. Optional [MAIN timing](../main-profile-st) uses the
-existing events to obtain physical measurements without adding native sites.
+persistent 100% MAIN load.
 
 ## Analog parameter layout evidence (OS 1.41)
 
@@ -383,12 +382,8 @@ guide's former `C:/Desarrollo/elektron-firmware-tool` location is absent).
 
 ## Physical validation — still required
 
-Use matching 0.12.19 SYX plus the normal bank, then its diagnostic counterpart
-`synfact-machines-profile-r4.smz4` in
-`out/core-st-0.12.19-poly-analog-ready/`. Build the diagnostic with the exact normal
-bank command in `docs/SYNTAKT-BUILD.md`, adding `--module mods/main-profile-st`
-first and `--module mods/main-profile-end-st` last. Do not ship profiler modules
-in the normal bank. Follow [MAIN profiling](../main-profile-st/README.md).
+Use a matching SYX plus the normal bank, built with the bank command in
+`docs/SYNTAKT-BUILD.md`.
 
 On main and this branch, use the same pattern, machines, note rate, modulation,
 locks, outputs and tempo. Record two settled windows at boot, PLAY and STOP for

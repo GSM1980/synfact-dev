@@ -2,7 +2,7 @@
 
 The MAIN audio IRQ runs the stock modulation `40097afc` (the velocity and
 source modulation matrix) in every block: about 6,600 instructions, 5.7 CPU
-points measured on the device (`irq-timer-st`). Between trigs and edits it
+points measured on the device. Between trigs and edits it
 writes exactly what it wrote in the previous block. This module writes those
 values itself in such blocks and returns, and runs the stock routine otherwise.
 Study and design: [docs/SYNTAKT-CONVERSION-SKIP.md](../../docs/SYNTAKT-CONVERSION-SKIP.md).
@@ -39,12 +39,12 @@ own copy and is not affected). Its six bytes (two instructions) become
 `jmp abs.l`; the stock path re-executes them. Installed once at init, nothing
 if the bytes differ.
 
-| Module | Mode |
+| Mode | What it does |
 |---|---|
-| `modulation-skip-st` | ON: skips; every 64th matching block runs stock and compares; the first difference turns it OFF (stock for the rest of the session) |
-| `modulation-skip-verify-st` | VERIFY: never skips; every matching block runs stock and compares, counting differences |
+| ON (the module as built) | skips; every 64th matching block runs stock and compares; the first difference turns it OFF (stock for the rest of the session) |
+| VERIFY (built with `MODULATION_SKIP_VERIFY=1`, diagnostics) | never skips; every matching block runs stock and compares, counting differences |
 
-Header page 3 of 3 (System info, `irq-timer-st`, this): `MSKIP ON  H99 S98
+Header page after System info's: `MSKIP ON  H99 S98
 E000` = mode (`ON `, `VER`, `OFF`, `NO1`/`NO2` refused at the modulation site /
 the writer), % of blocks whose inputs matched, % skipped, differences. ON shows
 it only after a difference, OFF or a refusal; VERIFY always.
