@@ -1,6 +1,6 @@
 {
   "id": "recorder-st",
-  "version": "0.1",
+  "version": "1.0",
   "title": "Audio Recorder",
   "device": "syntakt",
   "os": "1.41",

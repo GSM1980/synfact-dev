@@ -1,5 +1,5 @@
 {
-  "id":"lfo3-st","version":"0.1","title":"Third LFO",
+  "id":"lfo3-st","version":"1.0","title":"Third LFO",
   "device":"syntakt","os":"1.41","license":"GPL-2.0-or-later",
   "sources":["main.c","ui.c","shadow.c","codec.c","actions.c","locks_runtime.c","locks/locks.c","locks/pattern.c","locks/budget.c","locks/bounded.c","locks/owned.c","locks/events.c","locks/owners.c","locks/lock_ui.c","render.s","ui.s","shadow.s","actions.s","locks/pattern_entry.s","locks/owned_entry.s","locks/event_entry.s","locks/lock_ui_entry.s","sram.s"],"smz_module":{"descriptor":"lfo3_module"}
 }
