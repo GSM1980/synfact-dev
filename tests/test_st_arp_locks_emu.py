@@ -54,6 +54,16 @@ def verify(core,bank,out):
     assert mask==1 and r.read(SCRATCH+0x5000,2)==b'\x00\x02'
     assert r.read(SCRATCH+0x5010,8)==b'GUARD123'
     assert int.from_bytes(r.read(context+4,4),'big')==0x101
+    # The first step's static lock block when PLAY starts (444e3884 + 4*track)
+    # is outside the pool: unknown, it captures nothing; listed, it does.
+    static=SCRATCH+0x6000
+    call('lfo3_events_capture',static,0x40a38b34+0x2138c,0,3)
+    assert call('synfact_extra_locks',0,static,SCRATCH+0x5000)==0
+    r.write(0x444e3884,static)
+    call('lfo3_events_capture',static,0x40a38b34+0x2138c,0,3)
+    assert call('synfact_extra_locks',0,static,SCRATCH+0x5000)==1
+    assert r.read(SCRATCH+0x5000,2)==b'\x00\x02'
+    r.write(0x444e3884,0)
     r.native[r.sym['lfo3_events_native_apply']]='event_boundary'
     call('lfo3_events_apply_body',0,0x44000000,0)
     assert call('synfact_extra_locks',0,0xffffffff,SCRATCH+0x5000)==1
@@ -77,7 +87,7 @@ def verify(core,bank,out):
     result=dict(ok=True,bank_bytes=11072,allocator_block_bytes=16384,
                 cases=['LFO3 and ARP isolation','analog track 12','clone','merge preserves native lane',
                        'decode roundtrip','79 lane shared capacity','deleted lane reused','native lane capacity',
-                       'event capture/reuse','active locks/restore','LFO3 overlay','ARP LEN acceptance'],
+                       'event capture/reuse','play-start static lock block','active locks/restore','LFO3 overlay','ARP LEN acceptance'],
                 limits=['Native allocator/mutex are doubles; no device access.'])
     out.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
 

@@ -29,9 +29,15 @@ page's fixed layouts; LFO3's page and ARP's lanes are not among them.
 lane (58h..5Fh) and TRIG (page 0) for an ARP lane (60h..67h) at the same
 step of the active pattern's lock model. Confirmed on the instrument.
 
-Known limit: the first step's event when PLAY starts is made without a lock
-block, so neither the native fire nor LFO3's capture (4008bbf6) sees its
-locks; LFO3 and ARP locks on that step apply from the second pass.
+## First step when PLAY starts (2026-11-02)
+
+PLAY fires each track's first step (4008c0b0) with a static event whose lock
+block is that track's static block (444e3884 + 4 * track), outside the pool
+of 64 that `queued()` maps. Capture, convert, apply and `synfact_extra_locks`
+therefore found nothing, and LFO3 and ARP locks on that step applied only
+from the second pass. `shared_locks.py` now gives `queued()` thirteen
+`start_locks` entries for those blocks (pool first, then the table).
+`tests/test_st_arp_locks_emu.py` checks both sides; the previous bank fails it.
 
 ## Shared ARP lanes: temporary slots (2026-11-02)
 

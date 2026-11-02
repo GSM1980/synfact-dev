@@ -24,18 +24,26 @@ extern u32 lfo3_events_native_pool_init(u32);
 extern u32 lfo3_active_locks;
 extern void lfo3_publication_begin(void),lfo3_publication_end(u32,u32,u32,u32);
 u32 lfo3_events_context_bytes(void) {return sizeof(events_t);}
+static locks_t start_locks[13];
 void lfo3_events_init(events_t *c,u32 native_slots)
 {
     u32 i,j;c->stride=20+8*native_slots;lfo3_active_locks=0;
     for(i=0;i<64;i++) {c->queued[i].mask=0;for(j=0;j<16;j++) c->queued[i].record.v[j]=0;}
-    for(i=0;i<13;i++) {c->active[i].mask=0;for(j=0;j<16;j++) c->active[i].record.v[j]=0;}
+    for(i=0;i<13;i++) {start_locks[i].mask=0;c->active[i].mask=0;for(j=0;j<16;j++) c->active[i].record.v[j]=0;}
 }
+/* The first step's events as PLAY starts (4008c0b0) are static and take
+ * each track's static lock block (444e3884 + 4 * track), outside the pool of
+ * 64: capture, convert, apply and the extra-lock reader find it here too. */
 static locks_t *queued(u32 lock)
 {
     events_t *c=lfo3_events_context;u32 base=*(const u32 *)0x444db730u,off,i;
-    if(!c || !c->stride || !lock || !base || lock<base) return 0;
-    off=lock-base;i=off/c->stride;
-    return i<64 && off==i*c->stride ? &c->queued[i] : 0;
+    if(!c || !c->stride || !lock) return 0;
+    if(base && lock>=base) {
+        off=lock-base;i=off/c->stride;
+        if(i<64 && off==i*c->stride) return &c->queued[i];
+    }
+    for(i=0;i<13;i++) if(lock==*(const volatile u32 *)(0x444e3884u+4*i)) return &start_locks[i];
+    return 0;
 }
 void lfo3_events_allocate(u32 lock)
 {locks_t *q=queued(lock);if(q) q->mask=0;}
