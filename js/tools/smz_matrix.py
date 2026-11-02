@@ -18,14 +18,15 @@ def main():
     p.add_argument('--parser',type=Path,required=True)
     p.add_argument('--out',type=Path,required=True,help='new local directory')
     p.add_argument('--jobs',type=int,default=2)
-    p.add_argument('--only-id',help='validate only combinations containing this module (for an incremental run)')
+    p.add_argument('--only-id',action='append',default=[],
+                   help='validate only combinations containing this module (for an incremental run); repeat for several')
     a=p.parse_args()
     if not 1<=a.jobs<=8:raise ValueError('jobs must be 1..8')
     catalog=json.loads(a.catalog.read_text(encoding='utf-8'));config=json.loads(a.config.read_text(encoding='utf-8'))
     mods=config['modules'];ids=[m['id'] for m in mods]
     if ids!=[m['id'] for m in catalog['modules']] or len(ids)>16 or len(set(ids))!=len(ids):
         raise ValueError('Config must list the catalog IDs in order, at most 16')
-    if a.only_id and a.only_id not in ids:raise ValueError('Unknown --only-id')
+    if not set(a.only_id)<=set(ids):raise ValueError('Unknown --only-id')
     source=a.source_root.resolve()
     for m in mods:
         if m['kind'] not in ('machine','module') or not set(m.get('requires',[])+m.get('conflicts',[]))<=set(ids):
@@ -35,7 +36,7 @@ def main():
     allowed=[]
     for bits in itertools.product((False,True),repeat=len(mods)):
         chosen=[m for m,b in zip(mods,bits) if b];names={m['id'] for m in chosen}
-        if chosen and (not a.only_id or a.only_id in names) and all(set(m.get('requires',[]))<=names and not set(m.get('conflicts',[]))&names for m in chosen):allowed.append(chosen)
+        if chosen and (not a.only_id or set(a.only_id)&names) and all(set(m.get('requires',[]))<=names and not set(m.get('conflicts',[]))&names for m in chosen):allowed.append(chosen)
     a.out.mkdir(parents=True,exist_ok=False)
     parser=a.parser.resolve(); catalog_path=a.catalog.resolve();tool=ROOT/'js/tools/smz_candidate.ts'
     def run_one(pair):
