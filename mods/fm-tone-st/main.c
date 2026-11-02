@@ -25,4 +25,4 @@ static const struct core_machine_param controls[]={
  P("---","UNUSED",0,0),P("A","RATIO OFFSET A",0x7ffe,0x4000),
  P("B1","RATIO OFFSET B1",0x7ffe,0x4000),P("B2","RATIO OFFSET B2",0x7ffe,0x4000)
 };
-const struct core_machine_def fm_tone={65,28,"FM TONE","FMTN","SYN",controls,ST_MACHINE_NO_INIT,44,10,14};
+const struct core_machine_def fm_tone={65,28,"SY FM DTONE","DTON","SYN",controls,ST_MACHINE_NO_INIT,44,10,14};

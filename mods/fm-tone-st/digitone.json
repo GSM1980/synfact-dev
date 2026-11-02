@@ -1,5 +1,5 @@
 {
-  "format": "synfact-donor", "schema": 1, "title": "FM TONE", "device": "digitone-mk1", "versions": ["1.44"], "minimum": 4, "regions": [{"name": "audio", "section": 7, "start": 0, "length": 126352, "sha256": "e7bc77121df2cd5edd29cb0242cd9159ac522af1922ac69eb49065f24de50751"}, {"name": "ui", "section": 3, "start": 2298880, "length": 277504, "sha256": "0646a0dff16e550e790c9d625c1ea421ee2f75ecb6a569145730cd8f44eeefdc"}],
+  "format": "synfact-donor", "schema": 1, "title": "SY FM DTONE", "device": "digitone-mk1", "versions": ["1.44"], "minimum": 4, "regions": [{"name": "audio", "section": 7, "start": 0, "length": 126352, "sha256": "e7bc77121df2cd5edd29cb0242cd9159ac522af1922ac69eb49065f24de50751"}, {"name": "ui", "section": 3, "start": 2298880, "length": 277504, "sha256": "0646a0dff16e550e790c9d625c1ea421ee2f75ecb6a569145730cd8f44eeefdc"}],
   "outputs": [
     {"name": "imported/dsp.text.bin", "length": 19672, "sha256": "f7cd2504097d79e9828572bc868e593c5a96f03f0d7a345968832743d7196e27", "ops": [
       ["fill", "4e71", 616],

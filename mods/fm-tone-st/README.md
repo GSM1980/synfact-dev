@@ -1,5 +1,8 @@
 # FM TONE for Syntakt
 
+On the Syntakt and on the site, the machine is **SY FM DTONE** (short name
+**DTON**); it was FM TONE until 2026-11-02. These notes keep the old name.
+
 Local source port of Synfact's FM TONE: logical machine **65**, category
 **10 (SY)**, four SYN pages and 28 persisted scalar controls. RATIO B combines
 B1/B2 on one encoder, including native paired parameter locks and the original

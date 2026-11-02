@@ -262,6 +262,30 @@ C and assembler with the SDK (`elekloader.sdk.syntakt.smz`). Start from
 modules must keep, the parser check and the regressions; `lint` reports the
 sites a mod hooks itself under `core_candidates` (section 2's "core first").
 
+### Machine types: taken and free
+
+A machine's type is the first field of its `core_machine_def`. A bank takes
+types **64 to 79** (16 machines at most), each once: the bank builder and the
+core's parser refuse anything else. The type is also what a Sound stores, and
+the core derives the machine's parameter ids from it (engine
+`0x1f9 + (type-64)*32`, UI `0x2e0 + (type-64)*32`). So a released machine
+keeps its type for good, and a new machine takes a free one, never a retired
+one: Sounds saved with the old machine would open as the new one.
+
+| type | machine | mod |
+|---|---|---|
+| 64 | LOADER TEST | `examples/machine-test-st` (test only, never in a release) |
+| 65 | SY FM DTONE | `mods/fm-tone-st` |
+| 66 | SP ONE SHOT | `mods/samplers-st` |
+| 67 | SP WERP | `mods/samplers-st` |
+| 68 | SP REPITCH | `mods/samplers-st` |
+| 69 | SP SLICE | `mods/samplers-st` |
+
+**Free: 70 to 79.** Take the lowest free type, add your machine to this
+table in the same change, and keep it if the machine is ever renamed.
+`tests/test_units.py` checks that this table names every type the mods
+and examples use.
+
 ## 4. elekloader's general paths
 
 Linkable mods linked into MAIN (format 2, how the core itself is built) and

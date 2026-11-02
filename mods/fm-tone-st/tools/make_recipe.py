@@ -128,7 +128,7 @@ def main():
     template, data = drawings((a.source / 'ui-data.h').read_text())
     (FOLDER / 'ui-data.h.in').write_text(template, newline='\n')
     outputs['imported/ui-data.bin'] = data
-    recipe = donor.make('FM TONE', a.digitone.read_bytes(), 'digitone-mk1', ['1.44'], REGIONS, outputs)
+    recipe = donor.make('SY FM DTONE', a.digitone.read_bytes(), 'digitone-mk1', ['1.44'], REGIONS, outputs)
     (FOLDER / 'digitone.json').write_text(donor.dumps(recipe), newline='\n')
     for o in recipe['outputs']:
         copied = sum(op[3] for op in o['ops'] if op[0] == 'copy')

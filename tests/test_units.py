@@ -861,6 +861,23 @@ def test_the_fm_tone_recipe_matches_its_skeletons():
     assert size == outputs['imported/ui-data.bin']['length']
 
 
+def test_adapting_lists_every_machine_type_in_use():
+    import glob
+    import re
+    root = os.path.dirname(HERE)
+    used = {}
+    for path in glob.glob(os.path.join(root, 'mods', '*', '*.c')) + glob.glob(os.path.join(root, 'examples', '*', '*.c')):
+        text = open(path, encoding='utf-8').read()
+        for m in re.finditer(r'core_machine_def \w+=(?:\{\s*|D\()(\d+),\s*(?:\d+,\s*)?"([^"]+)"', text):
+            used[int(m[1])] = m[2]
+    doc = open(os.path.join(root, 'docs', 'ADAPTING.md'), encoding='utf-8').read()
+    table = {int(t): name for t, name in re.findall(r'^\| (\d+) \| ([^|]+?) \|', doc, re.M)}
+    assert used and table == used, (table, used)
+    assert all(64 <= t < 80 for t in used)
+    free = [t for t in range(64, 80) if t not in used]
+    assert '**Free: %d to %d.**' % (free[0], free[-1]) in doc and free == list(range(free[0], 80)), free
+
+
 def test_an_smz_source_pins_what_it_incbins():
     from elekloader.sdk.syntakt.smz import source_inputs
     with tempfile.TemporaryDirectory() as tmp:

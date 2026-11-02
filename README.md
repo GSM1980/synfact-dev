@@ -30,7 +30,7 @@ bank that can change without reinstalling the firmware:
 | mod | what |
 |---|---|
 | [SP sample machines](mods/samplers-st) | ONE SHOT, WERP, REPITCH and SLICE |
-| [FM TONE](mods/fm-tone-st) | an FM machine |
+| [SY FM DTONE](mods/fm-tone-st) | an FM machine (FM TONE until 2026-11-02) |
 | [Audio Recorder](mods/recorder-st) | record, trim, normalize and save samples |
 | [Third LFO](mods/lfo3-st) | a third LFO on every track |
 | [Arpeggiator](mods/arp-st) | a Digitone-style arpeggiator on the audio tracks |
