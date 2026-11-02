@@ -8,9 +8,9 @@ typedef unsigned int u32;
 typedef int s32;
 typedef unsigned short u16;
 typedef unsigned char u8;
-typedef struct {u16 *value[104];} index_t;
+typedef struct {u16 *value[208];} index_t;
 typedef struct {index_t *index;u16 count,reserved;} store_t;
-typedef struct {index_t index;u16 value[104][64];} bank_t;
+typedef struct {index_t index;u16 value[80][64];} bank_t;
 typedef struct {store_t store;bank_t *bank;} cell_t;
 typedef struct object {struct object *next;u32 base,bytes,count,kind;cell_t cells[1];} object_t;
 typedef struct {u32 bytes;void *pointer;} plan_t;
@@ -53,7 +53,7 @@ context_t *lfo3_owned_context __attribute__((section(".data")))=0;
 #define FULL 1u
 #define TRACK 2u
 #define STATIC 3u
-static void empty_index(bank_t *b) {u32 i;for(i=0;i<104;i++) b->index.value[i]=0;}
+static void empty_index(bank_t *b) {u32 i;for(i=0;i<208;i++) b->index.value[i]=0;}
 static bank_t *new_bank(void)
 {bank_t *b=lfo3_budget_allocate(sizeof(bank_t));if(b) empty_index(b);return b;}
 static void release_bank(bank_t *b) {if(b) lfo3_budget_release(b,sizeof(bank_t));}
@@ -206,10 +206,10 @@ static void end(context_t *c)
 static u32 stage_from(const store_t *src)
 {
     bank_t *b=lfo3_owned_context->stage;u32 i,j,count=0;const u16 *v;
-    for(i=0;i<104;i++) {
+    for(i=0;i<208;i++) {
         v=src && src->index ? src->index->value[i] : 0;
-        b->index.value[i]=v ? b->value[i] : 0;
-        if(v) {for(j=0;j<64;j++) b->value[i][j]=v[j];count++;}
+        b->index.value[i]=v ? b->value[count] : 0;
+        if(v) {for(j=0;j<64;j++) b->value[count][j]=v[j];count++;}
     }
     return count;
 }
@@ -227,10 +227,15 @@ void lfo3_owned_clear_body(store_t *s)
 }
 static u32 bank_set(bank_t *b,u32 *count,u32 track,u32 step,u32 parameter,s32 value)
 {
-    u32 slot=track*8+parameter,j;u16 *v=b->index.value[slot];
+    u32 slot=track*16+parameter,j;u16 *v=b->index.value[slot];
     if(!v) {
         if(value<0) return 1;
-        v=b->value[slot];for(j=0;j<64;j++) v[j]=EMPTY;
+        u32 k,n;for(k=0;k<80;k++) {
+            for(n=0;n<208;n++) if(b->index.value[n]==b->value[k]) break;
+            if(n==208) break;
+        }
+        if(k==80)return 0;
+        v=b->value[k];for(j=0;j<64;j++) v[j]=EMPTY;
         v[step]=(u16)value;BARRIER();*(u16 *volatile *)&b->index.value[slot]=v;(*count)++;return 1;
     }
     *(volatile u16 *)&v[step]=(u16)value;
@@ -244,9 +249,9 @@ u32 lfo3_owned_set_body(store_t *s,u32 track,u32 step,u32 parameter,s32 value,u3
 {
     cell_t *cell=store_cell(s);context_t *c=lfo3_owned_context;u32 count,slot;
     if(!cell) return lfo3_bounded_set(s,track,step,parameter,value,native);
-    if(c->busy || track>=13 || step>=64 || parameter>=8 || value< -1 || value>0x7fff) return 0;
+    if(c->busy || track>=13 || step>=64 || parameter>=16 || value< -1 || value>0x7fff) return 0;
     if(value>=0 && parameter==3 && ((u32)value>0x4600u || (value&255))) return 0;
-    count=s->count;slot=track*8+parameter;
+    count=s->count;slot=track*16+parameter;
     if(value>=0 && !cell->bank->index.value[slot] && (native>=79 || count>=79-native)) return 0;
     bank_set(cell->bank,&count,track,step,parameter,value);BARRIER();
     *(index_t *volatile *)&s->index=count ? &cell->bank->index : 0;BARRIER();s->count=(u16)count;return 1;
@@ -262,12 +267,12 @@ u32 lfo3_owned_clone_body(store_t *dst,const store_t *src)
 static u32 stage_decode(const lane_t *encoded,u32 *count)
 {
     bank_t *b=lfo3_owned_context->stage;u32 i,j,k,p,slot;const lane_t *lane;u16 *v;
-    for(i=0;i<80;i++) if(encoded[i].parameter>=0x58 && encoded[i].parameter<=0x5f && encoded[i].track<13)
+    for(i=0;i<80;i++) if(encoded[i].parameter>=0x58 && encoded[i].parameter<=0x67 && encoded[i].track<13)
         for(j=0;j<i;j++) if(encoded[j].parameter==encoded[i].parameter && encoded[j].track==encoded[i].track) return 0;
     empty_index(b);*count=0;
     for(i=0;i<80;i++) {
-        lane=&encoded[i];if(lane->parameter<0x58 || lane->parameter>0x5f || lane->track>=13) continue;
-        p=lane->parameter-0x58;slot=lane->track*8+p;v=b->value[slot];
+        lane=&encoded[i];if(lane->parameter<0x58 || lane->parameter>0x67 || lane->track>=13) continue;
+        p=lane->parameter-0x58;slot=lane->track*16+p;v=b->value[*count];
         for(k=0;k<64;k++) v[k]=p==3 ? (lane->value[k]==EMPTY ? EMPTY : (u16)lfo3_dest_decode(lane->value[k])) :
             (lane->value[k]&0x8000 ? EMPTY : lane->value[k]);
         b->index.value[slot]=v;(*count)++;
@@ -315,14 +320,14 @@ static cell_t *row_cell(u32 address,u32 step_row,u32 *track,u32 *step)
     return 0;
 }
 static s32 get(const store_t *s,u32 track,u32 step,u32 parameter)
-{const u16 *v=s && s->index ? s->index->value[track*8+parameter] : 0;return !v || v[step]==EMPTY ? -1 : v[step];}
+{const u16 *v=s && s->index ? s->index->value[track*16+parameter] : 0;return !v || v[step]==EMPTY ? -1 : v[step];}
 u32 lfo3_owned_clear_track_body(u32 trig,u32 row)
 {
     context_t *c=lfo3_owned_context;cell_t *d;u32 track,step,k,p,count,result;
     d=trig ? row_cell(row,0,&track,&step) : 0;
     if(!d || c->busy) return lfo3_owned_native_clear_track(trig,row);
     begin(c);count=stage_from(&d->store);
-    for(k=0;k<64;k++) for(p=0;p<8;p++) bank_set(c->stage,&count,track,k,p,-1);
+    for(k=0;k<64;k++) for(p=0;p<16;p++) bank_set(c->stage,&count,track,k,p,-1);
     result=lfo3_owned_native_clear_track(trig,row);commit(d,count);end(c);return result;
 }
 void *lfo3_owned_copy_body(void *dst,const void *src,u32 n)
@@ -335,7 +340,7 @@ void *lfo3_owned_copy_body(void *dst,const void *src,u32 n)
     begin(c);count=stage_from(n==PATTERN ? (s ? &s->store : 0) : &d->store);
     if(n!=PATTERN) {
         first=n==ROW ? 0 : ds;last=n==ROW ? 64 : ds+1;
-        for(k=first;k<last;k++) for(p=0;p<8;p++) bank_set(c->stage,&count,dt,k,p,get(s ? &s->store : 0,st,n==ROW ? k : ss,p));
+        for(k=first;k<last;k++) for(p=0;p<16;p++) bank_set(c->stage,&count,dt,k,p,get(s ? &s->store : 0,st,n==ROW ? k : ss,p));
     }
     result=lfo3_memcpy_entry(dst,src,n);commit(d,count);end(c);return result;
 }

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../mods/arp-st/runtime.h"
+static unsigned int *lastq;
 static unsigned int nodes[8][20],used[8],queued[64],times[64],gates[64],nq,nfree,fail_queue,fail_alloc;
 static unsigned int *alloc(void){unsigned int i;if(fail_alloc)return 0;for(i=0;i<8;i++)if(!used[i]){used[i]=1;memset(nodes[i],0,80);return nodes[i];}return 0;}
 static void copy(unsigned int *d,const unsigned int *s)
@@ -10,7 +11,7 @@ static void copy(unsigned int *d,const unsigned int *s)
 static void release(unsigned int *e)
 {unsigned int i=(unsigned int)(e-nodes[0])/20;assert(i<8 && used[i]);used[i]=0;if(e[17]){assert(*(unsigned int *)e[17]);(*(unsigned int *)e[17])--;}nfree++;}
 static int queue(unsigned int *e,unsigned int time)
-{if(fail_queue)return 0;assert(nq<64);gates[nq]=e[12];queued[nq]=e[6];times[nq++]=time;assert(e[3]==2 && !(e[9]&0x8000));release(e);return 1;}
+{if(fail_queue)return 0;assert(nq<64);gates[nq]=e[12];queued[nq]=e[6];times[nq++]=time;assert(e[3]==1 && !(e[9]&0x8000));lastq=e;release(e);return 1;}
 int main(void)
 {
     const struct arp_runtime_api api={alloc,copy,release,queue};
@@ -22,6 +23,9 @@ int main(void)
     for(i=0;i<800;i++)arp_runtime_frame(&r,&p,i*28800,(i+1)*28800,1);
     assert(nq==4 && !r.source && refs==1);
     assert(queued[0]==60 && queued[1]==64 && queued[2]==67 && queued[3]==60);
+    /* A sequence root's outputs are native kind 1 (above); the runtime knows
+     * its own queued output once, as superseded after its root ended. */
+    assert(arp_runtime_owns(&r,lastq)==2 && !arp_runtime_owns(&r,lastq));
     assert(times[0]==0 && times[1]==5400000 && times[2]==10800000 && times[3]==16200000);
     for(i=0;i<4;i++)assert(gates[i]==253125);
     assert(arp_runtime_start(&r,&p,e,0,2,chord,2));
@@ -60,5 +64,5 @@ int main(void)
     e[2]=12;assert(!arp_runtime_start(&r,&p,e,0,10,0,0) && refs==1);
     e[2]=13;assert(!arp_runtime_start(&r,&p,e,0,10,0,0) && refs==1);
     for(i=0;i<8;i++)assert(!used[i]);
-    printf("PASS: native-style lock refs, chord order/timestamps, LEN/parent clipping/native-zero infinity/edit, generation, rests, allocation/queue rollback (%u releases)\n",nfree);
+    printf("PASS: native-style lock refs, kind 1 outputs known once, chord order/timestamps, LEN/parent clipping/native-zero infinity/edit, generation, rests, allocation/queue rollback (%u releases)\n",nfree);
 }

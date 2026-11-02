@@ -6,6 +6,28 @@ patches from its file. Here the core owns some of those sites, so LFO3 is an
 SMZ module plus a few generic core services; the core resident has ~364 bytes
 free (0.12.13), so logic must live in the module.
 
+## Held-trig lock display (2026-11-02)
+
+LFO3 takes the entry of the lock-aware getter 40039160 (view, id, locked*)
+for its IDs. It returned the Sound's value and cleared `locked*`, so held
+trigs never showed LFO3 locks, although the editor wrote them and playback
+applied them. `lfo3_ui_preview` now does what the native/core preview
+(400391a8) does: with trigs held (selection +160h, 400c34d6), the first
+selected step within the active track's length whose lock the view reads
+(vt +90h, 40037942) is returned and marked locked; otherwise the Sound's
+value. `lfo3_ui_get`, used for base values elsewhere, is unchanged. Found on
+the instrument: the per-step getter returned the lock while 40039160 made no
+lock query at all. Confirmed on the instrument.
+
+## Shared ARP lanes: temporary slots (2026-11-02)
+
+`shared_locks.py` widens parameter loops from eight to sixteen for ARP's
+lanes 0x60..0x67. Its first version also widened the loops over the eight
+temporary pattern slots (`temporary[8]` in `pattern.c` and `owned.c`): the
+pattern context's initialiser wrote 96 bytes past its storage into the
+owned-lock context, and LFO3 lock writes failed. Lines naming `temporary` are
+now left as generated.
+
 ## Native lock editing: lazy lane census (2026-10-28)
 
 `gen_locks.py` adapts the pinned pattern setter before generating `locks/pattern.c`.

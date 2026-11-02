@@ -4,7 +4,7 @@
 typedef unsigned int u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
-typedef struct {u16 v[8];} rec_t;
+typedef struct {u16 v[16];} rec_t;
 typedef struct {u32 mask;rec_t record;} locks_t;
 typedef struct {u32 stride;locks_t queued[64],active[13];} events_t;
 typedef struct {u8 state[520];u32 rng[2];rec_t published[13],snapshot[13];
@@ -27,8 +27,8 @@ u32 lfo3_events_context_bytes(void) {return sizeof(events_t);}
 void lfo3_events_init(events_t *c,u32 native_slots)
 {
     u32 i,j;c->stride=20+8*native_slots;lfo3_active_locks=0;
-    for(i=0;i<64;i++) {c->queued[i].mask=0;for(j=0;j<8;j++) c->queued[i].record.v[j]=0;}
-    for(i=0;i<13;i++) {c->active[i].mask=0;for(j=0;j<8;j++) c->active[i].record.v[j]=0;}
+    for(i=0;i<64;i++) {c->queued[i].mask=0;for(j=0;j<16;j++) c->queued[i].record.v[j]=0;}
+    for(i=0;i<13;i++) {c->active[i].mask=0;for(j=0;j<16;j++) c->active[i].record.v[j]=0;}
 }
 static locks_t *queued(u32 lock)
 {
@@ -72,7 +72,7 @@ u32 lfo3_events_apply_body(u32 track,u32 lock,u32 working)
         c->active[track].mask=q ? q->mask : 0;
         if(c->active[track].mask) lfo3_active_locks|=1u<<track;
         else lfo3_active_locks&=~(1u<<track);
-        if(q) for(i=0;i<8;i++) c->active[track].record.v[i]=q->record.v[i];
+        if(q) for(i=0;i<16;i++) c->active[track].record.v[i]=q->record.v[i];
     }
     return result;
 }
@@ -95,3 +95,14 @@ u32 lfo3_events_restore(u32 track,u32 working,u32 sound){u32 result;lfo3_publica
 u32 lfo3_events_clear(u32 track){u32 result;lfo3_publication_begin();result=lfo3_events_clear_body(track);lfo3_publication_end(0,0,0,0);return result;}
 
 u32 lfo3_events_fx_restore(u32 working,u32 fx){u32 result;lfo3_publication_begin();result=lfo3_events_fx_restore_body(working,fx);lfo3_publication_end(0,0,0,0);return result;}
+
+u32 synfact_extra_locks(u32 track,u32 lock,u16 *out)
+{
+    locks_t *q;u32 i,mask;
+    if(track>=12 || !out || !lfo3_events_context)return 0;
+    q=lock==0xffffffffu ? &lfo3_events_context->active[track] : queued(lock);
+    if(!q)return 0;
+    mask=q->mask>>8;
+    for(i=0;i!=8;i++)out[i]=q->record.v[8+i];
+    return mask;
+}

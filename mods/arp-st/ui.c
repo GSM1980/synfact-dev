@@ -28,6 +28,9 @@ void arp_draw(const struct arp_screen *v,const struct arp_canvas *c)
     c->bitmap(c->context,v->length_bitmap,112,48,1);
     SHAPE(ARP_FILL,106,37,118,42,0);
     TEXT(0,112,37,2,v->show_length?v->length_text:"LEN");
+    /* A p-locked value is inverted, as the native pages show it: the fill
+     * XORs with a negative colour (400f7df2). */
+    for(i=0;i<4;i++)if(v->locked&(1u<<i))SHAPE(ARP_FILL,16+32*(int)i-14,47,16+32*(int)i+13,54,0xffffffffu);
     c->bitmap(c->context,0xffffffffu,1,7,0); /* native ARP rail artwork */
     title[0]='A';title[1]='R';title[2]='P';title[3]=' ';title[4]='T';decimal(title+5,(int)v->track+1);
     TEXT(1,14,2,1,title);

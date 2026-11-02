@@ -1,5 +1,81 @@
 # Digitone ARP → Syntakt: experimental source port
 
+## Pattern locks (2026-11-01)
+
+ARP now uses the shared pattern-lock service hosted by `lfo3-st`; both modules
+must be included in the bank, with LFO3 before ARP. Neither engine needs the
+other engine enabled. This bank requires the expanded service; do not mix its
+ARP object with an older LFO3 object.
+
+In the ARP view, enable **REC**, hold a sequencer trig and turn encoders A..D
+to lock MODE, SPEED, RANGE and note LEN. OFS, the arp sequence length (F) and
+YES are not locked: with trigs held they do nothing. Multiple held trigs
+receive relative edits from their respective values. The edit context is the
+native lock editor's: the app's 64-step selection of held trigs within the
+track length (400c34d6, the test of 40038e42 and the lock preview), including
+later sequencer pages; an edit marks the selection as the native editor does
+(400c2d34), so that releasing the trigs does not toggle them. The footer shows
+the first held step as `LOCK 01`..`LOCK 64`. Releasing the trigs restores the
+Sound's base values in the display; turning knobs without held trigs edits
+those base values. Empty pattern steps acquire a native lock trig; writes
+outside the track length are refused. Native step/track/pattern clear
+operations also clear these locks.
+
+Until 2026-11-02 the view also required live REC (400c2fb6, `+16Ah`, set by
+REC+PLAY) and the edit mark (`+160h`) before the first edit, so REC alone never
+entered lock editing on the instrument. The next bank entered it but wrote
+nothing: it took the pattern model from the parameter view's `+68h`, which is
+not the application, so LFO3's store lookup failed. The pattern and track
+models now come from the application (4016e804), as the native editor's do;
+the view fixture's model doubles reject any other argument.
+
+An encoder push (A..D) with trigs held clears that lock on every held step.
+The arp started by a trig keeps that trig's ARP locks for as long as it
+plays (the root is consumed before the native effects, so the track's
+published locks never carry them); a trigless lock trig passing a running
+arp adds its ARP locks to it without restarting or stopping it. A new rate
+keeps the phase of the last emitted beat.
+
+A sequence root's outputs are native kind 1 (sequencer), live input's kind 2:
+the native stale test (400a4236) drops an event whose kind is below the
+track's last started note (45510fc8), so kind 2 outputs hid every following
+trig and its locks until the arp ended. The runtime remembers its queued
+outputs (pointer and note) so the root adapter neither recaptures them nor
+plays one a newer root has superseded.
+
+Slots 0x60..0x63 hold the four locks; 0x64..0x67 stay reserved in the shared
+service and are not read. They are distinct from LFO3's 0x58..0x5f. The
+existing shared maximum of 79 created lanes still applies; the native stored
+block has 80 lanes. The compact private bank occupies 11,072 bytes (16,384
+after allocator rounding), including both families' index.
+
+### The arp steps on the trig keys
+
+Outside REC, with the ARP view open, the sixteen trig keys are the arp's
+sixteen steps on every track: steps up to LEN are lit, active ones in one
+colour (palette 9) and muted ones in red (palette 3, the stock note-trig
+colour); keys past LEN are dark. A press selects the step (as LEFT/RIGHT do);
+turning any of A..F while steps are held edits each held step's note (OFS);
+releasing a key without an encoder edit toggles that step. With REC (grid or
+live), or with FUNC, key 2 or key 12h held, the keys and their LEDs stay the
+sequencer's, and a release goes where its press went.
+
+The LEDs use the stock LED frame (400094f4): the view stack (40100856) offers
+the key LEDs from the top down to each view that is a `LedHandler`, found by
+`dynamic_cast`, and the first setter of an LED wins (40008220). The view is
+therefore a View followed by a LedHandler at `+50h`, described by its own
+`__vmi_class_type_info` as TrackSelect's (401d42ec) describes its own. Palette
+9 for the active steps is a guess from the stock track keys that needs the
+instrument: change `ARP_LED_ACTIVE` in `view.c` if it is not green.
+
+Checks: `tests/test_st_arp_locks_emu.py` executes compiled storage, LFO3/ARP
+isolation, clone/codec, capacity/reuse, event capture and ARP LEN acceptance.
+The view fixture executes the native selection test and 64-bit step membership,
+checks held-trig edits with explicit pattern-model doubles, runs the firmware's
+`__dynamic_cast` on the view, and checks the step keys and their LEDs with the
+LED setter as a double.
+No physical instrument or full scheduler test is implied by these fixtures.
+
 This is an **experimental SMZ module**, OFF at startup, for twelve independent
 audio tracks (eight digital, four analog), fed by sequence roots or held keyboard notes. Double tap on the TRIG parameter button opens a native
 IView with the Sound settings; a new Sound keeps MODE OFF. The selector,
@@ -27,8 +103,8 @@ manager's view dispatch remain explicit test boundaries. The core firmware is
 unchanged; updating the SMZ bank and rebooting is sufficient.
 
 Current eligibility is tracks 1..12 outside MIDI/POLY groups. A..F edit
-MODE/SPEED/RANGE/LEN/OFS/sequence length. Left/right select a step, up/down edit
-its offset, YES toggles it, NO closes without disabling, STOP passes to native
+MODE/SPEED/RANGE/LEN/OFS/sequence length. Left/right, or a trig key outside REC,
+select a step, up/down edit its offset, YES toggles it, NO closes without disabling, STOP passes to native
 transport. The page stays bound to its opening track. Opening another track
 selects that track's settings while the others keep playing. MODE OFF stops only
 the displayed track's generator.

@@ -110,7 +110,7 @@ u32 lfo3_pattern_encode_body(void *dst,const void *pattern,u32 flags)
 }
 u32 lfo3_pattern_update_body(void *dst,const void *matrix,u32 flags,u32 slot,u32 track)
 {
-    if(slot>=0x58 && slot<=0x5f && lfo3_owned_lookup((u32)matrix))
+    if(slot>=0x58 && slot<=0x67 && lfo3_owned_lookup((u32)matrix))
         return lfo3_pattern_compress(dst,matrix,flags);
     return lfo3_pattern_native_update(dst,matrix,flags,slot,track);
 }
@@ -147,9 +147,9 @@ static void notify(void *model,u32 track,u32 slot)
 u32 lfo3_pattern_set_body(void *model,u32 track,u32 step,u32 slot,s32 value)
 {
     u32 matrix=matrix_of(model),native,ok;store_t *s=lfo3_owned_lookup(matrix);
-    if(!s) return slot>=0x58 && slot<=0x5f ? 0 : lfo3_pattern_native_set(model,track,step,slot,value);
+    if(!s) return slot>=0x58 && slot<=0x67 ? 0 : lfo3_pattern_native_set(model,track,step,slot,value);
     /* Module: only sparse writes or a new native lane need a census. */
-    if(slot>=0x58 && slot<=0x5f) {
+    if(slot>=0x58 && slot<=0x67) {
         native=lfo3_pattern_native_lanes(matrix);
         if(lfo3_pattern_context->busy) return 0;
         begin();ok=lfo3_owned_set(s,track,step,slot-0x58u,value,native);end();
@@ -195,7 +195,7 @@ void lfo3_pattern_clear_row_body(void *model,s32 track,s32 step)
     had_own=lfo3_locks_row_count(s,(u32)track,(u32)step);
     native=lfo3_pattern_native_row_count(model,track,step);
     if(had_own) {
-        begin();for(i=0;i<8;i++) lfo3_owned_set(s,(u32)track,(u32)step,i,-1,0);end();
+        begin();for(i=0;i<16;i++) lfo3_owned_set(s,(u32)track,(u32)step,i,-1,0);end();
     }
     lfo3_pattern_native_clear_row(model,track,step);
     if(had_own && !native) {

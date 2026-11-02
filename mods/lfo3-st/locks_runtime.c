@@ -10,7 +10,7 @@
  * type changes (Synfact resolved it every block; destination_reuse cached it).
  */
 typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;
-typedef struct {u16 v[8];} rec_t;
+typedef struct {u16 v[16];} rec_t;
 typedef struct {u32 mask;rec_t record;} event_t;
 typedef struct {u32 stride;event_t queued[64],active[13];} events_t;
 struct lfo3_bank {u8 state[13][40];u32 rng[2];u16 params[13][8];u16 overlay[13][8];};
@@ -28,7 +28,7 @@ extern void lfo3_shadow_owner_relocate_body(u32,u32,u32);
 extern u32 lfo3_shadow_owned_tracked_body(u32);
 extern u32 lfo3_track_type(u32),lfo3_track_valid(u32);
 static u32 writer_mutex[4];
-static u32 owned_storage[394],pattern_storage[282],events_storage[386],budget_storage[5];
+static u32 owned_storage[394],pattern_storage[282],events_storage[694],budget_storage[5];
 u32 lfo3_active_locks;
 static u16 dest_raw[13]={0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff};
 static u16 dest_done[13];static u8 dest_type[13];

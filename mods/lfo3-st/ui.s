@@ -63,7 +63,7 @@ lfo3_ui_get_entry:
         subi.l #LFO3_ID,%d0
         cmpi.l #10,%d0
         bcc.w 1f
-        jmp lfo3_ui_get
+        jmp lfo3_ui_preview
 1:      lea -40(%sp),%sp
         moveq #-1,%d0
         jmp 0x40039166

@@ -39,7 +39,7 @@ class ViewMachine(Machine):
     def code(self,u,pc,n,ctx):
         if not self.ready:return super().code(u,pc,n,ctx)
         if pc==self.alloc:
-            assert self.args(1)==(96,);self.allocs+=1;self.ret(0 if self.oom else ROOT);return
+            assert self.args(1)==(16+0x50+12,);self.allocs+=1;self.ret(0 if self.oom else ROOT);return
         if pc==0x4001ff74:assert self.args(1)==(MODEL,);self.ret(self.track);return
         if pc==0x4001c422:
             assert self.args(3)==(MODEL+0x40,0x60,0xffffffff);self.ret(PROXY);return
@@ -113,6 +113,111 @@ class NativeKeyMachine(ViewMachine):
         self.w(EV+12,key);self.w(EV+16,flags);self.w(self.telemetry,block)
         return self.call(self.cs['core:core_key'],APP,EV)
 
+LEDMGR=W+0x1800
+LOCKMODEL=APP+0x3394+2*0x680+0x620 # pattern 3's lock model
+
+class LockViewMachine(ViewMachine):
+    """UI integration; pattern model/get/set and the LED setter are explicit
+    boundary doubles."""
+    def __init__(self,core,bank):
+        super().__init__(core,bank);self.step_locks={};self.leds={}
+        # The parameter view's +68h is not the application: never take its model.
+        self.w(PARAM+0x68,W+0x1900)
+    def code(self,u,pc,n,ctx):
+        if self.ready:
+            if pc==0x4016ede0:self.ret(LEDMGR);return
+            if pc==0x4016e804:self.ret(APP);return # application, for 400c34d6
+            if pc==0x40008220:
+                mgr,led,mode,palette=self.args(4);assert mgr==LEDMGR
+                self.leds.setdefault(led,(mode,palette));self.ret();return
+            if pc==0x4001c422:self.ret(PROXY);return
+            # 40019000 and 40016062 execute: pattern APP+3394h+680h*index, its
+            # lock model at +620h. Only the project and pattern index are doubles.
+            if pc==0x4016e946:self.ret(W+0x1a00);return
+            if pc==0x400c20a8:assert self.args(1)==(W+0x1a00,);self.ret(2);return
+            if pc==0x40019036:assert self.args(1)==(APP,),hex(self.args(1)[0]);self.ret(MODEL);return
+            if pc==0x40027f3a:self.ret(64);return
+            if pc==0x4002787c:self.ret(1);return
+            if pc==self.sym['lfo3_pattern_get']:
+                model,track,step,slot=self.args(4);assert model==LOCKMODEL,hex(model)
+                self.ret(self.step_locks.get((track,step,slot),0xffffffff));return
+            if pc==self.sym['lfo3_pattern_set']:
+                model,track,step,slot,value=self.args(5);assert model==LOCKMODEL,hex(model)
+                if value==0xffffffff:self.step_locks.pop((track,step,slot),None)
+                else:self.step_locks[track,step,slot]=value
+                self.ret(1);return
+        return super().code(u,pc,n,ctx)
+
+def lock_editing(core,bank):
+    m=LockViewMachine(core,bank)
+    m.key(0x13,1,0);m.key(0x13,16,10);assert m.key(0x13,1,100)==1
+    m.key(0x13,16,110)
+    selection=W+0x1500;m.w(PARAM+0x6c,selection)
+    # Grid REC (+168h, what REC toggles) without a held trig edits the base Sound.
+    m.u.mem_write(selection+0x161,b'\x01');m.u.mem_write(selection+0x168,b'\x01')
+    m.encoder(2,1);assert not m.step_locks
+    base=m.read(m.sym['arp_ui_parameters'],24)
+    # Held trigs: the native selection test (400c34d6) and 64-bit membership
+    # execute. Neither live REC (+16Ah) nor the edit mark (+160h) is needed
+    # before the first edit; the edit sets the mark as the native editor does.
+    m.w(selection+0x158,1<<15);m.w(selection+0x15c,1<<31) # steps 48 and 32
+    m.step_locks[0,47,0x61]=14
+    m.encoder(2,2)
+    assert m.step_locks[0,31,0x61]==12
+    assert m.step_locks[0,47,0x61]==16 # relative to this step's existing lock
+    assert m.read(selection+0x160,1)==b'\x01'
+    m.encoder(1,1);m.encoder(3,1);m.encoder(4,3)
+    assert m.step_locks[0,31,0x60]==1 and m.step_locks[0,47,0x62]==2
+    assert m.step_locks[0,31,0x63]==33 and m.step_locks[0,47,0x63]==33
+    for knob in (5,6,7):m.encoder(knob,3)
+    assert len(m.step_locks)==8 # MODE, SPEED, RANGE and LEN only: no OFS, LEN (F) or G
+    m.key(12,1,120);m.key(12,16,121);assert len(m.step_locks)==8 # YES locks nothing
+    assert m.read(m.sym['arp_parameters'],24)==base
+    m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
+    assert ['text',0x402a7354,64,59,2,'LOCK 32'] in m.rows
+    # Releasing trigs restores base values; subsequent knob movement is normal.
+    m.u.mem_write(selection+0x160,b'\x00');m.w(selection+0x158,0);m.w(selection+0x15c,0)
+    m.call('arp_view_tick',APP);assert m.read(m.sym['arp_ui_parameters'],24)==base
+    m.encoder(2,1);assert m.read(m.sym['arp_parameters']+1,1)==b'\x0b'
+    assert len(m.step_locks)==8
+
+def step_editing(core,bank):
+    m=LockViewMachine(core,bank)
+    m.key(0x13,1,0);m.key(0x13,16,10);m.key(0x13,1,100);m.key(0x13,16,110)
+    selection=W+0x1500;m.w(PARAM+0x6c,selection);m.u.mem_write(selection+0x161,b'\x01')
+    p,view=m.sym['arp_parameters'],ROOT+16
+    enabled=lambda:int.from_bytes(m.read(p+6,2),'big')
+    # The firmware's own __dynamic_cast (View -> LedHandler, hint -2), as the
+    # LED frame's view walk 40100856 calls it, finds the view's LedHandler.
+    handler=m.call(0x401ba378,view,0x40241b9c,0x401c7104,0xfffffffe)
+    assert handler==view+0x50
+    def leds():
+        m.leds={};m.call(m.word(m.word(handler)+8),handler,0,0);return m.leds
+    assert leds()=={k:(2,9) for k in range(1,17)}
+    # A held step key selects that step; any encoder edits its note (OFS);
+    # its release after an edit leaves it enabled.
+    assert m.key(27,1,200)==1 and m.word(m.sym['arp_selected'])==3
+    assert m.encoder(1,5)==1 and m.read(p+8+3,1)==b'\x05' and m.read(p,1)==b'\x00'
+    assert m.key(27,16,201)==1 and enabled()==0xffff
+    # A tap toggles the step; two held steps both take an edit.
+    m.key(27,1,202);m.key(27,16,203);assert enabled()==0xfff7
+    m.key(24,1,204);m.key(25,1,205);m.encoder(3,-2);m.key(24,16,206);m.key(25,16,207)
+    assert m.read(p+8,2)==b'\xfe\xfe' and enabled()==0xfff7
+    # Past LEN the keys are dark and a tap changes nothing.
+    m.encoder(6,-12);assert m.read(p+4,1)==b'\x03'
+    assert leds()=={1:(2,9),2:(2,9),3:(2,9),4:(2,3),**{k:(1,2) for k in range(5,17)}}
+    m.key(30,1,208);m.key(30,16,209);assert enabled()==0xfff7
+    # REC (grid or live) leaves the keys and LEDs to the sequencer.
+    for flag in (0x168,0x16a):
+        m.u.mem_write(selection+flag,b'\x01')
+        assert m.key(24,1,210)==0 and m.key(24,16,211)==0 and leds()=={}
+        m.u.mem_write(selection+flag,b'\x00')
+    # A press that went to the sequencer keeps its release there.
+    m.u.mem_write(selection+0x168,b'\x01');assert m.key(26,1,212)==0
+    m.u.mem_write(selection+0x168,b'\x00');assert m.key(26,16,213)==0 and enabled()==0xfff7
+    return {'led_handler_dynamic_cast':'native 401ba378','leds':'active 9, inactive 3, past LEN unlit',
+            'step_keys':['press selects','hold+encoder edits OFS','tap toggles','REC passes to the sequencer']}
+
 def native_key_binding(core,bank):
     m=NativeKeyMachine(core,bank)
     # Derive TRIG from native dispatch to parameter page 0; SYN selects page 1.
@@ -147,6 +252,7 @@ def resources(donor,core):
     return rows
 
 def verify(core,bank,donor,out):
+    lock_editing(core,bank);steps=step_editing(core,bank)
     fonts=resources(donor,core);m=ViewMachine(core,bank);initial=m.pool_counts()
     assert not m.key(0x13,1,0) and not m.key(0x13,16,10)
     assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
@@ -157,6 +263,11 @@ def verify(core,bank,donor,out):
     assert ['text',0x402a7354,64,59,2,'T1 ARPEGGIATOR'] in m.rows
     assert ['framed-text',0x402a9dc4,14,2,1,'ARP T1'] in m.rows
     assert ['bitmap','rail',1,7,0] in m.rows
+    # The open page follows the selected track and edits its own Sound.
+    m.track=1;m.call('arp_view_tick',APP);m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
+    assert ['text',0x402a7354,64,59,2,'T2 ARPEGGIATOR'] in m.rows
+    assert m.encoder(1,1)==1 and m.read(m.track_address('arp_parameters',1),1)==b'\x01'
+    m.track=0;m.call('arp_view_tick',APP)
     for knob,delta in [(1,3),(2,127),(3,127),(4,127),(5,-127),(6,-127)]:assert m.encoder(knob,delta)==1
     p=m.sym['arp_parameters'];assert m.read(p,5)==bytes([3,17,3,127,0])
     assert m.read(p+8,1)==b'\xe8'
@@ -213,8 +324,9 @@ def verify(core,bank,donor,out):
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
     binding=native_key_binding(core,bank)
-    result=dict(ok=True,fonts=fonts,key_binding=binding,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
+    result=dict(ok=True,fonts=fonts,key_binding=binding,step_editing=steps,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
         lifecycle=['double tap opens with MODE OFF','encoders A..F clamp','selected step/mute','modal priority',
+                   'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',
                    'native STOP passes','NO closes without disabling','destructor/reopen','failed opening preserves native release',
                    'D changes next gate with held root retained','native length labels and popup expiry/wrap',
                    'Sound-locked root does not replace/edit the viewed Sound'],

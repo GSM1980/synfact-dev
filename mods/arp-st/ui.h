@@ -12,6 +12,7 @@ struct arp_canvas {
 struct arp_screen {
     const struct arp_settings *settings;
     unsigned int track,selected,show_length;
+    unsigned int locked; /* MODE, SPEED, RANGE, LEN: bits 0..3, drawn inverted */
     const char *speed_text,*length_text;
     unsigned int length_bitmap;
 };

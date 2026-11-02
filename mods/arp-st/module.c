@@ -23,6 +23,7 @@ static arp_u32 arp_generation[ARP_TRACKS] DATA={1,1,1,1,1,1,1,1,1,1,1,1},arp_seq
 static unsigned int arp_live[ARP_TRACKS] DATA={0};
 static arp_u32 arp_bound_sound[ARP_TRACKS] DATA={0};
 static unsigned char arp_lab_override[ARP_TRACKS] DATA={0};
+#include "locks.h"
 static const volatile arp_u32 *held_notes(unsigned int track)
 {return (const volatile arp_u32 *)(0x4553f6e0u+track*0x2e18u);}
 static int arp_native(arp_u32,const arp_u32 *,arp_u32 *);
@@ -50,11 +51,15 @@ static int eligible(arp_u32 track)
     if(owner){if(owner[track]!=track)return 0;for(i=track+1;i<ARP_TRACKS;i++)if(owner[i]==track)return 0;}
     return 1;
 }
+static void stop_quiet(unsigned int track)
+{
+    arp_live[track]=0;arp_running&=~(1u<<track);
+    arp_runtime_stop(&arp_voice[track]);if(!++arp_generation[track])arp_generation[track]=1;
+}
 static void stop_locked(unsigned int track)
 {
     if(arp_voice[track].source)ARP_RELEASE(track,0x7fffu);
-    arp_live[track]=0;arp_running&=~(1u<<track);
-    arp_runtime_stop(&arp_voice[track]);if(!++arp_generation[track])arp_generation[track]=1;
+    stop_quiet(track);
 }
 static void interest(void)
 {
@@ -117,7 +122,18 @@ static void arp_frame(void)
            (!arp_live[track] && *(const volatile arp_u32 *)0x43bd73bcu!=1)) {stop_locked(track);continue;}
         if(arp_live[track] && arp_keyboard_sync(&arp_voice[track].selector,held_notes(track))<=0){stop_locked(track);continue;}
         if((int)(arp_voice[track].clock.next-(begin+2*tempo))<0 && !eligible(track)){stop_locked(track);continue;}
-        arp_runtime_frame(&arp_voice[track],&arp_parameters[track],begin,begin+2*tempo,arp_generation[track]);
+        {
+            struct arp_settings effective;struct arp_clock desired;
+            arp_effective(track,&effective);
+            arp_clock_arm(&desired,begin,effective.speed,arp_generation[track]);
+            if(arp_voice[track].clock.period!=desired.period){
+                /* A new rate keeps the phase of the last emitted beat. */
+                struct arp_clock *c=&arp_voice[track].clock;
+                c->next=c->next-c->period+desired.period;c->period=desired.period;
+                if((int)(c->next-begin)<0)c->next=begin;
+            }
+            arp_runtime_frame(&arp_voice[track],&effective,begin,begin+2*tempo,arp_generation[track]);
+        }
         if(!arp_voice[track].source)arp_running&=~(1u<<track);
     }
 }
@@ -154,7 +170,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
                 }
                 for(i=0;i<sizeof(keys);i++)
                     ((volatile unsigned char *)&arp_voice[track].selector)[i]=((const volatile unsigned char *)&keys)[i];
-                arp_live[track]=1;arp_running|=1u<<track;
+                arp_live[track]=1;arp_running|=1u<<track;arp_root_lock[track].mask=0;
                 arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
             }
             /* IMMEDIATE owns a pooled input. As for POLY's consuming handler,
@@ -175,13 +191,18 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
                     e[5]=1;*result=1;return 1; /* another Sound owns this root */
                 }
             }
-            /* LEN/step/range edits affect following outputs without losing a
-             * held root. Track, mode or rate changes retain the prior rearm. */
-            if(!p->mode || p->mode!=arp_parameters[track].mode ||
-               p->speed!=arp_parameters[track].speed || (arp_voice[track].source &&
+            /* Preserve the root when changing mode or rate. Retiming uses the
+             * last emitted beat as the phase origin and never queues in the past. */
+            if(!p->mode || (arp_voice[track].source &&
                (arp_sequence[track]!=*(const volatile arp_u32 *)0x43bd7430u ||
                 arp_kit[track]!=*(const volatile arp_u32 *)0x43bd743cu ||
                 (!arp_live[track] && *(const volatile arp_u32 *)0x43bd73bcu!=1))))stop_locked(track);
+            else if(arp_voice[track].source && p->speed!=arp_parameters[track].speed){
+                struct arp_clock *c=&arp_voice[track].clock;
+                arp_u32 last=c->next-c->period,now=*(const volatile arp_u32 *)0x800046ecu;
+                arp_clock_arm(c,last,p->speed,arp_generation[track]);c->next+=c->period;
+                if((int)(c->next-now)<0)c->next=now;
+            }
             for(i=0;i<sizeof(*p);i++)
                 ((volatile unsigned char *)&arp_parameters[track])[i]=((const volatile unsigned char *)p)[i];
             arp_lab_override[track]=!e[4];arp_bound_sound[track]=e[4];
@@ -197,8 +218,21 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
     if(op!=ST_NATIVE_NOTE_ACCEPT)return 0;
     e=(arp_u32 *)a[0];track=e[2];
     if(track>=ARP_TRACKS || e[3]!=1)return 0;
+    /* Our own output: play it, or drop one a newer root has superseded. */
+    switch(arp_runtime_owns(&arp_voice[track],e)){case 1:return 0;case 2:*result=1;return 1;}
     restore_sound(track,a[1]);
-    if(!arp_parameters[track].mode)return 0;
+    /* The step's locks precede native effect application at NOTE_ACCEPT. */
+    struct arp_settings effective;
+    /* A trigless lock trig passing a running sequence arp adds its locks to
+     * it, as a lock trig changes the sounding note; the native applies the
+     * rest. It neither restarts nor stops the arp. */
+    if(e[1]==1 && (e[9]&0x10201u)!=0x10201u){
+        if(arp_voice[track].source && !arp_live[track] && e[17])arp_root_capture(track,e[17],1);
+        return 0;
+    }
+    arp_root_capture(track,e[17],0);
+    arp_effective(track,&effective);
+    if(!effective.mode)return 0;
     if(arp_live[track]){*result=1;return 1;}
     /* Stopped/held-step preview is not a running sequence root. Held keyboard
      * input has its own IMMEDIATE lifecycle above. */
@@ -208,12 +242,15 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
     if(e[1]!=1 || !eligible(track)){
         stop_locked(track);return 0;
     }
-    if(arp_voice[track].source)stop_locked(track);
-    i=arp_runtime_start(&arp_voice[track],&arp_parameters[track],e,a[2],arp_generation[track],0,0);
+    /* A new root replaces the running one: its first output retriggers the
+     * track. The native gate release (400a5708) is applied by the audio
+     * engine after that output and silenced the new root (LEN = the loop). */
+    if(arp_voice[track].source)stop_quiet(track);
+    i=arp_runtime_start(&arp_voice[track],&effective,e,a[2],arp_generation[track],0,0);
     if(!i)return 0;
     arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
     arp_running|=1u<<track;before=arp_voice[track].dropped;
-    arp_runtime_frame(&arp_voice[track],&arp_parameters[track],a[2],a[3],arp_generation[track]);
+    arp_runtime_frame(&arp_voice[track],&effective,a[2],a[3],arp_generation[track]);
     /* Pool pressure on the very first output retains the original note. */
     if(arp_voice[track].dropped!=before){stop_locked(track);return 0;}
     *result=1;return 1;

@@ -15,6 +15,12 @@ struct arp_runtime {
     struct arp_clock clock;
     arp_u32 *source;
     arp_u32 generation,until,finite,track,emitted,dropped;
+    /* Output kind: 1 (sequencer) for a sequence root, 2 (live) for held keys.
+     * The native stale test (400a4236) drops an event whose kind is below the
+     * track's last started note (45510fc8, set at 400a435a): kind 2 outputs
+     * hid every following sequencer trig, its p-locks included. Queued
+     * outputs are remembered so the root adapter never recaptures them. */
+    arp_u32 kind,*queued[8],queued_note[8],queued_generation[8];unsigned int queued_next;
     const struct arp_runtime_api *api;
     /* Flat native Sound record, captured before the mutable UI preview can
      * select another track. Outputs are due in their current MAIN frame. */
@@ -35,9 +41,13 @@ int arp_runtime_start(struct arp_runtime *,const struct arp_settings *,
  * chord separately; this retains only the template/Sound/lock reference. */
 int arp_runtime_live_start(struct arp_runtime *,const struct arp_settings *,
                            const arp_u32 *,arp_u32 when,arp_u32 generation);
-/* Output word 3 is the existing native live-note kind (2), not a private tag
- * or code continuation. The sequence-root adapter only captures kind 1.
+/* Output word 3 is the root's native kind: 1 for a sequence root, 2 for
+ * live input. The sequence-root adapter captures kind 1, except this runtime's
+ * own queued outputs (arp_runtime_owns).
  */
 int arp_runtime_frame(struct arp_runtime *,const struct arp_settings *,
                       arp_u32 begin,arp_u32 end,arp_u32 generation);
+/* Once, for an event this runtime queued (the same pointer and note): 1 if
+ * it is from the current root, 2 if a newer root has replaced it since. */
+int arp_runtime_owns(struct arp_runtime *,const arp_u32 *event);
 #endif

@@ -188,6 +188,29 @@ static void *view_proxy(void *view,u32 id)
     if(!view || !(vt=*(u32 **)view))return 0;
     return (void *)((u32 (*)(void *,u32,s32))vt[0xc4/4])(view,id,-1);
 }
+/* 40039160 (view, id, locked*) for the LFO3 IDs. With trigs held, as the
+ * native/core preview (400391a8): the first selected step within the active
+ * track's length whose lock the view reads (vt +90h, 40037942), marked
+ * locked; without, the Sound's value. Pool Sound locks have no LFO3 words. */
+static s32 held_lock(void *view,u32 id)
+{
+    u8 *selection=*(u8 **)((u8 *)view+0x6c);u32 length,step;s32 v;
+    if(!selection || !(u8)((u32 (*)(void *))0x400c2d2au)(selection) ||
+       !(u8)((u32 (*)(void *))0x400c34d6u)(selection))return -1;
+    length=((u32 (*)(void *))0x40027f3au)(((void *(*)(void *))0x40019036u)(((void *(*)(void))0x4016e804u)()));
+    for(step=0;step<length && step<64;step++)
+        if((u8)((u32 (*)(void *,u32))0x400c2d94u)(selection,step) &&
+           (v=((s32 (*)(void *,u32,u32))(*(u32 **)view)[0x90/4])(view,step,id))!=-1)return v;
+    return -1;
+}
+s32 lfo3_ui_get(void *view,u32 id,u8 *locked);
+s32 lfo3_ui_preview(void *view,u32 id,u8 *locked)
+{
+    s32 v=lfo3_index(id)<10?held_lock(view,id):-1;
+    if(v==-1)return lfo3_ui_get(view,id,locked);
+    if(locked)*locked=1;
+    return v;
+}
 s32 lfo3_ui_get(void *view,u32 id,u8 *locked)
 {
     u32 i=lfo3_index(id);rec_t *r;

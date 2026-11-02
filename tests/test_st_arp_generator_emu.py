@@ -197,9 +197,12 @@ def verify(core,bank,out):
     assert len(q.log)==1 and q.log[0]['kind']==1 and q.pool_counts()==base
     failures.append('special-trigger-flags-native-fallback')
     q=Machine(core,bank);base=q.pool_counts();q.configure();q.event(length=0xffffffff);q.frame(0)
+    # A trigless (lock) trig passing a running arp neither stops nor restarts it.
     q.event(flags=0x10600,when=28800);q.frame(28800)
-    assert q.log[-1]['kind']==1 and q.pool_counts()==base
-    failures.append('infinite-template-replaced-by-unsupported-native-note')
+    assert q.word(q.sym['arp_running'])&1 and q.log[-1]['gate']==10800000 # native applies it
+    q.frame(5400000);assert q.log[-1]['pitch']==72 and q.log[-1]['time']==5400000
+    assert q.configure(mode=0)==1 and q.pool_counts()==base
+    failures.append('trigless-trig-keeps-running-arp')
     q=Machine(core,bank);q.configure();q.u.mem_write(W+0x103,b'\xff')
     assert q.call('arp_experiment_configure',0,W+0x100)==0
     failures.append('invalid-note-length-configuration-refused')
@@ -241,6 +244,15 @@ def verify(core,bank,out):
     q.configure();q.event();q.frame(0);q.w(0x800046ec,28800)
     q.count=0;q.call('arp_frame');idle=q.count
     q.w(0x800046ec,5400000);q.count=0;q.call('arp_frame');due=q.count
+    # Rate and direction changes keep the currently sounding root and use
+    # the new period without waiting for another sequencer trig.
+    q=Machine(core,bank);base=q.pool_counts();q.configure();q.event(length=0);q.frame(0)
+    generation=q.word(q.sym['arp_generation']);q.w(0x800046ec,2000000)
+    q.u.mem_write(W+0x100,struct.pack('>5BxH16b',3,10,1,30,15,0xffff,*([0]*16)))
+    assert q.call('arp_experiment_configure',0,W+0x100)==1
+    assert q.word(q.sym['arp_generation'])==generation and q.pool_counts()!=base
+    q.frame(4320000);assert len(q.log)==2 and q.log[-1]['time']==4320000
+    q.configure(mode=0);assert q.pool_counts()==base
     result=dict(ok=True,native_pool_counts=initial,notes=m.log,limits=[
         'Native core dispatch, allocation/copy/free, lock refs, queue, pitch/gate run as target code.',
         'Sound publication, smoothing and parameter-lock application are explicit boundaries; no audio synthesis or device test.',

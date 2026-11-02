@@ -4,7 +4,7 @@
 lfo3_pattern_get_entry:
         move.l 16(%sp),%d0
         subi.l #0x58,%d0
-        cmpi.l #8,%d0
+        cmpi.l #16,%d0
         bcc.w lfo3_pattern_native_get
         jmp lfo3_pattern_get
         .globl lfo3_pattern_native_get
@@ -54,7 +54,7 @@ lfo3_pattern_native_clear:
 \name:
         move.l 16(%sp),%d0
         subi.l #0x58,%d0
-        cmpi.l #8,%d0
+        cmpi.l #16,%d0
         bcc.w \native
         jmp \target
         .globl \native
@@ -69,7 +69,7 @@ lfo3_pattern_native_clear:
 lfo3_pattern_delete_entry:
         move.l 16(%sp),%d0
         subi.l #0x58,%d0
-        cmpi.l #8,%d0
+        cmpi.l #16,%d0
         bcc.w delete_replay
         jmp lfo3_pattern_delete
 delete_replay:
