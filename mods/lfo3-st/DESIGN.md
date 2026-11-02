@@ -19,6 +19,20 @@ value. `lfo3_ui_get`, used for base values elsewhere, is unchanged. Found on
 the instrument: the per-step getter returned the lock while 40039160 made no
 lock query at all. Confirmed on the instrument.
 
+## Page key lock LEDs (2026-11-02)
+
+Holding trigs lights the page keys whose parameters hold a lock at those
+steps. The native collector (40031de6, per held step, called through
+400c3670 from the main view's LED code) checks the parameter IDs of each
+page's fixed layouts; LFO3's page and ARP's lanes are not among them.
+`lfo3_page_locks` replays the collector, then marks LFO (page 4) for an LFO3
+lane (58h..5Fh) and TRIG (page 0) for an ARP lane (60h..67h) at the same
+step of the active pattern's lock model. Confirmed on the instrument.
+
+Known limit: the first step's event when PLAY starts is made without a lock
+block, so neither the native fire nor LFO3's capture (4008bbf6) sees its
+locks; LFO3 and ARP locks on that step apply from the second pass.
+
 ## Shared ARP lanes: temporary slots (2026-11-02)
 
 `shared_locks.py` widens parameter loops from eight to sixteen for ARP's

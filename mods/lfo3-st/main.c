@@ -68,6 +68,7 @@ static u32 install(void)
     return 0;
 }
 /* ---- UI hooks installed on stock code (preimages checked, all or none) ---- */
+extern void lfo3_page_locks(void);
 extern void lfo3_constructor(void),lfo3_wave_site(void),lfo3_ui_get_entry(void),lfo3_editor_entry(void),
     lfo3_widget_valid_entry(void),lfo3_widget_header_entry(void),lfo3_widget_view_get_entry(void),
     lfo3_widget_wave_flags(void),lfo3_sound_publication(void),lfo3_sound_success(void),lfo3_fx_publication(void),
@@ -223,7 +224,8 @@ static const struct site {u32 at;u8 bytes;u8 stock[10];void (*target)(void);u8 c
     {0x40013628u,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1},
     {0x40013690u,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1},
     {0x400136f8u,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1},
-    {0x4001924cu,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1}};
+    {0x4001924cu,6,{0x4e,0xb9,0x40,0x0a,0x5c,0x4a},lfo3_lock_ui_slot,1},
+    {0x40031de6u,8,{0x4f,0xef,0xff,0xd4,0x48,0xd7,0x7c,0xfc},lfo3_page_locks}};
 /* +Drive record size operands (pea 0x107 -> 0x13f) of the save/load above. */
 static const struct {u32 at;u16 stock,value;} operands[]={{0x40111b82u,0x0107,ST_SOUND_S1_BYTES},{0x40110b1eu,0x0107,ST_SOUND_S1_BYTES}};
 #define SITES (sizeof sites/sizeof sites[0])

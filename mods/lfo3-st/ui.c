@@ -203,6 +203,27 @@ static s32 held_lock(void *view,u32 id)
            (v=((s32 (*)(void *,u32,u32))(*(u32 **)view)[0x90/4])(view,step,id))!=-1)return v;
     return -1;
 }
+/* Page key lock LEDs: per held step, the native collector 40031de6 marks the
+ * pages (TRIG, SYN, FLTR, AMP, LFO) whose layouts' parameter IDs hold a lock.
+ * LFO3's page and ARP's lanes are not among those layouts: after it, LFO is
+ * marked for an LFO3 lane (58h..5Fh) and TRIG for an ARP lane (60h..67h) at
+ * the same step of the active pattern's lock model (40016062), the model the
+ * lock setter and getter take. Closure state: +0 page flags, +8 the track. */
+extern u32 lfo3_page_locks_native(void *,u32);
+extern s32 lfo3_pattern_get(void *,u32,u32,u32);
+u32 lfo3_page_locks(void *closure,u32 step)
+{
+    u32 r=lfo3_page_locks_native(closure,step),slot,track;u8 **state=*(u8 ***)closure,*flags;void *model;
+    if(!state || !(flags=state[0]) || !state[2] || step>=64 || (track=*(u32 *)state[2])>12)return r;
+    model=((void *(*)(void *))0x40019000u)(((void *(*)(void))0x4016e804u)());
+    if(!model)return r;
+    model=((void *(*)(void *))0x40016062u)(model);
+    for(slot=0x58;slot<0x68;slot++){
+        u8 *page=&flags[slot<0x60?4:0];
+        if(!*page && lfo3_pattern_get(model,track,step,slot)>=0)*page=1;
+    }
+    return r;
+}
 s32 lfo3_ui_get(void *view,u32 id,u8 *locked);
 s32 lfo3_ui_preview(void *view,u32 id,u8 *locked)
 {

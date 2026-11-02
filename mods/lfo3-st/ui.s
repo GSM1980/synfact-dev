@@ -57,6 +57,14 @@ lfo3_wave_site:
         jmp 0x400f38c0
 
 | Value getter 40039160 (view, id, locked*).
+| Page key lock collector 40031de6 (closure, step): its stock prologue,
+| replayed by lfo3_page_locks (ui.c) before it adds LFO3's and ARP's lanes.
+        .globl lfo3_page_locks_native
+lfo3_page_locks_native:
+        lea -44(%sp),%sp
+        movem.l %d2-%d7/%a2-%a6,(%sp)
+        jmp 0x40031dee
+
         .globl lfo3_ui_get_entry
 lfo3_ui_get_entry:
         move.l 8(%sp),%d0
