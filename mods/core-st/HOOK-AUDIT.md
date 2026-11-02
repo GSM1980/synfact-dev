@@ -65,9 +65,9 @@ the descriptor alias.
 
 ## Digitakt reference
 
-Reviewed [machine-pages](../machine-pages/README.md), its
-[periodic work](../machine-pages/pages.c),
-[native adapters](../machine-pages/pages.s), and the DT1 core subscription.
+Reviewed elekloader's [machine-pages](https://github.com/irpina/elekloader/blob/main/mods/machine-pages/README.md), its
+[periodic work](https://github.com/irpina/elekloader/blob/main/mods/machine-pages/pages.c),
+[native adapters](https://github.com/irpina/elekloader/blob/main/mods/machine-pages/pages.s), and the DT1 core subscription.
 DT1 uses `ev_tick` for periodic work and shared native adapters for page-local
 metadata/drawing. Its layout adapter recognizes the native view caller by
 return PC instead of adding another hook at the view getter. The Syntakt
