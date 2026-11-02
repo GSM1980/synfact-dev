@@ -89,14 +89,16 @@ $PY -m elekloader.lint mods/core-st/out/core-X.Y.Z.elemod \
 
 ```bash
 $PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
-    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
+    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st     --module mods/modulation-skip-st \
     --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
 - **Module order matters**: `lfo3-st` must come **before** `poly-st` (both
   use the core's native LFO operation; LFO3 is non-consuming and runs first).
-- Modulation skip ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md)):
-  add `--module mods/modulation-skip-st` after System info. Checks:
+- Modulation skip ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md))
+  goes in every bank, last; it is not a choice (`"always": true` in
+  `js/config/syntakt-normal.json`). The regressions run its host test; with
+  a bank built without it as the reference, the full checks are:
   `$PY tests/test_st_modulation_skip.py --cc <clang> --bank <bank> --reference
   <normal bank> --stock <syx> --core <main.bin>` and, with the Unicorn
   environment below, `tests/test_st_modulation_skip_emu.py --bank <bank>`.

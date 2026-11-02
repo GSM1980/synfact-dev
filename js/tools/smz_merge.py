@@ -5,7 +5,7 @@ from pathlib import Path
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--catalog',type=Path,required=True,help='new catalog with the target artifacts')
-    p.add_argument('--config',type=Path,required=True,help='current module requirements and conflicts')
+    p.add_argument('--config',type=Path,required=True,help='current module requirements, conflicts and always-included modules')
     p.add_argument('--reuse',type=Path,action='append',required=True,help='previous independently validated catalog')
     p.add_argument('--out',type=Path,required=True,help='new catalog beside target artifacts')
     p.add_argument('--require-complete',action='store_true',help='fail unless every permitted nonempty selection is present')
@@ -15,9 +15,10 @@ def main():
     order=[x['id'] for x in new['modules']]
     mods=json.loads(a.config.read_text(encoding='utf-8'))['modules']
     if [m['id'] for m in mods]!=order:raise ValueError('Config differs from target catalog')
+    always={m['id'] for m in mods if m.get('always')}
     def permitted(ids):
         selected=set(ids)
-        return all(set(m.get('requires',[]))<=selected and not set(m.get('conflicts',[]))&selected
+        return always<=selected and all(set(m.get('requires',[]))<=selected and not set(m.get('conflicts',[]))&selected
                    for m in mods if m['id'] in selected)
     if a.out.parent.resolve()!=a.catalog.parent.resolve():raise ValueError('Output must be beside target artifacts')
     if any(not permitted(x['ids']) for x in new['approved']):raise ValueError('Target catalog contains a disallowed selection')

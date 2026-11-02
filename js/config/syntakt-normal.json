@@ -7,6 +7,7 @@
     {"id": "arp-st", "path": "mods/arp-st", "kind": "module"},
     {"id": "poly-st", "path": "mods/poly-st", "kind": "module"},
     {"id": "system-info-smz-st", "path": "mods/system-info-smz-st", "kind": "module"},
-    {"id": "sample-manager-st", "path": "mods/sample-manager-st", "kind": "module"}
+    {"id": "sample-manager-st", "path": "mods/sample-manager-st", "kind": "module"},
+    {"id": "modulation-skip-st", "path": "mods/modulation-skip-st", "kind": "module", "always": true}
   ]
 }

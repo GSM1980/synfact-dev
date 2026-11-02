@@ -13,7 +13,7 @@ ROOT=Path(__file__).resolve().parents[2]
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--catalog',type=Path,required=True)
-    p.add_argument('--config',type=Path,required=True,help='JSON modules with id, path, kind, requires, conflicts')
+    p.add_argument('--config',type=Path,required=True,help='JSON modules with id, path, kind, requires, conflicts, always')
     p.add_argument('--source-root',type=Path,required=True)
     p.add_argument('--parser',type=Path,required=True)
     p.add_argument('--out',type=Path,required=True,help='new local directory')
@@ -29,14 +29,15 @@ def main():
     if not set(a.only_id)<=set(ids):raise ValueError('Unknown --only-id')
     source=a.source_root.resolve()
     for m in mods:
-        if m['kind'] not in ('machine','module') or not set(m.get('requires',[])+m.get('conflicts',[]))<=set(ids):
+        if m['kind'] not in ('machine','module') or not set(m.get('requires',[])+m.get('conflicts',[]))<=set(ids)                 or not isinstance(m.get('always',False),bool):
             raise ValueError('Invalid module configuration')
         path=(source/m['path']).resolve()
         if not path.is_relative_to(source) or not (path/'mod.json').is_file():raise ValueError('Invalid source path')
+    always={m['id'] for m in mods if m.get('always')}
     allowed=[]
     for bits in itertools.product((False,True),repeat=len(mods)):
         chosen=[m for m,b in zip(mods,bits) if b];names={m['id'] for m in chosen}
-        if chosen and (not a.only_id or set(a.only_id)&names) and all(set(m.get('requires',[]))<=names and not set(m.get('conflicts',[]))&names for m in chosen):allowed.append(chosen)
+        if chosen and always<=names and (not a.only_id or set(a.only_id)&names) and all(set(m.get('requires',[]))<=names and not set(m.get('conflicts',[]))&names for m in chosen):allowed.append(chosen)
     a.out.mkdir(parents=True,exist_ok=False)
     parser=a.parser.resolve(); catalog_path=a.catalog.resolve();tool=ROOT/'js/tools/smz_candidate.ts'
     def run_one(pair):

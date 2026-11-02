@@ -71,6 +71,8 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None):
         run('POLY source/ABI',[sys.executable,'tests/test_st_poly.py',out,*(['--synfact',synfact] if synfact else [])])
     if 'system_info_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
         run('System info redraw/cadence',[sys.executable,'tests/test_st_system_info.py','--cc',cc])
+    if 'modulation_skip_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
+        run('modulation skip host logic',[sys.executable,'tests/test_st_modulation_skip.py','--cc',cc,'--work',out/'modulation-skip-tests'])
     run('folder catalogue',[sys.executable,'tests/test_st_sample_folders.py'])
     run('folder C/Python round trip',[sys.executable,'tests/test_st_sample_folders.py','--cc',cc,'--out',out/'folder-tests'])
     run('units',[sys.executable,'tests/test_units.py'])

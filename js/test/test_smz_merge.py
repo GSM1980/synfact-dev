@@ -26,5 +26,12 @@ class MergeTests(unittest.TestCase):
             subprocess.run([sys.executable,str(TOOL),'--catalog',str(d/'new.json'),'--config',str(d/'config.json'),
                             '--reuse',str(d/'old.json'),'--out',str(d/'restricted.json')],check=True,capture_output=True)
             self.assertEqual(json.loads((d/'restricted.json').read_text())['approved'],[])
+            config={'modules':[{'id':'a','always':True},{'id':'b'}]};(d/'config.json').write_text(json.dumps(config))
+            old['modules'][1]['sha256']='b'*64
+            old['approved']=[{'ids':['a'],'sha256':'1'*64},{'ids':['b'],'sha256':'2'*64},{'ids':['a','b'],'sha256':'3'*64}]
+            (d/'old.json').write_text(json.dumps(old))
+            subprocess.run([sys.executable,str(TOOL),'--catalog',str(d/'new.json'),'--config',str(d/'config.json'),
+                            '--reuse',str(d/'old.json'),'--out',str(d/'always.json'),'--require-complete'],check=True,capture_output=True)
+            self.assertEqual([x['ids'] for x in json.loads((d/'always.json').read_text())['approved']],[['a'],['a','b']])
 
 if __name__=='__main__':unittest.main()
