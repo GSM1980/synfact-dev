@@ -15,6 +15,7 @@ toolchain they need, and the emulator checks.
 
 ```bash
 python tests/test_units.py        # needs nothing; always run it
+python tests/test_st_fm_recipe.py --digitone Digitone_and_Digitone_Keys_OS1.44.syx   # FM TONE's recipe
 ```
 
 ## The engine

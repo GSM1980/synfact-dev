@@ -33,7 +33,8 @@ git -C /c/Desarrollo/synfact-dev worktree list
 ## What a new worktree does not have
 
 - Ignored, generated files: `mods/poly-st/imported/` (regenerate with
-  `tools/import_poly_kernels.py`) and `out/`. Rebuild them in your own
+  `tools/import_poly_kernels.py`), `mods/fm-tone-st/imported/` (regenerate
+  with its `tools/import_digitone.py` and the Digitone OS 1.44 file) and `out/`. Rebuild them in your own
   worktree as [SYNTAKT-BUILD.md](SYNTAKT-BUILD.md) says. The toolchain in
   `C:\Desarrollo\syntakt-dev\toolchains` is shared and read-only.
 - Untracked files that exist only in `C:\Desarrollo\synfact-dev`. If you

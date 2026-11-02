@@ -11,27 +11,40 @@ machine-selection defaults. Older UI service APIs reject
 the FM module initializer before publishing AUDIO. Graphics, formatting, input
 semantics and FM DSP belong to the SMZ; core services are machine-independent.
 
-## Build from the imported sources
+## Build it from your own Digitone OS
+
+FM TONE's DSP, its tables and some of its drawings are the Digitone's. This
+repository does not hold them. It holds a recipe, `digitone.json`, that
+rebuilds them from your own **Digitone OS 1.44** file, on your machine:
 
 ```powershell
+python mods/fm-tone-st/tools/import_digitone.py Digitone_and_Digitone_Keys_OS1.44.syx
 python -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st --out out/new-bank.smz4
 ```
 
-This compiles C and symbolic assembler, including private imported instruction
-source, tables, UI resources and initialized state under `imported/`. It reads
-no Digitone SYX, extracted firmware section or previous SMZ. The source hash
-report includes nested headers and assembler includes. Never overwrite an old
-delivery: choose a new output path.
+The first command checks the file and the two parts it reads, by sha256:
+section 7 (the second CPU's image) and the drawings in MAIN OS
+`0x40231800..0x40275400`. It then writes `imported/`, which Git ignores: the
+bytes `dsp.s` and `tables.s` include (`.incbin`), and `imported/ui-data.h`
+from `ui-data.h.in`. Every result is checked against the sha256 the recipe
+was made for, so a bank built this way is the bank we build. Without
+`imported/`, the bank build stops at the first `.incbin`. The build pins the
+included files with the sources. Never overwrite an old delivery: choose a
+new output path.
 
-`tools/import_synfact_fm.py` is a separate, one-time local import from the
-existing optimized Synfact reference build and its local extracted UI data.
-It emits instruction-by-instruction assembler with symbolic relocations,
-constant/data source and a provenance manifest. It does not run an emulator.
-`tools/adapt_synfact_fm.py` prepares the authored adapter/UI from that imported
-assembly and the Synfact drawing C; it is not part of normal compilation.
-These maintenance tools require the local Synfact reference tree. Private
-imported firmware-derived sources remain ignored by Git and are not licensed
-for redistribution by this port.
+The recipe has three operations: copy a run from one of those parts, repeat a
+pattern (padding, zeros), or our own bytes. Our own bytes are the code and
+data we changed. The kernels are unrolled and rescheduled, the voices and
+buffers moved to our layout, and the drawings redrawn for this screen. None
+of them holds four bytes in a row that the Digitone's parts hold
+(`tests/test_st_fm_recipe.py --digitone <file>` checks it). `dsp.s` and
+`tables.s` hold the labels and relocations; `bindings.s` the addresses they
+are laid out with.
+
+Maintainers who change the full sources (with the Digitone's bytes, kept out
+of the repository) regenerate the skeletons, the template and the recipe
+with `tools/make_recipe.py <Digitone OS 1.44> --from <their folder>`, then
+check that the bank is the one they expect.
 
 ## Performance contract
 

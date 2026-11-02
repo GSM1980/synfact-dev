@@ -771,6 +771,90 @@ def test_merged_pull_requests_claim_entries_for_the_leaderboard():
     assert [(c['id'], c['pr']) for c in shown['claims']] == [('digitakt-mk1@1.53:0x40025344', 11)]
 
 
+def test_a_donor_recipe_copies_fills_and_keeps_our_bytes():
+    from elekloader.sdk.syntakt import donor
+    rng = random.Random(7)
+    a, b = bytes(rng.randrange(256) for _ in range(4000)), bytes(rng.randrange(256) for _ in range(3000))
+    sources = {'audio': a, 'ui': b}
+    ours = bytes(rng.randrange(256) for _ in range(40))
+    target = a[100:600] + ours + b'\x4e\x71' * 40 + b[5:9] + a[3990:] + bytes(100) + ours[:3]
+    ops = donor.ops(target, sources)
+    assert donor.apply(ops, sources) == target
+    assert [op[0] for op in ops][:4] == ['copy', 'data', 'fill', 'copy']
+    assert ['fill', '4e71', 40] in ops and ['fill', '00', 100] in ops
+    assert donor.literal_runs(ops, sources) == []
+    assert sum(len(op[1]) // 2 for op in ops if op[0] == 'data') <= len(ours) + 3
+    # the text form reads back as the same recipe
+    recipe = {'format': donor.FORMAT, 'schema': 1, 'title': 'T', 'device': 'digitone-mk1', 'versions': ['1.44'],
+              'minimum': 4, 'regions': [], 'outputs': [{'name': 'x', 'length': len(target),
+                                                        'sha256': donor.sha(target), 'ops': ops}]}
+    assert json.loads(donor.dumps(recipe)) == recipe
+    for bad in (['copy', 'audio', 3990, 11], ['copy', 'main', 0, 4], ['copy', 'audio', -1, 4], ['copy', 'audio', 0, 0],
+                ['fill', '000000', 2], ['fill', '00', 0], ['move', 'audio', 0, 4], 'data'):
+        try:
+            donor.apply([bad], sources)
+        except donor.DonorError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_a_donor_recipe_wants_its_own_os_file():
+    from elekloader.sdk.syntakt import donor
+    recipe = {'format': donor.FORMAT, 'schema': 1, 'title': 'FM TONE', 'device': 'digitone-mk1',
+              'versions': ['1.44'], 'regions': [], 'outputs': []}
+    try:
+        donor.rebuild(recipe, b'not an OS file')
+    except donor.DonorError as e:
+        assert 'FM TONE needs the Digitone mk1 OS 1.44 file' in str(e)
+    else:
+        raise AssertionError('accepted a file that is no OS')
+    try:
+        donor.rebuild(dict(recipe, schema=2), b'')
+    except donor.DonorError as e:
+        assert 'schema 1' in str(e)
+    else:
+        raise AssertionError('accepted another schema')
+
+
+def test_the_fm_tone_recipe_matches_its_skeletons():
+    import re
+    folder = os.path.join(os.path.dirname(HERE), 'mods', 'fm-tone-st')
+    recipe = json.load(open(os.path.join(folder, 'digitone.json')))
+    outputs = {o['name']: o for o in recipe['outputs']}
+    assert recipe['device'] == 'digitone-mk1' and recipe['versions'] == ['1.44']
+    assert all(re.fullmatch(r'[0-9a-f]{64}', r['sha256']) for r in recipe['regions'])
+    assert [r['section'] for r in recipe['regions']] == [7, 3]
+    for name in ('dsp.s', 'tables.s'):
+        text = open(os.path.join(folder, name)).read()
+        for path, at, n in re.findall(r'^\.incbin "([^"]+)",0x([0-9a-f]+),0x([0-9a-f]+)$', text, re.M):
+            assert int(at, 16) + int(n, 16) <= outputs[path]['length'], (name, path)
+        # no bytes of their own: labels, relocations, alignment and .incbin only
+        for line in text.splitlines():
+            assert re.fullmatch(r'\|.*|\.text|\.section \.\w+,"\w+"|\.balign \d+|[.\w]+:|\.globl \w+|'
+                                r'\.incbin .*|\.long [.\w]+([+-]0x[0-9a-f]+)?|\.type \w+,@function|\.size \w+,0x[0-9a-f]+',
+                                line), (name, line)
+    template = open(os.path.join(folder, 'ui-data.h.in')).read()
+    size = 0
+    for kind, shape in re.findall(r'@(u32|u8):([\d,]+)@', template):
+        n = 1
+        for d in shape.split(','):
+            n *= int(d)
+        size += n * (4 if kind == 'u32' else 1)
+    assert size == outputs['imported/ui-data.bin']['length']
+
+
+def test_an_smz_source_pins_what_it_incbins():
+    from elekloader.sdk.syntakt.smz import source_inputs
+    with tempfile.TemporaryDirectory() as tmp:
+        open(os.path.join(tmp, 'blob.bin'), 'wb').write(bytes(range(256)))
+        open(os.path.join(tmp, 'part.s'), 'w').write('.long 1\n')
+        src = os.path.join(tmp, 'main.s')
+        open(src, 'w').write('.include "part.s"\n.incbin "blob.bin",0x0,0x10\n')
+        inputs = {}
+        source_inputs(src, tmp, inputs)
+        assert sorted(os.path.basename(k) for k in inputs) == ['blob.bin', 'main.s', 'part.s']
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

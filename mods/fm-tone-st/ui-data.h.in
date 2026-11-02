@@ -1,0 +1,15 @@
+/* FM TONE drawings: tools/import_digitone.py writes imported/ui-data.h from
+   this template and the owner's Digitone OS file (digitone.json). */
+#define FM_ALGORITHM_WORDS 50
+#define FM_ALGORITHM_WIDTH 25
+#define FM_ALGORITHM_HEIGHT 51
+#define FM_ALGORITHM_PIXELS @u32:8,50@
+#define FM_KNOB_POINTER {{-4,-4},{-5,-4},{-5,-3},{-6,-2},{-6,-1},{-6,0},{-6,1},{-6,1},{-6,2},{-5,3},{-5,4},{-4,4},{-3,5},{-3,5},{-2,6},{-1,6},{0,6},{1,6},{2,6},{3,5},{3,5},{4,4},{5,4},{5,3},{6,2},{6,1},{6,1},{6,0},{6,-1},{6,-2},{5,-3},{5,-4},{4,-4}}
+#define FM_DIAMOND_PIXELS @u32:32,19@
+#define FM_RATIO_FRAME_C @u32:19@
+#define FM_RATIO_FRAME_B @u32:19@
+#define FM_HARM_WAVES @u8:27,17@
+#define FM_FONT_WIDTHS @u8:128@
+#define FM_FONT_GLYPHS @u8:128,5@
+#define FM_RATIO_C {"0.25","0.50","0.75","1.00","2.00","3.00","4.00","5.00","6.00","7.00","8.00","9.00","10.0","11.0","12.0","13.0","14.0","15.0","16.0"}
+#define FM_RATIO_A {"0.25","0.50","0.75","1.00","1.25","1.50","1.75","2.00","2.25","2.50","2.75","3.00","3.25","3.50","3.75","4.00","4.25","4.50","4.75","5.00","5.50","6.00","6.50","7.00","7.50","8.00","8.50","9.00","9.50","10.0","11.0","12.0","13.0","14.0","15.0","16.0"}

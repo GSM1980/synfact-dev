@@ -2,7 +2,7 @@
 
 The planned site is a separate private project. `synfact-dev` holds the source of the firmware SDK and browser build engine. The site would serve static HTML, CSS, JavaScript, a pinned core package and a pinned catalog of audited SMZ objects, and integrate the JavaScript edition of Synfact Transfer. Cloudflare Pages can deploy it from a private repository and attach a custom domain. No site has been deployed as part of this work.
 
-The source repository of the site and Transfer may remain private. Browser code and artifacts served to visitors are nevertheless downloadable and inspectable by those visitors. Review third-party licenses, corresponding-source obligations, module provenance and redistribution rights before publishing. In particular, the local FM TONE source includes private firmware-derived material; passing a build test does not give permission to distribute it. Never deploy stock OS files, complete AUDIO images, extracted firmware or patched firmware.
+The source repository of the site and Transfer may remain private. Browser code and artifacts served to visitors are nevertheless downloadable and inspectable by those visitors. Review third-party licenses, corresponding-source obligations, module provenance and redistribution rights before publishing. In particular, FM TONE's source holds a recipe, not the Digitone's bytes: it rebuilds them from the owner's own Digitone OS file (mods/fm-tone-st/README.md), but its compiled objects hold those bytes, so they must not be served as they are. Passing a build test does not give permission to distribute anything. Never deploy stock OS files, complete AUDIO images, extracted firmware or patched firmware.
 
 ## Intended visitor flow
 

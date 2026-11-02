@@ -87,6 +87,13 @@ $PY -m elekloader.lint mods/core-st/out/core-X.Y.Z.elemod \
 
 ### SMZ4 bank (machines + modules)
 
+FM TONE needs its Digitone parts first (once per checkout, or after a change
+to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
+
+```bash
+$PY mods/fm-tone-st/tools/import_digitone.py C:/Desarrollo/synfact/inputs/local/official/Digitone_and_Digitone_Keys_OS1.44.syx
+```
+
 ```bash
 $PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st     --module mods/modulation-skip-st \

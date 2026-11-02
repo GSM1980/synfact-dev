@@ -1,8 +1,8 @@
 | Synfact FM_CACHE adapter, imported as symbolic assembler source.
-| Adaptation: generic elekloader extended-control receiver. See imported provenance.
+| Adaptation: generic elekloader extended-control receiver.
 | FM TONE (runtime-support machine): Digitone 1.44 FM voice, dn-resident adapter semantics.
         .text
-.include "imported/bindings.s"
+.include "bindings.s"
         .globl  fm_update, fm_render
 | ---------------------------------------------------------------- update(pitch, voice, params)
 fm_update:

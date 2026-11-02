@@ -1,4 +1,4 @@
-/* Synfact FM TONE UI: same drawing source and private imported resources.
+/* Synfact FM TONE UI: the drawing source; imported/ui-data.h holds its drawings (tools/import_digitone.py).
  * Core services own page navigation, storage, locks and parameter transport. */
 #include <syntakt/machines.h>
 #include "imported/ui-data.h"

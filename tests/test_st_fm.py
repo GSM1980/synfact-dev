@@ -30,8 +30,8 @@ def verify(bank,synfact,cc):
     assert all(flag in report['cflags'] for flag in ('-O3','-mcpu=54415','-mtune=cfv4'))
     for path,digest in report['source_sha256'].items():
         assert Path(path).is_relative_to(ROOT) and hashlib.sha256(Path(path).read_bytes()).hexdigest()==digest
-    for name in ('ui-data.h','bindings.s'):
-        assert str((folder/'imported'/name).resolve()) in report['source_sha256']
+    for name in ('imported/ui-data.h','bindings.s','imported/dsp.text.bin','imported/tables.rodata.bin','imported/tables.data.bin'):
+        assert str((folder/name).resolve()) in report['source_sha256'],name
     # A change in either nested include must be covered by the build's source pin.
     assert str((folder/'events.h').resolve()) in report['source_sha256']
     raw=(synfact/'build/smz-1/work/current/out/inner-zone.smz4').read_bytes()

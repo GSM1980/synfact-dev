@@ -30,17 +30,19 @@ STORED_PARAMS=28
 def align(n,a=16):return (n+a-1)&-a
 def be32(*words):return struct.pack('>'+str(len(words))+'I',*words)
 
-def source_inputs(src,folder,inputs):
-    """Pin transitive C/assembler includes, including private nested resources."""
+def source_inputs(src,folder,inputs,binary=False):
+    """Pin transitive C/assembler includes, including private nested resources
+    and the files assembler sources .incbin."""
     src=Path(src).resolve()
     if str(src) in inputs:return
     raw=src.read_bytes();inputs[str(src)]=hashlib.sha256(raw).hexdigest()
-    pattern=r'^\s*(?:#\s*include\s*[<"]([^>"]+)[>"]|\.include\s*"([^"]+)")'
+    if binary:return
+    pattern=r'^\s*(?:#\s*include\s*[<"]([^>"]+)[>"]|\.include\s*"([^"]+)"|\.incbin\s*"([^"]+)")'
     for match in re.finditer(pattern,raw.decode('utf-8-sig'),re.M):
-        name=match[1] or match[2]
+        name=match[1] or match[2] or match[3]
         for base in (src.parent,Path(folder),Path(sdk.INCLUDE)):
             dependency=base/name
-            if dependency.is_file():source_inputs(dependency,folder,inputs);break
+            if dependency.is_file():source_inputs(dependency,folder,inputs,binary=bool(match[3]));break
 
 def pack(image,relocations,descriptors,section,features=0,ui=0,modules=0,module_count=0):
     """The builder's inputs are generated from source, never a previous SMZ."""
