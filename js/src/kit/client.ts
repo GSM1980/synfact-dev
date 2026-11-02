@@ -71,9 +71,12 @@ export function createBuilder(options: BuilderOptions) {
       return call<{data:ArrayBuffer;sha256:string;bytes:number;coreVersion:string;facts:unknown}>(
         'build_syntakt', {manifest,sha256}, await file.arrayBuffer(), log)
     },
-    /** Only selections independently validated and pinned in the SMZ catalog are accepted. */
-    buildSmz(catalog:string,sha256:string,selected:readonly string[]) {
-      return call<{data:ArrayBuffer;sha256:string;bytes:number;selected:string[]}>('build_smz',{catalog,sha256,selected})
+    /** Only selections independently validated and pinned in the SMZ catalog are accepted. `donor` is the owner's
+     * own OS file a selected module takes bytes from: the catalog's entry names it (`donor`: FM TONE's is the Digitone
+     * OS 1.44). It stays in the worker. */
+    async buildSmz(catalog:string,sha256:string,selected:readonly string[],donor?:Blob) {
+      return call<{data:ArrayBuffer;sha256:string;bytes:number;selected:string[]}>('build_smz',{catalog,sha256,selected},
+        donor?await donor.arrayBuffer():undefined)
     },
     /** Stops the worker; the builder cannot be used after. */
     dispose() { closed = true; fail('The builder was closed.') },

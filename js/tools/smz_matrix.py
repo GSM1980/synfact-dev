@@ -18,6 +18,7 @@ def main():
     p.add_argument('--parser',type=Path,required=True)
     p.add_argument('--out',type=Path,required=True,help='new local directory')
     p.add_argument('--jobs',type=int,default=2)
+    p.add_argument('--donor',type=Path,help="the OS file a module's donor recipe reads (FM TONE: the Digitone OS 1.44)")
     p.add_argument('--only-id',action='append',default=[],
                    help='validate only combinations containing this module (for an incremental run); repeat for several')
     a=p.parse_args()
@@ -40,6 +41,7 @@ def main():
         if chosen and always<=names and (not a.only_id or set(a.only_id)&names) and all(set(m.get('requires',[]))<=names and not set(m.get('conflicts',[]))&names for m in chosen):allowed.append(chosen)
     a.out.mkdir(parents=True,exist_ok=False)
     parser=a.parser.resolve(); catalog_path=a.catalog.resolve();tool=ROOT/'js/tools/smz_candidate.ts'
+    donor=['--donor',str(a.donor.resolve())] if a.donor else []
     def run_one(pair):
         index,selected=pair;names=[m['id'] for m in selected]
         folder=a.out.resolve()/f'{index:05d}';folder.mkdir()
@@ -50,7 +52,7 @@ def main():
         command+=['--out',str(ref)]
         logs=[]
         for stage,cmd,cwd in [('reference-build',command,source),('reference-parser',[str(parser),str(ref)],ROOT),
-                              ('candidate-build',['node',str(tool),str(catalog_path),str(candidate),*names],ROOT),
+                              ('candidate-build',['node',str(tool),str(catalog_path),str(candidate),*donor,*names],ROOT),
                               ('candidate-parser',[str(parser),str(candidate)],ROOT)]:
             result=subprocess.run(cmd,cwd=cwd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
             logs.append(result.stdout)

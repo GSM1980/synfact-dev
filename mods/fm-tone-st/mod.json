@@ -6,6 +6,7 @@
     "modules":["fm_tone_module"],
     "features":["machine-ui-v1"],
     "machines":[{"descriptor":"fm_tone","ui":"fm_tone_ui","update":"fm_update","render":"fm_render"}],
-    "audio":{"sources":["dsp.s","tables.s","audio.s","receive.c"]}
+    "audio":{"sources":["dsp.s","tables.s","audio.s","receive.c"]},
+    "donor":{"recipe":"digitone.json","sources":["dsp.s","tables.s","ui.c"]}
   }
 }

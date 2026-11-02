@@ -41,6 +41,14 @@ of them holds four bytes in a row that the Digitone's parts hold
 `tables.s` hold the labels and relocations; `bindings.s` the addresses they
 are laid out with.
 
+In the browser, the same rule holds for the compiled objects. `mod.json`'s
+`smz.donor` names the recipe and the sources whose objects hold the
+Digitone's bytes (`dsp.s`, `tables.s`, `ui.c`). `js/tools/smz_artifacts.py
+--donor <Digitone OS 1.44>` blanks those bytes in the catalog's objects and
+records where they go. The site's worker puts them back from the visitor's
+own file before linking ([docs/INTEGRATING.md](../../docs/INTEGRATING.md),
+protocol 4).
+
 Maintainers who change the full sources (with the Digitone's bytes, kept out
 of the repository) regenerate the skeletons, the template and the recipe
 with `tools/make_recipe.py <Digitone OS 1.44> --from <their folder>`, then

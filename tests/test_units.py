@@ -798,6 +798,24 @@ def test_a_donor_recipe_copies_fills_and_keeps_our_bytes():
         raise AssertionError(bad)
 
 
+def test_donor_fills_blank_a_section_and_put_it_back():
+    from elekloader.sdk.syntakt import donor
+    rng = random.Random(11)
+    src = bytes(rng.randrange(256) for _ in range(2000))
+    sources = {'audio': src}
+    data = b'\x01\x02' + src[40:140] + bytes(8) + src[500:504] + b'\xaa\x55'
+    blanked, copies = donor.fills(data, sources)
+    assert copies == [[2, 'audio', 40, 100], [110, 'audio', 500, 4]]
+    assert blanked == b'\x01\x02' + bytes(112) + b'\xaa\x55'
+    assert donor.unfill(blanked, copies, sources) == data
+    for bad in ([[0, 'audio', 0, 4]], [[2, 'audio', 1999, 4]], [[2, 'main', 0, 4]], [[2, 'audio', 0]], [[120, 'audio', 0, 4]]):
+        try:
+            donor.unfill(blanked, bad, sources)
+        except donor.DonorError:
+            continue
+        raise AssertionError(bad)
+
+
 def test_a_donor_recipe_wants_its_own_os_file():
     from elekloader.sdk.syntakt import donor
     recipe = {'format': donor.FORMAT, 'schema': 1, 'title': 'FM TONE', 'device': 'digitone-mk1',

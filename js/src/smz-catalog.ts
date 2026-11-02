@@ -2,12 +2,13 @@
 // Experimental curated, SHA-pinned SMZ artifact selection.
 import {sha, fromHex} from './bytes.ts'
 import {buildSmzBank, type SmzBankSpec} from './smz-bank.ts'
+import {checkDonorSpec, donorRegions, donorUnfill} from './smz-donor.ts'
 
 async function build(catalogBytes:Uint8Array, catalogHash:string, selected:string[],
-  fetch:(name:string)=>Promise<Uint8Array>, requireApproval:boolean) {
+  fetch:(name:string)=>Promise<Uint8Array>, requireApproval:boolean, donor?:Uint8Array) {
   if(!/^[0-9a-f]{64}$/.test(catalogHash)||sha(catalogBytes)!==catalogHash)throw Error('SMZ catalog hash mismatch')
   const c=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(catalogBytes))
-  if(c.schema!==1||c.device!=='syntakt'||c.os!=='1.41'||!Array.isArray(c.modules)||c.modules.length>32||
+  if((c.schema!==1&&c.schema!==2)||c.device!=='syntakt'||c.os!=='1.41'||!Array.isArray(c.modules)||c.modules.length>32||
     c.modules.some((p:any)=>!p||typeof p.id!=='string'||!/^[\w-]+$/.test(p.id)||typeof p.file!=='string'||
       !/^[\w.-]+\.json$/.test(p.file)||!/^[0-9a-f]{64}$/.test(p.sha256))||
     new Set(c.modules.map((p:any)=>p.id)).size!==c.modules.length||new Set(c.modules.map((p:any)=>p.file)).size!==c.modules.length||!Array.isArray(c.approved))
@@ -28,6 +29,16 @@ async function build(catalogBytes:Uint8Array, catalogHash:string, selected:strin
       if(!Array.isArray(obj.sections)||!Array.isArray(obj.symbols)||!Array.isArray(obj.relocations))throw Error('Invalid SMZ object')
       for(const s of obj.sections){if(typeof s.data!=='string'||!/^(?:[0-9a-f]{2})*$/.test(s.data))throw Error('Invalid SMZ section bytes');s.data=fromHex(s.data)}
     }
+    // Another instrument's bytes, blanked in the catalog: the owner's own OS file puts them back.
+    if(item.donor!==undefined){
+      if(c.schema<2||!Array.isArray(item.donor.fills))throw Error('Invalid SMZ donor')
+      const regions=await donorRegions(checkDonorSpec(item.donor),donor)
+      for(const f of item.donor.fills){
+        const s=(f?.side==='main'?item.main:f?.side==='audio'?item.audio:[])[f?.object]?.sections?.[f?.section]
+        if(!s||!(s.data instanceof Uint8Array))throw Error('Invalid SMZ donor fill')
+        s.data=donorUnfill(s.data,f.copies,regions)
+      }
+    }
     spec.main.push(...item.main);spec.audio.push(...item.audio);spec.machines.push(...item.machines);spec.modules.push(...item.modules)
     spec.samplePool ||= item.samplePool
   }
@@ -37,12 +48,15 @@ async function build(catalogBytes:Uint8Array, catalogHash:string, selected:strin
   return {data,sha256:digest,bytes:data.length,selected:ordered}
 }
 
-/** Production path: only a combination independently validated and pinned in the catalog can be returned. */
-export function buildSmzSelection(catalogBytes:Uint8Array, catalogHash:string, selected:string[], fetch:(name:string)=>Promise<Uint8Array>) {
-  return build(catalogBytes,catalogHash,selected,fetch,true)
+/** Production path: only a combination independently validated and pinned in the catalog can be returned.
+ * `donor` is the owner's OS file a selected module takes bytes from (FM TONE: the Digitone OS 1.44). */
+export function buildSmzSelection(catalogBytes:Uint8Array, catalogHash:string, selected:string[], fetch:(name:string)=>Promise<Uint8Array>,
+  donor?:Uint8Array) {
+  return build(catalogBytes,catalogHash,selected,fetch,true,donor)
 }
 
 /** Offline development only: compare and validate the result before adding it to an approved catalog. */
-export function buildSmzCandidate(catalogBytes:Uint8Array, catalogHash:string, selected:string[], fetch:(name:string)=>Promise<Uint8Array>) {
-  return build(catalogBytes,catalogHash,selected,fetch,false)
+export function buildSmzCandidate(catalogBytes:Uint8Array, catalogHash:string, selected:string[], fetch:(name:string)=>Promise<Uint8Array>,
+  donor?:Uint8Array) {
+  return build(catalogBytes,catalogHash,selected,fetch,false,donor)
 }

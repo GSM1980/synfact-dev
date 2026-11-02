@@ -65,7 +65,7 @@ export function createService(get: Fetcher) {
       const file=String(args.catalog ?? ''), pin=String(args.sha256 ?? '')
       if(!/^[\w.-]+\.json$/.test(file)||!Array.isArray(args.selected))throw Error('SMZ build needs a pinned catalog and selection')
       const result=await buildSmzSelection(await get(new URL(file,base).href),pin,args.selected as string[],
-        name=>get(new URL(name,base).href))
+        name=>get(new URL(name,base).href),call.data?new Uint8Array(call.data):undefined)
       return {...result,data:result.data.slice().buffer}
     }
     if (call.call === 'build_syntakt') {

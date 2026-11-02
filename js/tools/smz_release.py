@@ -36,6 +36,7 @@ def main():
     p.add_argument('--core-build', type=Path, help='a verified Syntakt core build (verification.json, audio/) to package')
     p.add_argument('--meter', action='store_true', help='the core build used --system-info')
     p.add_argument('--jobs', type=int, default=2)
+    p.add_argument('--donor', type=Path, help="the OS file a module's donor recipe reads (FM TONE: the Digitone OS 1.44)")
     p.add_argument('--allow-dirty', action='store_true', help='development only: sources with uncommitted changes')
     a = p.parse_args()
     if os.environ.get('ELEKLOADER_CROSS') is None:
@@ -64,7 +65,8 @@ def main():
     # Its objects, pinned with their sources.
     smz = out / 'smz'
     run(sys.executable, TOOLS / 'smz_artifacts.py', '--bank', bank,
-        *[x for m in machines for x in ('--machine', m)], *[x for m in modules for x in ('--module', m)], '--out', smz)
+        *[x for m in machines for x in ('--machine', m)], *[x for m in modules for x in ('--module', m)], '--out', smz,
+        *(['--donor', a.donor.resolve()] if a.donor else []))
     catalog = json.loads((smz / 'catalog.json').read_text(encoding='utf-8'))
     pins = {m['id']: m['sha256'] for m in catalog['modules']}
 
@@ -77,7 +79,8 @@ def main():
     if changed:
         only = [] if not a.previous else [x for i in changed for x in ('--only-id', i)]
         run(sys.executable, TOOLS / 'smz_matrix.py', '--catalog', smz / 'catalog.json', '--config', a.config.resolve(),
-            '--source-root', ROOT, '--parser', a.parser.resolve(), '--out', out / 'matrix', '--jobs', a.jobs, *only)
+            '--source-root', ROOT, '--parser', a.parser.resolve(), '--out', out / 'matrix', '--jobs', a.jobs, *only,
+            *(['--donor', a.donor.resolve()] if a.donor else []))
     final = smz / 'catalog-validated.json'
     if a.previous:
         final = smz / 'catalog-complete.json'

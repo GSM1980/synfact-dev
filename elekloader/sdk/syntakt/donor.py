@@ -40,9 +40,9 @@ def regions(recipe, raw):
     try:
         parsed, dev, rel = formats.load(raw)
     except (devices.UnknownFirmware, formats.FormatError) as e:
-        raise DonorError('%s needs %s; this file is not one (%s)' % (recipe['title'], _wanted(recipe), e))
+        raise DonorError('%s needs %s; this file is not one (%s)' % (recipe['title'], wanted(recipe), e))
     if dev.key != recipe['device'] or rel.version not in recipe['versions']:
-        raise DonorError('%s needs %s; this file is %s %s' % (recipe['title'], _wanted(recipe), dev.name, rel.version))
+        raise DonorError('%s needs %s; this file is %s %s' % (recipe['title'], wanted(recipe), dev.name, rel.version))
     out = {}
     for r in recipe['regions']:
         data = parsed.section(r['section'])[r['start']:r['start'] + r['length']]
@@ -53,7 +53,8 @@ def regions(recipe, raw):
     return out
 
 
-def _wanted(recipe):
+def wanted(recipe):
+    """-> 'the <device> OS <versions> file' a recipe reads."""
     name = next((d.name for d in devices.devices() if d.key == recipe['device']), recipe['device'])
     return 'the %s OS %s file' % (name, ' or '.join(recipe['versions']))
 
@@ -156,6 +157,49 @@ def ops(target, sources, minimum=4):
             data(target[i:i + 1])
             i += 1
     return out
+
+
+def spec(recipe):
+    """What a build needs to read an owner's file for a recipe: no outputs."""
+    return {k: recipe[k] for k in ('title', 'device', 'versions', 'minimum', 'regions')}
+
+
+def fills(data, sources, minimum=4):
+    """A compiled section's bytes -> (the bytes with the regions' runs blanked to
+    zero, the copies that put them back: [at, region, offset, length]). Runs of
+    one repeated byte stay: they are nobody's. Refuses a result whose own bytes
+    hold `minimum` bytes in a row of a region (literal_runs)."""
+    blanked, copies, at = bytearray(data), [], 0
+    section_ops = ops(data, sources, minimum)
+    if literal_runs(section_ops, sources, minimum):
+        raise DonorError('a run the regions hold was left in place')
+    for op in section_ops:
+        if op[0] == 'copy':
+            n = op[3]
+            if len(set(data[at:at + n])) > 1:
+                copies.append([at, op[1], op[2], n])
+                blanked[at:at + n] = bytes(n)
+            at += n
+        elif op[0] == 'fill':
+            at += len(op[1]) // 2 * op[2]
+        else:
+            at += len(op[1]) // 2
+    return bytes(blanked), copies
+
+
+def unfill(data, copies, sources):
+    """The blanked bytes and their copies -> the section's bytes."""
+    out = bytearray(data)
+    for c in copies:
+        if not (isinstance(c, list) and len(c) == 4):
+            raise DonorError('bad copy: %r' % (c,))
+        at, name, offset, n = c
+        src = sources.get(name)
+        if (src is None or not all(isinstance(v, int) for v in (at, offset, n)) or n <= 0 or at < 0 or offset < 0
+                or at + n > len(out) or offset + n > len(src) or any(out[at:at + n])):
+            raise DonorError('copy outside its section or region: %r' % (c,))
+        out[at:at + n] = src[offset:offset + n]
+    return bytes(out)
 
 
 def literal_runs(recipe_ops, sources, minimum=4):
