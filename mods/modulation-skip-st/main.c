@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * modulation-skip-st: skips the stock modulation 40097afc (the velocity/
  * modulation matrix of the MAIN audio IRQ, ~5.7 CPU points) in blocks where
- * it would write exactly what it wrote last time. docs/SYNTAKT-CONVERSION-SKIP.md.
+ * it would write exactly what it wrote last time.
  *
  * The stock body writes, per track t, working[t] + 2*index for 4 entries of
  * 12 velocity groups and 13x5 source groups; entry = {amount, index} longs of
  * the track's unsmoothed machine data. Its output depends only on (memo rule,
- * validated in Unicorn, tools/st_modulation_skip_study.py): the velocity and
+ * validated in Unicorn): the velocity and
  * source tables (45 longs), the machine data it reads (13 x 24 longs) and the
  * values of its destination words on entry. When all of them equal the last
  * real run's, it would write the same: write those final values and return.

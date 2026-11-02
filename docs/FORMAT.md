@@ -397,5 +397,5 @@ and feature bits do not change.
 The optional ARP module stores Sound-owned settings in APC1 project carriers
 and an ARP1 extension after the existing +Drive LFO3 trailer. Native Sound/Kit
 records and snapshot lengths remain fixed; absent/corrupt metadata gives OFF.
-The complete byte layout, validation and compatibility contract are in
-[ARP-SOUND-PERSISTENCE](ARP-SOUND-PERSISTENCE.md).
+The complete byte layout, validation and compatibility rules are in the ARP
+sources, `mods/arp-st/persist.c`.

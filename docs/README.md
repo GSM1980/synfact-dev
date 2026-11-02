@@ -11,7 +11,6 @@ and change with the code, so a commit's docs match its code.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
-- Feedback and improvements: [../improvements.md](../improvements.md).
 
 ## Writing mods
 
@@ -29,11 +28,6 @@ and change with the code, so a commit's docs match its code.
   (the core: hook bus, SMZ4 banks, storage, sample pool), with
   [mods/core](../mods/core) (the two sources it shares with elekloader's
   core), [mods/machines-st](../mods/machines-st), and each mod's folder.
-- **ARP:** [the Digitone ARP port](DIGITONE-ARP-ST.md) and
-  [its Sound persistence](ARP-SOUND-PERSISTENCE.md).
-- **Studies:** [conversion skip](SYNTAKT-CONVERSION-SKIP.md),
-  [CPU and UI](SYNTAKT-CPU-UI-INVESTIGATION-20261028.md),
-  [hook inventory](SYNTAKT-HOOK-INVENTORY-20261029.md).
 - **Examples** ([examples/](../examples)): `machine-test-st`, a test machine,
   and `smz-test-st`, a test SMZ4 bank.
 

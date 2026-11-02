@@ -82,8 +82,7 @@ IView with the Sound settings; a new Sound keeps MODE OFF. The selector,
 native event generator, clock and view are connected. This is an experimental hardware-test candidate: native sequencer chord lanes
 remain incomplete. Sound persistence uses the shared lifecycle
 adapter and needs a physical save/reload/reboot check. The ARP is monophonic and works without POLY;
-it never reserves other tracks. Each audio track has one ARP. Investigation:
-[DIGITONE-ARP-ST.md](../../docs/DIGITONE-ARP-ST.md).
+it never reserves other tracks. Each audio track has one ARP.
 
 ## Controls and view
 
@@ -112,7 +111,6 @@ Encoder D/LEN changes following output gates without dropping a held root.
 Its temporary value label uses the original length spelling and fractions.
 Settings follow the Sound through native copies, Kit/project and pool codecs,
 Kit save/reload buffers and +Drive Sound records. Missing metadata restores OFF.
-See [Sound persistence](../../docs/ARP-SOUND-PERSISTENCE.md).
 
 `ui.c` reproduces Digitone 1.44 `40051390..40051928`: labels, positions, step
 selection, rests, offsets, adaptive scale, length marker and rail. `view.c`
@@ -260,7 +258,7 @@ single-instance test; it does not measure eight instances.
 
 Persistence is still **not connected**. The agreed ownership is the Sound,
 including Sound copy/load, +Drive and kit/project save/reload. The storage audit
-and required integration tests are in [ARP-SOUND-PERSISTENCE.md](../../docs/ARP-SOUND-PERSISTENCE.md).
+and the required integration tests are not in the repository yet.
 
 ### TEST03: native UI producer and borrowed preview Sound
 

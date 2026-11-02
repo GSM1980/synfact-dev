@@ -69,8 +69,7 @@ physical CPU percentages or a full boot test. Full common regressions also pass.
 
 Candidate: `out/lfo3-lock-edit-20261028/synfact-machines.smz4`, unchanged core
 0.12.18 and AUDIO. The sibling `baseline/` bank is byte-identical to fm-fb.
-See [the investigation](../../docs/SYNTAKT-CPU-UI-INVESTIGATION-20261028.md)
-and the workstation build guide for the emulator environment and commands.
+See the workstation build guide for the emulator environment and commands.
 
 ## Task-side publication lookup memo
 

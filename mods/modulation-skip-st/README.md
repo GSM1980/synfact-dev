@@ -5,7 +5,6 @@ source modulation matrix) in every block: about 6,600 instructions, 5.7 CPU
 points measured on the device. Between trigs and edits it
 writes exactly what it wrote in the previous block. This module writes those
 values itself in such blocks and returns, and runs the stock routine otherwise.
-Study and design: [docs/SYNTAKT-CONVERSION-SKIP.md](../../docs/SYNTAKT-CONVERSION-SKIP.md).
 
 ## What decides a skip
 

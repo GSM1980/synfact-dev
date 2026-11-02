@@ -1,11 +1,9 @@
-
 # Copyright (c) 2026 GSM1980 and contributors
 """Digitone Sound v1..v6 -> Elekloader FM TONE Sound v7, host only.
 
 Canonical converter for the current one-word RATIO B layout. Transfer apps may
 vendor this module unchanged; it needs only Python's standard library, no
 firmware, emulator or MIDI. Object framing belongs to the calling application.
-
 """
 import struct
 

@@ -202,7 +202,7 @@ scalar states agree in x1 and x2; the retained x2 mode also agrees sample for
 sample with Digitone. x2 is selected in emulator memory only. The shipped ECO
 profile remains x1. The different x1 PCM is not proof of an attack-click defect.
 This is not an AMP, POLY allocator, full-boot or physical listening test;
-[IMP-018](../../improvements.md#imp-018--clics-de-ataque-fm-fm-c) remains open.
+The attack-click issue (IMP-018) remains open.
 
 `tests/test_st_fm_onset.py` additionally executes the original Syntakt AUDIO
 and Digitone MAIN AMP routines. It checks six native attack ramps against each

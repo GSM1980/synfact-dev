@@ -1,4 +1,3 @@
-
 """Portable HZFS v1/v2 metadata codec. No IO, MIDI or device side effects.
 
 V2 retains every 64-byte sample record and appends n u32 folder IDs then

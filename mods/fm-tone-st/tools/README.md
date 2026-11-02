@@ -3,7 +3,7 @@
 `digitone.py` is the canonical host-only converter. Synfact Transfer calls an
 unchanged vendored copy of this module; its local `digitone.py` handles the
 outer Transfer object and CRC. No firmware, emulator or MIDI is needed to
-convert a record. 
+convert a record.
 
 The destination is Elekloader's current FM TONE, type 65, with one stored
 RATIO B control and four ratio offsets. Older Synfact layouts are not a

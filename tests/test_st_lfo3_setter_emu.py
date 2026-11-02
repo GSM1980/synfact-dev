@@ -17,8 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT/'tools'))
-from st_ui_cost_study import Machine, BASE, STACK, MODEL, VTABLE, DATA, COMPRESSED, RETURN, ACCESS, NOTIFY, STRIDE
+sys.path.insert(0, str(ROOT/'tests'))
+from st_emulator import Machine, BASE, STACK, MODEL, VTABLE, DATA, COMPRESSED, RETURN, ACCESS, NOTIFY, STRIDE
 from elekloader import syx
 from elekloader.sdk import elf
 from unicorn.m68k_const import *
