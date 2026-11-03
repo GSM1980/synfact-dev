@@ -79,6 +79,8 @@ A format-2 mod is a relocatable object:
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2; "Mod storage" below) |
 
+`core_mod_info` (a table of 40-byte entries, declared by the Syntakt core) is filled by the linker, not by mods: see "The linker" below.
+
 ### The linker
 
 1. **Checks.** Everything in "Checks" below. Nothing is linked unless all
@@ -164,6 +166,9 @@ core a mod that declares storage is refused. The linker:
   generations, then T and P);
 - adds entries to `core_store_ids`: the layout's ID, then its ancestors,
   newest first;
+- when a mod declares `core_mod_info` (40-byte entries), adds one entry per linked
+  mod, the core's first: its id in 24 bytes and its version in 16, NUL-padded,
+  so System info can list them ([ADAPTING](ADAPTING.md), core 1.1); a zero entry ends the table;
 - appends the lockfile to the image, after the mods' image: `ELKSTORE`,
   its length (4 bytes, big-endian), then its text. Nothing reads it on the
   unit; `elekloader.patch --lockfile-from` takes it back out of a build;

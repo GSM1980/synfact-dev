@@ -77,5 +77,10 @@ struct st_machine_host_api {
     };
     /* API 11 appends pool infrastructure; APIs 8/10 keep their prefix. */
     const struct st_sample_pool_api *pool;
+    /* Host API 12: the core's mod list and the loaded bank's, zero-terminated 40-byte
+     * records (id in 24 bytes, version in 16, NUL-padded). bank_info points to the
+     * bank's list pointer; it is null when no bank with a mod-info directory is loaded. */
+    const unsigned char *core_info;
+    const unsigned char *const *bank_info;
 };
 #endif

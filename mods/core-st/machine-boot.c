@@ -21,6 +21,8 @@ u32 core_machine_paints; /* Reserved diagnostic: silent loading never draws. */
 u32 core_machine_pages;
 const u8 *core_machine_audio;
 static void *retained;
+/* Host API 12: the loaded bank's mod-info directory, null when none is published. */
+const unsigned char *core_bank_info;
 struct disk_reader {u32 sector,valid;u8 cache[4096] __attribute__((aligned(16)));};
 static int disk_read(void *context,u32 at,void *out,u32 n)
 {
@@ -99,7 +101,8 @@ void core_machine_load(void)
     }
     if(again.nmods && !core_modules_bind((void *)(file+again.image+again.modules),again.nmods)){
         core_machine_active=0;retained=file;fw_free(guard);return;}
-    retained=file;core_machine_audio=file+again.audio;
+    retained=file;core_bank_info=again.info==CORE_SMZ_NONE?0:file+again.image+again.info;
+    core_machine_audio=file+again.audio;
     core_machine_pages=again.count?(again.audio_bytes+2047)>>11:0;
     core_machine_status=0;fw_free(guard);return;
 reject:

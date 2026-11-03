@@ -1,6 +1,6 @@
 {
   "id": "system-info-st",
-  "version": "0.1",
+  "version": "1.1",
   "title": "System info",
   "category": "Interface",
   "author": "GSM1980; Synfact; digihealth (irpina)",
@@ -27,6 +27,16 @@
       "event": "ev_draw",
       "fn": "si_draw",
       "order": 90
+    },
+    {
+      "event": "ev_key",
+      "fn": "si_key",
+      "order": 60
+    },
+    {
+      "event": "ev_enc",
+      "fn": "si_enc",
+      "order": 60
     }
   ],
   "resources": {

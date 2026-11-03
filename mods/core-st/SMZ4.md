@@ -45,7 +45,7 @@ All words are 32-bit big endian. Address intervals exclude their upper end.
 | 0 / 4 / 8 | `SAFE` / version 2 / ABI `454c0001` |
 | 12 / 16 | Exact file length / Adler32 of bytes 20..EOF |
 | 20 | MAIN zone offset, exactly 48 |
-| 24 | Feature mask: bit 0 sample-pool v1; bit 1 machine-ui-v1; bit 2 modules-v1; other bits rejected |
+| 24 | Feature mask: bit 0 sample-pool v1; bit 1 machine-ui-v1; bit 2 modules-v1; bit 3 mod-info; other bits rejected |
 | 28 | UI directory offset within MAIN image when bit 1 is set; otherwise zero |
 | 32 / 36 | Module directory offset within MAIN image / count 1..16 when bit 2 is set; otherwise zero |
 | 40 / 44 | Descriptor directory offset within MAIN image / machine count |
@@ -55,7 +55,7 @@ All words are 32-bit big endian. Address intervals exclude their upper end.
 | Offset | Value |
 |---|---|
 | 0 / 4 / 8 | `SMZ4` / MAIN image bytes / relocation count |
-| 12 / 16 | Zero hooks / `ffffffff` (no global initializer) |
+| 12 / 16 | Mod-info directory offset within MAIN image when bit 3 is set, otherwise zero / `ffffffff` (no global initializer) |
 | 20 | Sum of BE longwords from zone+32 through MAIN image end, modulo 2^32 |
 | 24 / 28 | AUDIO offset relative to zone / unpadded AUDIO length |
 
@@ -420,3 +420,17 @@ AUDIO service budget. This is a speed-oriented policy, without relaxed math.
 The MCF54415 has EMAC and no FPU; use integer/fixed-point DSP. Objects and linked
 C function ranges in the bank are decoded to reject unsupported instructions.
 Static checks do not prove every runtime path or measure CPU cycles on hardware.
+
+## Mod-info directory (feature bit 3, core 1.1)
+
+Bit 3 adds the versions of the bank's mods, so System info can list them. The
+zone word at file offset 60 (zone+12) is then the directory's offset within the
+MAIN image; it is zero when the bit is clear. The directory is zero-terminated
+and has no count: each record is 40 bytes, the mod's `id` in 24 bytes and its
+`version` in 16, printable ASCII and NUL-padded. A record whose first byte is
+zero ends it, and at most 16 mods fit. Its bytes are plain data, so no relocation
+may touch them. `smz.py` writes one record per mod folder (machine and module
+folders alike), taking `id` and `version` from its `mod.json`. Core 1.1 checks the
+directory during validation and publishes the loaded bank's list to modules as
+`bank_info` (host API 12); the core's own mods are `core_info`. Cores before 1.0
+reject feature bit 3 before execution, and a bank without it lists only the core.

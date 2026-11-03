@@ -5,10 +5,13 @@
 #include <syntakt/native.h>
 #include <syntakt/host.h>
 #include <stddef.h>
-typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==92 &&
+/* Host API 12 appends core_info (92) and bank_info (96); earlier offsets are unchanged. */
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==100 &&
     offsetof(struct st_machine_host_api,native_query)==84 &&
     offsetof(struct st_machine_host_api,native_dispatch)==84 &&
-    offsetof(struct st_machine_host_api,pool)==88 ? 1 : -1];
+    offsetof(struct st_machine_host_api,pool)==88 &&
+    offsetof(struct st_machine_host_api,core_info)==92 &&
+    offsetof(struct st_machine_host_api,bank_info)==96 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)

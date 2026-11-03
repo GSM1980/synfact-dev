@@ -3,7 +3,19 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { DIGITAKT_MK1, DIGITONE_MK1, targetOf } from '../src/devices.ts'
-import { Mod2, check } from '../src/link.ts'
+import { Mod2, check, modInfoRecord } from '../src/link.ts'
+
+test('the mod-info record: id and version, NUL-padded; refused when one does not fit (link.py mod_info_record)', () => {
+  const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.43')!
+  const mod = (id: string, version: string) => new Mod2({
+    elemod: 2, id, version, target: targetOf(dn, r), sections: { '.run': { align: 4, parts: [['hex', '4e714e71']] } },
+  }, id)
+  const rec = modInfoRecord(mod('arp-st', '1.1'))
+  assert.equal(rec.length, 40)
+  assert.deepEqual([...rec], [...new TextEncoder().encode('arp-st'), ...new Uint8Array(18), ...new TextEncoder().encode('1.1'), ...new Uint8Array(13)])
+  for (const bad of [mod('x'.repeat(24), '1'), mod('a', ''), mod('a', 'vérsion')])
+    assert.throws(() => modInfoRecord(bad), /mod-info table/)
+})
 
 test('a parameter slot claims its sound slot (soundslot:<n>), from its own bytes or the stock image', () => {
   const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.43')!

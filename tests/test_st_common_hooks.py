@@ -89,10 +89,10 @@ def verify(folder):
     assert b.endswith(bytes.fromhex('4ef94003921e')) and not calls(ins,'core_preview_selected')
     assert not any(i.flow==cf.F_JSR and i.target in (0x40103788,0x40103794) for pc,i in ins)
     assert read(0x400a423e,6)==jump('core_native_note_accept')
-    assert len(manifest['sites'])==97 and len(manifest['collections'])==12
+    assert len(manifest['sites'])==97 and len(manifest['collections'])==13   # core_mod_info: 1.0
     assert len({s['addr'] for s in manifest['sites']})==97
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, note acceptance; 97 sites, 12 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, note acceptance; 97 sites, 13 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])

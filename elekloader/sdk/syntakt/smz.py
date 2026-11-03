@@ -44,7 +44,21 @@ def source_inputs(src,folder,inputs,binary=False):
             dependency=base/name
             if dependency.is_file():source_inputs(dependency,folder,inputs,binary=bool(match[3]));break
 
-def pack(image,relocations,descriptors,section,features=0,ui=0,modules=0,module_count=0):
+MOD_INFO_ID,MOD_INFO_VERSION,MOD_INFO_MAX=24,16,16   # feature bit 3: the mods' versions (SMZ4.md)
+
+def mod_info_directory(records):
+    """-> the bank's mod-info directory: (id, version) per mod as 40-byte records, NUL-padded,
+    ended by a zero record. Each id and version is 1..23 and 1..15 printable ASCII characters."""
+    if not records or len(records)>MOD_INFO_MAX:raise ValueError('a bank lists 1..%d mods'%MOD_INFO_MAX)
+    out=b''
+    for mod_id,version in records:
+        for what,text,size in (('id',mod_id,MOD_INFO_ID),('version',version,MOD_INFO_VERSION)):
+            if not 0<len(text)<size or not all(' '<=c<'' for c in text):
+                raise ValueError('mod %s %r does not fit the bank directory'%(what,text))
+            out+=text.encode('ascii').ljust(size,b'\x00')
+    return out+bytes(40)
+
+def pack(image,relocations,descriptors,section,features=0,ui=0,modules=0,module_count=0,info=0):
     """The builder's inputs are generated from source, never a previous SMZ."""
     rels=sorted(relocations)
     if (not descriptors and not module_count) or len(descriptors)>16:raise ValueError('bank needs machines or modules; maximum 16 machines')
@@ -59,8 +73,9 @@ def pack(image,relocations,descriptors,section,features=0,ui=0,modules=0,module_
     section[12:16]=be32(zlib.adler32(section[16:])&0xffffffff)
     image_sum=sum(struct.unpack('>'+str(len(body)//4)+'I',body))&0xffffffff
     audio_at=align(80+len(body))
-    zone=b'SMZ4'+be32(len(image),len(rels),0,0xffffffff,image_sum,audio_at-48,len(section))
-    if features&~7:raise ValueError('unknown machine-bank feature')
+    zone=b'SMZ4'+be32(len(image),len(rels),info,0xffffffff,image_sum,audio_at-48,len(section))
+    if features&~15:raise ValueError('unknown machine-bank feature')
+    if bool(features&8)!=bool(info):raise ValueError('feature 8 needs the mod-info directory, and only it')
     data=bytearray(b'SAFE'+be32(2,ABI,0,0,48,features,ui,modules,module_count,0,len(descriptors))+zone+body)
     data+=bytes(audio_at-len(data))+section+bytes(align(len(section),2048)-len(section))
     data[12:16]=be32(len(data));data[16:20]=be32(zlib.adler32(data[20:])&0xffffffff)
@@ -80,7 +95,7 @@ def build(directories,stock_path=None,output=None,module_directories=()):
         stock,dev,release=formats.load(stock_path)
         if dev.key!='syntakt' or release.version!='1.41':raise ValueError('requires Syntakt OS 1.41')
     prefix=os.environ.get('ELEKLOADER_CROSS',dev.toolchain['prefix'])
-    descriptors=[];uis=[];modules=[];main_objs=[];audio_objs=[];audio_exports=[];types=set();features=0;inputs={};audits={}
+    descriptors=[];uis=[];modules=[];main_objs=[];audio_objs=[];audio_exports=[];types=set();features=0;inputs={};audits={};mod_records=[]
     api_header=Path(sdk.INCLUDE)/'syntakt/machines.h'
     inputs[str(api_header)]=hashlib.sha256(api_header.read_bytes()).hexdigest()
     modules_header=Path(sdk.INCLUDE)/'syntakt/modules.h'
@@ -89,6 +104,7 @@ def build(directories,stock_path=None,output=None,module_directories=()):
     for k,(directory,is_module) in enumerate(folders):
         folder=Path(directory).resolve()
         manifest=json.loads((folder/'mod.json').read_text(encoding='utf-8-sig'))
+        mod_records.append((str(manifest['id']),str(manifest['version'])))
         # Machine source compilation needs the target profile, not an OS image.
         if any(manifest.get(f) for f in ('sites','subscribe','contribute','collections','fixed','storage','machines','dsp','weak')):
             raise ValueError('SMZ banks accept machine sources only, without resident hooks/resources')
@@ -184,8 +200,10 @@ def build(directories,stock_path=None,output=None,module_directories=()):
     size=code_start-AUDIO+len(code)
     entries=b''.join(be32(t,asym[u],asym[r],0) for t,(u,r) in zip(machine_types,audio_exports))
     section=b'SMA3'+be32(n,size,0)+entries+bytes(384)+code
+    # Feature 8: the mods' versions, a zero-terminated directory in the MAIN image (SMZ4.md).
+    image+=bytes(-len(image)%4);info=len(image);image+=mod_info_directory(mod_records);features|=8
     data=pack(bytes(image),rels,descriptors,section,features,40*n if features&2 else 0,
-              module_at if modules else 0,len(modules))
+              module_at if modules else 0,len(modules),info)
     if any(hashlib.sha256(Path(path).read_bytes()).hexdigest()!=digest for path,digest in inputs.items()):
         raise ValueError('machine sources changed during compilation')
     output.write_bytes(data)

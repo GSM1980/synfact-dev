@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "0.13.1",
+  "version": "1.1",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -657,7 +657,8 @@
     "ev_fs_write": 4,
     "ev_fs_written": 4,
     "ev_main_mix": 4,
-    "ev_native": 4
+    "ev_native": 4,
+    "core_mod_info": 40
   },
   "subscribe": [
     {

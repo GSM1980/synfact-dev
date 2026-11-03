@@ -1,6 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Telemetry port from Synfact pool/system_info.c, inspired by irpina/digihealth.
  * Native UI stays owned by the firmware. No machines, project data or storage.
+ *
+ * The SETTINGS row opens a list (screen): METERS ON/OFF, then the core and each
+ * mod in the bank with its version (host API 12). ENC A and the arrows move,
+ * YES on METERS toggles the meters, NO closes the list.
  */
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -9,6 +13,12 @@ typedef unsigned char u8;
 #define WIN16 ((volatile unsigned short *)0x10000800u)
 #define QUERY_MAGIC 0x48543133u
 #define REPLY_MAGIC 0x53493134u
+#define LIST_LINES 10
+#define KEY_YES 12
+#define KEY_NO 13
+#define KEY_UP 14
+#define KEY_DOWN 15
+
 #ifndef ST_SYSTEM_INFO_MODULE
 extern void core_clock_snapshot(u32 *);
 extern void core_additem(void *,const void *);
@@ -20,6 +30,10 @@ extern void fw_blit(void *,const void *,int,int,u32);
 extern void si_label(void);
 extern const u32 core_pool_busy[];
 extern u32 core_pool_query_owner[];
+extern const unsigned char core_mod_info[];
+extern const unsigned char *core_bank_info;
+#define SI_CORE_INFO core_mod_info
+#define SI_BANK_INFO core_bank_info
 #endif
 #include "ram.c"
 static u32 enabled,ticks,page_ticks,page,primed,header_dirty;
@@ -27,18 +41,23 @@ static u32 previous[3],audio_previous[3],audio_primed;
 static u32 audio[5],audio_age,seq,pending;
 static u32 values[4]={UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN};
 static char line[25]="CPU M --% CPU A --%";
+static u32 list_open,cursor,top,list_dirty,swallowed;
 
 const char *si_label_text(void) {return enabled?"SYSTEM INFO: ON":"SYSTEM INFO: OFF";}
 struct capture {void *data;u32 unused,manager,invoke;};
-static void si_select(const struct capture *fn)
+static void set_enabled(u32 on)
 {
     u32 i;
-    enabled=!enabled;ticks=page_ticks=page=primed=audio_primed=0;
+    enabled=on;ticks=page_ticks=page=primed=audio_primed=0;
     header_dirty=1;
     audio_age=0;pending=0;
     for(i=0;i<4;i++)values[i]=UNKNOWN;
     /* Stop publication when OFF; leave the native timer mode untouched. */
     if(core_pool_query_owner[0]==2){WIN[0]=0;core_pool_query_owner[0]=0;}
+}
+static void si_select(const struct capture *fn)
+{
+    list_open=1;cursor=0;top=0;list_dirty=1;
     if(fn->data)fw_invalidate((u8 *)fn->data+0x38);
 }
 /* Hand-rasterized Synfact info icon (Material Symbols info, Apache-2.0).
@@ -141,9 +160,75 @@ static int format(void)
     for(i=0;(line[i]=next[i])!=0;i++){}
     return 1;
 }
+/* The mod list: a zero-terminated list of 40-byte records (id, version), the
+ * core's first. Lists are at most 32 records each. */
+static u32 list_count(const u8 *p)
+{
+    u32 n=0;
+    if(p)for(;p[0] && n<32;p+=40)n++;
+    return n;
+}
+static u32 rows(void){return 1+list_count(SI_CORE_INFO)+list_count(SI_BANK_INFO);}
+static const u8 *list_entry(u32 index)
+{
+    const u8 *core=SI_CORE_INFO,*bank=SI_BANK_INFO;u32 n=list_count(core);
+    if(index<n)return core+40*index;
+    index-=n;
+    if(index<list_count(bank))return bank+40*index;
+    return 0;
+}
+static char upper(char c){return c>='a' && c<='z'?(char)(c-32):c;}
+/* Row 0 is the METERS switch; the rest are "ID VERSION". */
+static void row_text(u32 row,char *out)
+{
+    char *p=out;const u8 *e;u32 i;
+    if(!row){p=word(p,"METERS ");p=word(p,enabled?"ON":"OFF");*p=0;return;}
+    e=list_entry(row-1);
+    if(!e){*out=0;return;}
+    for(i=0;i<24 && e[i];i++)*p++=upper((char)e[i]);
+    *p++=' ';
+    for(i=0;i<16 && e[24+i];i++)*p++=upper((char)e[24+i]);
+    *p=0;
+}
+static void move(int delta)
+{
+    u32 n=rows();
+    if(delta<0){if(cursor)cursor--;}
+    else if(delta>0 && cursor+1<n)cursor++;
+    if(cursor<top)top=cursor;
+    if(cursor>=top+LIST_LINES)top=cursor-LIST_LINES+1;
+    list_dirty=1;
+}
+static u32 be(const u8 *p){return (u32)p[0]<<24|(u32)p[1]<<16|(u32)p[2]<<8|p[3];}
+/* ev_key: while the list is open it takes every key, and NO's release too. */
+int si_key(void *brain,void *ev)
+{
+    const u8 *e=ev;u32 key=be(e+12),flags=be(e+16);
+    (void)brain;
+    if(!(flags&1)){
+        if(swallowed && key==swallowed){swallowed=0;return 1;}
+        return list_open?1:0;
+    }
+    if(!list_open)return 0;
+    if(key==KEY_YES){if(!cursor)set_enabled(!enabled);list_dirty=1;}
+    else if(key==KEY_NO){list_open=0;swallowed=KEY_NO;header_dirty=1;list_dirty=1;}
+    else if(key==KEY_UP)move(-1);
+    else if(key==KEY_DOWN)move(1);
+    return 1;
+}
+/* ev_enc: encoder A (1) moves the cursor while the list is open. */
+int si_enc(void *brain,void *ev)
+{
+    const u8 *e=ev;u32 encoder=be(e+12);int delta=(int)be(e+16);
+    (void)brain;
+    if(!list_open)return 0;
+    if(encoder==1 && delta)move(delta>0?1:-1);
+    return 1;
+}
 void si_tick(void *ctrl)
 {
     u32 force=header_dirty,refresh=force;
+    if(list_dirty){list_dirty=0;((u8 *)ctrl)[0x20]=1;}
     if(!enabled){
         if(core_pool_query_owner[0]==2){core_pool_query_owner[0]=0;pending=0;}
         if(force){header_dirty=0;((u8 *)ctrl)[0x20]=1;}
@@ -157,25 +242,48 @@ void si_tick(void *ctrl)
         if(format() || force)((u8 *)ctrl)[0x20]=1;
     }
 }
-/* A 3x5 font keeps both explicit CPU/RAM labels inside the 110px title area.
- * Each row uses three low bits. Draw through the native clipping primitive. */
-static const u8 glyphs[][5]={
+/* A 3x5 font: digits, A-Z, and - % : . Each row uses three low bits, left first.
+ * Draw through the native clipping primitive. */
+static const u8 font[40][5]={
  {7,5,5,5,7},{2,6,2,2,7},{7,1,7,4,7},{7,1,7,1,7},{5,5,7,1,1},
  {7,4,7,1,7},{7,4,7,5,7},{7,1,1,1,1},{7,5,7,5,7},{7,5,7,1,7},
- {7,4,4,4,7},/* C */{6,5,6,4,4},/* P */{5,5,5,5,7},/* U */
- {2,5,7,5,5},/* A */{5,7,7,5,5},/* M */{6,5,6,5,5},/* R */
- {0,0,7,0,0},/* - */{5,1,2,4,5}/* % */};
+ {2,5,7,5,5},{6,5,6,5,6},{7,4,4,4,7},{6,5,5,5,6},{7,4,6,4,7},
+ {7,4,6,4,4},{7,4,5,5,7},{5,5,7,5,5},{7,2,2,2,7},{1,1,1,5,7},
+ {5,5,6,5,5},{4,4,4,4,7},{5,7,7,5,5},{5,7,7,7,5},{7,5,5,5,7},
+ {6,5,6,4,4},{7,5,5,7,1},{6,5,6,5,5},{7,4,7,1,7},{7,2,2,2,2},
+ {5,5,5,5,7},{5,5,5,5,2},{5,5,7,7,5},{5,5,2,5,5},{5,5,2,2,2},
+ {7,1,2,4,7},
+ {0,0,7,0,0},{5,1,2,4,5},{0,2,0,2,0},{0,0,0,0,2}};
 static const u8 *glyph(char c)
 {
-    if(c>='0'&&c<='9')return glyphs[c-'0'];
-    switch(c){case 'C':return glyphs[10];case 'P':return glyphs[11];
-    case 'U':return glyphs[12];case 'A':return glyphs[13];
-    case 'M':return glyphs[14];case 'R':return glyphs[15];
-    case '-':return glyphs[16];case '%':return glyphs[17];default:return 0;}
+    if(c>='0'&&c<='9')return font[c-'0'];
+    c=upper(c);
+    if(c>='A'&&c<='Z')return font[10+c-'A'];
+    switch(c){case '-':return font[36];case '%':return font[37];
+    case ':':return font[38];case '.':return font[39];default:return 0;}
+}
+static void draw_text(void *bmp,int base,const char *s,u32 ink)
+{
+    int x=2,r,c;const u8 *g;
+    while(*s && x<=124){g=glyph(*s++);if(g)for(r=0;r<5;r++)for(c=0;c<3;c++)
+        if(g[r]&(4u>>c))fw_fillrect(bmp,x+c,base-r,x+c,base-r,ink);
+        x+=4;}
+}
+static void draw_list(void *bmp)
+{
+    char text_line[48];u32 n=rows(),k,row;int base;
+    fw_fillrect(bmp,0,0,127,63,0);
+    for(k=0;k<LIST_LINES && top+k<n;k++){
+        row=top+k;base=60-6*(int)k;
+        row_text(row,text_line);
+        if(row==cursor){fw_fillrect(bmp,0,base-5,127,base+1,1);draw_text(bmp,base,text_line,0);}
+        else draw_text(bmp,base,text_line,1);
+    }
 }
 void si_draw(void *bmp,void *ctrl)
 {
     int x=20,r,c;const char *s=line;const u8 *g;(void)ctrl;
+    if(list_open){draw_list(bmp);return;}
     if(!enabled)return;
     fw_fillrect(bmp,18,54,127,63,0);
     while(*s && x<=124){g=glyph(*s++);if(g)for(r=0;r<5;r++)for(c=0;c<3;c++)

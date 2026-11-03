@@ -1,5 +1,5 @@
 {
-  "id": "system-info-smz-st", "version": "1.0", "title": "System info",
+  "id": "system-info-smz-st", "version": "1.1", "title": "System info",
   "device": "syntakt", "os": "1.41", "license": "GPL-2.0-or-later",
   "sources": ["main.c", "menu.s"],
   "smz_module": {"descriptor": "system_info_module"}

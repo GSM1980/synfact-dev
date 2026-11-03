@@ -14,10 +14,12 @@
 #define CORE_SMZ_EXT_STATE (8u*24u*2u)
 #define CORE_SMZ_MAIN_MAX 0x200000u
 #define CORE_SMZ_NONE 0xffffffffu
+/* Feature 8: at most 16 mods in the bank's mod-info directory (SMZ4.md). */
+#define CORE_SMZ_MOD_INFO_MAX 16u
 /* Disk words are BE. Only machines are supported, no runtime patch plans,
  * hook subscriptions or global module initializers. */
 struct core_smz_view {
-    core_u32 image,bytes,relocs,nrel,descriptors,count,audio,audio_bytes,ui,modules,nmods;
+    core_u32 image,bytes,relocs,nrel,descriptors,count,audio,audio_bytes,ui,modules,nmods,info;
 };
 struct core_smz_reader {
     void *context;

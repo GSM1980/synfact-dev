@@ -41,6 +41,29 @@ static int immutable(const struct core_smz_reader *r,const struct core_smz_view 
         if(x+4<=at)lo=mid+1;else hi=mid;}
     return lo==v->nrel || (word(r,v->relocs+4*lo,&x) && x>=at+n);
 }
+/* Feature 8: a zero-terminated directory of 40-byte records, the mod's id (24 bytes,
+ * printable, NUL-padded) and version (16, the same), at most CORE_SMZ_MOD_INFO_MAX.
+ * Plain bytes: no relocation may touch it. Sets v->info on success. */
+static int mod_info(const struct core_smz_reader *r,struct core_smz_view *v,u32 at)
+{
+    u8 d[40];u32 k,i,j,record;
+    for(k=0;k<=CORE_SMZ_MOD_INFO_MAX;k++){
+        record=at+40*k;
+        if(!span(record,40,v->bytes) || !read_at(r,v->image+record,d,40) || !immutable(r,v,record,40))return 0;
+        if(!d[0]){
+            for(j=0;j<40;j++)if(d[j])return 0;
+            if(!k)return 0;
+            v->info=at;return 1;
+        }
+        for(i=0;i<24 && d[i];i++)if(d[i]<32 || d[i]>126)return 0;
+        if(i==0 || i==24)return 0;
+        for(j=i;j<24;j++)if(d[j])return 0;
+        for(i=24;i<40 && d[i];i++)if(d[i]<32 || d[i]>126)return 0;
+        if(i==24 || i==40)return 0;
+        for(j=i;j<40;j++)if(d[j])return 0;
+    }
+    return 0;
+}
 static int text(const struct core_smz_reader *r,const struct core_smz_view *v,u32 at,u32 max)
 {
     u32 n=0;u8 c;
@@ -60,7 +83,7 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
        core_smz_be(h+8)!=CORE_SMZ_ABI || core_smz_be(h+12)!=r->bytes ||
        core_smz_be(h+20)!=48){core_smz_failure=__LINE__;return 0;}
     /* Bit 1 adds a machine-only UI callback directory, never a patch plan. */
-    if(core_smz_be(h+24)&~7u){core_smz_failure=__LINE__;return 0;}
+    if(core_smz_be(h+24)&~15u){core_smz_failure=__LINE__;return 0;}
     v->ui=core_smz_be(h+24)&2u?core_smz_be(h+28):CORE_SMZ_NONE;
     if(!(core_smz_be(h+24)&2u) && core_smz_be(h+28)){core_smz_failure=__LINE__;return 0;}
     v->modules=core_smz_be(h+32);v->nmods=core_smz_be(h+36);
@@ -70,8 +93,8 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
     v->descriptors=core_smz_be(h+40);v->count=count=core_smz_be(h+44);
     if((!count && !v->nmods) || count>CORE_SMZ_MACHINES || (v->descriptors&3) ||
        (!count && v->ui!=CORE_SMZ_NONE)){core_smz_failure=__LINE__;return 0;}
-    if(core_smz_be(h+48)!=0x534d5a34u || core_smz_be(h+60)!=0 ||
-       core_smz_be(h+64)!=CORE_SMZ_NONE){core_smz_failure=__LINE__;return 0;}
+    if(core_smz_be(h+48)!=0x534d5a34u || core_smz_be(h+64)!=CORE_SMZ_NONE ||
+       (!(core_smz_be(h+24)&8u) && core_smz_be(h+60))){core_smz_failure=__LINE__;return 0;}
     v->bytes=core_smz_be(h+52);v->nrel=core_smz_be(h+56);v->relocs=80;
     if(v->nrel>(r->bytes-80)/4){core_smz_failure=__LINE__;return 0;}
     v->image=80+4*v->nrel;
@@ -79,6 +102,8 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
        !span(v->descriptors,40*count,v->bytes)){core_smz_failure=__LINE__;return 0;}
     main_end=v->image+v->bytes;
     if(main_end>CORE_SMZ_MAIN_MAX){core_smz_failure=__LINE__;return 0;}
+    v->info=CORE_SMZ_NONE;
+    if(core_smz_be(h+24)&8u && !mod_info(r,v,core_smz_be(h+60))){core_smz_failure=__LINE__;return 0;}
     x=core_smz_be(h+72);
     if(x>r->bytes-48){core_smz_failure=__LINE__;return 0;}
     v->audio=48+x;v->audio_bytes=core_smz_be(h+76);

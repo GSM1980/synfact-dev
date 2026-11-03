@@ -105,6 +105,18 @@ sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
 
+### Syntakt core 1.1: the mod list in System info
+
+The SETTINGS row SYSTEM INFO opens a list: METERS ON/OFF, then the core and every
+mod, "ID VERSION". The core's mods come from the table `core_mod_info`, which the
+linker fills from each mod's `id` and `version` (mod.json). The bank's mods come from
+its mod-info directory (feature bit 3, [SMZ4](../mods/core-st/SMZ4.md)), which
+`elekloader.sdk.syntakt.smz` writes from each mod's `mod.json`. A bank without that
+directory lists only the core. Host API 12 gives modules `core_info` and `bank_info`.
+In the list: ENC A or the arrows move, YES on METERS toggles the meters, NO closes it.
+The list is in [system-info-st](../mods/system-info-st/system_info.c); its C test is
+`tests/test_st_system_info.py`. Its display on the unit is not verified here.
+
 ### Syntakt core 0.10: machine UI and optional modules
 
 Core 0.12's [digital POLY](../mods/poly-st/README.md) uses existing UI events

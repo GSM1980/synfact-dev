@@ -548,6 +548,71 @@ def test_a_parameter_slot_claims_its_sound_slot():
     assert t.implied_names(b'') == []
 
 
+def test_mod_info_table_lists_each_linked_mod():
+    """A core that declares core_mod_info gets one 40-byte record per linked mod, its id (24
+    bytes) and version (16), the core's first and zero-terminated: core-st's SETTINGS rows
+    read it. A mod whose id or version does not fit is refused by name; a core whose entries
+    are another size is refused. The stock image is replaced by zeros (link checks its hash)."""
+    syn = [d for d in devices.devices() if d.key == 'syntakt'][0]
+    r = syn.releases['1.41']
+    image = bytes(r.main_len)
+
+    def mod(i, version, tables=None):
+        sec = {'align': 4, 'parts': [['hex', '4e714e71']]}
+        return link.Mod2({'elemod': 2, 'id': i, 'version': version, 'target': devices.target_of(syn, r),
+                          'sections': {'.boot': sec, '.run': sec} if i == 'core' else {'.run': sec},
+                          'collections': tables or {}}, i)
+
+    def refused(fn, word):
+        try:
+            fn()
+        except elemod.ModError as e:
+            assert word in str(e), str(e)
+            return
+        raise AssertionError('not refused: ' + word)
+    core = mod('core', '1.0', {'core_mod_info': {'entry': 40}})
+    arp = mod('arp-st', '1.1')
+    real_sha, link.sha = link.sha, lambda b: r.main_sha256
+    try:
+        out = link.link([arp, core], image)
+        at, count, entry = out.tables['core_mod_info']
+        assert (count, entry) == (2, 40)
+        ddr_at, ddr_end = out.layout['ddr']              # the DDR part ends the linked image
+        off = len(out.image) - (ddr_end - ddr_at) + at - ddr_at
+        raw = out.image[off:off + 3 * entry]
+        rec = [raw[k * entry:(k + 1) * entry] for k in range(3)]
+        assert rec[0] == b'core'.ljust(24, b'\0') + b'1.0'.ljust(16, b'\0')     # the core first
+        assert rec[1] == b'arp-st'.ljust(24, b'\0') + b'1.1'.ljust(16, b'\0')
+        assert rec[2] == bytes(40)                                              # the zero entry
+        assert link.mod_info_record(arp) == rec[1]
+        refused(lambda: link.mod_info_record(mod('x' * 24, '1')), 'mod-info table')
+        refused(lambda: link.mod_info_record(mod('a', 'vérsion')), 'mod-info table')
+        refused(lambda: link.mod_info_record(mod('a', '')), 'mod-info table')
+        refused(lambda: link.link([mod('core', '1.0', {'core_mod_info': {'entry': 36}})], image),
+                'entries, not 40')
+        # without the table nothing is added
+        assert 'core_mod_info' not in link.link([mod('core', '1.0', {})], image).tables
+    finally:
+        link.sha = real_sha
+
+
+def test_smz_mod_info_directory():
+    """The bank's mod-info directory (SMZ4.md, feature 8): one 40-byte record per mod, its id in
+    24 bytes and version in 16, NUL-padded, and a zero record after the last. A record that does
+    not fit, or more than 16 mods, is refused by the builder."""
+    from elekloader.sdk.syntakt import smz
+    d = smz.mod_info_directory([('arp-st', '1.1'), ('lfo3-st', '1.0')])
+    assert len(d) == 3 * 40
+    assert d[:6] == b'arp-st' and d[6:24] == bytes(18) and d[24:27] == b'1.1' and d[27:40] == bytes(13)
+    assert d[40:46] == b'lfo3-s' and d[80:] == bytes(40)
+    for bad in ([('x' * 24, '1')], [('a', '')], [('a', 'vé')], [('a', '1')] * 17, []):
+        try:
+            smz.mod_info_directory(bad)
+        except ValueError:
+            continue
+        raise AssertionError('accepted %r' % (bad,))
+
+
 def test_parts_stay_in_the_image():
     d, r = devices.identify(devices.devices()[0].releases['1.53'].syx_sha256)
     ok = elemod.parse_parts([['hex', '00ff'], ['stock', '0x40000400', 8]], 't', d, r)

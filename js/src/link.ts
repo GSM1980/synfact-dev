@@ -36,6 +36,8 @@ const DSP = '.dsp.'                         // a DSP section: '.dsp.' + its payl
 const FAST_ENTRY = 16                       // a .fast copy entry: src, dst, len, 0
 const MAX_ALIGN = 4096                      // a section's alignment: a power of two up to this
 const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words'])
+const MOD_INFO = 'core_mod_info'            // the table of every linked mod's id and version (core-st's rows)
+const MOD_INFO_ID = 24, MOD_INFO_VERSION = 16   // its entry: both NUL-padded; a zero first byte ends it
 
 const align = (v: number, a: number) => Math.ceil(v / a) * a
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
@@ -54,6 +56,19 @@ function items(d: unknown): [string, any][] {
 
 type Sec = { align: number; parts?: Part[]; len?: number; size?: number }
 export type Contribution = { to: string; order: number; data: Uint8Array; relocs: [number, string, string, number][]; claims: [number, number][]; i: number }
+
+/** m's entry in the mod-info table: its id and version, NUL-padded (link.py mod_info_record). */
+export function modInfoRecord(m: Mod2): Uint8Array {
+  const out = new Uint8Array(MOD_INFO_ID + MOD_INFO_VERSION)
+  let at = 0
+  for (const [what, text, size] of [['id', m.id, MOD_INFO_ID], ['version', m.version, MOD_INFO_VERSION]] as const) {
+    if (!text || text.length >= size || ![...text].every(c => c >= ' ' && c < ''))
+      throw new ModError(`${m.label()}: its ${what} ${JSON.stringify(text)} does not fit the mod-info table (1..${size - 1} printable ASCII characters)`)
+    for (let k = 0; k < text.length; k++) out[at + k] = text.charCodeAt(k)
+    at += size
+  }
+  return out
+}
 
 /** A loaded, validated format-2 mod. */
 export class Mod2 implements AnyMod {
@@ -265,6 +280,7 @@ export class Mod2 implements AnyMod {
     }
     for (const c of this.contribute) n += align(c.data.length, 4)
     for (const e of this.collections.values()) n += align(e, 4)
+    n += MOD_INFO_ID + MOD_INFO_VERSION        // its mod-info record, if the core declares one
     if (this.size('.fast')) n += align(this.size('.fast'), 4) + FAST_ENTRY
     return n
   }
@@ -486,6 +502,11 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     for (const nm of storeSyms.keys())
       if (taken.has(nm) || LINKER_SYMS.has(nm)) throw new ModError(`the storage field ${nm} has the name of a symbol a mod exports`)
     ids.forEach((data, i) => entries.get(store.IDS_TABLE)!.push([-1, '', i, core, { to: store.IDS_TABLE, order: -1, data, relocs: [], claims: [], i }]))
+  }
+  if (tables.has(MOD_INFO)) {                  // one record per linked mod, the core's first
+    const [owner, size] = tables.get(MOD_INFO)!
+    if (size !== MOD_INFO_ID + MOD_INFO_VERSION) throw new ModError(`${owner.label()} declares ${MOD_INFO} with ${size}-byte entries, not ${MOD_INFO_ID + MOD_INFO_VERSION}`)
+    for (const m of order) entries.get(MOD_INFO)!.push([m === core ? -2 : -1, m.id, 0, m, { to: MOD_INFO, order: -1, data: modInfoRecord(m), relocs: [], claims: [], i: 0 }])
   }
   const fastMods = order.filter(m => m.size('.fast'))
   for (const list of entries.values()) {

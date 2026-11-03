@@ -49,10 +49,24 @@ FAST_ENTRY = 16                   # a .fast copy entry: src, dst, len, 0
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
                '__bss_words'}
+MOD_INFO = 'core_mod_info'        # the table of every linked mod's id and version (core-st's rows)
+MOD_INFO_ID, MOD_INFO_VERSION = 24, 16    # its entry: both NUL-padded; a zero first byte ends it
 
 
 def _align(v, a):
     return (v + a - 1) // a * a
+
+
+def mod_info_record(m):
+    """-> m's entry in the mod-info table: its id and version, NUL-padded. ModError if one
+    is empty, not printable ASCII, or too long to keep its NUL."""
+    out = b''
+    for what, text, size in (('id', m.id, MOD_INFO_ID), ('version', m.version, MOD_INFO_VERSION)):
+        if not text or len(text) >= size or not all(' ' <= c < '\x7f' for c in text):
+            raise ModError('%s: its %s %r does not fit the mod-info table (1..%d printable '
+                           'ASCII characters)' % (m.label(), what, text, size - 1))
+        out += text.encode('ascii').ljust(size, b'\0')
+    return out
 
 
 class Mod2:
@@ -247,6 +261,7 @@ class Mod2:
                 n += _align(self.size(sec), 4) + max(4, self.sections[sec]['align']) - 4
         n += sum(_align(len(c['data']), 4) for c in self.contribute)
         n += sum(_align(e, 4) for e in self.collections.values())
+        n += MOD_INFO_ID + MOD_INFO_VERSION      # its mod-info record, if the core declares one
         if self.size('.fast'):
             n += _align(self.size('.fast'), 4) + FAST_ENTRY
         return n
@@ -465,6 +480,14 @@ def link(mods, image, lock=None):
                 raise ModError('the storage field %s has the name of a symbol a mod exports' % nm)
         for i, data in enumerate(ids):
             entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
+    if MOD_INFO in tables:                 # one record per linked mod, the core's first
+        if tables[MOD_INFO][1] != MOD_INFO_ID + MOD_INFO_VERSION:
+            raise ModError('%s declares %s with %d-byte entries, not %d'
+                           % (tables[MOD_INFO][0].label(), MOD_INFO, tables[MOD_INFO][1],
+                              MOD_INFO_ID + MOD_INFO_VERSION))
+        for m in order:
+            entries[MOD_INFO].append((-2 if m is core else -1, m.id, 0, m,
+                                      {'data': mod_info_record(m), 'relocs': []}))
     fast_mods = [m for m in order if m.size('.fast')]
     for c in entries:
         entries[c].sort(key=lambda e: e[:3])
