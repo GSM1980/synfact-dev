@@ -1,6 +1,6 @@
 {
   "id": "machines-st",
-  "version": "0.1",
+  "version": "1.0",
   "license": "GPL-2.0-or-later",
   "title": "Syntakt machine loader",
   "description": "Enables optional SMZ4 machine banks when built with core-st's explicit MAIN/AUDIO companion builder.",
