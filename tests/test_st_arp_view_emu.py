@@ -14,6 +14,12 @@ from unicorn.m68k_const import UC_M68K_REG_A7
 APP,MAIN,MODEL,NODE,EV,ROOT,BMP,VECTOR=0x49011000,0x49012000,0x49012400,0x49012500,0x49012600,0x49013000,0x49014000,0x49015000
 PARAM,PROXY,PVT,INNER,IVT=0x49018000,0x49018100,0x49018200,0x49018300,0x49018400
 GET_SOUND,NOTIFY=RET+0x200,RET+0x204
+# Control policy (0x13) and the encoder natives. The real policy record is built at boot
+# from the core's object table, which this harness does not run; the increment table itself
+# is a zero fixture. The natives' lifecycle is what this test checks: a turn is one detent,
+# 256 sub-steps per detent. The acceleration curve is not modelled; it is verified on the
+# instrument (see the arp commit message).
+POLICY,INCREMENTS=0x49019000,0x4901a000
 
 class ViewMachine(Machine):
     def __init__(self,core,bank):
@@ -43,6 +49,11 @@ class ViewMachine(Machine):
         if pc==0x4001ff74:assert self.args(1)==(MODEL,);self.ret(self.track);return
         if pc==0x4001c422:
             assert self.args(3)==(MODEL+0x40,0x60,0xffffffff);self.ret(PROXY);return
+        if pc==0x4007b9b2:assert self.args(1)==(0x13,);self.w(POLICY+16,INCREMENTS);self.ret(POLICY);return
+        if pc==0x400f66a2:ev,_,_=self.args(3);self.ret(self.word(ev+16));return
+        if pc==0x400f68d2:
+            _,_,delta,_,_=self.args(5);delta=delta-(1<<32) if delta>>31 else delta
+            self.ret(delta*256);return # 256 sub-steps per detent, as arp_encoder_steps reads them
         if pc==GET_SOUND:
             assert self.args(1)==(INNER,);self.ret(KIT+0x2a+self.track*0x123);return
         if pc==NOTIFY:
