@@ -204,15 +204,33 @@ static void arp_shape(void *bmp,unsigned int kind,int x,int y,int x2,int y2,unsi
         UI_CALL(0x400f7bd6u,void (*)(void *,int,int,int,int,arp_u32))(bmp,x,y,x2,y2,col);
     else ARP_FILLRECT(bmp,x,y,x2,y2,col);
 }
+/* Negative of a p-locked length marker: its colour plane inverted, its mask
+ * shared. The blit writes the colour only where the mask is set, so the
+ * marker's own silhouette comes out inverted. Rows are one long each (27 px). */
+#define ARP_NEGATIVE_LONGS 32u
+static arp_u32 arp_negative_plane[ARP_NEGATIVE_LONGS] DATA={0};
 static void arp_bitmap(void *bmp,unsigned int resource,int x,int y,unsigned int mode)
 {
-    arp_u32 rail[7];const void *p=(const void *)resource;
+    arp_u32 rail[7],negative[7];const arp_u32 *entry=(const arp_u32 *)resource;const void *p=(const void *)resource;
+    arp_u32 i,n;
     if(resource==0xffffffffu){
         /* Same 27x27 image and mask as DN 40255b58/40255aec; constructed by
          * the native bitmap constructor, then destroyed on the UI task. */
         UI_CALL(0x400f70fau,void (*)(void *,arp_u32,arp_u32,const void *,const void *))
             (rail,27,27,(const void *)0x402eaad4u,(const void *)0x402d736cu);
         p=rail;
+    }else if(mode&2){
+        /* entry: +4 width, +8 height, +12 stride (longs), +16 colour, +20 mask */
+        n=entry[2]*entry[3];
+        if(entry[3]==1 && n>0 && n<=ARP_NEGATIVE_LONGS){
+            const arp_u32 *colour=(const arp_u32 *)entry[4];
+            for(i=0;i<n;i++)arp_negative_plane[i]=~colour[i];
+            UI_CALL(0x400f70fau,void (*)(void *,arp_u32,arp_u32,const void *,const void *))
+                (negative,entry[1],entry[2],arp_negative_plane,(const void *)entry[5]);
+            UI_CALL(0x400f8dacu,void (*)(void *,const void *,int,int,arp_u32))(bmp,negative,x,y,mode);
+            UI_CALL(0x400f702cu,void (*)(void *))(negative);
+            return;
+        }
     }
     UI_CALL(0x400f8dacu,void (*)(void *,const void *,int,int,arp_u32))(bmp,p,x,y,mode);
     if(resource==0xffffffffu)UI_CALL(0x400f702cu,void (*)(void *))(rail);
@@ -231,12 +249,8 @@ static void arp_view_draw(void *v,void *bmp,arp_u32 phase)
     s.length_bitmap=first+28u*index;
     s.locked=arp_lock_mode?arp_lock_shown:0;
     ARP_FILLRECT(bmp,0,0,127,63,0);arp_draw(&s,&c);
-    if(arp_lock_mode){
-        char label[12]={'L','O','C','K',' ',0};unsigned int n=arp_lock_step+1;
-        label[5]='0'+n/10;label[6]='0'+n%10;label[7]=0;
-        ARP_FILLRECT(bmp,0,53,127,63,0);arp_text(bmp,0,64,59,2,label);
-    }
 }
+static void arp_enc_reset(void);
 static int arp_open(void *app,arp_u32 track)
 {
     arp_u8 *root,*v,*main,*parameter;void *pair[2],*proxy;arp_u32 sound;
@@ -260,10 +274,33 @@ static int arp_open(void *app,arp_u32 track)
     *(const arp_u32 **)(v+ARP_VIEW_BYTES)=arp_led_vtable+2;
     *(arp_u32 *)(v+ARP_VIEW_BYTES+4)=0;*(arp_u32 *)(v+ARP_VIEW_BYTES+8)=0;
     arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;arp_view=v;arp_main=main;arp_manager=(arp_u8 *)app+0x40;arp_selected=0;
-    arp_steps_held=0;arp_steps_edited=0;
+    arp_steps_held=0;arp_steps_edited=0;arp_enc_reset();
     pair[0]=v;pair[1]=root;
     UI_CALL(0x40100bc2u,arp_u32 (*)(void *,void *,arp_u32))(arp_manager,pair,0);
     UI_CALL(0x4016dde8u,void (*)(void *))(pair+1);ARP_DIRTY(v);return 1;
+}
+/* Encoder A..F turns use the stock increment (400f68d2) with control 0x13's
+ * policy, as POLY and FM TONE do. The routine keeps one 20-byte record per
+ * position p at base+20*p+20, so the block holds six fields from base+20. Its
+ * sub-step travel is per field and is cleared when the view opens or the
+ * track changes. */
+#define ARP_ENC_FIELDS 6
+static arp_u8 arp_enc_state[20*(ARP_ENC_FIELDS+1)] DATA={0};
+static void arp_enc_reset(void)
+{
+    unsigned int i;
+    for(i=0;i<sizeof(arp_enc_state);i++)((volatile arp_u8 *)arp_enc_state)[i]=0;
+}
+static int arp_encoder_steps(unsigned int field,const void *event)
+{
+    arp_u32 policy,increment[7],pressed,i;int delta;
+    policy=UI_CALL(0x4007b9b2u,arp_u32 (*)(arp_u32))(0x13);
+    for(i=0;i<7;i++)increment[i]=((const arp_u32 *)*(const arp_u32 *)(policy+16))[i];
+    delta=UI_CALL(0x400f66a2u,int (*)(const void *,arp_u32,arp_u32))(event,*(const arp_u32 *)(policy+4),*(const arp_u32 *)(policy+8));
+    pressed=UI_CALL(0x400f66c0u,arp_u32 (*)(const void *))(event);
+    delta=UI_CALL(0x400f68d2u,int (*)(void *,arp_u32,int,void *,arp_u32))(arp_enc_state,field,delta,increment,pressed);
+    if(!delta)return 0;
+    return delta/256?delta/256:(delta<0?-1:1);
 }
 static int arp_edit(unsigned int field,int delta)
 {
@@ -293,7 +330,7 @@ static void arp_view_tick(void *controller)
                 sound=proxy_sound(proxy);
             }
             if(!sound){ARP_CLOSE(arp_view);return;}
-            arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;
+            arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;arp_enc_reset();
             arp_sound_read(sound,&arp_ui_parameters);arp_length_show=0;ARP_DIRTY(arp_view);
             if(arp_lock_mode)arp_lock_read();
         }
@@ -310,22 +347,26 @@ static void arp_view_tick(void *controller)
 static int arp_view_encoder(void *app,const void *event)
 {
     arp_u32 knob=view_word(event,12);(void)app;
+    int steps;
     if(!arp_foreground())return 0;
     arp_lock_sync();
     if(knob>=1 && knob<=6){
+        /* One native increment per turn: held steps and locks all take it. */
+        steps=arp_encoder_steps(knob-1,event);
+        if(!steps)return 1;
         if(arp_lock_mode){
             unsigned int i,first=arp_lock_step,done=0;
             for(i=0;i<64;i++)if(arp_held[i>>5]&(1u<<(i&31))){
-                arp_lock_step=i;arp_lock_read();done|=arp_edit(knob-1,(int)view_word(event,16));
+                arp_lock_step=i;arp_lock_read();done|=arp_edit(knob-1,steps);
             }
             if(done)arp_lock_mark();
             arp_lock_step=first;arp_lock_read();
         }else if(arp_steps_held){
             /* Held arp steps: any of A..F edits each one's note (OFS). */
             unsigned int i,first=arp_selected;
-            for(i=0;i<16;i++)if(arp_steps_held&(1u<<i)){arp_selected=i;arp_edit(4,(int)view_word(event,16));}
+            for(i=0;i<16;i++)if(arp_steps_held&(1u<<i)){arp_selected=i;arp_edit(4,steps);}
             arp_selected=first;arp_steps_edited=1;
-        }else arp_edit(knob-1,(int)view_word(event,16));
+        }else arp_edit(knob-1,steps);
     }
     return 1;
 }

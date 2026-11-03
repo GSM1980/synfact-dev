@@ -14,8 +14,8 @@ receive relative edits from their respective values. The edit context is the
 native lock editor's: the app's 64-step selection of held trigs within the
 track length (400c34d6, the test of 40038e42 and the lock preview), including
 later sequencer pages; an edit marks the selection as the native editor does
-(400c2d34), so that releasing the trigs does not toggle them. The footer shows
-the first held step as `LOCK 01`..`LOCK 64`. Releasing the trigs restores the
+(400c2d34), so that releasing the trigs does not toggle them. The view shows no
+step label: p-locked values are inverted on their encoder bars. Releasing the trigs restores the
 Sound's base values in the display; turning knobs without held trigs edits
 those base values. Empty pattern steps acquire a native lock trig; writes
 outside the track length are refused. Native step/track/pattern clear

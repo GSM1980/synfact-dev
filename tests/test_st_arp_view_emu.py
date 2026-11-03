@@ -174,7 +174,7 @@ def lock_editing(core,bank):
     m.key(12,1,120);m.key(12,16,121);assert len(m.step_locks)==8 # YES locks nothing
     assert m.read(m.sym['arp_parameters'],24)==base
     m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
-    assert ['text',0x402a7354,64,59,2,'LOCK 32'] in m.rows
+    assert not any(r[0]=='text' and str(r[-1]).startswith('LOCK') for r in m.rows) # no footer over the controls
     # Releasing trigs restores base values; subsequent knob movement is normal.
     m.u.mem_write(selection+0x160,b'\x00');m.w(selection+0x158,0);m.w(selection+0x15c,0)
     m.call('arp_view_tick',APP);assert m.read(m.sym['arp_ui_parameters'],24)==base
