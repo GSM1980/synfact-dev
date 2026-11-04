@@ -76,10 +76,20 @@ int main(void)
         }
         core_machine_draw(view,(void *)0x7777);assert(paints==i+1 && last_type==type && last_page==u[i].pages-1);
     }
+    /* The FX track's SYN view is a 0x14 view of page 32 (DRIVE): no machine
+     * layout, and its encoder reaches the native editor, selector flag or not. */
+    old=*(u32 **)(view+0x7c);old_end=*(u32 *)(view+0x80);
+    {u32 fx[1]={32},old_cap=*(u32 *)(view+0x84);*(u32 **)(view+0x7c)=fx;*(u32 **)(view+0x80)=*(u32 **)(view+0x84)=fx+1;
+     for(selecting=0;selecting<0x100;selecting+=0xff){
+        assert(!core_machine_syn_view(view) && !core_machine_view_layout(view) && core_machine_nav(view,7)==CORE_SMZ_NONE);
+        assert(!core_machine_editor_event(view,(void *)0x4567,150) && encoders==1);encoders=0;
+     }
+     selecting=0;assert(*(u32 *)(view+0x80)==(u32)(fx+1) && fx[0]==32);
+     *(u32 **)(view+0x7c)=old;*(u32 *)(view+0x80)=old_end;*(u32 *)(view+0x84)=old_cap;}
     *(u32 *)(view+0x88)=0x12;assert(!core_machine_view_layout(view));core_machine_draw(view,(void *)0x7777);assert(paints==5);
     fw_free(*(void **)(view+0x7c));
     core_machine_active=0;core_machine_draw((void *)1,(void *)1);assert(paints==5);
-    puts("PASS: SourcePageView resolves all FM/SP pages through one layout service; selector highlight paints nothing/resizes nothing; confirmation enables shared drawing; non-SYN views excluded");return 0;
+    puts("PASS: SourcePageView resolves all FM/SP pages through one layout service; selector highlight paints nothing/resizes nothing; confirmation enables shared drawing; FX track SYN (DRIVE) keeps its encoder; non-SYN views excluded");return 0;
 }
 
 void core_pool_ui_reset(void){}

@@ -88,11 +88,14 @@ void core_machine_draw(void *raw,void *ctx)
     if((u32)u->draw!=CORE_SMZ_NONE)u->draw(&api,m,v,ctx,page);
 }
 /* One gate before any module encoder: selector ownership and native page
- * guards (including POLY slaves) apply before FM can consume its paired dial. */
+ * guards (including POLY slaves) apply before FM can consume its paired dial.
+ * The selector gate is the machine SYN view's (page vector 6...) only: the FX
+ * track's SYN view (page 32, DRIVE) is a 0x14 view too and keeps its encoder. */
 int core_machine_editor_event(void *view,void *event,u32 id)
 {
+    const u32 *pages=*(const u32 *const *)((u8 *)view+0x7c);
     if(core_machine_parameter_view(view) && *(u32 *)((u8 *)view+0x88)==0x14 &&
-       !core_machine_syn_view(view))return 1;
+       pages && pages[0]==6 && !core_machine_syn_view(view))return 1;
     if(core_native_view(ST_NATIVE_PAGE_GUARD,view,0))return 1;
     return core_event_view(ST_EV_ENC,view,event,id);
 }
