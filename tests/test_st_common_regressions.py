@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 
-def verify(folder,cc,synfact=None,previous=None,audio_window=None):
+def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False):
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
     def run(name,args):
@@ -103,8 +103,23 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None):
             import struct
             def audio_section(path):
                 raw=path.read_bytes();at,n=struct.unpack_from('>II',raw,72);return raw[48+at:48+at+n]
-            assert audio_section(out/'synfact-machines.smz4')==audio_section(oldbank)
-            checks.append({'name':'FM/SP AUDIO bank identical to previous build','ok':True})
+            new_section=audio_section(out/'synfact-machines.smz4')
+            old_section=audio_section(oldbank)
+            if sampler_audio_changed:
+                sys.path.insert(0,str(ROOT))
+                from elekloader.sdk import elf
+                def fm_start(folder):
+                    image=elf.Elf.load(folder/'synfact-machines.work/audio.elf')
+                    return next(s.value for s in image.symbols if s.name=='fm_core')-0x4204f750
+                boundary=fm_start(out)
+                assert boundary==fm_start(previous)
+                assert len(new_section)==len(old_section) and new_section!=old_section
+                assert new_section[boundary:]==old_section[boundary:]
+                assert new_section[80:480]==old_section[80:480]
+                checks.append({'name':'sampler AUDIO changed; FM and following AUDIO identical','ok':True})
+            else:
+                assert new_section==old_section
+                checks.append({'name':'FM/SP AUDIO bank identical to previous build','ok':True})
     else:skipped.append('AUDIO comparison: supply --previous-build')
     assert json.loads((out/'lint.json').read_text())['ok']
     checks.append({'name':'lint','ok':True})
@@ -118,6 +133,8 @@ if __name__=='__main__':
     p.add_argument('--previous-build',type=Path)
     p.add_argument('--audio-companion-changed',action='store_true',
         help='the core AUDIO companion intentionally changed: compare outside its declared window only')
+    p.add_argument('--sampler-audio-changed',action='store_true',
+        help='sampler DSP changed: compare FM and later AUDIO byte for byte')
     a=p.parse_args()
     window=None
     if a.audio_companion_changed:
@@ -125,4 +142,4 @@ if __name__=='__main__':
         from elekloader.devices.syntakt import DEVICE
         window=DEVICE.secondary[7][3][-1]
         assert window==(0x40040860,0x40041050)
-    verify(a.folder,a.cc,a.synfact,a.previous_build,window)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed)

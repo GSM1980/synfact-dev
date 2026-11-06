@@ -54,5 +54,23 @@ int main(void)
     s=fresh(8192,2);s.control[4]=0x0100;s.control[5]=0x0300;s.control[6]=0x0200;
     sp_werp_window(&s,60<<16,14400,1);assert(s.running && s.start<s.end);
     for(i=0;i<1000;i++){sp_werp_window(&s,60<<16,14400,0);sp_pcm(&s,out);assert(s.start<=s.end && s.end<=8192);}
+    /* BR must not turn a near-zero negative sample into a loud DC step. */
+    pcm[0]=-1;pcm[1]=1;pcm[2]=-8191;pcm[3]=8191;
+    pcm[4]=-16384;pcm[5]=16384;pcm[6]=-32767;pcm[7]=32767;
+    s=fresh(8192,3);sp_window(&s,0,8192,0,3,1);s.br=127;
+    sp_pcm(&s,out);
+    for(i=0;i<8;i+=2)assert(out[i]==-out[i+1]);
+    assert(!out[0] && !out[1] && !out[2] && !out[3]);
+    assert(out[4]==-16384*65536 && out[5]==16384*65536);
+    s=fresh(8192,3);sp_window(&s,0,8192,0,3,1);s.br=0;
+    sp_pcm(&s,out);for(i=0;i<8;i++)assert(out[i]==(int)pcm[i]*65536);
+    /* The lower half of the knob now changes a normal-level sample, and
+     * increasing BR never restores bits already removed. */
+    pcm[0]=12345;pcm[1]=-12345;
+    s=fresh(8192,3);sp_window(&s,0,8192,0,3,1);s.br=32;
+    sp_pcm(&s,out);assert(out[0]!=12345*65536 && out[0]==-out[1]);
+    assert(out[0]>0 && out[0]<12345*65536);expected=(unsigned)out[0];
+    s=fresh(8192,3);sp_window(&s,0,8192,0,3,1);s.br=64;
+    sp_pcm(&s,out);assert(out[0]>0 && (unsigned)out[0]<=expected);
     puts("PASS: source PCM, forward/reverse/loop/fractional bounds, long scaling, REPITCH, SLICE and WERP");return 0;
 }

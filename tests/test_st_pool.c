@@ -53,7 +53,7 @@ static void reset_state(void)
 int main(void)
 {
     u16 entries[128];u8 object[516],source_project[512],copy_project[512],*blob;u32 i,pos,wire;
-    const u8 *page;void *project_ram,*blob_ram;
+    const u8 *page;const struct st_machine_wave *wave;void *project_ram,*blob_ram;
     project_ram=VirtualAlloc((void *)0x40650000u,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
     blob_ram=VirtualAlloc((void *)0x4d840000u,0x30000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
     assert(project_ram==(void *)0x40650000u && blob_ram==(void *)0x4d840000u);
@@ -143,6 +143,30 @@ int main(void)
     /* A missing catalogue still preserves every native stock source. */
     io_fail=1;core_pool_prepare();io_fail=0;assert(core_pool_boot_pages==2);
     core_pool_boot_page(0,&wire);assert(state->frames[0]==4 && !state->frames[64]);reset_state();
+    /* The visible stock wave gets a whole-sample overview immediately, then
+     * the bounded idle scan refines peaks missed by the sparse pass. */
+    state=fw_malloc(sizeof(*state));assert(state);memset(state,0,sizeof(*state));
+    state->code[0]=1;state->frames[0]=state->stock_frames[0]=5000;
+    state->stock_pointer[0]=STOCK_AUDIO+0x1000;
+    memset(blob+0x1000,0,10000);
+    blob[0x1000+2*4997]=0x04;blob[0x1000+2*4997+1]=0xd2;
+    blob[0x1000+2*4999]=0x4e;blob[0x1000+2*4999+1]=0x20;
+    core_pool_wave_idle(0,64);wave=core_pool_wave(0);
+    assert(wave && wave->ready && wave->frames==5000 && wave->hi[95]==1234);
+    state->code[1]=2;state->frames[1]=state->stock_frames[1]=4;
+    state->stock_pointer[1]=STOCK_AUDIO+0x3000;
+    memset(blob+0x3000,0,8);
+    core_pool_wave_idle(1,64); /* interrupt the first sample's exact scan */
+    for(i=0;i<80;i++)core_pool_wave_idle(0,64);
+    assert(wave->ready==2 && wave->hi[95]==20000);
+    blob[0x1000+2*4997]=blob[0x1000+2*4997+1]=0;
+    blob[0x1000+2*4999]=blob[0x1000+2*4999+1]=0;
+    core_pool_wave_begin(1,5000);core_pool_wave_idle(0,64);
+    assert(wave->ready==1 && wave->hi[95]==0); /* same code, new PCM */
+    state->frames[0]=state->stock_frames[0]=4;
+    core_pool_wave_idle(0,64);wave=core_pool_wave(0);
+    assert(wave && wave->ready && wave->frames==4);
+    reset_state();
     if(waves)fw_free(waves);if(saved_record)fw_free(saved_record);assert(!live);
     assert(VirtualFree(project_ram,0,MEM_RELEASE));assert(VirtualFree(blob_ram,0,MEM_RELEASE));
     assert(VirtualFree((void *)0x10000000u,0,MEM_RELEASE));assert(VirtualFree((void *)0x43bd0000u,0,MEM_RELEASE));

@@ -1,5 +1,5 @@
 {
-  "id": "samplers-st", "version": "1.0", "license": "GPL-2.0-or-later",
+  "id": "samplers-st", "version": "1.1", "license": "GPL-2.0-or-later",
   "title": "SP sample machines", "category": "Synth", "author": "GSM1980",
   "description": "Source-built ONE SHOT, WERP, REPITCH and SLICE for the generic Syntakt project sample pool.",
   "device": "syntakt", "os": "1.41", "sources": ["main.c", "ui.c", "input.c"],

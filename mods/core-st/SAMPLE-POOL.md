@@ -189,8 +189,12 @@ unconfirmed: native sample preparation is still synchronous.
 
 The generic `st_machine_ui_api` lends a 96-bin min/max envelope for each selected
 sample. HZFS PCM is accumulated while the existing loader reads it and becomes
-ready only after complete CRC verification. Stock PCM is scanned in bounded UI
-idle slices (2048 frames in the sampler bank), using its existing MAIN copy.
+ready only after complete CRC verification. On first selection, stock PCM gets
+a bounded, evenly spaced overview of at most 2048 frames so the whole waveform
+appears immediately. Subsequent UI idle slices (2048 frames in the sampler bank)
+refine all 96 bins to exact min/max peaks using the existing MAIN copy. Explicit
+reimport of a sample invalidates its cached envelope even if its id and length
+are unchanged.
 The cache is an owned native-heap allocation, approximately 50 KiB for 128
 entries, outside the 64 KiB code reserve. Allocation failure leaves no waveform;
 it does not prevent audio playback.
