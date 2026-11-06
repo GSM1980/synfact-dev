@@ -402,5 +402,7 @@ and feature bits do not change.
 The optional ARP module stores Sound-owned settings in APC1 project carriers
 and an ARP1 extension after the existing +Drive LFO3 trailer. Native Sound/Kit
 records and snapshot lengths remain fixed; absent/corrupt metadata gives OFF.
+An all-default Kit and its default pool Sound may leave the APC1 carrier absent;
+the decoder treats that as the same defaults, including for older projects.
 The complete byte layout, validation and compatibility rules are in the ARP
 sources, `mods/arp-st/persist.c`.

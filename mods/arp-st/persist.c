@@ -49,6 +49,14 @@ static int valid(const struct arp_settings *p)
     for(i=0;i<16;i++)if(p->offset[i]<-24 || p->offset[i]>24)return 0;
     return 1;
 }
+static int ordinary(const struct arp_settings *p)
+{
+    unsigned int i;
+    if(p->mode || p->speed!=9 || p->range!=1 || p->note_length!=30 ||
+       p->length!=15 || p->enabled!=0xffff)return 0;
+    for(i=0;i<16;i++)if(p->offset[i])return 0;
+    return 1;
+}
 static void pack(unsigned char *d,const struct arp_settings *p)
 {
     unsigned int i;d[0]=p->mode;d[1]=p->speed;d[2]=p->range;d[3]=p->note_length;d[4]=p->length;d[5]=0;
@@ -96,11 +104,9 @@ void arp_sound_read(arp_u32 sound,struct arp_settings *p)
 {enter();copy_settings(p,arp_sound_settings(sound));leave();}
 static int store(arp_u32 sound,const struct arp_settings *p)
 {
-    struct cell *c;unsigned int bank,i;int ordinary;
+    struct cell *c;unsigned int bank;
     if(!sound || !valid(p))return 0;
-    ordinary=p->mode==0 && p->speed==9 && p->range==1 && p->note_length==30 && p->length==15 && p->enabled==0xffff;
-    for(i=0;i<16 && ordinary;i++)if(p->offset[i])ordinary=0;
-    c=find(sound,0);if(!c && ordinary)return 1;
+    c=find(sound,0);if(!c && ordinary(p))return 1;
     if(!c)c=find(sound,1);
     if(!c)return 0;
     bank=(c->bank^1)&1;copy_settings(&c->p[bank],p);
@@ -115,6 +121,14 @@ static unsigned char *carrier(arp_u32 container,unsigned int index)
 {return (unsigned char *)(container+0x200u+index*SLOT+CARRIER);}
 static int carrier_valid(const unsigned char *p,unsigned int index)
 {return word(p)==0x41504331u && word(p+316)==(hash(p,316)^index);}
+/* A missing carrier already decodes all thirteen rows as these defaults.
+ * Keep the empty representation when a whole Kit and its pool Sound are OFF. */
+static int row_ordinary(const unsigned char *p)
+{
+    static const unsigned char d[20]={0,9,1,30,15,0,255,255,
+        0x18,0x86,0x61,0x18,0x86,0x61,0x18,0x86,0x61,0x18,0x86,0x61};
+    unsigned int i;for(i=0;i<20;i++)if(p[i]!=d[i])return 0;return 1;
+}
 static arp_u32 row_record(arp_u32 container,unsigned int index,unsigned int row)
 {return row==12?container+POOL_SLOTS+index*RECORD:container+KIT_SLOTS+index*0x1600u+0x2eu+row*RECORD;}
 /* Six-bit signed offsets leave four bytes for binding each row to its native
@@ -147,9 +161,31 @@ static void carrier_init(unsigned char *p,arp_u32 container,unsigned int index)
 {unsigned int i;put(p,0x41504331u);for(i=0;i<13;i++)row_pack(p+4+i*24,&defaults,row_record(container,index,i));}
 static void save_row(arp_u32 container,unsigned int index,unsigned int row,const struct arp_settings *p)
 {
-    unsigned char *c=carrier(container,index);
-    if(!carrier_valid(c,index))carrier_init(c,container,index);
+    unsigned char *c=carrier(container,index);unsigned int i;int present=carrier_valid(c,index);
+    if(ordinary(p)){
+        if(!present){put(c,0);return;}
+        for(i=0;i<13;i++)if(i!=row && !row_ordinary(c+4+i*24))break;
+        if(i==13){put(c,0);return;}
+    }
+    if(!present)carrier_init(c,container,index);
     row_pack(c+4+row*24,p,row_record(container,index,row));put(c+316,hash(c,316)^index);
+}
+/* A whole Kit writes rows 0..11. Building defaults for those rows first and
+ * sealing the 320-byte carrier after each row repeats most of the work during
+ * every project save, especially the first save of a new project. Row 12 is
+ * the pool Sound and must survive a later Kit refresh. */
+static void save_kit(arp_u32 container,unsigned int index,arp_u32 kit)
+{
+    unsigned char *c=carrier(container,index);unsigned int i;int present=carrier_valid(c,index);
+    for(i=0;i<12;i++)if(!ordinary(arp_sound_settings(kit+0x2a+i*SOUND)))break;
+    if(i==12 && (!present || row_ordinary(c+4+12*24))){put(c,0);return;}
+    if(!present){
+        put(c,0x41504331u);
+        row_pack(c+4+12*24,&defaults,row_record(container,index,12));
+    }
+    for(i=0;i<12;i++)
+        row_pack(c+4+i*24,arp_sound_settings(kit+0x2a+i*SOUND),row_record(container,index,i));
+    put(c+316,hash(c,316)^index);
 }
 static void load_row(struct arp_settings *p,arp_u32 container,unsigned int index,unsigned int row)
 {
@@ -255,8 +291,10 @@ static void sound_meta(const arp_u32 *a)
     if(kind==ST_SOUND_KIT_ENCODE || kind==ST_SOUND_KIT_DECODE){
         arp_u32 record=kind==ST_SOUND_KIT_ENCODE?d:s,kit=kind==ST_SOUND_KIT_ENCODE?s:d;
         if(kit_index(record,n,&k)){
-            for(i=0;i<12;i++)if(kind==ST_SOUND_KIT_ENCODE)save_row(n,k,i,arp_sound_settings(kit+0x2a+i*SOUND));
-            else{load_row(&p,n,k,i);arp_sound_store(kit+0x2a+i*SOUND,&p);}
+            if(kind==ST_SOUND_KIT_ENCODE)save_kit(n,k,kit);
+            else for(i=0;i<12;i++){
+                load_row(&p,n,k,i);arp_sound_store(kit+0x2a+i*SOUND,&p);
+            }
         }else{
             struct kit_assoc *entry=kind==ST_SOUND_KIT_ENCODE?kit_remember(record):kit_remembered(record);
             for(i=0;i<12;i++)if(kind==ST_SOUND_KIT_ENCODE)copy_settings(&entry->p[i],arp_sound_settings(kit+0x2a+i*SOUND));
