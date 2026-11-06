@@ -271,6 +271,21 @@ def verify(core,bank,out):
         assert [x['pitch'] for x in q.log]==expected,(case,q.log)
         assert q.configure(mode=0)==1 and q.pool_counts()==base
         failures.append('chord: '+case)
+    # Two successive trigs must take their own F/G/H lanes. The event pool may
+    # reuse an address, so neither the previous chord nor a track default may
+    # leak into the next root.
+    q=Machine(core,bank);base=q.pool_counts();q.configure(mode=1,range_=0)
+    q.u.mem_write(SEQ,bytes(0x499));q.u.mem_write(SEQ+0x2c0,b'\xff'*256)
+    q.u.mem_write(SEQ+0x3c6,b'\x40\x40\x40')
+    for step,values in ((0,(68,71,64)),(1,(52,69,64))):
+        for ln,value in enumerate(values,1):q.u.mem_write(lane(0,ln,step),bytes([value]))
+    e,_=q.event(note=60,length=0);trig(q,0,e)
+    for t in (0,5400000,10800000):q.frame(t)
+    e,_=q.event(note=65,length=0,when=16200000);trig(q,1,e)
+    for t in (16200000,21600000,27000000):q.frame(t)
+    assert [x['pitch'] for x in q.log]==[60,64,67,65,53,70],q.log
+    assert q.configure(mode=0)==1 and q.pool_counts()==base
+    failures.append('chord: successive steps retain independent NOT2..NOT4')
     result=dict(ok=True,native_pool_counts=initial,notes=m.log,limits=[
         'Native core dispatch, allocation/copy/free, lock refs, queue, pitch/gate run as target code.',
         'Sound publication, smoothing and parameter-lock application are explicit boundaries; no audio synthesis or device test.',

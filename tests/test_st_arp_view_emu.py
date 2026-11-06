@@ -7,7 +7,7 @@ selector and pool lifecycle execute target code. No physical UI/audio assertion.
 import argparse,hashlib,json,struct,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from test_st_arp_generator_emu import Machine,W,SP,RET,KIT
+from test_st_arp_generator_emu import Machine,W,SP,RET,KIT,SEQ
 from test_st_arp_selector_emu import DONOR_SHA
 from unicorn.m68k_const import UC_M68K_REG_A7
 
@@ -324,6 +324,7 @@ class ChordViewMachine(LockViewMachine):
 
 def chord_page(core,bank):
     m=ChordViewMachine(core,bank);page=lambda:m.word(m.sym['arp_page'])
+    m.u.mem_write(SEQ,m.read(TRACKDATA,0x499))
     m.key(0x13,1,0);m.key(0x13,16,10);m.key(0x13,1,100);m.key(0x13,16,110)
     assert page()==0 and 'T1 ARPEGGIATOR' in m.texts()
     # TRIG on the open view switches page; press and release are both consumed.
@@ -337,6 +338,7 @@ def chord_page(core,bank):
     assert m.read(m.sym['arp_parameters'],24)==base and not m.notices
     m.encoder(6,3);m.encoder(5,-1);m.encoder(8,-200)
     assert (m.lane(0),m.lane(1),m.lane(3))==(59,67,1),(m.lane(0),m.lane(1),m.lane(3))
+    assert m.read(SEQ+0x3c6,1)==b'\x43' and m.read(SEQ+0x3c8,1)==b'\x01'
     assert m.notices==[0x401c690c]*3
     assert m.texts()[1:8:2]==['B3','+3','+7','-63'] # the lowest step is raw 1; 0 is OFF
     m.encoder(8,1);assert m.lane(3)==2 and m.texts()[7]=='-62'
@@ -350,6 +352,8 @@ def chord_page(core,bank):
     m.u.mem_write(TRACKDATA+0x2c0+2*0x40+47,b'\x50')
     m.notices=[];m.encoder(7,2)
     assert (m.lane(2,31),m.lane(2,47),m.lane(2))==(73,82,71)
+    assert m.read(SEQ+0x2c0+2*0x40+31,1)==b'\x49'
+    assert m.read(SEQ+0x2c0+2*0x40+47,1)==b'\x52'
     assert m.notices==[0x401c68fc]*2 and m.read(selection+0x160,1)==b'\x01'
     # Hardware reported no effective native choices travel for F..H. Their
     # step edits still advance directly from the event's signed tick count.
@@ -357,12 +361,16 @@ def chord_page(core,bank):
     m.notices=[];m.encoder(6,1);m.encoder(8,1)
     got=(m.lane(1,31),m.lane(1,47),m.lane(3,31),m.lane(3,47))
     assert got==(68,68,3,3),got
+    assert [m.read(SEQ+0x2c0+lane*0x40+step,1)[0]
+            for lane in (1,2,3) for step in (31,47)]==[68,68,73,82,3,3]
     assert m.notices==[0x401c68fc]*4
     assert m.texts()[1:8:2]==['B3','+4','+9','-61']
     m.texts();assert ['shape',0x400f7df2,66,47,93,54,0xffffffff] in m.rows # NOT3 shown as the step's own
     # G's push: the held steps inherit NOT3 again. E's push leaves NOTE alone.
     m.u.mem_write(TRACKDATA+0x2c0+31,b'\x30');m.notices=[]
     assert m.key(46,1,240)==1 and m.lane(2,31)==255 and m.lane(2,47)==255 and m.notices==[0x401c68fc]*2
+    assert m.read(SEQ+0x2c0+2*0x40+31,1)==b'\xff'
+    assert m.read(SEQ+0x2c0+2*0x40+47,1)==b'\xff'
     assert m.key(44,1,241)==1 and m.lane(0,31)==0x30
     # Back to the arp page; a reopened view starts there.
     m.u.mem_write(selection+0x160,b'\x00');m.w(selection+0x158,0);m.w(selection+0x15c,0)

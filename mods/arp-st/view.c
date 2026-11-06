@@ -129,8 +129,20 @@ static volatile arp_u8 *arp_chord_data(void **track)
 static void arp_chord_store(void *track,unsigned int lane,unsigned int step,unsigned int value)
 {
     static const arp_u32 set_default[4]=ST_CHORD_SET_DEFAULT,set_step[4]=ST_CHORD_SET_STEP;
+    unsigned int off=step<ST_CHORD_STEPS?ST_CHORD_STEP(lane,step):ST_CHORD_DEFAULT(lane);
+    volatile arp_u8 *model,*mirror;
+    arp_u32 sequence;
     if(step<ST_CHORD_STEPS)UI_CALL(set_step[lane],void (*)(void *,arp_u32,arp_u32))(track,step,value);
     else UI_CALL(set_default[lane],void (*)(void *,arp_u32))(track,value);
+    /* The stock track model notifies the UI, but its dormant NOT2..NOT4
+     * lanes are not guaranteed to reach the playing sequencer copy in time.
+     * Mirror the value accepted by the native setter, as POLY's live chord
+     * recorder does, so the next TRIG reads this step rather than the default. */
+    if(!lane || arp_track>=ARP_TRACKS ||
+       !(sequence=*(const volatile arp_u32 *)0x43bd7430u) ||
+       !(model=(volatile arp_u8 *)st_pattern_track_data(track)))return;
+    mirror=(volatile arp_u8 *)sequence+arp_track*ST_CHORD_TRACK_BYTES;
+    mirror[off]=model[off];
 }
 static unsigned int arp_chord_value(const volatile arp_u8 *data,unsigned int lane,unsigned int *locked)
 {
@@ -164,7 +176,8 @@ static void arp_chord_clear(unsigned int lane)
 {
     void *track;volatile arp_u8 *data=arp_chord_data(&track);unsigned int i,done=0;
     if(!data || lane<1 || lane>3)return;
-    for(i=0;i<64;i++)if((arp_held[i>>5]&(1u<<(i&31))) && data[ST_CHORD_STEP(lane,i)]!=ST_CHORD_INHERIT){
+    for(i=0;i<64;i++)if(i<st_pattern_track_length(track) &&
+        (arp_held[i>>5]&(1u<<(i&31))) && data[ST_CHORD_STEP(lane,i)]!=ST_CHORD_INHERIT){
         arp_chord_store(track,lane,i,ST_CHORD_INHERIT);done=1;
     }
     if(done)arp_lock_mark();

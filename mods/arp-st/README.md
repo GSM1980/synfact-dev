@@ -17,6 +17,12 @@ semitones, OFF at 0 and at raw 0 (see `chord.h`).
 Edits go through the track model's native setters (`40027552..400276de` for
 the defaults, `4002817a..400282e8` for a step), the TRIG page's own, which
 notify the model as its edits do and refuse steps past the track length.
+In 1.5, accepted NOT2..NOT4 edits are also mirrored to the playing
+sequencer copy, including per-step edits, inherited clears and defaults.
+The screen model could otherwise show the new p-lock while a following trig
+still read the previous chord. The mirror uses the value read back after the
+native setter and follows POLY's live recorder precedent. `test_st_arp_view_emu.py`
+checks the model and sequencer copy separately for F/G/H edits and clears.
 
 A sequence root plays its step's NOT2..NOT4 too: the arp holds the root and
 those notes, in that order. ARP observes TRIG without consuming it and keeps
