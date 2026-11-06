@@ -32,7 +32,9 @@ class Machine:
         data=bank.read_bytes();size,n=struct.unpack_from('>2I',data,52);image=bytearray(data[80+4*n:80+4*n+size])
         for off in struct.unpack_from('>%dI'%n,data,80):self.pack_into(image,off,struct.unpack_from('>I',image,off)[0]+BANK)
         u.mem_write(BANK,bytes(image));u.mem_write(RET,b'\x4e\x71');u.mem_write(OWNER,b'\x4e\x75')
-        self.phase='call';self.log=[];self.locks=[];self.count=0;u.hook_add(UC_HOOK_CODE,self.code)
+        self.phase='call';self.log=[];self.locks=[];self.count=0
+        self.stock_trig_result=None;self.stock_trig_calls=0
+        u.hook_add(UC_HOOK_CODE,self.code)
         self.w(0x444db730,LOCKPOOL);self.call(0x4011a3a0,71)
         self.w(0x43bd743c,KIT);self.w(0x800030b8,KIT);self.w(0x43bd7430,SEQ);self.w(0x43bd73bc,1)
         self.w(0x402d7010,14400);self.w(0x800046ec,0);self.u.mem_write(OWNERMAP,bytes(range(12)))
@@ -57,6 +59,8 @@ class Machine:
         self.u.reg_write(UC_M68K_REG_D0,v&0xffffffff);self.u.reg_write(UC_M68K_REG_A7,sp+4);self.u.reg_write(UC_M68K_REG_PC,pc)
     def code(self,u,pc,n,_):
         self.count+=1
+        if pc==self.cs['core:core_stock_trig'] and self.stock_trig_result is not None:
+            self.stock_trig_calls+=1;self.ret(self.stock_trig_result);return
         if pc in [0x40001980,0x40001aa2]:self.ret();return # task mutex boundary
         if pc==OWNER:
             sp=u.reg_read(UC_M68K_REG_A7);op,args,out=struct.unpack('>3I',self.read(sp+4,12))
@@ -253,11 +257,15 @@ def verify(core,bank,out):
     assert q.word(q.sym['arp_generation'])==generation and q.pool_counts()!=base
     q.frame(4320000);assert len(q.log)==2 and q.log[-1]['time']==4320000
     q.configure(mode=0);assert q.pool_counts()==base
-    # 1.2: a sequence root plays its step's NOT2..NOT4. TRIG (observed, never
-    # consumed) records them by event; NOTE_ACCEPT hands them to the runtime.
-    def trig(q,step,event,track=0):
-        q.u.mem_write(W+0x200,struct.pack('>6I',track,SEQ,KIT,step,event,0))
-        assert q.call('arp_native',0,W+0x200,W+0x240)==0
+    # Stock TRIG may return a different event from the one supplied. Exercise
+    # the core dispatcher and its original replay, then accept the result.
+    def trig(q,step,event,track=0,source=None):
+        q.stock_trig_result=event
+        q.u.mem_write(W+0x200,struct.pack('>6I',track,SEQ,KIT,step,event if source is None else source,0))
+        before=q.stock_trig_calls
+        assert q.call(q.cs['core:core_native'],0,W+0x200)==event
+        assert q.stock_trig_calls==before+1
+        q.stock_trig_result=None
     lane=lambda track,n,step:SEQ+track*0x499+0x2c0+n*0x40+step
     for case,setup,expected in [
             ('step lanes by event',lambda q,e:(q.u.mem_write(lane(0,1,3),b'\x44'),q.u.mem_write(lane(0,2,3),b'\x47'),trig(q,3,e)),[60,64,67,60]),
@@ -286,10 +294,35 @@ def verify(core,bank,out):
     assert [x['pitch'] for x in q.log]==[60,64,67,65,53,70],q.log
     assert q.configure(mode=0)==1 and q.pool_counts()==base
     failures.append('chord: successive steps retain independent NOT2..NOT4')
+    # Step 1 inherits C4/+3/+5. Step 17 locks only NOT3 to +6. Stock returns
+    # the queued root rather than the scratch event passed into TRIG.
+    q=Machine(core,bank);base=q.pool_counts();q.configure(mode=1,range_=0)
+    q.u.mem_write(SEQ,bytes(0x499));q.u.mem_write(SEQ+0x2c0,b'\xff'*256)
+    q.u.mem_write(SEQ+0x3c5,bytes([60,67,69,64]))
+    q.u.mem_write(lane(0,2,16),b'\x46')
+    e,_=q.event(note=60,length=0);trig(q,0,e,source=W+0x700)
+    for t in (0,5400000,10800000):q.frame(t)
+    e,_=q.event(note=60,length=0,when=16200000);trig(q,16,e,source=W+0x700)
+    for t in (16200000,21600000,27000000):q.frame(t)
+    assert [x['pitch'] for x in q.log]==[60,63,65,60,63,66],q.log
+    assert q.configure(mode=0)==1 and q.pool_counts()==base
+    failures.append('chord: step 17 NOT3 lock survives stock event replacement')
+    # The prepared static source can also return a pooled event. Its backup
+    # record must be spent when that event plays, before any unrelated root.
+    q=Machine(core,bank);base=q.pool_counts();q.configure(mode=1,range_=0)
+    q.u.mem_write(SEQ,bytes(0x499));q.u.mem_write(SEQ+0x2c0,b'\xff'*256)
+    q.u.mem_write(lane(0,3,0),b'\x3b')
+    e,_=q.event(note=60,length=0);trig(q,0,e,source=0x444e2438)
+    q.frame(0);q.frame(5400000)
+    q.event(note=60,length=0,when=10800000)
+    q.frame(10800000);q.frame(16200000)
+    assert [x['pitch'] for x in q.log]==[60,55,60,60],q.log
+    assert q.configure(mode=0)==1 and q.pool_counts()==base
+    failures.append('chord: prepared fallback spent after pooled first root')
     result=dict(ok=True,native_pool_counts=initial,notes=m.log,limits=[
         'Native core dispatch, allocation/copy/free, lock refs, queue, pitch/gate run as target code.',
         'Sound publication, smoothing and parameter-lock application are explicit boundaries; no audio synthesis or device test.',
-        'This fixture covers sequence roots; standalone held keyboard chords are checked separately. Native chord lanes are read from a sequence fixture (TRIG observed by direct call); temporary pooled Sounds remain outside this fixture; persistence has a separate fixture.'],
+        'This fixture covers sequence roots; standalone held keyboard chords are checked separately. Native chord lanes are read from a sequence fixture; stock TRIG replay is stubbed with the returned event while core dispatch executes. Temporary pooled Sounds remain outside this fixture; persistence has a separate fixture.'],
         failure_cases=failures,frame_callback_instructions=dict(off=off,active_not_due=idle,due_with_native_pool_copy_queue=due),device_access=False)
     out.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
 

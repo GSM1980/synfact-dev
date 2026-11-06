@@ -26,32 +26,39 @@ static unsigned char arp_lab_override[ARP_TRACKS] DATA={0};
 #include "locks.h"
 #include "chord.h"
 #include "record.c"
-/* 1.2: a sequence root plays its step's NOT2..NOT4 too (the chord page).
- * TRIG prepares each trig's event from its step; ENQUEUE and NOTE_ACCEPT then
- * see the same pointer, so the step's intervals are kept by event pointer,
- * four per track. The first step after STOP is prepared in a static event
- * (444e2438 + 50h a track, as POLY's) that the native start copies: kept
- * apart, it goes to the next root with no record. A root with neither takes
- * the track defaults. Writers (TRIG) publish the pointer last. */
+/* A sequence root plays its step's NOT2..NOT4 too. Stock TRIG may return a
+ * different event from the one it was given; NOTE_ACCEPT sees the returned
+ * event. Keep each step's intervals under that result, four per track. The
+ * first step after STOP uses a static event which native start may copy, so
+ * retain a separate prepared record as well. */
 struct arp_chord_record {arp_u32 event;int interval[3];unsigned int count;};
 static volatile struct arp_chord_record arp_chord_ring[ARP_TRACKS][4] DATA={{{0}}};
 static volatile struct arp_chord_record arp_chord_prep[ARP_TRACKS] DATA={{0}};
 static unsigned char arp_chord_next[ARP_TRACKS] DATA={0};
 #define ARP_PREP_EVENT(t) (0x444e2438u+(t)*0x50u)
-static void chord_trig(const arp_u32 *a)
+static void chord_trig(const arp_u32 *a,arp_u32 event)
 {
-    arp_u32 track=a[0],event=a[4];unsigned int i,count;int interval[3];
+    arp_u32 track=a[0];unsigned int i,count;int interval[3];
     volatile struct arp_chord_record *r=0;
-    if(track>=ARP_TRACKS || !a[1] || !event)return;
+    if(track>=ARP_TRACKS || !a[1])return;
+    if(!event){
+        if(a[4]==ARP_PREP_EVENT(track))arp_chord_prep[track].event=0;
+        return;
+    }
     count=st_chord_intervals((const volatile unsigned char *)a[1]+track*ST_CHORD_TRACK_BYTES,a[3],interval);
-    if(event==ARP_PREP_EVENT(track))r=&arp_chord_prep[track];
-    else {
+    if(a[4]==ARP_PREP_EVENT(track)){
+        r=&arp_chord_prep[track];r->event=0;
+        for(i=0;i<count;i++)r->interval[i]=interval[i];
+        r->count=count;r->event=event;
+    }
+    if(event!=ARP_PREP_EVENT(track)){
+        r=0;
         for(i=0;i<4;i++)if(arp_chord_ring[track][i].event==event)r=&arp_chord_ring[track][i];
         if(!r){r=&arp_chord_ring[track][arp_chord_next[track]&3u];arp_chord_next[track]++;}
+        r->event=0;
+        for(i=0;i<count;i++)r->interval[i]=interval[i];
+        r->count=count;r->event=event;
     }
-    r->event=0;
-    for(i=0;i<count;i++)r->interval[i]=interval[i];
-    r->count=count;r->event=event;
 }
 static unsigned int chord_take(arp_u32 track,const arp_u32 *e,int *interval)
 {
@@ -62,6 +69,8 @@ static unsigned int chord_take(arp_u32 track,const arp_u32 *e,int *interval)
     if(!r)return sequence?st_chord_intervals(sequence+track*ST_CHORD_TRACK_BYTES,ST_CHORD_STEPS,interval):0;
     count=r->count;
     for(i=0;i<count;i++)interval[i]=r->interval[i];
+    if(r!=&arp_chord_prep[track] && arp_chord_prep[track].event==(arp_u32)e)
+        arp_chord_prep[track].event=0;
     r->event=0;return count;
 }
 static const volatile arp_u32 *held_notes(unsigned int track)
@@ -181,7 +190,14 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
 {
     arp_u32 *e,before;const struct arp_settings *p;unsigned int i,track;
     if(op==ST_NATIVE_SOUND_META){arp_sound_meta(a);changed_sound(a);return 0;}
-    if(op==ST_NATIVE_TRIG){chord_trig(a);return 0;}  /* observer: stock prepares it */
+    if(op==ST_NATIVE_TRIG){
+        /* Only independent audio tracks reach the stock replay here. POLY
+         * owns grouped tracks and must prepare their voices itself. */
+        if(!a || a[0]>=ARP_TRACKS || !eligible(a[0]))return 0;
+        *result=arp_host->native_original(ST_NATIVE_TRIG,a);
+        chord_trig(a,*result);
+        return 1;
+    }
     if(op==ST_NATIVE_IMMEDIATE){
         e=(arp_u32 *)a[0];if(e[0]!=ARP_COMMAND){
             int held,fresh;

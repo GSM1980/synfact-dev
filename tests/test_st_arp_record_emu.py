@@ -62,8 +62,10 @@ def verify(core,bank,out):
     assert m.read(m.sym['arp_rec_chords']+10,1)==b'\x03'
     assert not m.word(m.sym['arp_live'])
     e,_=m.event(note=60,length=0)
+    m.stock_trig_result=e
     m.u.mem_write(W+0x200,struct.pack('>6I',0,SEQ,KIT,0,e,0))
-    assert m.call('arp_native',0,W+0x200,W+0x240)==0
+    assert m.call(m.cs['core:core_native'],0,W+0x200)==e
+    m.stock_trig_result=None
     for t in (0,5400000,10800000,16200000):m.frame(t)
     assert m.pitches()==[60,64,67,72],m.log
     assert m.configure(mode=0) and m.pool_counts()==initial
