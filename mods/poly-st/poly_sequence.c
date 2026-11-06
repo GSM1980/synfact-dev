@@ -72,10 +72,16 @@ static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
     return 1;
 }
 
+/* The first step plays its chord on voices 0.. as prepared; the voices it
+ * takes become the newest, so the next sequencer note rotates past them. */
 static void prep_fill_group(const volatile u8 *sequence,u32 master,s32 time)
 {
-    u32 voice;
-    for(voice=1;voice+1u<poly_seq_config.states[master];voice++)prep_fill(sequence,master,voice,time);
+    u32 voice,played=0;
+    volatile u32 *source=PREP_EVENT(master);
+    if(source[1] && source[2]==master)played=1;
+    for(voice=1;voice+1u<poly_seq_config.states[master];voice++)
+        if(prep_fill(sequence,master,voice,time))played|=1u<<voice;
+    poly_seq_started(master,played);
 }
 
 /* Native per-track preparation, as 4008c0b0 does for one audio track. */
@@ -250,6 +256,10 @@ u32 poly_sequence_enqueue(u32 *event,u32 time)
     }
     count=poly_prepare(event,(const volatile u8 *)pending->sequence,pending->step,
                            poly_seq_config.states[track]-1u,batch);
+    /* Note trigs rotate over the voices. A trigless lock trig (as ARP tells
+     * them: not all of +24h's 10201h bits) moves no voice: a chord's reaches
+     * every voice, a single note's the voice started last. */
+    if(count)poly_seq_voices(batch,count,track,poly_seq_config.states[track]-1u,event);
     if(!count) {
         /* A failed reservation has rolled back all child refs. Keep the
          * original master behavior when the native queue can accept it. */

@@ -20,7 +20,7 @@ static void *poly_test_function(T);
 static T events[128][20],used[128],queue[256][20],queued,releases,publishes,cancelled;
 static T fail_after,allocations,refcount=1,trig_calls,model_notifies,draws,immediate_calls;
 static T policy[13],increments[7],native_layout[11],tracked=0;
-static T rec_step,rec_track;
+static T rec_step,rec_track,trig_flags=0x10201u;  /* +24h of a note trig */
 static B rec_model[0x500];
 static B view[512],model[64],header[256];
 static char labels[512];
@@ -69,7 +69,7 @@ static T original(T op,const T *a)
     case ST_NATIVE_TRIG:
         trig_calls++;e=(T *)a[4];if(!e)return 0;
         for(i=0;i<20;i++)e[i]=0;
-        e[0]=1;e[1]=1;e[2]=a[0];e[3]=1;e[6]=SEQ[a[0]*0x499+0x3c5];e[18]=a[0];
+        e[0]=1;e[1]=1;e[2]=a[0];e[3]=1;e[6]=SEQ[a[0]*0x499+0x3c5];e[9]=trig_flags;e[18]=a[0];
         if(a[5])*(T *)a[5]=1000;return (T)e;
     case ST_NATIVE_ENQUEUE:native_enqueue((T *)a[0],a[1]);return 1;
     case ST_NATIVE_HEADER_LOAD:memcpy((void *)a[0],(void *)a[1],256);return 1;
@@ -136,7 +136,7 @@ static void reset(void)
     cache_sequence=0;cache_midi_mask=0xffffffffu;preview_depth=0;
     memset(prep_generation,0,sizeof prep_generation);memset(live_generation,0,sizeof live_generation);
     memset(chord_generation,0,sizeof chord_generation);memset(preview_generation,0,sizeof preview_generation);
-    memset(rec_chords,0,sizeof rec_chords);
+    memset(rec_chords,0,sizeof rec_chords);memset(live_age,0,sizeof live_age);live_clock=0;
     memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_shared_mask=poly_copy_pending=0;
     *(T *)0x800030b8=0;
     for(i=0;i<12;i++)poly_lfo_map[i]=poly_post_map[i]=(B)i;
@@ -312,6 +312,65 @@ static void groups_and_notes(void)
         cancelled=0;assert(poly_record_write(0,0,4));assert(cancelled==4);
         *(T *)0x444de434u=0;
     }
+}
+/* 1.1: master steps in a row take the group's voices least recently started
+ * first, so they overlap; chords take as many; the first-step statics count. */
+static T step_voices(T step,T *notes)
+{
+    T e[20],time,i,mask=0;
+    memset(e,0,sizeof e);e[0]=1;
+    assert(poly_trig(0,SEQ,(T)KIT,step,e,&time)==e && poly_sequence_enqueue(e,time));
+    for(i=0;i<queued;i++){
+        assert(queue[i][2]==queue[i][18] && queue[i][2]<4 && !(mask>>queue[i][2]&1u));
+        mask|=1u<<queue[i][2];if(notes)notes[i]=queue[i][6];
+    }
+    drain();return mask;
+}
+static void sequence_voices(void)
+{
+    T v,step,notes[4],time;
+    for(v=2;v<=4;v++) {
+        reset();assert(poly_record_write(0,1,v));
+        SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;          /* NOT2..NOT4 OFF: single notes */
+        for(step=0;step<3*v;step++)assert(step_voices(step,notes)==1u<<step%v && notes[0]==60);
+    }
+    reset();assert(poly_record_write(0,1,4));SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;
+    SEQ[0x2c0+0x40+1]=67;SEQ[0x2c0+0x80+1]=71;      /* step 1: 60, 63, 67 */
+    assert(step_voices(0,0)==1);
+    assert(step_voices(1,notes)==14 && notes[0]==60 && notes[1]==63 && notes[2]==67);
+    assert(step_voices(2,0)==1 && step_voices(1,0)==14 && step_voices(3,0)==1);
+    /* The chord's root takes the oldest voice: 1 after a note on 0. */
+    reset();assert(poly_record_write(0,1,4));SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;
+    SEQ[0x2c0+0x40+1]=67;assert(step_voices(0,0)==1);
+    memset(queue,0,sizeof queue);
+    {T e[20]={1},i;
+     assert(poly_trig(0,SEQ,(T)KIT,1,e,&time)==e && poly_sequence_enqueue(e,time) && queued==2);
+     assert(queue[0][2]==1 && queue[0][6]==60 && queue[1][2]==2 && queue[1][6]==63);
+     for(i=0;i<2;i++)assert(!queue[i][10]);drain();}
+    /* First step after STOP: voices 0 and 1 prepared, next notes go to 2, 3, 0. */
+    reset();assert(poly_record_write(0,1,4));SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;
+    SEQ[0x2c0+0x40]=67;
+    assert(poly_trig(0,SEQ,(T)KIT,0,(T *)PREP_EVENT(0),&time));
+    assert(PREP_EVENT(1)[1] && PREP_EVENT(1)[6]==63 && !PREP_EVENT(2)[1]);
+    assert(step_voices(1,0)==4 && step_voices(2,0)==8 && step_voices(3,0)==1);
+    /* A trigless lock trig reaches every voice in order and moves no voice. */
+    trig_flags=0x10001u;
+    {T e[20]={1},i;
+     assert(poly_trig(0,SEQ,(T)KIT,4,e,&time)==e && poly_sequence_enqueue(e,time) && queued==1);
+     assert(queue[0][2]==0);drain();    /* voice 0 started last (step 3) */
+     SEQ[0x2c0+0x40+5]=67;SEQ[0x2c0+0x80+5]=71;SEQ[0x2c0+0xc0+5]=76;
+     assert(poly_trig(0,SEQ,(T)KIT,5,e,&time)==e && poly_sequence_enqueue(e,time) && queued==4);
+     for(i=0;i<4;i++)assert(queue[i][2]==i);drain();}
+    trig_flags=0x10201u;assert(step_voices(6,0)==2);
+    trig_flags=0x10001u;assert(step_voices(7,0)==2);trig_flags=0x10201u;assert(step_voices(8,0)==4);
+    /* Analog: the slave voice still binds the master's kit Sound. */
+    reset();assert(poly_record_write(8,1,3));SEQ[8*0x499+0x3c6]=SEQ[8*0x499+0x3c7]=64;
+    for(step=0;step<6;step++) {
+        T e[20]={1};
+        assert(poly_trig(8,SEQ,(T)KIT,step,e,&time)==e && poly_sequence_enqueue(e,time) && queued==1);
+        assert(queue[0][2]==8+step%3 && queue[0][10]==(step%3?(T)KIT+0x2a+8*0x123:0));drain();
+    }
+    printf("PASS: sequencer notes rotate over 2/3/4 voices, chords take the oldest voices, first-step statics, analog Sounds\n");
 }
 static void ui(void)
 {
@@ -604,7 +663,7 @@ int main(void)
      ui.host=&services;assert(poly_initialize(&api));ui.version=7;assert(!poly_initialize(&api));
      h.version=8;h.native_interest=interest_mock;h.native_page_view=page_view_mock;
      ui.host=&h;assert(!poly_initialize(&api));}
-    play_codec();play_modes();copy_on_change();topology();groups_and_notes();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();
+    play_codec();play_modes();copy_on_change();topology();groups_and_notes();sequence_voices();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();
     puts("PASS: analog event/Sound/UI regressions and 110592 mixed topology/mode/record cases; 108 POLY topologies, 2/3/4 voices, live/chord/sequence paths, stealing/off, rollback, CRC persistence, MIDI suspension, page/controls/slave guards, native interest by group state");
     return 0;
 }

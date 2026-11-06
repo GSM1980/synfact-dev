@@ -48,6 +48,18 @@ Track trigs and held-step preview play the chord. Sequencer chords retain
 native condition/probability decisions, event ownership, cancellation and
 first-step preparation. Live recording writes NOTE and relative note lanes.
 
+Since 1.1 the master's sequencer steps overlap instead of cutting each other:
+each note of a step (root, then NOT2..NOT4) takes the voice started least
+recently, so steps in a row play on the master, slave 1, slave 2... and a
+note cuts another only when every voice has started since. A chord takes as
+many voices, the oldest first, so it no longer always starts on the master.
+The ages are the ones held keys use, so keyboard and sequencer avoid each
+other's newest notes. The first step after STOP plays the chord natively on
+voices 0.. and counts as started. A trigless lock trig moves no voice: a
+chord's reaches every voice in order, as before, and a single note's the
+voice started last. Slide between steps now crosses voices, so it has no
+note to slide from.
+
 Slaves show TRACK IN / SLAVE MODE and block parameter edits, page mutations,
 machine selection and Sound writes according to the reference. Of the keys,
 a slave blocks only the other parameter pages (TRIG, SYN, FLTR, AMP, LFO):
@@ -249,6 +261,7 @@ rejected by older cores before execution. Use the matching SYX and SMZ together.
 
 `tests/test_st_poly.c` runs production C with explicit native doubles on a
 32-bit host: 108 digital topologies plus analog 9×2/9×3/10×2, 2/3/4 voices, key/chord/sequencer paths,
+the sequencer's voice rotation (single notes, chords, first-step statics, lock trigs),
 stealing/note-off, event rollback, MIDI suspension, CRC, UI controls, slave
 guards, live recording and scalar publication. `test_st_parameters.c` checks
 effective owner/type/count transport and invalid-owner fallback.

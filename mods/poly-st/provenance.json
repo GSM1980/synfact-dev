@@ -24,15 +24,16 @@
     "local guards use bound 12 and an IRQ-published slave bitmap; native kernel bodies remain stock",
     "first/last slave bounds skip independent tracks outside the publication range; scaled word addressing saves four instructions per slave",
     "native TRIG synchronizes once before grouped routing; analog-only groups never subscribe TYPE",
-    "analog slave note events bind the master kit Sound when native keyboard/MIDI/preview events carry no Sound; event-only fix"
+    "analog slave note events bind the master kit Sound when native keyboard/MIDI/preview events carry no Sound; event-only fix",
+    "1.1: sequencer notes take the group's voice started least recently, so master steps in a row overlap; lock trigs move no voice"
   ],
   "local_sha256": {
     "main.c": "ee0fe9a479d8e0c8612b79010603ea1062836a29d6b116a694a2efd61ce78a40",
-    "poly_core.c": "1849eed97bbc99cd8ebd1b0eacf4dcbdc493792525baccfa449254397b71a1fd",
+    "poly_core.c": "b533e2c068abf55204c3ada655620b8c1b0d4e2944390f192e8c8a493c679f23",
     "poly_event.c": "3b06dd4b2b3edee382e2042af3563e772ccd3eee8c69f7576dbbbaefc5693301",
     "poly_groups.c": "29e473fec63a15d6b51b81beea8ef1b51b1027aeec999982f3dcd8cf6d110054",
     "poly_pattern.c": "c503a5afda21197951d627f849378a7a5b2e60bf7b16e843e1b6c852035669d1",
-    "poly_sequence.c": "568a61268f778df26bd4665f8078655fb8d39552891b67b1658167eb2b6a76fd",
+    "poly_sequence.c": "78a4fbe18e9b21588b6f5ebe0312b4d95fbc6b2880ecce0edbded0673b405ec6",
     "poly_publication.c": "55671a510144abef6a1acc5f292a1192896841672b4adafd4e454ff9af9d4220",
     "poly_ui.c": "3e61477755dc4e523bf111cbabff2191a62d3348377bca6ea3fcaf3e4cd48228",
     "publication.s": "b6f30f056ce165a7cdf0f6ee858c636d60d454225ec1e9b01520e7771d0494e6",

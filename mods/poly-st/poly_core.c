@@ -7,6 +7,8 @@
 static u8 poly_modes[8],poly_next_modes[8];
 static void poly_play_maps(const volatile u8 *);
 static void poly_copy_group(u32,u32);
+static void poly_seq_voices(u32 **,u32,u32,u32,const u32 *);
+static void poly_seq_started(u32,u32);
 #include "poly_sequence.c"
 #include "poly_publication.c"
 #include "poly_play.c"
@@ -331,6 +333,40 @@ static u32 live_age[12][4] DATA={{0}};
 static u32 live_clock DATA=0;
 static u32 live_next[12] DATA={0};
 static u32 live_generation[12] DATA={0};
+
+/* Sequencer notes of a group (1.1): each note of a step, root first, takes
+ * the voice started least recently (ties: the lowest), on the same ages as
+ * the held keys. Steps in a row overlap on master, slave 1, slave 2... and
+ * a note steals only once every voice has started since. The events come
+ * from poly_prepare (lane i on voice i); each is retargeted as if prepared
+ * for its voice, from the source's Sound. */
+static void poly_seq_voices(u32 **batch,u32 count,u32 track,u32 voices,const u32 *source)
+{
+    u32 j,v,voice,taken=0;
+    if((source[9]&0x10201u)!=0x10201u) {
+        if(count!=1)return;
+        for(voice=0,v=1;v<voices;v++)if(live_age[track][v]>live_age[track][voice])voice=v;
+        batch[0][10]=source[10];
+        poly_voice_target(batch[0],track,voice);
+        return;
+    }
+    for(j=0;j<count;j++) {
+        voice=4;
+        for(v=0;v<voices;v++)
+            if(!(taken>>v&1u) && (voice>3 || live_age[track][v]<live_age[track][voice]))voice=v;
+        taken|=1u<<voice;
+        batch[j][10]=source[10];
+        poly_voice_target(batch[j],track,voice);
+        live_age[track][voice]=++live_clock;
+    }
+}
+
+/* The first-step statics play voices 0.. natively: mark them started. */
+static void poly_seq_started(u32 track,u32 played)
+{
+    u32 v;
+    for(v=0;v<4;v++)if(played>>v&1u)live_age[track][v]=++live_clock;
+}
 
 static u32 poly_live_keys(u32 *event,u32 track,u32 voices,u32 press)
 {
