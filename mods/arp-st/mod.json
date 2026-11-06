@@ -1,5 +1,5 @@
 {
-  "id":"arp-st", "version":"1.2", "title":"ARP experiment",
+  "id":"arp-st", "version":"1.3", "title":"ARP experiment",
   "device":"syntakt", "os":"1.41", "license":"GPL-2.0-or-later",
   "sources":["module.c","runtime.c","selector.c","clock.c","input.c","ui.c","length.c","keyboard.c","persist.c"],
   "smz_module":{"descriptor":"arp_module"}

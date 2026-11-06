@@ -501,6 +501,13 @@ static int arp_view_key(void *app,const void *event)
         }
         return 1;
     }
+    /* Parameter pages belong to the native view stack. Remove ARP before the
+     * same press reaches it, so the selected page (or SYN's double-tap machine
+     * selector) cannot paint over a live ARP/chord view. TRIG stays above. */
+    if(key>=0x14 && key<=0x17){
+        if((flags&1) && !(flags&8))ARP_CLOSE(arp_view);
+        return 0;
+    }
     /* On the chord page the trig keys stay the sequencer's: with REC, held
      * trigs select the steps E..H edit. */
     if(key>=24 && key<=39)return arp_page?0:arp_step_key(key,flags);
@@ -519,7 +526,11 @@ static int arp_view_key(void *app,const void *event)
     }
     if(key==12){
         if((flags&1) && !(flags&8) && !arp_lock_mode){
-            struct arp_settings p=arp_ui_parameters;p.enabled^=1u<<arp_selected;
+            struct arp_settings p;unsigned int i;
+            /* Keep the freestanding SMZ build independent of libc memcpy. */
+            for(i=0;i<sizeof p;i++)
+                ((volatile arp_u8 *)&p)[i]=((volatile const arp_u8 *)&arp_ui_parameters)[i];
+            p.enabled^=1u<<arp_selected;
             save_ui_settings(&p);ARP_DIRTY(arp_view);
         }
         return 1;

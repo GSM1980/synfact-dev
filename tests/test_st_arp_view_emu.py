@@ -73,7 +73,9 @@ class ViewMachine(Machine):
             assert self.word(self.args(1)[0])==ROOT;self.ret();return
         if pc==0x400ffdfc:self.disposals+=1;self.ret();return
         if pc==0x400ffd02:
-            assert self.args(1)==(ROOT+16,);self.closed+=1;self.ret();return
+            assert self.args(1)==(ROOT+16,);self.closed+=1
+            # Native close removes the view from the foreground stack.
+            self.w(ROOT+16+0x30,1);self.top(MAIN);self.ret();return
         if pc==0x400ffc5e:self.dirty+=1;self.ret();return
         if pc==0x400f8a0c:
             bmp,font,x,y,align,fmt,text=self.args(7);assert bmp==BMP and self.string(fmt)=='%s'
@@ -233,11 +235,11 @@ def step_editing(core,bank):
 
 def native_key_binding(core,bank):
     m=NativeKeyMachine(core,bank)
-    # Derive TRIG from native dispatch to parameter page 0; SYN selects page 1.
+    # Derive all parameter-page keys from the native MainScreen switch.
     # The old 0x12 (18) does neither. This failed on TEST01's recognizer.
     m.stock_key(0x12);assert m.native_pages==[]
-    m.stock_key(0x13);assert m.native_pages==[0]
-    m.stock_key(0x14);assert m.native_pages==[0,1]
+    for key in range(0x13,0x18):m.stock_key(key)
+    assert m.native_pages==[0,1,2,3,4]
     keys=W+0x900;m.w(keys,m.sym['arp_view_key']);m.w(keys+4,0)
     m.w(m.cs['core:core_key_table']+2,keys)
     m.w(m.cs['core:events']+2*8,keys)
@@ -247,9 +249,37 @@ def native_key_binding(core,bank):
     assert not m.global_key(0x13,1,100) and not m.global_key(0x13,16,110)
     assert m.global_key(0x13,1,200)==1 and m.word(m.sym['arp_view'])==ROOT+16
     assert m.global_key(0x13,16,210)==1 and m.manager_calls==6
-    return {'TRIG':19,'SYN':20,'old_wrong_key':18,'native_page_switch_executed':True,
+    return {'TRIG':19,'SYN':20,'FLTR':21,'AMP':22,'LFO':23,'old_wrong_key':18,'native_page_switch_executed':True,
             'global_core_key_dispatch_executed':True,'wrong_key_double_tap_rejected':True,
             'boundaries':['parameter-page selection','view-manager dispatch','view allocation/base/stack/raster as above']}
+
+def parameter_page_handoff(core,bank):
+    for arp_page in (0,1):
+        for page_key in (0x14,0x15,0x16,0x17):
+            m=NativeKeyMachine(core,bank)
+            keys=W+0x900;m.w(keys,m.sym['arp_view_key']);m.w(keys+4,0)
+            m.w(m.cs['core:core_key_table']+2,keys)
+            m.w(m.cs['core:events']+2*8,keys)
+            for key,flags,block in ((0x13,1,0),(0x13,16,10),(0x13,1,100),(0x13,16,110)):
+                m.global_key(key,flags,block)
+            assert m.word(m.sym['arp_view'])==ROOT+16
+            if arp_page:
+                assert m.global_key(0x13,1,200)==1
+                assert m.global_key(0x13,16,210)==1
+            assert m.word(m.sym['arp_page'])==arp_page
+            before=m.manager_calls
+            # The first page press removes ARP and reaches the native manager;
+            # release and another press remain available for native gestures.
+            assert m.global_key(page_key,1,300)==0
+            assert m.closed==1 and m.word(ROOT+16+0x30)==1
+            assert m.word(NODE+8)==MAIN and m.manager_calls==before+1
+            assert m.global_key(page_key,16,310)==0
+            assert m.global_key(page_key,1,320)==0
+            assert m.manager_calls==before+3 and m.closed==1
+            m.dispose();assert not m.word(m.sym['arp_view'])
+    return {'arp_pages':[0,1],'native_page_keys':['SYN','FLTR','AMP','LFO'],
+            'first_press_closes_before_native_dispatch':True,
+            'release_and_second_press_reach_native_manager':True}
 
 def resources(donor,core):
     d=donor.read_bytes();assert hashlib.sha256(d).hexdigest()==DONOR_SHA
@@ -425,8 +455,8 @@ def verify(core,bank,donor,out):
     assert q.word(q.sym['arp_generation'])==generation
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
-    binding=native_key_binding(core,bank)
-    result=dict(ok=True,fonts=fonts,key_binding=binding,step_editing=steps,chord_page=chord,encoder_travel=travel,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
+    binding=native_key_binding(core,bank);page_handoff=parameter_page_handoff(core,bank)
+    result=dict(ok=True,fonts=fonts,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
         lifecycle=['double tap opens with MODE OFF','encoders A..F clamp','selected step/mute','modal priority',
                    'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',
                    'native STOP passes','NO closes without disabling','destructor/reopen','failed opening preserves native release',

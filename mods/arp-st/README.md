@@ -468,3 +468,13 @@ counts for 0/1/4/8 active live ARPs are unchanged in the fixture; 12 active ARPs
 cost 1,823 instructions on a non-note block and 6,531 on a due-note block.
 These are instruction counts, not cycles. Files for hardware testing are under
 `out/Syntakt_ARP_AllTracks_TEST06_20261030/`.
+
+## Parameter page handoff (1.3)
+
+From either ARP page, SYN, FLTR, AMP and LFO close the ARP view and pass the
+same press to the native page handler. SYN's second tap can then open the
+machine selector without the ARP view remaining beneath it. TRIG still switches
+between the two ARP pages. The linked `test_st_arp_view_emu.py` fixture checks
+both pages and all four keys through the core key dispatcher, including the
+native handoff of the release and second press. Physical display behavior still
+needs confirmation on the Syntakt.
