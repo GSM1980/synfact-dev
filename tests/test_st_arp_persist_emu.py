@@ -58,6 +58,10 @@ def verify(core,bank,out):
     canary=bytes([0xa5])*320;m.u.mem_write(m.carrier(C1,3),canary)
     assert m.call(0x400a787c,rec,kit,0)&255
     assert m.read(m.carrier(C1,3),320)==canary
+    shared_pool=m.put_settings(POOL+3*SOUND,mode=4,seed=4)
+    shared_record=C1+PS+3*RECORD
+    assert m.call(0x400a7366,shared_record,POOL+3*SOUND,0)&255
+    m.call('lfo3_sound_encoded',shared_record,POOL+3*SOUND,1)
     m.call('lfo3_kit_encoded',rec,kit,1)
     carrier=m.read(m.carrier(C1,3),320);assert carrier[:4]==b'APC1'
     lfo_tail=m.read(rec+0x14e0,0x120)
@@ -70,15 +74,21 @@ def verify(core,bank,out):
     assert m.read(m.carrier(C1,3),320)==carrier
     # Preserve bytes through a native-size project snapshot and simulated reboot.
     m.w(C1,0xbeefbace);m.w(C1+4,13);m.w(C1+0x3a5600,0xbacef00c)
+    # Register the second full container, as a project A/B destination.
+    m.w(m.sym['containers'],C2)
     m.copy(C2,C1,0x3a5604)
     assert m.read(m.carrier(C2,3),320)==carrier
+    assert m.read(C2+0x3a6000,4)==b'LP\x02\x80'
     m.fresh();m.call('lfo3_records_init')
-    assert m.call(0x400a7828,kit,rec)&255
-    m.call('lfo3_kit_decoded',kit,rec,1)
+    copied_rec=C2+KS+3*0x1600
+    assert m.call(0x400a7828,kit,copied_rec)&255
+    m.call('lfo3_kit_decoded',kit,copied_rec,1)
     assert [m.settings(kit+0x2a+t*SOUND) for t in range(12)]==values
+    m.call('lfo3_sound_decoded',POOL+3*SOUND,C2+PS+3*RECORD,1)
+    assert m.settings(POOL+3*SOUND)==shared_pool
     assert m.read(lfo_row,16)==lfo_value
     assert m.read(rec+0x14e0,0x120)==lfo_tail
-    cases.append('native Kit codec; 12 Sound settings; snapshot; cleared RAM; LFO3 tail untouched')
+    cases.append('native Kit codec; 12 Sound settings; A/B snapshot; cleared RAM; LFO3 tail untouched')
     # Snapshot has no extra capacity requirement. Corrupt/absent payload = OFF.
     m.u.mem_write(m.carrier(C1,3)+24,b'\xff')
     m.call('lfo3_kit_decoded',kit,rec,1)
@@ -174,14 +184,52 @@ def verify(core,bank,out):
     full_value=full.put_settings(kit7+0x2a+6*SOUND,mode=4,seed=6)
     full_pool=full.put_settings(POOL+11*SOUND,mode=3,seed=3)
     # 53h = Kit, pool, project header; native pattern records already cached.
+    before_serialize=full.count
     assert full.call('lfo3_serialize_entry',C1,0x40a38b18,0,0x53,W+0xe000)&255
+    serialize_instructions=full.count-before_serialize
+    assert [i for i in range(128) if full.read(full.carrier(C1,i),4)==b'APC1']==[7,11]
     full.fresh()
     assert full.call(0x400a7828,kit7,C1+KS+7*0x1600)&255
     assert full.settings(kit7+0x2a+6*SOUND)==full_value
     assert full.call(0x400a6f7e,POOL+11*SOUND,C1+PS+11*RECORD)&255
     assert full.settings(POOL+11*SOUND)==full_pool
+    full.u.mem_write(W+0x100,DEFAULT)
+    assert full.call('arp_sound_store',kit7+0x2a+6*SOUND,W+0x100)==1
+    assert full.call('arp_sound_store',POOL+11*SOUND,W+0x100)==1
+    assert full.call('lfo3_serialize_entry',C1,0x40a38b18,0,0x53,W+0xe000)&255
+    assert all(full.read(full.carrier(C1,i),4)!=b'APC1' for i in range(128))
+    full.fresh()
+    full.call('lfo3_kit_decoded',kit7,C1+KS+7*0x1600,1)
+    full.call('lfo3_sound_decoded',POOL+11*SOUND,C1+PS+11*RECORD,1)
+    assert all(full.settings(kit7+0x2a+t*SOUND)==DEFAULT for t in range(12))
+    assert full.settings(POOL+11*SOUND)==DEFAULT
     cases.append('native whole-project Kit/pool serializer through shared adapters')
-    result=dict(ok=True,cases=cases,device_access=False,
+    # Pattern-owned ARP MODE/SPEED/RANGE/LEN and the native chord lanes must
+    # survive an encoded slot, an A/B project snapshot and a fresh decode.
+    locked=Persistence(core,bank)
+    assert locked.call('lfo3_locks_setup')==1
+    pattern=0x40a38b34;matrix=pattern+0x3bc5;encoded_pattern=C1+0x200
+    locked.u.mem_write(pattern,bytes(0x2138c))
+    locked.u.mem_write(matrix,b'\xff'*(0x21360-0x3bc5))
+    for track in range(13):locked.u.mem_write(matrix+track*0x2447+0x2400,bytes(71))
+    chord_lane=pattern+0x2c0+2*0x40+16
+    locked.u.mem_write(chord_lane,b'\x46')  # step 17 NOT3=+6
+    store=locked.call('lfo3_owned_lookup',matrix);assert store
+    for param,value in ((8,1),(9,10),(10,2),(11,33)):
+        assert locked.call('lfo3_owned_set',store,0,16,param,value,0)==1
+    # Install the exact native compressor hook used by the production bank.
+    locked.u.mem_write(0x400a811a,b'\x4e\xf9'+struct.pack('>I',locked.sym['lfo3_pattern_compress'])+b'\x4e\x71')
+    assert locked.call('lfo3_pattern_encode',encoded_pattern,pattern,0)&255
+    locked.w(C1,0xbeefbace);locked.w(C1+4,13);locked.w(C1+0x3a5600,0xbacef00c)
+    locked.w(locked.sym['containers'],C2)
+    locked.copy(C2,C1,0x3a5604)
+    locked.call('lfo3_owned_clear',store)
+    locked.u.mem_write(chord_lane,b'\xff')
+    assert locked.call('lfo3_owned_pattern_decode',pattern,C2+0x200,0)&255
+    assert [locked.call('lfo3_locks_get',store,0,16,param) for param in (8,9,10,11)]==[1,10,2,33]
+    assert locked.read(chord_lane,1)==b'\x46'
+    cases.append('ARP pattern locks and NOT3 step 17 survive encoded A/B project copy')
+    result=dict(ok=True,cases=cases,serializer_emulated_instructions=serialize_instructions,device_access=False,
                 core_sha256=hashlib.sha256(core.read_bytes()).hexdigest(),
                 bank_sha256=hashlib.sha256(bank.read_bytes()).hexdigest(),
                 limits=['Native IO is not exercised; no physical project save/reboot assertion.',

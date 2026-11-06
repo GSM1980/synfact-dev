@@ -394,6 +394,8 @@ a monophonic generator on all twelve audio tracks and Sound persistence.
 Build it with `--module mods/lfo3-st --module mods/arp-st --module mods/poly-st`
 in that order, alongside the ordinary recorder and System info modules.
 See [ARP](../mods/arp-st/README.md) for tests, native boundaries and persistence.
+Project APC1 carriers may be absent when all thirteen associated ARP Sound rows
+are defaults; readers must restore those defaults without requiring a carrier.
 
 ## Syntakt: mixer events, the FX codec and several providers (core 1.2)
 

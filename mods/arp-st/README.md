@@ -460,6 +460,9 @@ separately under `out/Syntakt_ARP_Digital_TEST05_20261030/`.
 Sound/Kit/pattern codecs, native project serializer for Kits/pool, cleared-RAM
 reload, snapshots, copy/free/defaults, nondefault LFO3 coexistence, short export
 canaries, +Drive wire records and a held chord reset by loading OFF.
+The project lifecycle audit and the default-carrier save/load optimization are
+documented in `docs/PROJECT-LIFECYCLE-AUDIT.md`. A carrier with only default
+ARP settings is omitted; old APC1 carriers remain readable.
 The displayed Sound settings stay separate from another Sound selected by a
 sequence Sound lock. All eight voices and existing timing paths remain active.
 The final physical save/reload/reboot and +Drive IO checks remain for hardware.
