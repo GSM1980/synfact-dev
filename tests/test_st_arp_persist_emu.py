@@ -89,6 +89,15 @@ def verify(core,bank,out):
     assert m.read(lfo_row,16)==lfo_value
     assert m.read(rec+0x14e0,0x120)==lfo_tail
     cases.append('native Kit codec; 12 Sound settings; A/B snapshot; cleared RAM; LFO3 tail untouched')
+    # Two projects can have identical native Sound bytes but different ARP
+    # settings. Switching A -> B -> A must select the matching metadata.
+    other=m.put_settings(kit+0x2a,mode=4,seed=15)
+    m.call('lfo3_kit_encoded',copied_rec,kit,1)
+    m.fresh()
+    for source,expected in ((rec,values[0]),(copied_rec,other),(rec,values[0])):
+        m.call('lfo3_kit_decoded',kit,source,1)
+        assert m.settings(kit+0x2a)==expected
+    cases.append('project A/B switch restores distinct ARP settings for identical native Sounds')
     # Snapshot has no extra capacity requirement. Corrupt/absent payload = OFF.
     m.u.mem_write(m.carrier(C1,3)+24,b'\xff')
     m.call('lfo3_kit_decoded',kit,rec,1)
@@ -118,8 +127,9 @@ def verify(core,bank,out):
     assert m.put_settings(a,mode=4,seed=4)==changed
     encoded,scratch,dest=W+0x8000,W+0x9000,W+0xa000
     m.u.mem_write(encoded-16,b'\xa5'*(16+RECORD+16))
+    m.w(m.cs['core:core_parameter_providers'],m.sym['lfo3_parameter_query'])
     assert m.call(0x400a7366,encoded,a,0)&255
-    m.call('lfo3_sound_encoded',encoded,a,1)
+    assert m.settings(a)==changed
     assert m.read(encoded-16,16)==b'\xa5'*16 and m.read(encoded+RECORD,16)==b'\xa5'*16
     m.u.mem_write(scratch-16,b'\xa5'*544)
     m.call('lfo3_s1_prepare',encoded,scratch)
@@ -130,6 +140,14 @@ def verify(core,bank,out):
     m.call('lfo3_s1_loaded',encoded,1,scratch)
     assert m.call(0x400a6f7e,dest,encoded)&255
     m.call('lfo3_sound_decoded',dest,encoded,1);assert m.settings(dest)==changed
+    # +Drive's owning loader calls 400af5f2 after S1, which validates the
+    # native record before jumping to the hooked Sound decode.
+    m.call('lfo3_s1_loaded',encoded,1,scratch)
+    assert m.call(0x400af5f2,dest,encoded,0)&255
+    m.call('lfo3_sound_decoded',dest,encoded,1);assert m.settings(dest)==changed
+    m.fresh();m.call('lfo3_s1_loaded',encoded,1,scratch)
+    assert m.call(0x400af5f2,a,encoded,0)&255
+    assert m.settings(a)==changed
     # Legacy and corrupt Sound records replace stale active settings with OFF.
     for n in [0x107,0x11f]:
         m.u.mem_write(scratch,wire[:n]+bytes(512-n));m.call('lfo3_s1_loaded',encoded,1,scratch)
@@ -193,6 +211,19 @@ def verify(core,bank,out):
     assert full.settings(kit7+0x2a+6*SOUND)==full_value
     assert full.call(0x400a6f7e,POOL+11*SOUND,C1+PS+11*RECORD)&255
     assert full.settings(POOL+11*SOUND)==full_pool
+    # The shutdown working-state writer passes -1 for all project sections.
+    # Exercise that exact serializer flag, not only the explicit 53h subset.
+    full.call_budget=250000000
+    assert full.call('lfo3_serialize_entry',C2,0x40a38b18,0,0xffffffff,W+0xe000)&255
+    assert full.read(full.carrier(C2,7),4)==b'APC1'
+    assert full.read(full.carrier(C2,11),4)==b'APC1'
+    full.fresh()
+    full.w(full.sym['containers'],C2)
+    full.call('lfo3_kit_decoded',kit7,C2+KS+7*0x1600,1)
+    full.call('lfo3_sound_decoded',POOL+11*SOUND,C2+PS+11*RECORD,1)
+    assert full.settings(kit7+0x2a+6*SOUND)==full_value
+    assert full.settings(POOL+11*SOUND)==full_pool
+    full.w(full.sym['containers'],C1)
     full.u.mem_write(W+0x100,DEFAULT)
     assert full.call('arp_sound_store',kit7+0x2a+6*SOUND,W+0x100)==1
     assert full.call('arp_sound_store',POOL+11*SOUND,W+0x100)==1
@@ -203,7 +234,7 @@ def verify(core,bank,out):
     full.call('lfo3_sound_decoded',POOL+11*SOUND,C1+PS+11*RECORD,1)
     assert all(full.settings(kit7+0x2a+t*SOUND)==DEFAULT for t in range(12))
     assert full.settings(POOL+11*SOUND)==DEFAULT
-    cases.append('native whole-project Kit/pool serializer through shared adapters')
+    cases.append('native whole-project and shutdown -1 serializers restore Kit/pool after RAM reset')
     # Pattern-owned ARP MODE/SPEED/RANGE/LEN and the native chord lanes must
     # survive an encoded slot, an A/B project snapshot and a fresh decode.
     locked=Persistence(core,bank)
@@ -212,8 +243,16 @@ def verify(core,bank,out):
     locked.u.mem_write(pattern,bytes(0x2138c))
     locked.u.mem_write(matrix,b'\xff'*(0x21360-0x3bc5))
     for track in range(13):locked.u.mem_write(matrix+track*0x2447+0x2400,bytes(71))
-    chord_lane=pattern+0x2c0+2*0x40+16
-    locked.u.mem_write(chord_lane,b'\x46')  # step 17 NOT3=+6
+    # The second page edits native NOTE and NOT2..NOT4 track defaults and
+    # per-step lanes. Cover inheritance, OFF, and distinct step 1/17 values.
+    chord_defaults=pattern+0x3c5
+    locked.u.mem_write(chord_defaults,bytes((60,68,71,64)))
+    chord_steps={
+        (0,0):72, (1,0):67, (2,0):64, (3,0):76,
+        (0,16):65, (1,16):255, (2,16):70, (3,16):0,
+    }
+    for (lane,step),value in chord_steps.items():
+        locked.u.mem_write(pattern+0x2c0+lane*0x40+step,bytes((value,)))
     store=locked.call('lfo3_owned_lookup',matrix);assert store
     for param,value in ((8,1),(9,10),(10,2),(11,33)):
         assert locked.call('lfo3_owned_set',store,0,16,param,value,0)==1
@@ -224,11 +263,14 @@ def verify(core,bank,out):
     locked.w(locked.sym['containers'],C2)
     locked.copy(C2,C1,0x3a5604)
     locked.call('lfo3_owned_clear',store)
-    locked.u.mem_write(chord_lane,b'\xff')
+    locked.u.mem_write(chord_defaults,bytes(4))
+    for lane,step in chord_steps:
+        locked.u.mem_write(pattern+0x2c0+lane*0x40+step,b'\xff')
     assert locked.call('lfo3_owned_pattern_decode',pattern,C2+0x200,0)&255
     assert [locked.call('lfo3_locks_get',store,0,16,param) for param in (8,9,10,11)]==[1,10,2,33]
-    assert locked.read(chord_lane,1)==b'\x46'
-    cases.append('ARP pattern locks and NOT3 step 17 survive encoded A/B project copy')
+    assert locked.read(chord_defaults,4)==bytes((60,68,71,64))
+    assert {key:locked.read(pattern+0x2c0+key[0]*0x40+key[1],1)[0] for key in chord_steps}==chord_steps
+    cases.append('ARP locks and chord page NOTE/NOT2/NOT3/NOT4 survive encoded A/B project copy')
     result=dict(ok=True,cases=cases,serializer_emulated_instructions=serialize_instructions,device_access=False,
                 core_sha256=hashlib.sha256(core.read_bytes()).hexdigest(),
                 bank_sha256=hashlib.sha256(bank.read_bytes()).hexdigest(),

@@ -45,10 +45,16 @@ static void *arp_pattern_model(void)
     void *app=arp_app(),*pattern=app?UI_CALL(0x40019000u,void *(*)(void *))(app):0;
     return pattern?UI_CALL(0x40016062u,void *(*)(void *))(pattern):0;
 }
+static arp_u32 active_kit_sound(unsigned int track);
+static void arp_ui_read_settings(arp_u32 sound,unsigned int track,struct arp_settings *p)
+{
+    arp_u32 owned=active_kit_sound(track);
+    arp_sound_read(owned?owned:sound,p);
+}
 static void arp_lock_read(void)
 {
     unsigned short values[ARP_LOCK_SLOTS];unsigned int i,mask=0;int n;void *model=arp_pattern_model();
-    arp_sound_read(arp_ui_sound,&arp_ui_parameters);arp_lock_shown=0;
+    arp_ui_read_settings(arp_ui_sound,arp_track,&arp_ui_parameters);arp_lock_shown=0;
     if(!model)return;
     for(i=0;i<ARP_LOCK_SLOTS;i++){
         n=lfo3_pattern_get(model,arp_track,arp_lock_step,0x60u+i);
@@ -87,7 +93,7 @@ static void arp_lock_sync(void)
     }
     arp_lock_mode=first<64;
     if(arp_lock_mode){arp_lock_step=first;arp_lock_read();}
-    else if(previous)arp_sound_read(arp_ui_sound,&arp_ui_parameters);
+    else if(previous)arp_ui_read_settings(arp_ui_sound,arp_track,&arp_ui_parameters);
 }
 /* As the native editor after a lock edit (40038e66): mark the held trigs as
  * locked, so that their release does not toggle them. */
@@ -193,14 +199,28 @@ static arp_u32 proxy_sound(void *proxy)
     if(!inner || !*inner)return 0;
     return ((arp_u32 (*)(void *))(*(arp_u32 **)inner)[0x28/4])(inner);
 }
+/* The parameter view may expose an editable Sound mirror. A project snapshot
+ * encodes the active Kit's Sound, so keep its metadata in step with an edit
+ * made through that mirror. Only a Kit in the live project bank is eligible;
+ * an unrelated preview must not alter another Sound. */
+static arp_u32 active_kit_sound(unsigned int track)
+{
+    const arp_u32 base=0x41ad5134u,size=0x1618u;
+    arp_u32 kit=*(const volatile arp_u32 *)0x43bd743cu;
+    if(track>=ARP_TRACKS || kit<base || kit>=base+128u*size || (kit-base)%size)return 0;
+    return kit+0x2au+track*0x123u;
+}
 static int save_ui_settings(const struct arp_settings *p)
 {
+    arp_u32 owned;
     if(proxy_sound(arp_proxy)!=arp_ui_sound || !arp_ui_sound || !eligible(arp_track))return 0;
     if(!arp_sound_store(arp_ui_sound,p))return 0;
+    owned=active_kit_sound(arp_track);
+    if(owned && owned!=arp_ui_sound && !arp_sound_store(owned,p))return 0;
     arp_sound_configure(arp_track,p,arp_ui_sound);
     /* Same native model notification as a Sound parameter edit (task only). */
     UI_CALL(0x40013084u,void (*)(void *))(arp_proxy);
-    arp_sound_read(arp_ui_sound,&arp_ui_parameters);return 1;
+    arp_ui_read_settings(arp_ui_sound,arp_track,&arp_ui_parameters);return 1;
 }
 /* Resource descriptors have identical glyph metrics/maps/pixels to DN 1.44.
  * The vtable belongs to Syntakt. These are borrowed ROM fonts, not owning
@@ -343,7 +363,7 @@ static int arp_open(void *app,arp_u32 track)
     parameter=*(arp_u8 **)(main+0xc0);if(!parameter || view_word(parameter,0)!=0x401c97fcu)return 0;
     proxy=((void *(*)(void *,arp_u32,int))(*(arp_u32 **)parameter)[0xc4/4])(parameter,0x60u,-1);
     sound=proxy_sound(proxy);if(!sound)return 0;
-    arp_sound_read(sound,&p);
+    arp_ui_read_settings(sound,track,&p);
     if(arp_view)return 0;
     root=arp_host->storage->alloc(16+ARP_VIEW_BYTES+ARP_LED_BYTES);if((arp_u32)root<0x40000000u)return 0;
     *(arp_u32 *)root=0x401c9670u;*(arp_u32 *)(root+4)=1;*(arp_u32 *)(root+8)=1;
@@ -453,7 +473,7 @@ static void arp_view_tick(void *controller)
             }
             if(!sound){ARP_CLOSE(arp_view);return;}
             arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;arp_enc_reset();
-            arp_sound_read(sound,&arp_ui_parameters);arp_length_show=0;ARP_DIRTY(arp_view);
+            arp_ui_read_settings(sound,track,&arp_ui_parameters);arp_length_show=0;ARP_DIRTY(arp_view);
             if(arp_lock_mode)arp_lock_read();
         }
     }

@@ -401,8 +401,25 @@ def encoder_travel(core,bank):
     return ['ticks x1 (x8 pressed) through the native choices table, every control',
             'whole values only; partial travel adds up, reversing drops it']
 
+def kit_sound_mirror(core,bank):
+    # The UI getter can expose an editable mirror, while project/+Drive saves
+    # encode the active Kit. An ARP edit must publish both Sound identities.
+    m=ViewMachine(core,bank)
+    owned=0x41ad5134+3*0x1618+0x2a
+    m.w(0x43bd743c,0x41ad5134+3*0x1618)
+    initial=struct.pack('>5BxH16b',2,10,1,30,15,0xffff,*([0]*16))
+    m.u.mem_write(W+0x100,initial)
+    assert m.call('arp_sound_store',owned,W+0x100)==1
+    m.key(0x13,1,0);m.key(0x13,16,10)
+    assert m.key(0x13,1,100)==1 and m.key(0x13,16,110)==1
+    assert m.read(m.sym['arp_ui_parameters'],24)==initial
+    assert m.encoder(1,1)==1
+    assert m.read(m.call('arp_sound_settings',owned),24)==m.read(m.sym['arp_ui_parameters'],24)
+    m.dispose()
+    return 'ARP view reads restored Kit settings; edits update UI mirror and Kit Sound'
+
 def verify(core,bank,donor,out):
-    lock_editing(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank)
+    lock_editing(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank);mirror=kit_sound_mirror(core,bank)
     fonts=resources(donor,core);m=ViewMachine(core,bank);initial=m.pool_counts()
     assert not m.key(0x13,1,0) and not m.key(0x13,16,10)
     assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
@@ -474,7 +491,7 @@ def verify(core,bank,donor,out):
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
     binding=native_key_binding(core,bank);page_handoff=parameter_page_handoff(core,bank)
-    result=dict(ok=True,fonts=fonts,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
+    result=dict(ok=True,fonts=fonts,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,kit_sound_mirror=mirror,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
         lifecycle=['double tap opens with MODE OFF','encoders A..F clamp','selected step/mute','modal priority',
                    'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',
                    'native STOP passes','NO closes without disabling','destructor/reopen','failed opening preserves native release',
