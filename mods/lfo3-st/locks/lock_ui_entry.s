@@ -4,7 +4,7 @@
         .globl \name
 \name:
         move.l 8(%sp),%d0
-        subi.l #0x3d9,%d0
+        subi.l #0x3f9,%d0
         cmpi.l #10,%d0
         bcc.w .Lprevious\@
         jmp \target
@@ -17,7 +17,7 @@
 
         .globl lfo3_lock_ui_alternate
 lfo3_lock_ui_alternate:
-        cmpi.l #0x3dc,%d2
+        cmpi.l #0x3fc,%d2
         bne.w native_alternate
         jsr lfo3_editor_destination_alt
         jmp 0x40011e50

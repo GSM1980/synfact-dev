@@ -4,7 +4,10 @@
 #include "machines.h"
 enum st_smz_event { ST_EV_TICK,ST_EV_DRAW,ST_EV_KEY,ST_EV_ENC,ST_EV_SETTINGS,
     ST_EV_RENDER_IN,ST_EV_RENDER_OUT,ST_EV_FS_ROUTE,ST_EV_FS_WRITE,
-    ST_EV_FS_WRITTEN,ST_EV_MAIN_MIX,ST_EV_NATIVE,ST_EV_COUNT };
+    ST_EV_FS_WRITTEN,ST_EV_MAIN_MIX,ST_EV_NATIVE,
+    /* Core 1.2: mixer FX-send events (fx-send.s, MAIN audio IRQ). An older
+     * core's bank parser refuses a bank that subscribes to them. */
+    ST_EV_TRACK_SEND,ST_EV_DELAY_IN,ST_EV_REVERB_IN,ST_EV_COUNT };
 /* Core 0.10 / module service API 2: opt into the native receiving-view phase
  * of the SAME event collection. Ordinary subscriptions retain their ABI and
  * run once at the global site. No second input registry is involved.

@@ -127,10 +127,12 @@ all LFO3 work. Physical performance remains to be measured.
 ## IDs
 
 Synfact used engine IDs 0x245..0x24e. In elekloader those collide with SMZ
-machine IDs (`0x1f9 + (type-64)*32`, types 64..79 → 0x1f9..0x3f8). Candidate:
-reserve the type-79 blocks (engine 0x3d9.., UI 0x4c0..) for LFO3 and refuse
-machine type 79 in banks with LFO3. To verify: no native path packs IDs in
-fewer bits than 0x3e2 needs (Synfact's 0x245 already exceeded 0x1ff).
+machine IDs (`0x1f9 + (type-64)*32`, types 64..79 → 0x1f9..0x3f8). LFO3 first
+took the type-79 blocks (engine 0x3d9.., UI 0x4c0..). Since core 1.2 it uses
+the core's module range after the machines (`ST_MODULE_ID` 0x3f9..0x402, UI
+`ST_MODULE_UI` 0x4e0..0x4e9), so type 79 is free for machines again. Its
+locks store lock slots (0x58..), not IDs, so the 11-bit IDs pack nowhere.
+Projects saved with the old IDs are not translated.
 
 ## Site map for 1b (Synfact → here)
 

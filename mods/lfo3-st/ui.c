@@ -10,8 +10,8 @@
 #include <syntakt/host.h>
 typedef unsigned int u32;typedef int s32;typedef unsigned short u16;typedef unsigned char u8;
 #define FIELD(v,o) (*(u32 *)((u8 *)(v)+(o)))
-#define LFO3_ID 0x3d9u                     /* engine IDs (type-79 block), LFO2 order */
-#define LFO3_UI 0x4c0u
+#define LFO3_ID 0x3f9u                     /* engine IDs (ST_MODULE_ID+0..9), LFO2 order */
+#define LFO3_UI 0x4e0u                     /* ST_MODULE_UI+0..9 */
 #define LFO_VIEW 0x402400ccu
 typedef struct {u16 v[8];} rec_t;
 struct lfo3_bank {u8 state[13][40];u32 rng[2];u16 params[13][8];u16 overlay[13][8];};
@@ -384,7 +384,8 @@ int lfo3_widget_view_get(void *view,u32 id,int track)
 {return track<0?lfo3_ui_get(view,id,0):(int)descriptor(lfo3_index(id))[4];}
 
 /* ---- core host API 7 provider: metadata of the LFO3 IDs ---- */
-void lfo3_sound_encoded(u32,u32,u32),lfo3_sound_decoded(u32,u32,u32),lfo3_project_new(u32);
+void lfo3_sound_encoded(u32,u32,u32),lfo3_sound_decoded(u32,u32,u32),lfo3_project_new(u32),
+     lfo3_fx_encoded(u32,u32,u32),lfo3_fx_decoded(u32,u32,u32);
 void lfo3_lock_ui_store(void *,u32,s32,s32,u32,u32);
 int lfo3_parameter_query(u32 q,u32 *args,void *result,u32 *value)
 {
@@ -392,6 +393,9 @@ int lfo3_parameter_query(u32 q,u32 *args,void *result,u32 *value)
     if(q==25){lfo3_sound_encoded(args[0],args[1],args[2]);return 0;}
     if(q==26){lfo3_sound_decoded(args[0],args[1],args[2]);lfo3_republish();return 0;}
     if(q==27){lfo3_project_new(args[0]);lfo3_republish();return 0;}
+    /* core 1.2: the FX record codec, as lfo3_fx_encode_entry/_decode_entry did */
+    if(q==28){lfo3_fx_encoded(args[0],args[1],args[2]);return 0;}
+    if(q==29){lfo3_fx_decoded(args[0],args[1],args[2]);lfo3_republish();return 0;}
     u32 id=q==18 || q==20 || q==24?args[1]:args[0],i=lfo3_index(id),*out=result;const u32 *d;
     if(q==6){if(args[0]-LFO3_UI>=10u)return 0;*value=LFO3_ID+args[0]-LFO3_UI;return 1;}
     if(i>=10)return 0;

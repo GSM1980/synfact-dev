@@ -13,12 +13,12 @@ extern rec_t pool_shadow[128];
 static const u8 word[10]={0,1,2,3,4,5,5,6,7,1};
 u32 lfo3_lock_ui_slot(u32 id)
 {
-    return id-0x3d9u<10 ? 0x58u+word[id-0x3d9u] : ((u32 (*)(u32))0x400a5c4a)(id);
+    return id-0x3f9u<10 ? 0x58u+word[id-0x3f9u] : ((u32 (*)(u32))0x400a5c4a)(id);
 }
 void lfo3_lock_ui_store(void *proxy,u32 id,s32 value,s32 track,u32 record,u32 notify)
 {
     u32 *vt;
-    if(id-0x3d9u>=10 || !lfo3_actions_record(proxy)) return;
+    if(id-0x3f9u>=10 || !lfo3_actions_record(proxy)) return;
     vt=*(u32 **)proxy;
     lfo3_actions_store(proxy,id,value,track,0,0);
     /* This flag is the native store's record-to-pattern request; the fourth
@@ -37,7 +37,7 @@ s32 lfo3_lock_ui_get(void *view,u32 id,s32 pool_index)
         track=((u32 (*)(void *))0x4001ff74)(*(void **)((u8 *)view+0x74));
         if(context && track!=12 && (vt=*(u32 **)manager) &&
             (((u32 (*)(void *,s32))vt[0x5c/4])((void *)manager,pool_index)&255))
-            return pool_shadow[pool_index].v[word[id-0x3d9u]];
+            return pool_shadow[pool_index].v[word[id-0x3f9u]];
     }
     return lfo3_ui_get(view,id,0);
 }

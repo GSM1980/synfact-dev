@@ -27,12 +27,17 @@ def verify(folder):
         'source_layout':(4,0),'cached_parameter':(4,0x1f9),'format_value':(4,0x1f9),
         'parameter_label':(8,0x1f9),'synth_parameter':(4,0x1f9),
         'parameter_long_label':(8,0x1f9),'modulation_flags':(4,0x1f9),'menu_rank':(4,0)}
+    SEND={'cached_parameter','format_value','parameter_label','parameter_long_label'}
     for name,(arg,first) in cases.items():
         at=address('core_machine_'+name);stock=address('core_stock_'+name)
         flag(at,'core_machine_active');branch(at+6,0x67,stock)
         if first:
             assert read(at+10,10)==struct.pack('>HHHI',0x202f,arg,0x0c80,first)
-            branch(at+20,0x65,stock)
+            if name in SEND:   # 1.2: parameter 72 (the chorus's CHO) also reaches the providers
+                assert branch(at+20,0x64)==at+32
+                assert read(at+22,6)==struct.pack('>HI',0x0c80,72)
+                branch(at+28,0x66,stock)
+            else:branch(at+20,0x65,stock)
     # All twelve native bridges retain their original replay AND active path.
     ops={'trig': 0, 'enqueue': 1, 'header_load': 5, 'header_reset': 6, 'type': 4, 'src_type': 4, 'publish': 3, 'immediate': 2, 'sound_set': 7, 'machine_select': 8, 'modulation': 16, 'lfo': 17}
     for name in ['trig','enqueue','header_load','header_reset']:
@@ -51,14 +56,14 @@ def verify(folder):
         at=address('core_native_'+name);interest(at,ops[name])
         target=branch(at+6,0x67)
         if name=='sound_set':   # 0.12.15: the reserved LFO3 ID check precedes the replay
-            assert read(target,4)==bytes.fromhex('202f0008') and read(target+4,6)==struct.pack('>HI',0x0480,0x3d9)
+            assert read(target,4)==bytes.fromhex('202f0008') and read(target+4,6)==struct.pack('>HI',0x0480,0x3f9)
             target+=read(target,64).index(bytes.fromhex(replay))
         assert read(target,8)==bytes.fromhex(replay),(name,hex(target))
     manifest=json.loads(Path('mods/core-st/mod.json').read_text())
     at=address('core_native_note_accept');interest(at,20)
     target=branch(at+6,0x67)
     assert read(target,12)==bytes.fromhex('202a002472014ef9400a4244')
-    assert len(manifest['sites'])==97 and len(manifest['collections'])==13   # core_mod_info: 1.0
+    assert len(manifest['sites'])==102 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
     assert report['resident_ram']['free']>=0 and '-O3' in report['cflags']
     print('PASS: 23 no-bank/stock-ID lookup exits and 12 per-operation interest native replays; hidden pointers/stack untouched on fast exits; all hooks, extended paths and APIs retained')
 

@@ -166,7 +166,7 @@ def verify(core,bank,out):
     # Whole native serializer orders Kit and pool metadata after any pattern
     # encoding. Patch the exact two entries owned by LFO3, as install_hooks does.
     full=Persistence(core,bank);full.call_budget=100000000
-    full.w(full.cs['core:core_parameter_provider'],full.sym['lfo3_parameter_query'])
+    full.w(full.cs['core:core_parameter_providers'],full.sym['lfo3_parameter_query'])   # slot 0 (core 1.2)
     full.w(full.sym['lfo3_bank'],W+0xc000)
     for at,name in [(0x400a787c,'lfo3_kit_encode_entry'),(0x400a7828,'lfo3_kit_decode_entry')]:
         full.u.mem_write(at,b'\x4e\xf9'+struct.pack('>I',full.sym[name])+b'\x4e\x71')

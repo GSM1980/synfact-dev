@@ -14,11 +14,14 @@ extern void core_event_publish(const u32 *);
 #define EVENT(name) extern const u32 ev_##name[];extern const unsigned char core_##name##_table[];
 EVENT(tick) EVENT(draw) EVENT(key) EVENT(enc) EVENT(settings)
 EVENT(render_in) EVENT(render_out) EVENT(fs_route) EVENT(fs_write) EVENT(fs_written) EVENT(main_mix)
+EVENT(track_send) EVENT(delay_in) EVENT(reverb_in)
 extern const u32 ev_native[];
 #define E(name) {ev_##name,core_##name##_table+2}
 static struct {const u32 *list;const unsigned char *operand;} events[]={
     E(tick),E(draw),E(key),E(enc),E(settings),E(render_in),E(render_out),
-    E(fs_route),E(fs_write),E(fs_written),E(main_mix),{ev_native,0}};
+    E(fs_route),E(fs_write),E(fs_written),E(main_mix),{ev_native,0},
+    E(track_send),E(delay_in),E(reverb_in)};
+typedef char event_table_size[sizeof events/sizeof events[0]==ST_EV_COUNT?1:-1];
 /* One byte per native operation: nonzero sends it through the C dispatcher,
  * zero lets its assembly adapter replay stock at once. A subscriber is
  * interested in every operation unless it narrowed itself (host API 5).

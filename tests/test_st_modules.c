@@ -7,12 +7,12 @@ typedef st_u32 u32;
 static void builtin(void *c){(void)c;}
 #define EV(n) const unsigned char core_##n##_table[6]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
-EV(fs_route) EV(fs_write) EV(fs_written) EV(main_mix)
+EV(fs_route) EV(fs_write) EV(fs_written) EV(main_mix) EV(track_send) EV(delay_in) EV(reverb_in)
 const u32 ev_native[]={0};
 const u32 ev_tick[]={(u32)builtin,0};
 #define EMPTY(n) const u32 ev_##n[]={0};
 EMPTY(draw) EMPTY(key) EMPTY(enc) EMPTY(settings) EMPTY(render_in) EMPTY(render_out)
-EMPTY(fs_route) EMPTY(fs_write) EMPTY(fs_written) EMPTY(main_mix)
+EMPTY(fs_route) EMPTY(fs_write) EMPTY(fs_written) EMPTY(main_mix) EMPTY(track_send) EMPTY(delay_in) EMPTY(reverb_in)
 const struct st_machine_ui_api core_machine_ui_api={1};
 static u32 fail_alloc,fail_init,published,initialized;static const u32 *ticks;
 static u32 input_resets;

@@ -19,8 +19,8 @@
  * A PAGE_NAV subscriber must synchronize the view as PAGE_SYNC would: the
  * per-knob navigation path sends PAGE_NAV without a second PAGE_SYNC.
  * PAGE_NAV: view,knob -> ID, ffffffff means no override.
- * PAGE_LAYOUT: page (3, and 37/38 for LFO3 actions) -> borrowed layout
- * pointer; zero means no override.
+ * PAGE_LAYOUT: page (3, 37/38 for LFO3 actions, 25 for the chorus since
+ * core 1.2) -> borrowed layout pointer; zero means no override.
  * PAGE_GUARD: view,zero -> 1 consumes the native page mutation.
  * OWNERS: null args -> borrowed 12-byte track-owner map, or zero (MAIN IRQ).
  * Core 0.12.19: args {1} requests LFO state owners instead. Sound/configuration

@@ -99,7 +99,7 @@ event (lower first; the shipped mods use 10-90).
 | `ev_render_out` | audio render exit | `void f(void)` | the same |
 
 These are the events the Syntakt's core shares with elekloader's cores
-(`mods/core/core.s`). It adds its own (`ev_native`, `ev_main_mix`, `ev_fs_route`,
+(`mods/core/core.s`). It adds its own (`ev_native`, `ev_main_mix`, `ev_track_send`, `ev_delay_in`, `ev_reverb_in`, `ev_fs_route`,
 `ev_fs_write`, `ev_fs_written`) and the services of the sections below; its
 sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
@@ -394,3 +394,56 @@ a monophonic generator on all twelve audio tracks and Sound persistence.
 Build it with `--module mods/lfo3-st --module mods/arp-st --module mods/poly-st`
 in that order, alongside the ordinary recorder and System info modules.
 See [ARP](../mods/arp-st/README.md) for tests, native boundaries and persistence.
+
+## Syntakt: mixer events, the FX codec and several providers (core 1.2)
+
+Three events of the MAIN audio interrupt (`mods/core-st/fx-send.s`) let a
+module add an effect on the mixer's FX sends:
+
+| event | when | C prototype |
+|---|---|---|
+| `ev_track_send` | once per block, when every track's level x pan gains are computed | `void f(const struct st_track_sends *t)` |
+| `ev_delay_in` | the delay's input bus is complete, before the delay renders it | `void f(void)` |
+| `ev_reverb_in` | the reverb's input bus is complete, before the reverb renders it | `void f(void)` |
+
+The table holds each track's left/right gains (native inverted Q31) and its
+142-byte mixer record (s16: +106 the dormant Digitone chorus send, +118 DEL,
++120 REV, +122 PAN, +124 LEV), then the native send-mute bits (`muted`, bit
+t set: track t's sends are muted). The core fills a row per track and calls
+once, at track 11. At `ev_track_send` the EMAC
+accumulators hold the mixer's live products: use no EMAC instruction and keep
+MACSR. The buses and the tracks' dry PCM are named in `<syntakt/mix.h>`
+(`ST_TRACK_PCM`, `ST_FX_SEND_BUS`, `ST_FX_TRACK_BUS`). With no subscriber each
+site costs a LEA, a TST and a branch. A bank that subscribes to these events
+(`ST_EV_TRACK_SEND`, `ST_EV_DELAY_IN`, `ST_EV_REVERB_IN`) is refused by an
+older core's bank parser.
+
+Host API 13 keeps up to four parameter providers: queries go to each in
+registration order until one answers, notifications (25..29) reach all of
+them. The core now owns the Kit's FX record codec (`400a6d96` encode,
+`400a6d2e` decode, `fx-codec.s`) and tells the providers after every call:
+28 `{record, fx, ok}`, 29 `{fx, record, ok}`. LFO3 1.1 uses them instead of
+hooking those two entries itself, so it needs core 1.2 with a rebuilt bank
+(on an older core it hooks them as before). `ST_NATIVE_PAGE_LAYOUT` also asks
+for page 25, the dormant chorus page. The [chorus](../mods/chorus-st/README.md)
+uses all of it.
+
+Query 30 asks for a dial no machine claims (`struct st_machine_dial`; nonzero
+means drawn), and query 17 also gives such an ID's direct value text.
+Queries 16, 17, 18 and 20 also come for parameter 72, the Sound's dormant
+Digitone chorus send, which has no stock labels or formatter.
+
+A module's parameter IDs come from their own range, after the machines'
+blocks: `ST_MODULE_ID` (engine `0x3f9`) and `ST_MODULE_UI` (UI `0x4e0`), 128
+of each (`<syntakt/machines.h>`). The core sends them to the providers,
+lets the native relative edit and range check reach them (its bound is now
+`0x478`) and passes their Sound stores to query 24. Taken: LFO3 +0..+9, the
+chorus +10..+16; take the next free ones and list yours there. Every
+machine type 64-79 stays free for machines. The core's lookups run only
+while a bank's machines are bound, so a provider's IDs need a bank with
+machines.
+
+MAIN SRAM never misses in cache, which an audio-IRQ module pays for in DDR.
+`<syntakt/sram.h>` names the stock-zero windows and their owners (LFO3's
+kernel and bank, the chorus's state, per-block C code and kernels); each owner checks only its
+own window at init and falls back to DDR, so bank order does not matter.

@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "1.1",
+  "version": "1.2",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -44,7 +44,9 @@
     "native.s",
     "view-draw.s",
     "preview.s",
-    "note-events.s"
+    "note-events.s",
+    "fx-send.s",
+    "fx-codec.s"
   ],
   "defsym": {
     "DRAWALL": "0x401007ce",
@@ -643,6 +645,36 @@
       "stock": "202a00247201",
       "op": "jmp",
       "target": "core_native_note_accept"
+    },
+    {
+      "addr": "0x4008f3a0",
+      "stock": "ae000900ae810900",
+      "op": "jmp",
+      "target": "core_track_send"
+    },
+    {
+      "addr": "0x4008f828",
+      "stock": "4eb940096890",
+      "op": "jsr",
+      "target": "core_delay_in"
+    },
+    {
+      "addr": "0x4008f952",
+      "stock": "4eb940096e3c",
+      "op": "jsr",
+      "target": "core_reverb_in"
+    },
+    {
+      "addr": "0x400a6d96",
+      "stock": "2f0b2f0a246f000c",
+      "op": "jmp",
+      "target": "core_fx_encode"
+    },
+    {
+      "addr": "0x400a6d2e",
+      "stock": "4feffff448d71c00",
+      "op": "jmp",
+      "target": "core_fx_decode"
     }
   ],
   "collections": {
@@ -658,7 +690,10 @@
     "ev_fs_written": 4,
     "ev_main_mix": 4,
     "ev_native": 4,
-    "core_mod_info": 40
+    "core_mod_info": 40,
+    "ev_track_send": 4,
+    "ev_delay_in": 4,
+    "ev_reverb_in": 4
   },
   "subscribe": [
     {

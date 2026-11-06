@@ -89,10 +89,18 @@ def verify(folder):
     assert b.endswith(bytes.fromhex('4ef94003921e')) and not calls(ins,'core_preview_selected')
     assert not any(i.flow==cf.F_JSR and i.target in (0x40103788,0x40103794) for pc,i in ins)
     assert read(0x400a423e,6)==jump('core_native_note_accept')
-    assert len(manifest['sites'])==97 and len(manifest['collections'])==13   # core_mod_info: 1.0
-    assert len({s['addr'] for s in manifest['sites']})==97
+    # 1.2: the mixer's FX-send events and the FX record codec
+    assert read(0x4008f3a0,8)==jump('core_track_send')+bytes.fromhex('4e71')
+    assert read(0x4008f828,6)==jump('core_delay_in',0x4eb9)
+    assert read(0x4008f952,6)==jump('core_reverb_in',0x4eb9)
+    b,ins=body('core_track_send','core_delay_in')
+    assert b.startswith(bytes.fromhex('ae000900ae810900')) and b.count(bytes.fromhex('4ef94008f3a8'))==2
+    assert read(0x400a6d96,8)==jump('core_fx_encode')+bytes.fromhex('4e71')
+    assert read(0x400a6d2e,8)==jump('core_fx_decode')+bytes.fromhex('4e71')
+    assert len(manifest['sites'])==102 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
+    assert len({s['addr'] for s in manifest['sites']})==102
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, note acceptance; 97 sites, 13 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec; 102 sites, 16 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])

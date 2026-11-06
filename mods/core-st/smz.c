@@ -206,7 +206,8 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
                (nsubs?((subs&3) || !relocated(r,v,u+8) || !span(subs,8*nsubs,v->bytes)):
                        (subs!=CORE_SMZ_NONE || !immutable(r,v,u+8,4)))){core_smz_failure=__LINE__;return 0;}
             for(j=0;j<nsubs;j++)if(!immutable(r,v,subs+8*j,4) || !word(r,v->image+subs+8*j,&x) ||
-                !(x<12 || x==0x101 || x==0x102 || x==0x103 || x==0x302) ||
+                /* events 12..14: core 1.2's mixer events; an older core refuses them */
+                !(x<15 || x==0x101 || x==0x102 || x==0x103 || x==0x302) ||
                 !word(r,v->image+subs+8*j+4,&fn) || (fn&1) || !span(fn,2,v->bytes) ||
                 !relocated(r,v,subs+8*j+4)){core_smz_failure=__LINE__;return 0;}
         }

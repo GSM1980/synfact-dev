@@ -2,9 +2,9 @@
 | LFO3 entry glue, ported from Synfact page/ui_bridge/widget/frame prototypes.
 | Each lfo3_*_entry replaces whole stock instructions at a module-installed
 | site (main.c, preimages checked); the replay labels execute the displaced
-| instructions and continue at the next stock instruction. IDs: 0x3d9.. (10).
+| instructions and continue at the next stock instruction. IDs: 0x3f9.. (10).
         .text
-        .set LFO3_ID,0x3d9
+        .set LFO3_ID,0x3f9
 
 | LfoPageView constructor 400f38f2: extend the page vector before the caller
 | asks for the page count.

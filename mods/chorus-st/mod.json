@@ -1,0 +1,7 @@
+{
+  "id":"chorus-st","version":"1.0","title":"Chorus",
+  "device":"syntakt","os":"1.41","license":"GPL-2.0-or-later",
+  "sources":["main.c","mix.c","hot_begin.s","hot.c","hot_end.s","dsp.c","params.c","ui.c","install.c","sites.s","kernels.s","tables.s"],
+  "smz_module":{"descriptor":"chorus_module",
+    "donor":{"recipe":"digitone.json","sources":["tables.s"]}}
+}

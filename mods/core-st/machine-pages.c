@@ -64,16 +64,22 @@ u32 core_machine_action_begin(void *view)
     override_layout=core_machine_view_layout(view);core_machine_action_select(override_layout);return old;
 }
 void core_machine_action_end(u32 old){override_layout=(void *)old;core_machine_action_select(override_layout);core_native_view(ST_NATIVE_PAGE_END,0,0);}
-/* PAGE_LAYOUT: page 3 (POLY) and the LFO3 action pages 37/38 (0.12.16). */
-u32 *core_machine_action_layout(u32 id){return id==6?override_layout:(id==3 || id-37u<2u?(u32 *)core_native(ST_NATIVE_PAGE_LAYOUT,&id):0);}
+/* PAGE_LAYOUT: page 3 (POLY), the LFO3 action pages 37/38 (0.12.16) and
+ * page 25, the dormant chorus page (1.2). */
+u32 *core_machine_action_layout(u32 id){return id==6?override_layout:(id==3 || id==25 || id-37u<2u?(u32 *)core_native(ST_NATIVE_PAGE_LAYOUT,&id):0);}
 /* Native Sound records preserve their fixed 172-byte geometry. Copy the 16
  * extended words and last word; slot 0 is kept raw for the extra control,
  * while slots 11/18 retain their native codec. Loaded digital types only. */
-extern int (*core_parameter_provider)(u32,u32 *,void *,u32 *);
+extern int core_parameter_provider(u32,u32 *,void *,u32 *);
 /* Host API 7 (core 0.12.16): after a successful native Sound codec call the
- * provider (LFO3) sees query 25 {record, sound} or 26 {sound, record}. */
+ * providers (LFO3) see query 25 {record, sound} or 26 {sound, record}. */
 static void sound_codec_notify(u32 q,const void *a,const void *b)
-{u32 args[3];if(core_parameter_provider){args[0]=(u32)a;args[1]=(u32)b;args[2]=1;core_parameter_provider(q,args,0,0);}}
+{u32 args[3];args[0]=(u32)a;args[1]=(u32)b;args[2]=1;core_parameter_provider(q,args,0,0);}
+/* Host API 13 (core 1.2), fx-codec.s: after every native FX record codec
+ * call, ok or not, the providers see 28 {record, fx, ok} (encode) or
+ * 29 {fx, record, ok} (decode). LFO3 and the chorus keep their FX state. */
+void core_fx_codec_notify(u32 q,u32 a,u32 b,u32 ok)
+{u32 args[3];args[0]=a;args[1]=b;args[2]=ok;core_parameter_provider(q,args,0,0);}
 /* Both codec directions copy the same 34-byte contiguous region and optional
  * slot-zero word. Share task-side code to retain the fixed resident budget. */
 __attribute__((noinline)) static void sound_codec(void *destination,const void *source,u32 load)

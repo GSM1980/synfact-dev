@@ -7,12 +7,14 @@
  *
  * MAIN SRAM: the kernel runs from a copy in the first tail and its state,
  * RNG and parameter bank live in the second tail (SRAM data never misses).
- * Both tails must still be all zero as the stock boot leaves them; otherwise,
- * or if the copy's CRC ever changes, the same kernel and data run from DDR.
+ * Both windows (<syntakt/sram.h>) must still be all zero as the stock boot
+ * leaves them; otherwise, or if the copy's CRC ever changes, the same kernel
+ * and data run from DDR. The chorus's windows after each are not ours.
  */
 #include <syntakt/native.h>
 #include <syntakt/host.h>
 #include <syntakt/sound-meta.h>
+#include <syntakt/sram.h>
 typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;
 #ifndef LFO3_MEM
 #define LFO3_MEM(a) ((volatile u8 *)(a))
@@ -28,9 +30,9 @@ extern void lfo3_sync(void);
  * WAVE, SPH/SLEW, MODE, DEP, in native LFO units. */
 struct lfo3_bank {u8 state[TRACKS][40];u32 rng[2];u16 params[TRACKS][8];u16 overlay[TRACKS][8];};
 static const u16 defaults[8]={0x7000,0x300,0x4000,0x7f00,0,0,0,0x4000};
-static const u32 tails[2][2]={{0x80007330u,0x80008000u},{0x8000f860u,0x80010000u}};
-#define SRAM_CODE 0x80007340u
-#define SRAM_BANK 0x8000f870u
+static const u32 tails[2][2]={{ST_SRAM_TAIL0,ST_SRAM_CHORUS},{ST_SRAM_TAIL1,ST_SRAM_CHORUS_CODE}};
+#define SRAM_CODE ST_SRAM_LFO3_CODE
+#define SRAM_BANK ST_SRAM_LFO3_BANK
 static const struct st_machine_host_api *host;
 static struct lfo3_bank ddr_bank;
 struct lfo3_bank *lfo3_bank;
@@ -230,16 +232,21 @@ static const struct site {u32 at;u8 bytes;u8 stock[10];void (*target)(void);u8 c
 static const struct {u32 at;u16 stock,value;} operands[]={{0x40111b82u,0x0107,ST_SOUND_S1_BYTES},{0x40110b1eu,0x0107,ST_SOUND_S1_BYTES}};
 #define SITES (sizeof sites/sizeof sites[0])
 static u32 hooks_installed;
+/* Core 1.2 (host API 13) owns the FX record codec and tells the providers
+ * (queries 28/29, ui.c); an older core leaves those two entries to LFO3. */
+static u32 core_site(u32 i)
+{return host->version>=13 && (sites[i].at==0x400a6d96u || sites[i].at==0x400a6d2eu);}
 static u32 install_hooks(void)
 {
     u32 i,j,sr,target;
-    for(i=0;i<SITES;i++)for(j=0;j<sites[i].bytes;j++)
+    for(i=0;i<SITES;i++)if(!core_site(i))for(j=0;j<sites[i].bytes;j++)
         if(LFO3_MEM(sites[i].at)[j]!=sites[i].stock[j])return 1;
     for(i=0;i<2;i++)if((LFO3_MEM(operands[i].at-2)[0]<<8|LFO3_MEM(operands[i].at-2)[1])!=0x4878 ||
                        (LFO3_MEM(operands[i].at)[0]<<8|LFO3_MEM(operands[i].at)[1])!=operands[i].stock)return 1;
     sr=lfo3_lock();
     for(i=0;i<2;i++)lfo3_code16(operands[i].at,operands[i].value);
     for(i=0;i<SITES;i++){
+        if(core_site(i))continue;
         target=(u32)sites[i].target;
         lfo3_code16(sites[i].at+2,target>>16);lfo3_code16(sites[i].at+4,target&0xffffu);
         for(j=6;j<sites[i].bytes;j+=2)lfo3_code16(sites[i].at+j,0x4e71);

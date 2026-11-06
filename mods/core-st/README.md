@@ -211,6 +211,23 @@ matched by x5/4 to keep the level. Its ordinary UI `ev_tick` subscription refill
 private PCM ring and stops audition when the manager loses foreground.
 
 
+## Mixer FX-send events and the FX codec (1.2)
+
+`ev_track_send`, `ev_delay_in` and `ev_reverb_in` (`fx-send.s`) run in the
+MAIN audio interrupt at `4008f3a0`, `4008f828` and `4008f952`: a track's send
+gains once per track and block, then the delay's and the reverb's complete
+input bus before the native effect renders it. The track stub fills a row of
+`core_track_sends` per track and calls once a block, at track 11 (a call per
+track cost the chorus about 600 instructions a block). The stubs replay the displaced
+instructions exactly (two MSACs at the track site; the two sites' JSR tail
+into the stock delay and reverb), so with no subscriber the unit runs as stock.
+Arguments, contexts and limits are in [ADAPTING.md](../../docs/ADAPTING.md)
+(core 1.2) and `<syntakt/mix.h>`. `fx-codec.s` owns the Kit's FX record
+codec entries `400a6d96`/`400a6d2e` and notifies the parameter providers
+(queries 28/29, `<syntakt/host.h>`). `tests/test_st_chorus_emu.py` runs the
+three stubs against the stock instructions in Unicorn.
+
+
 ## Machine registration API
 
 `core_machine_bind(descriptors, count)` is the core registration entry point.

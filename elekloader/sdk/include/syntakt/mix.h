@@ -22,4 +22,20 @@ static __inline__ void st_preview_mix_frame(int *bus,unsigned int frame,int x)
 {
     st_main_mix_frame(bus,frame,x+(x>>2));
 }
+/* Core 1.2 mixer FX-send events (modules.h). Each block is 32 frames:
+ * a track's dry PCM is 32 mono Q31 words, the buses 32 stereo frames.
+ * ST_FX_SEND_BUS is the delay's input at ev_delay_in, then the reverb's at
+ * ev_reverb_in. ST_FX_TRACK_BUS is the inverted-Q31 bus 4008fa8c sums the
+ * digital tracks into before the FX track's analog block (the preview note
+ * above); the chorus adds its VOL return there at ev_main_mix. */
+#define ST_TRACK_PCM(t) ((const int *)((t)<8?0x80003d50u+128u*(t):0x80003950u+128u*((t)-8)))
+/* ev_track_send's table, once a block: each track's level x pan gains (native
+ * inverted Q31) and 142-byte mixer record, then the native send-mute bits
+ * (bit t set: track t's sends are muted). Borrowed for the call only. */
+struct st_track_sends {
+    struct {int left,right;const unsigned char *mix;unsigned int reserved;} track[12];
+    unsigned int muted;
+};
+#define ST_FX_SEND_BUS ((int *)0x8000dbd0)
+#define ST_FX_TRACK_BUS ((int *)0x8000dad0)
 #endif

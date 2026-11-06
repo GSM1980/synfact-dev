@@ -21,6 +21,7 @@ static void draw(void *v,void *b,u32 id){assert(v==view && b==ctrl && !id);draw_
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
 EV(fs_route) EV(fs_write) EV(fs_written) EV(main_mix)
+EV(track_send) EV(delay_in) EV(reverb_in)
 const u32 ev_native[]={0};
 const struct st_machine_ui_api core_machine_ui_api={4};
 void core_machine_input_reset(void){}

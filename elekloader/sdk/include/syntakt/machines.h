@@ -18,6 +18,13 @@ static __inline__ const struct st_pool_sample *st_machine_sample(st_u32 slot)
     return ((const struct st_pool_sample *(*)(st_u32))api[1])(slot);
 }
 #define ST_MACHINE_CONTROL_CAPACITY 32u
+/* Core 1.2: parameter IDs for modules, after the machines' blocks (types
+ * 64..79: engine 0x1f9..0x3f8, UI 0x2e0..0x4df), 128 of each. They reach
+ * the parameter providers, the native relative edit and range check, and
+ * Sound stores (query 24). Taken: LFO3 +0..+9, the chorus +10..+16. */
+#define ST_MODULE_ID 0x3f9u
+#define ST_MODULE_UI 0x4e0u
+#define ST_MODULE_IDS 128u
 #define ST_MACHINE_SYN_PAGES 4u
 #define ST_MACHINE_STORED_CONTROLS 28u
 /* AUDIO-only service. Returns 24 extended Q8/raw words for this track,

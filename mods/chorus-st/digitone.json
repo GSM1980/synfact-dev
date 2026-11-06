@@ -1,0 +1,11 @@
+{
+  "format": "synfact-donor", "schema": 1, "title": "CHORUS", "device": "digitone-mk1", "versions": ["1.44"], "minimum": 4,
+  "regions": [
+    {"name": "lut", "section": 3, "start": 2724024, "length": 128, "sha256": "014b6559a462574839182e02d4cf7cb5659555abb40fbdf0a2fecc92302166d8"},
+    {"name": "hpf", "section": 3, "start": 2309636, "length": 512, "sha256": "2ea66e6a6bf3c90359cc10033503f723528a73f3901ac7d7fa1a1004730bb6d5"}
+  ],
+  "outputs": [
+    {"name": "imported/lut.bin", "length": 128, "sha256": "014b6559a462574839182e02d4cf7cb5659555abb40fbdf0a2fecc92302166d8", "ops": [["copy", "lut", 0, 128]]},
+    {"name": "imported/hpf.bin", "length": 512, "sha256": "2ea66e6a6bf3c90359cc10033503f723528a73f3901ac7d7fa1a1004730bb6d5", "ops": [["copy", "hpf", 0, 512]]}
+  ]
+}

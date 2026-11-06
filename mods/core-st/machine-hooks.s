@@ -13,6 +13,18 @@
         bcs.w core_stock_\name
         .endif
         .endm
+| Core 1.2: also ask the providers for parameter 72, the dormant Digitone
+| chorus send, which has no stock labels or formatter (the chorus's CHO).
+        .macro STOCK_FIRST_SEND name,arg
+        tst.l core_machine_active
+        beq.w core_stock_\name
+        move.l \arg(%sp),%d0
+        cmpi.l #0x1f9,%d0
+        bcc.s 1f
+        cmpi.l #72,%d0
+        bne.w core_stock_\name
+1:
+        .endm
         .globl core_machine_name_full,core_stock_name_full
 core_machine_name_full:
         STOCK_FIRST name_full,4,64
@@ -502,7 +514,7 @@ core_stock_source_layout:
         jmp 0x4007b9f2
         .globl core_machine_cached_parameter,core_stock_cached_parameter
 core_machine_cached_parameter:
-        STOCK_FIRST cached_parameter,4,0x1f9
+        STOCK_FIRST_SEND cached_parameter,4
         lea -12(%sp),%sp
         move.l %a0,(%sp)
         move.l %a1,4(%sp)
@@ -533,7 +545,7 @@ core_stock_cached_parameter:
         jmp 0x4007b9bc
         .globl core_machine_format_value,core_stock_format_value
 core_machine_format_value:
-        STOCK_FIRST format_value,4,0x1f9
+        STOCK_FIRST_SEND format_value,4
         lea -12(%sp),%sp
         move.l %a0,(%sp)
         move.l %a1,4(%sp)
@@ -559,7 +571,7 @@ core_stock_format_value:
         jmp 0x4007bb74
         .globl core_machine_parameter_label,core_stock_parameter_label
 core_machine_parameter_label:
-        STOCK_FIRST parameter_label,8,0x1f9
+        STOCK_FIRST_SEND parameter_label,8
         lea -12(%sp),%sp
         move.l %a0,(%sp)
         move.l %a1,4(%sp)
@@ -621,7 +633,7 @@ core_stock_synth_parameter:
         jmp 0x400a6182
         .globl core_machine_parameter_long_label,core_stock_parameter_long_label
 core_machine_parameter_long_label:
-        STOCK_FIRST parameter_long_label,8,0x1f9
+        STOCK_FIRST_SEND parameter_long_label,8
         lea -12(%sp),%sp
         move.l %a0,(%sp)
         move.l %a1,4(%sp)

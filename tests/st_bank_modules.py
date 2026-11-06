@@ -13,6 +13,10 @@ def check_bank_modules(report, raw, allowed):
     expected=[list(names) for names in allowed]
     expected += [['sp_sampler_input_module',*names] for names in allowed]
     expected += [names+['sample_manager_module'] for names in list(expected)]
+    # optional modules after them, in bank order: the chorus, then modulation skip
+    # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
+    expected += [names+['chorus_module'] for names in list(expected)]
+    expected += [names+['modulation_skip_module'] for names in list(expected)]
     assert modules in expected, ('unexpected module composition/order',modules)
     directory,count=struct.unpack_from('>II',raw,32)
     assert count==len(modules), 'module directory/report count differs'

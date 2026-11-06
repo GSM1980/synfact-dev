@@ -3,7 +3,7 @@
 | with elekloader IDs. The layout of pages 37/38 comes through the core's
 | PAGE_LAYOUT operation (ui.c); the rest are module-installed sites.
         .text
-        .set LFO3_ID,0x3d9
+        .set LFO3_ID,0x3f9
 | Page ID of a view for actions 4003792c (view): 37/38 on the LFO3 page.
         .globl lfo3_actions_page_entry
 lfo3_actions_page_entry:

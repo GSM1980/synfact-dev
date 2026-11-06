@@ -3,7 +3,7 @@
 Reproduces Synfact src/features/lfo3/locks_link.py integrate(): the sparse
 lock library becomes the owned-bank backend, pattern/owned writers get the
 recursive writer mutex, events publish under the frame busy counter. Module
-adaptations: elekloader LFO3 IDs (0x3d9..), the module's publication counter
+adaptations: elekloader LFO3 IDs (0x3f9..), the module's publication counter
 (lfo3_publication_begin/end) and its memcpy chain (lfo3_memcpy_entry). The
 engine overlay (events_before) and the store routing live in ui.c.
 Native lock edits count lanes only when the combined-capacity guard needs it;
@@ -24,7 +24,7 @@ from locks_link import definition, locked_source          # noqa: E402  (pure te
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / 'locks'
-LFO3_ID = 0x3d9
+LFO3_ID = 0x3f9            # ST_MODULE_ID (core 1.2)
 provenance = []
 
 
@@ -34,7 +34,7 @@ def read(path):
 
 
 def ids(text):
-    """Synfact engine IDs 0x245.. -> elekloader 0x3d9.. (DEST3 0x248)."""
+    """Synfact engine IDs 0x245.. -> elekloader 0x3f9.. (DEST3 0x248)."""
     text = re.sub(r'0x245u', f'{LFO3_ID:#x}u', text)
     text = text.replace('#0x245', f'#{LFO3_ID:#x}').replace('#0x248', f'#{LFO3_ID + 3:#x}')
     return text

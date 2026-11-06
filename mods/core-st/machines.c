@@ -112,9 +112,27 @@ u32 *core_machine_layout(const struct core_machine_def *m,u32 page)
 /* Entry wrappers pass the original stack arguments and hidden A0 result.
  * A zero result declines to the exact displaced stock entry. These are
  * machine/parameter lookups only, not a runtime hook bus for the file.
- * Host API 7: IDs no loaded machine claims go to one module provider (LFO3). */
-int (*core_parameter_provider)(u32,u32 *,void *,u32 *);
-void core_parameter_provider_set(int (*provider)(u32,u32 *,void *,u32 *)){core_parameter_provider=provider;}
+ * Host API 7: IDs no loaded machine claims go to the module providers.
+ * Host API 13 (core 1.2): up to four, asked in registration order until one
+ * answers; notifications (25..29) reach every one. Same args pointer. */
+#define PROVIDERS 4
+typedef int (*provider_t)(u32,u32 *,void *,u32 *);
+provider_t core_parameter_providers[PROVIDERS];      /* emulator tests seed slot 0 */
+void core_parameter_provider_set(provider_t provider)
+{
+    u32 i;
+#pragma GCC unroll 1
+    for(i=0;i<PROVIDERS;i++)if(!core_parameter_providers[i] || core_parameter_providers[i]==provider)
+        {core_parameter_providers[i]=provider;return;}
+}
+int core_parameter_provider(u32 q,u32 *args,void *result,u32 *value)
+{
+    u32 i;int r;
+#pragma GCC unroll 1
+    for(i=0;i<PROVIDERS && core_parameter_providers[i];i++)
+        if((r=core_parameter_providers[i](q,args,result,value)) && (q<25 || q>29))return r;
+    return 0;
+}
 int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
 {
     const struct core_machine_def *m=0;const struct core_machine_param *p;
@@ -129,11 +147,12 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
         if(id!=0x4060c510u)return 0;
         m=find(*(u32 *)args[1]);
     }else if(q==ST_UI_ENGINE){
-        if(id<0x2e0 || id>=0x4e0)return 0;
-        m=find(64+(id-0x2e0)/32);index=(id-0x2e0)&31;
+        if(id<0x2e0)return 0;
+        /* 1.2: UI 0x4e0.. are the modules' (ST_MODULE_UI), always providers' */
+        m=id<0x4e0?find(64+(id-0x2e0)/32):0;index=(id-0x2e0)&31;
         if(m && index>=m->params)m=0;
     }else m=core_machine_parameter(q==ST_LABEL || q==ST_LONG_LABEL?args[1]:id,&index);
-    if(!m)return core_parameter_provider?core_parameter_provider(q,args,result,value):0;
+    if(!m)return core_parameter_provider(q,args,result,value);
     if(q==ST_NAME)core_machine_name_seen|=1u<<(m->type-64);
     if(q==ST_CATEGORY)core_machine_category_seen|=1u<<(m->type-64);
     p=m->parameter+index;

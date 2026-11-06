@@ -38,7 +38,7 @@ def verify(folder,synfact=None):
         assert not any(manifest.get(x) for x in ['sites','subscribe','contribute','fixed','collections'])
     raw=(folder/'synfact-machines.smz4').read_bytes();image=80+4*struct.unpack_from('>I',raw,56)[0]
     at,n=struct.unpack_from('>II',raw,32);assert n==len(report['modules'])
-    for module,expected in [('poly_module',[5,0x101,0x103,0x302,0,11]),('system_info_module',[4,0,1])]:
+    for module,expected in [('poly_module',[5,0x101,0x103,0x302,0,11]),('system_info_module',[4,0,1,2,3])]:   # core 1.1: KEY, ENC for the mod list
         index=report['modules'].index(module)
         name,init,subs,count=struct.unpack_from('>4I',raw,image+at+16*index)
         assert count==len(expected) and not init&1 and init<report['main_bytes']
@@ -58,14 +58,14 @@ def verify(folder,synfact=None):
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
     names+=['core_parameter_provider_set','core_native','core_sample_pool_api']
-    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',11,*[address(n) for n in names])
+    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',13,*[address(n) for n in names])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
     native_sites=[s for s in manifest['sites'] if s['target'].startswith('core_native_')]
-    assert len(native_sites)==13 and len(manifest['sites'])==97 and len(manifest['collections'])==12
+    assert len(native_sites)==13 and len(manifest['sites'])==102 and len(manifest['collections'])==16
     assert any(s['addr']=='0x400a423e' and s['target']=='core_native_note_accept' for s in native_sites)
     for site in native_sites:
         assert read(int(site['addr'],16),6)==struct.pack('>HI',0x4eb9 if site['op']=='jsr' else 0x4ef9,address(site['target']))

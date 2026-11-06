@@ -6,6 +6,7 @@ typedef st_u32 u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
 EV(fs_route) EV(fs_write) EV(fs_written) EV(main_mix)
+EV(track_send) EV(delay_in) EV(reverb_in)
 static u32 calls,publications;
 static int resident(u32 op,const u32 *args,u32 *result)
 {assert(op==7 && args[0]==2);calls++;*result=123;return 1;}

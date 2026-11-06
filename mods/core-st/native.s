@@ -146,20 +146,18 @@ core_native_sound_set:
         tst.l %d0
         beq.s 2f
 8:
-| Host API 7: stores of the reserved type-79 IDs (LFO3) go to the parameter
-| provider as query 24 with the original arguments; nonzero = stored.
+| Host API 7: stores of the modules' engine IDs (1.2: ST_MODULE_ID..+127;
+| LFO3's) go to the parameter providers as query 24 with the original
+| arguments; nonzero = stored.
         move.l 8(%sp),%d0
-        subi.l #0x3d9,%d0
-        cmpi.l #32,%d0
+        subi.l #0x3f9,%d0
+        cmpi.l #128,%d0
         bcc.s 9f
-        move.l core_parameter_provider,%d0
-        beq.s 9f
-        movea.l %d0,%a0
         clr.l -(%sp)
         clr.l -(%sp)
         pea 12(%sp)
         pea 24
-        jsr (%a0)
+        jsr core_parameter_provider
         lea 16(%sp),%sp
         tst.l %d0
         bne.s 2f

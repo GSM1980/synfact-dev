@@ -28,7 +28,8 @@ void fw_invalidate(void *v){(void)v;}
 u32 fw_view_machine(void *v){assert(v==view);native_queries++;return type;}
 #include "../mods/core-st/machine-ui.c"
 #include "../mods/core-st/machine-pages.c"
-int (*core_parameter_provider)(unsigned int,unsigned int *,void *,unsigned int *);   /* machines.c (host API 7), none here */
+int core_parameter_provider(unsigned int q,unsigned int *a,void *r,unsigned int *v)   /* machines.c (host API 7), none here */
+{(void)q;(void)a;(void)r;(void)v;return 0;}
 void core_machine_dispatch_delta(void *v,u32 id,int delta,u32 knob)
 {assert(v==view && core_machine_edit_id==id && delta==-256 && knob==3);dispatches++;}
 static void clear_mock(void *v,u32 id,u32 knob)

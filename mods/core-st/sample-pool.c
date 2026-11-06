@@ -60,11 +60,11 @@ void core_pool_write(u8 *project,const u16 *entries)
     for(i=0;i<128;i++){p[16+2*i]=entries[i]>>8;p[17+2*i]=(u8)entries[i];}
     wr(p,0x504f4f4c);wr(p+4,0x00010080);wr(p+8,~crc(0,p+16,256));wr(p+12,0);
 }
-extern int (*core_parameter_provider)(u32,u32 *,void *,u32 *);
+extern int core_parameter_provider(u32,u32 *,void *,u32 *);
 void core_pool_empty(u8 *p)
 {u16 e[128];u32 i;for(i=0;i<128;i++)e[i]=i<CORE_POOL_STOCK_SLOTS?i+1:0;
  core_pool_write(p,e);
- if(core_parameter_provider){u32 a=(u32)p;core_parameter_provider(27,&a,0,0);}}  /* NEW PROJECT (LFO3) */
+ {u32 a=(u32)p;core_parameter_provider(27,&a,0,0);}}  /* NEW PROJECT (LFO3) */
 /* NEW PROJECT initializes the live project through 4001d16a, not the cached
  * project constructor at 40018ab0. Run after the native body has finished.
  * A valid previous pool must be replaced here, even though LOAD preserves it. */

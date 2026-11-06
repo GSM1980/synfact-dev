@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * LFO3 page actions (copy/paste/clear/randomize/reload), ported from Synfact
  * research-runtime/lfo3-coherence-20261021/actions_proto/lfo3_actions.c with
- * elekloader's IDs (0x3d9.., LFO2 order). The added page answers as native
+ * the core's module IDs (0x3f9.., LFO2 order). The added page answers as native
  * page IDs 37 (layout 4/5) and 38 (FX layout 30); native page clipboard/undo
  * objects keep owning their numeric vectors. Values go through the proxy
  * backend (ui.c), so actions read and write the LFO3 records.
  */
 typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;
-#define LFO3_ID 0x3d9u
+#define LFO3_ID 0x3f9u
 typedef struct {u16 v[8];} rec_t;
 typedef struct {u32 addr,size,tag,seq,count;rec_t r[13];} side_t;
 typedef struct {const char *name,*title;u32 ids[9];} projection;

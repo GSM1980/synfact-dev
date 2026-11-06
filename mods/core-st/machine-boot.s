@@ -140,17 +140,18 @@ core_machine_highlight_bound:
 1:      move.l %d0,%d1
         addq.l #1,%d1
         rts
+| 1.2: up to the last module ID (ST_MODULE_ID+127), past the machines' 0x3f8
 core_machine_relative_bound4:
         tst.l core_machine_active
         beq.s 1f
-        cmpi.l #0x3f8,%d4
+        cmpi.l #0x478,%d4
         rts
 1:      cmpi.l #0x1f8,%d4
         rts
 core_machine_relative_bound2:
         tst.l core_machine_active
         beq.s 1f
-        cmpi.l #0x3f8,%d2
+        cmpi.l #0x478,%d2
         rts
 1:      cmpi.l #0x1f8,%d2
         rts

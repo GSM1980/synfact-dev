@@ -280,3 +280,43 @@ Never enable folders solely because a legacy `v6`/`v7` transfer profile connects
 
 Core 0.13.1 combines folders and ARP with host API 11. In complete banks,
 LFO3 precedes ARP, which precedes POLY; Sample Manager may follow System info.
+
+Core 1.2 adds the mixer events and the FX record codec notifications (host
+API 13); LFO3 1.1 needs it. The optional chorus takes its Digitone tables from
+the owner's OS file once per checkout, then goes in the bank before
+modulation skip ([its README](../mods/chorus-st/README.md)):
+
+```bash
+$PY mods/chorus-st/tools/import_digitone.py C:/Desarrollo/synfact/inputs/local/official/Digitone_and_Digitone_Keys_OS1.44.syx
+```
+
+```bash
+$PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
+    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st \
+    --module mods/system-info-smz-st --module mods/sample-manager-st --module mods/chorus-st \
+    --module mods/modulation-skip-st --out out/core-st-X.Y.Z-name/synfact-machines.smz4
+```
+
+The core's three mixer stubs against the stock instructions, and the chorus
+against Synfact's V56 compiled from its pinned sources in syntakt-work, with
+the toolchain settings above:
+
+```bash
+LIBUNICORN_PATH='C:\Desarrollo\syntakt-dev\syntakt-work\analysis\unicorn-2.1.4-oneshot-build\Release' \
+    /c/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_chorus_emu.py \
+    --bank out/core-st-X.Y.Z-name/synfact-machines.smz4 \
+    --digitone C:/Desarrollo/synfact/inputs/local/official/Digitone_and_Digitone_Keys_OS1.44.syx
+```
+
+Add `--reference <other bank>` when a change must not alter the chorus's
+sound (code moved, not arithmetic): its buses must equal that bank's bit for
+bit (test E). Both banks need their sibling `.work/main.elf`.
+
+The chorus's controls on the delivered core image (labels, formats, values,
+codec, page 25, REVERB's pages, AMP's branch, the dials), same environment:
+
+```bash
+LIBUNICORN_PATH='C:\Desarrollo\syntakt-dev\syntakt-work\analysis\unicorn-2.1.4-oneshot-build\Release' \
+    /c/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_chorus_ui_emu.py \
+    --core out/core-st-X.Y.Z-name/main.bin --bank out/core-st-X.Y.Z-name/synfact-machines.smz4
+```

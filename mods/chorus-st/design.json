@@ -1,0 +1,175 @@
+{
+  "decimator": {
+    "variant": "sparse16-weighted0.2-u4",
+    "taps": 16,
+    "positions": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16,
+      19
+    ],
+    "coefficients": [
+      0.0,
+      0.012979961931705475,
+      0.05544184148311615,
+      0.13796295784413815,
+      0.23396912403404713,
+      0.2871630322188139,
+      0.2577425418421626,
+      0.15749096684157848,
+      0.038529541343450546,
+      -0.046876510605216026,
+      -0.07663684152066708,
+      -0.06163350213319063,
+      -0.02842135541141033,
+      0.0,
+      0.013158326037228107,
+      0.01325003057718277,
+      0.007261516526341438,
+      0.0,
+      0.0,
+      -0.0013816319406032562
+    ],
+    "instructions": 843,
+    "text_bytes": 1006,
+    "strict_isa_passed": true,
+    "coefficient_l1": 1.429899682290852,
+    "floating_reference_max_error_q31": 4,
+    "fullscale_stress_max_error_q31": 1,
+    "blocks_compared": 72,
+    "response": {
+      "max_magnitude_error_to_7khz_db": 0.1952812636017326,
+      "max_magnitude_error_to_9khz_db": 0.27508942812923165,
+      "max_phase_error_to_7khz_degrees": 1.056025541956851,
+      "samples": [
+        {
+          "hz": 1000,
+          "magnitude_error_db": -0.01128836825109973,
+          "phase_error_degrees": -0.207303962878935
+        },
+        {
+          "hz": 4000,
+          "magnitude_error_db": -0.03603432771371659,
+          "phase_error_degrees": -0.8343367295510616
+        },
+        {
+          "hz": 6000,
+          "magnitude_error_db": 0.01860746027465543,
+          "phase_error_degrees": 0.9962469783900535
+        },
+        {
+          "hz": 8000,
+          "magnitude_error_db": 0.022831048921139137,
+          "phase_error_degrees": -0.7020459463851019
+        },
+        {
+          "hz": 9000,
+          "magnitude_error_db": -0.27508942812923165,
+          "phase_error_degrees": 1.2318255360232946
+        },
+        {
+          "hz": 10000,
+          "magnitude_error_db": 0.12140292023683573,
+          "phase_error_degrees": 1.9356897867118392
+        },
+        {
+          "hz": 11000,
+          "magnitude_error_db": -0.13173117963981823,
+          "phase_error_degrees": -5.379708022824848
+        }
+      ],
+      "alias_rejection": [
+        {
+          "input_hz": 12000,
+          "aliases_to_hz": 12000,
+          "gain_db": -42.21215714967521
+        },
+        {
+          "input_hz": 13000,
+          "aliases_to_hz": 11000,
+          "gain_db": -47.12785478107264
+        },
+        {
+          "input_hz": 16000,
+          "aliases_to_hz": 8000,
+          "gain_db": -59.901704640444315
+        },
+        {
+          "input_hz": 18000,
+          "aliases_to_hz": 6000,
+          "gain_db": -51.35803337150294
+        },
+        {
+          "input_hz": 20000,
+          "aliases_to_hz": 4000,
+          "gain_db": -47.82573078976441
+        }
+      ]
+    }
+  },
+  "reconstructor": {
+    "length": 15,
+    "passband_hz": 8000,
+    "phase_coefficients": [
+      -0.01731504865331772,
+      0.06113197357948029,
+      -0.1639999874992586,
+      0.620183062573096,
+      0.620183062573096,
+      -0.1639999874992586,
+      0.06113197357948029,
+      -0.01731504865331772
+    ],
+    "max_linear_passband_error_on_design_grid": 0.004062410270405797,
+    "response": [
+      {
+        "hz": 1000,
+        "baseband_db": 0.011454347458777993,
+        "image_hz": 23000,
+        "image_relative_db": -57.6026056243445
+      },
+      {
+        "hz": 4000,
+        "baseband_db": -0.007405991802957059,
+        "image_hz": 20000,
+        "image_relative_db": -61.38091833965256
+      },
+      {
+        "hz": 6000,
+        "baseband_db": -0.008423046209101857,
+        "image_hz": 18000,
+        "image_relative_db": -60.26269061081514
+      },
+      {
+        "hz": 7000,
+        "baseband_db": 0.033926056163425936,
+        "image_hz": 17000,
+        "image_relative_db": -48.18257611188827
+      },
+      {
+        "hz": 8000,
+        "baseband_db": -0.034813395050214045,
+        "image_hz": 16000,
+        "image_relative_db": -47.92394606096338
+      },
+      {
+        "hz": 9000,
+        "baseband_db": -0.4276736557625899,
+        "image_hz": 15000,
+        "image_relative_db": -25.939321945308194
+      }
+    ]
+  }
+}

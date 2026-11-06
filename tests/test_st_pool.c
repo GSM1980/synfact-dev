@@ -11,7 +11,8 @@
 static void receiver_sleep(unsigned int);
 #define CORE_POOL_SLEEP receiver_sleep
 #include "../mods/core-st/sample-pool.c"
-int (*core_parameter_provider)(unsigned int,unsigned int *,void *,unsigned int *);   /* machines.c (host API 7), none here */
+int core_parameter_provider(unsigned int q,unsigned int *a,void *r,unsigned int *v)   /* machines.c (host API 7), none here */
+{(void)q;(void)a;(void)r;(void)v;return 0;}
 #include "../mods/core-st/sample-wave.c"
 static u32 receiver_table[256],receiver_stock[128],receiver_bell,receiver_calls;
 #define TABLE receiver_table

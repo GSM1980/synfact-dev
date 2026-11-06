@@ -15,7 +15,19 @@ const char *core_machine_format(u32 id,u32 raw){(void)id;(void)raw;return 0;}
 u32 core_machine_policy(u32 id){return id==0x1fd?0x1f1:CORE_SMZ_NONE;}
 static u32 type=64,resets;
 static u32 allocations;
-static u32 codec_notifications;
+static u32 codec_notifications,chain_calls[2],fx_notes[2][4];
+/* Host API 13: two providers. A query stops at the first answer; every
+ * notification (25..29, FX codec 28/29) reaches both; query 30 stops at an answer. */
+static int chain(u32 k,u32 q,u32 *a,u32 *value)
+{
+    chain_calls[k]++;
+    if(q==30)return k==0;
+    if(q>=28){fx_notes[k][0]=q;fx_notes[k][1]=a[0];fx_notes[k][2]=a[1];fx_notes[k][3]=a[2];return 1;}
+    if(q==18 && a[1]==0x23d+k){*value=100+k;return 1;}
+    return 0;
+}
+static int chain_a(u32 q,u32 *a,void *r,u32 *v){(void)r;return chain(0,q,a,v);}
+static int chain_b(u32 q,u32 *a,void *r,u32 *v){(void)r;return chain(1,q,a,v);}
 static int codec_final(u32 q,u32 *a,void *result,u32 *value)
 {
     u8 *record=(u8 *)a[q==25?0:1],*sound=(u8 *)a[q==25?1:0];u32 i;
@@ -111,9 +123,22 @@ int main(void)
     fw_free(*(void **)(view+0x7c));sound[0xa2]=64;
     for(i=0;i<32;i++)sound[0x80+i]=(u8)(i+1);sound[0xa0]=77;sound[0xa1]=88;
     sound[0x14]=0x12;sound[0x15]=0x34;
-    core_parameter_provider=codec_final;
+    core_parameter_provider_set(codec_final);
     core_machine_sound_saved(record,sound);memset(sound,0x11,0xa2);core_machine_sound_loaded(sound,record);
-    assert(codec_notifications==2);core_parameter_provider=0;
+    assert(codec_notifications==2);core_parameter_providers[0]=0;
+    {u32 q[3]={0,0x23e,0};
+     core_parameter_provider_set(chain_a);core_parameter_provider_set(chain_b);core_parameter_provider_set(chain_a);
+     assert(core_parameter_providers[0]==chain_a && core_parameter_providers[1]==chain_b && !core_parameter_providers[2]);
+     assert(core_parameter_provider(18,q,0,&value) && value==101 && chain_calls[0]==1 && chain_calls[1]==1);
+     q[1]=0x23d;assert(core_parameter_provider(18,q,0,&value) && value==100 && chain_calls[0]==2 && chain_calls[1]==1);
+     q[1]=0x300;assert(!core_parameter_provider(18,q,0,&value) && chain_calls[0]==3 && chain_calls[1]==2);
+     core_fx_codec_notify(28,0x1000,0x2000,1);
+     assert(fx_notes[0][0]==28 && fx_notes[1][0]==28 && fx_notes[1][1]==0x1000 && fx_notes[1][2]==0x2000 && fx_notes[1][3]==1);
+     core_fx_codec_notify(29,0x2000,0x1000,0);
+     assert(fx_notes[0][0]==29 && fx_notes[1][0]==29 && fx_notes[0][1]==0x2000 && fx_notes[0][3]==0);
+     {u32 a=chain_calls[0],b=chain_calls[1];
+      assert(core_parameter_provider(30,q,0,0)==1 && chain_calls[0]==a+1 && chain_calls[1]==b);}
+     core_parameter_providers[0]=core_parameter_providers[1]=0;}
     for(i=0;i<32;i++)assert(sound[0x80+i]==i+1);assert(sound[0xa0]==77 && sound[0xa1]==88);
     assert(sound[0x14]==0x12 && sound[0x15]==0x34);
     assert(core_machine_lanes[54]==0x47 && core_machine_lanes[70]==0x57);

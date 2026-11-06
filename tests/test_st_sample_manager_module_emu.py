@@ -18,7 +18,7 @@ def main():
     assert raw[image+name:raw.index(0,image+name)]==b'Sample Manager' and n==2
     events=[struct.unpack_from('>2I',raw,image+subs+8*i)[0] for i in range(n)]
     assert events==[2,0],events
-    assert word(host)==11 and word(host+88)==sym['core:core_sample_pool_api']
+    assert word(host)==13 and word(host+88)==sym['core:core_sample_pool_api']
     assert word(pointer)==0
     # API 10 advertises ARP support but has no appended pool pointer.
     # Borrow the real native UI/host table; no OS view is constructed at init.

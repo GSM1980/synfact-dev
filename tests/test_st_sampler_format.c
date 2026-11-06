@@ -12,6 +12,8 @@ volatile u32 core_machine_active=1;
 extern const struct core_machine_def sp_one_shot,sp_werp,sp_repitch,sp_slice;
 extern const struct st_machine_ui sp_one_ui,sp_werp_ui,sp_repitch_ui,sp_slice_ui;
 int core_machine_direct_format(u32,u32,char *);
+/* machines.c (host API 13): no provider here; an unclaimed ID keeps stock. */
+int core_parameter_provider(u32 q,u32 *a,void *r,u32 *v){(void)q;(void)a;(void)r;(void)v;return 0;}
 static const struct core_machine_def *const machines[]={&sp_one_shot,&sp_werp,&sp_repitch,&sp_slice};
 static const struct st_machine_ui *const pages[]={&sp_one_ui,&sp_werp_ui,&sp_repitch_ui,&sp_slice_ui};
 const struct core_machine_def *core_machine_find(u32 type)

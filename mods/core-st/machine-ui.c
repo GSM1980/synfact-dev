@@ -65,16 +65,24 @@ u32 core_machine_policy(u32 id)
     const struct st_machine_ui *u=core_machine_ui(m);
     return u && (u32)u->policy!=CORE_SMZ_NONE?u->policy(index):CORE_SMZ_NONE;
 }
+extern int core_parameter_provider(u32,u32 *,void *,u32 *);
+/* Core 1.2: an ID no loaded machine claims asks the providers, query 30
+ * {model, id, raw, a, b, ctx, x, y} (struct st_machine_dial): nonzero drawn. */
 int core_machine_dial(void *model,u32 id,u32 raw,u32 a,u32 b,void *ctx,int x,int y)
 {
     u32 index;struct st_machine_dial args={model,id,raw,a,b,ctx,x,y};
     const struct core_machine_def *m=core_machine_parameter(id,&index);
     const struct st_machine_ui *u=core_machine_ui(m);
+    if(!m)return core_machine_active && core_parameter_provider(30,(u32 *)&args,0,0);
     return u && (u32)u->dial!=CORE_SMZ_NONE?u->dial(&api,m,index,&args):0;
 }
+/* Core 1.2: and its direct value text is the providers' format (query 17). */
 int core_machine_direct_format(u32 id,u32 raw,char *out)
 {
+    u32 args[2]={id,raw},value=0,index;
     const char *text=formatted(id,raw,&control_api);u32 n=0;
+    if(!text && !core_machine_parameter(id,&index) && core_machine_active &&
+       core_parameter_provider(17,args,0,&value))text=(const char *)value;
     if(!text)return 0;
     while(n<15 && text[n]){out[n]=text[n];n++;}out[n]=0;return 1;
 }

@@ -56,14 +56,25 @@ struct st_machine_host_api {
      * 18 short label,19 synth,20 long label,21 flags,22 rank,23 encoder
      * cached. args[0] is the ID (labels: args[1]). Return nonzero with
      * *value; zero keeps the stock path (cached/format may rewrite args[0]
-     * to an alias ID and return zero). LFO3 owns the type-79 ID blocks:
-     * engine 0x3d9..0x3f8, UI 0x4c0..0x4df; no bank may define type 79.
+     * to an alias ID and return zero). Core 1.2: modules take their IDs from
+     * ST_MODULE_ID / ST_MODULE_UI (<syntakt/machines.h>), after the machines'
+     * blocks; LFO3 0x3f9..0x402 / 0x4e0..0x4e9, the chorus the next seven.
      * Core 0.12.15: 24 store — native Sound setter args (proxy, id, value,
      * track, publish, notify) for IDs in the engine block; result/value are
      * null; nonzero means stored (the native setter is skipped).
      * Core 0.12.16 notifications (result/value null, return ignored): 25 after
      * a successful native Sound encode {record, sound, 1}; 26 after a decode
-     * {sound, record, 1}; 27 after NEW PROJECT {project container}. */
+     * {sound, record, 1}; 27 after NEW PROJECT {project container}.
+     * Host API 13 (core 1.2): up to four providers, asked in registration
+     * order until one returns nonzero; every provider gets the notifications
+     * (25..29). 28 after every native FX record encode {record, fx, ok},
+     * 29 after every decode {fx, record, ok}; ok is the native result's low
+     * byte. ST_NATIVE_PAGE_LAYOUT also asks for page 25 (the dormant chorus
+     * page). Queries 16/17/18/20 also come for parameter 72, the dormant
+     * Digitone chorus send (no stock labels or formatter). Query 30: a dial
+     * no machine claims, args = struct st_machine_dial; nonzero = drawn.
+     * Query 17 also gives an unclaimed ID's direct value text. Register in
+     * the module's init. */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
     /* API 8 native_query and the ARP branch's native_dispatch are aliases
      * for the same existing bus at offset 84. Both prefixes stay compatible.
@@ -82,5 +93,7 @@ struct st_machine_host_api {
      * bank's list pointer; it is null when no bank with a mod-info directory is loaded. */
     const unsigned char *core_info;
     const unsigned char *const *bank_info;
+    /* Host API 13 (core 1.2) adds no field: chained parameter providers, FX
+     * codec notifications and queries 28..30 (parameter_provider above). */
 };
 #endif

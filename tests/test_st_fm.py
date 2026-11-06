@@ -20,7 +20,7 @@ def verify(bank,synfact,cc):
     shoff=struct.unpack_from('>I',ae.raw,0x20)[0];shsize=struct.unpack_from('>H',ae.raw,0x2e)[0]
     section_base=struct.unpack_from('>I',ae.raw,shoff+section.idx*shsize+12)[0]
     syms={s.name:s.value for s in ae.symbols if s.name}
-    assert report['machines']==[66,67,68,69,65] and report['features']==7
+    assert report['machines']==[66,67,68,69,65] and report['features']==15   # bit 8: the bank's mod-info directory (core 1.1)
     check_bank_modules(report,bank.read_bytes(),(
         ['fm_tone_module'],['fm_tone_module','recorder_module'],
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
