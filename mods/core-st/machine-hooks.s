@@ -514,6 +514,21 @@ core_stock_source_layout:
         jmp 0x4007b9f2
         .globl core_machine_cached_parameter,core_stock_cached_parameter
 core_machine_cached_parameter:
+| The randomize draw (40014954) asks machine-randomize.c first: a bank
+| control, or an ID a provider answers query 31 for, gets the generic
+| randomizer; every other caller and ID keeps its own or its alias's entry.
+        move.l (%sp),%d1
+        cmpi.l #0x40014970,%d1
+        bne.s 2f
+        tst.l core_machine_active
+        beq.s 2f
+        move.l 4(%sp),-(%sp)
+        jsr core_machine_randomize_entry
+        addq.l #4,%sp
+        tst.l %d0
+        beq.s 2f
+        rts
+2:
         STOCK_FIRST_SEND cached_parameter,4
         lea -12(%sp),%sp
         move.l %a0,(%sp)

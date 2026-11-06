@@ -73,7 +73,13 @@ struct st_machine_host_api {
      * page). Queries 16/17/18/20 also come for parameter 72, the dormant
      * Digitone chorus send (no stock labels or formatter). Query 30: a dial
      * no machine claims, args = struct st_machine_dial; nonzero = drawn.
-     * Query 17 also gives an unclaimed ID's direct value text. Register in
+     * Query 17 also gives an unclaimed ID's direct value text.
+     * Host API 14 (core 1.4): 24 also comes for the Kit model's setter
+     * (40013516, same arguments). Query 31, page randomize: args[0] is any
+     * ID on the page (stock or module); nonzero = the native randomize draws
+     * it uniformly over its range (query 13 for a module's ID) and stores it
+     * through the page's model (24 for a module's ID). Before 13 there is one
+     * provider slot: a provider only for 31 registers on 14. Register in
      * the module's init. */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
     /* API 8 native_query and the ARP branch's native_dispatch are aliases
@@ -94,6 +100,7 @@ struct st_machine_host_api {
     const unsigned char *core_info;
     const unsigned char *const *bank_info;
     /* Host API 13 (core 1.2) adds no field: chained parameter providers, FX
-     * codec notifications and queries 28..30 (parameter_provider above). */
+     * codec notifications and queries 28..30 (parameter_provider above).
+     * Host API 14 (core 1.4) adds no field: queries 24 (Kit) and 31. */
 };
 #endif

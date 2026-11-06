@@ -848,3 +848,20 @@ name. API 10's `native_dispatch` is an alias in the same 4-byte slot at offset
 notification helper is shared out of line; its extended controls plus final
 word are copied as one contiguous 34-byte range before notification. This
 keeps the combined core within its unchanged 64 KiB reserve and build flags.
+
+## Core 1.4: page randomize for new pages
+
+Page key + YES now reaches the bank's machines and the modules' pages
+(design and firmware addresses: [docs/RANDOMIZE-PAGES.md](../../docs/RANDOMIZE-PAGES.md)).
+`machine-randomize.c`/`.s` add four sites: `40044972` (the SYN view's
+randomize, which records its view), `400146bc` (a bank machine's parameter
+list: the controls of that view's page), `400a61fa` (the Kit-owner check
+takes the owner from `400a5c6c`, so the chorus resolves to the Kit's model)
+and `40013516` (the Kit model's setter sends module IDs to query 24). The
+cached-parameter hook gives the randomize draw (`40014954`) the native
+generic randomizer (`400744f0`/`40077ee8`) for a bank control or an ID a
+provider answers query 31 for. Host API 14. Rebuild the bank: LFO3 1.2,
+POLY 1.2, chorus 1.1 and ARP 1.6 go with this core.
+`tests/test_st_common_hooks.py` pins the four sites (106 in all). Checked in
+the analog-emu emulator (SYN pages, chorus, POLY, ARP, stock TRIG/SYN and
+LFO3 unchanged) and by the user on the unit (first build).

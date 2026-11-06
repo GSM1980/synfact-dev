@@ -112,6 +112,11 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
     }
     return 0; /* Notifications continue to later native subscribers. */
 }
+/* Host API 14 query 31: TRIG + YES on POLY's page draws the chord's
+ * NOT2..NOT4 (stock trig IDs 1e..20, laid out only there). NOTE stays, as
+ * on the stock TRIG page; POLY, VOICES and PLAY are never drawn. */
+static int poly_query(unsigned int q,unsigned int *args,void *result,unsigned int *value)
+{(void)result;(void)value;return q==31 && args[0]-0x1eu<3u;}
 static int poly_initialize(const struct st_smz_api *api)
 {
     if(!api || api->version<3 || !api->ui || api->ui->version<7 ||
@@ -119,6 +124,8 @@ static int poly_initialize(const struct st_smz_api *api)
     poly_host=api->ui->host;poly_native_interest();
     /* Host API 6: POLY's page handlers act only on the TRIG ParameterView. */
     if(poly_host->version>=6)poly_host->native_page_view((void (*)(void))poly_native,0x401c97fcu);
+    /* Before host API 13 there is one provider slot (LFO3's); 14 asks query 31. */
+    if(poly_host->version>=14)poly_host->parameter_provider(poly_query);
     return 0;
 }
 static const struct st_smz_subscription poly_subscriptions[]={

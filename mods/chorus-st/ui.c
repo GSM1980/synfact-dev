@@ -73,18 +73,21 @@ static int dial(const u32 *a)
     return 1;
 }
 extern void chorus_params_save(u8 *,const u16 *),chorus_params_load(u16 *,const u8 *);
+extern s32 chorus_param_set(void *,u32,s32);
 /* Host API 13 provider. The seven settings answer like V56's generic FX
  * machine (owner 0x31, not a synth or modulation destination, cached
  * record of 0x13, encoder policy of 0x1f1 but HPF/WDTH); the CHO send takes
- * DEL send's (78) cached record. The FX record codec carries the values. */
+ * DEL send's (78) cached record. The FX record codec carries the values.
+ * Host API 14: the page randomize draws the settings (31) and stores them
+ * through the Kit's setter (24), as the editor's own edits are stored. */
 static int query(u32 q,u32 *args,void *result,u32 *value)
 {
     u32 id,i;
     if(q==28 && (args[2]&255u))chorus_params_save((u8 *)args[0],(const u16 *)args[1]);
     if(q==29 && (args[2]&255u))chorus_params_load((u16 *)args[0],(const u8 *)args[1]);
-    if(q>=25 && q!=30)return 0;
+    if(q>=25 && q!=30 && q!=31)return 0;
     if(q==6){if(args[0]-CHORUS_UI>=7u)return 0;*value=CHORUS_ID+args[0]-CHORUS_UI;return 1;}
-    id=q==18 || q==20 || q==30?args[1]:args[0];
+    id=q==18 || q==20 || q==24 || q==30?args[1]:args[0];
     if(q==30)return dial(args);
     if(id==CHORUS_SEND)switch(q){
     case 18:*value=(u32)"CHO";return 1;
@@ -105,6 +108,8 @@ static int query(u32 q,u32 *args,void *result,u32 *value)
     case 20:*value=(u32)long_names[i];return 1;
     case 19:case 21:*value=0;return 1;
     case 23:args[0]=i==2 || i==3?0x13:0x1f1;return 0;
+    case 24:return chorus_param_set((void *)args[0],id,(s32)args[2])==0;
+    case 31:return 1;
     }
     return 0;
 }

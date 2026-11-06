@@ -97,10 +97,14 @@ def verify(folder):
     assert b.startswith(bytes.fromhex('ae000900ae810900')) and b.count(bytes.fromhex('4ef94008f3a8'))==2
     assert read(0x400a6d96,8)==jump('core_fx_encode')+bytes.fromhex('4e71')
     assert read(0x400a6d2e,8)==jump('core_fx_decode')+bytes.fromhex('4e71')
-    assert len(manifest['sites'])==102 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
-    assert len({s['addr'] for s in manifest['sites']})==102
+    # 1.4 (randomize, list item 22): parameter list, SYN view randomize, Kit owner, Kit setter
+    for at,name in ((0x400146bc,'core_machine_parameter_list'),(0x40044972,'core_machine_syn_randomize'),
+                    (0x400a61fa,'core_machine_kit_owner'),(0x40013516,'core_native_kit_set')):
+        assert read(at,6)==jump(name),name
+    assert len(manifest['sites'])==106 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
+    assert len({s['addr'] for s in manifest['sites']})==106
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec; 102 sites, 16 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize; 106 sites, 16 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])

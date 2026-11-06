@@ -233,9 +233,14 @@ static const struct {u32 at;u16 stock,value;} operands[]={{0x40111b82u,0x0107,ST
 #define SITES (sizeof sites/sizeof sites[0])
 static u32 hooks_installed;
 /* Core 1.2 (host API 13) owns the FX record codec and tells the providers
- * (queries 28/29, ui.c); an older core leaves those two entries to LFO3. */
+ * (queries 28/29, ui.c); an older core leaves those two entries to LFO3.
+ * Core 1.4 (host API 14) owns the FX setter 40013516 and sends LFO3's IDs
+ * to query 24, which stores them as lfo3_lock_ui_fx_store did. */
 static u32 core_site(u32 i)
-{return host->version>=13 && (sites[i].at==0x400a6d96u || sites[i].at==0x400a6d2eu);}
+{
+    return (host->version>=13 && (sites[i].at==0x400a6d96u || sites[i].at==0x400a6d2eu)) ||
+           (host->version>=14 && sites[i].at==0x40013516u);
+}
 static u32 install_hooks(void)
 {
     u32 i,j,sr,target;

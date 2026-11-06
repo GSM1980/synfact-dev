@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "1.3",
+  "version": "1.4",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -46,7 +46,9 @@
     "preview.s",
     "note-events.s",
     "fx-send.s",
-    "fx-codec.s"
+    "fx-codec.s",
+    "machine-randomize.c",
+    "machine-randomize.s"
   ],
   "defsym": {
     "DRAWALL": "0x401007ce",
@@ -357,6 +359,30 @@
       "stock": "0c82000001f8",
       "op": "jsr",
       "target": "core_machine_relative_bound2"
+    },
+    {
+      "addr": "0x400146bc",
+      "stock": "4fefffec48d71c04",
+      "op": "jmp",
+      "target": "core_machine_parameter_list"
+    },
+    {
+      "addr": "0x40044972",
+      "stock": "2f0a2f02246f000c",
+      "op": "jmp",
+      "target": "core_machine_syn_randomize"
+    },
+    {
+      "addr": "0x400a61fa",
+      "stock": "222f00040c81000001f9",
+      "op": "jmp",
+      "target": "core_machine_kit_owner"
+    },
+    {
+      "addr": "0x40013516",
+      "stock": "4e56ffdc48d7047c",
+      "op": "jmp",
+      "target": "core_native_kit_set"
     },
     {
       "addr": "0x40037d9e",

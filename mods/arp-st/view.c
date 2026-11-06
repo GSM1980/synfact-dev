@@ -29,6 +29,8 @@ static unsigned int arp_steps_edited DATA=0;
 /* 1.2: TRIG on the open view switches page 0 (the arp) and page 1 (the
  * chord: NOTE, NOT2..NOT4). A double tap always opens page 0. */
 static unsigned int arp_page DATA=0;
+/* A TRIG press that switched the page; TRIG + YES switches it back first. */
+static unsigned int arp_trig_flipped DATA=0;
 extern int lfo3_pattern_get(void *,arp_u32,arp_u32,arp_u32);
 extern arp_u32 lfo3_pattern_set(void *,arp_u32,arp_u32,arp_u32,int);
 /* The application (4016e804) and its active track model (40019036), as
@@ -411,6 +413,32 @@ static int arp_edit(unsigned int field,int delta)
     if(field==3){arp_length_until=arp_host->machine_telemetry[0]+1500u;arp_length_show=1;}
     ARP_DIRTY(arp_view);return 1;
 }
+/* TRIG + YES (list item 22), as the native pages' page key + YES: each
+ * control drawn uniformly over its encoder range by the firmware's rand
+ * (40131d24, 0..32767), scaled by its high bits as the native draw (40077ee8).
+ * The arp page draws A..F (OFS on the selected step) and keeps the steps.
+ * on/off, which YES itself toggles, and whether the arp is on: MODE OFF stays
+ * OFF, an arp that is on draws one of its four modes. The chord page draws
+ * NOT2..NOT4's track defaults over the native range 0..127, as POLY's page
+ * does, and keeps NOTE, as the stock TRIG page does. Not with locks shown. */
+static int arp_random(int low,int high)
+{return low+(int)((UI_CALL(0x40131d24u,arp_u32 (*)(void))()&0x7fffu)*(arp_u32)(high-low+1)>>15);}
+static void arp_randomize(void)
+{
+    struct arp_settings p=arp_ui_parameters;void *track;volatile arp_u8 *data;unsigned int i;
+    if(arp_lock_mode)return;
+    if(arp_page){
+        if(!(data=arp_chord_data(&track)))return;
+        for(i=1;i<4;i++)arp_chord_store(track,i,ST_CHORD_STEPS,(unsigned int)arp_random(0,127));
+    }else{
+        if(p.mode)p.mode=arp_random(1,4);
+        p.speed=arp_random(0,17);p.range=arp_random(0,3);
+        p.note_length=arp_random(0,127);p.length=arp_random(0,15);
+        p.offset[arp_selected]=(signed char)arp_random(-24,24);
+        if(!save_ui_settings(&p))return;
+    }
+    ARP_DIRTY(arp_view);
+}
 static void arp_view_tick(void *controller)
 {
     arp_u32 now=arp_host->machine_telemetry[0];(void)controller;
@@ -518,6 +546,17 @@ static int arp_view_key(void *app,const void *event)
     if(key==0x13){
         if((flags&1) && !(flags&8)){
             arp_page^=1u;arp_steps_held=0;arp_steps_edited=0;arp_enc_reset();ARP_DIRTY(arp_view);
+            arp_trig_flipped=1;
+        }
+        if(!(flags&1))arp_trig_flipped=0;
+        return 1;
+    }
+    /* YES with TRIG held: randomize the page shown before that TRIG press. */
+    if(key==12 && UI_CALL(0x40102d7cu,arp_u32 (*)(arp_u32))(0x13)){
+        if((flags&1) && !(flags&8)){
+            arp_lock_sync();
+            if(arp_trig_flipped){arp_page^=1u;arp_trig_flipped=0;arp_enc_reset();}
+            arp_randomize();
         }
         return 1;
     }

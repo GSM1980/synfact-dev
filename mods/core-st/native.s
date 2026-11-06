@@ -166,6 +166,27 @@ core_native_sound_set:
         movem.l %d2-%d7/%a2,(%sp)
         jmp 0x4001330c
 2:      rts
+| Host API 14: the Kit model's stores (40013516, same arguments) of the
+| modules' engine IDs go to query 24 too: a module's Kit control (the
+| chorus) gets the draws of a page randomize. Nonzero = stored.
+        .globl core_native_kit_set,core_stock_kit_set
+core_native_kit_set:
+        move.l 8(%sp),%d0
+        subi.l #0x3f9,%d0
+        cmpi.l #128,%d0
+        bcc.s core_stock_kit_set
+        clr.l -(%sp)
+        clr.l -(%sp)
+        pea 12(%sp)
+        pea 24
+        jsr core_parameter_provider
+        lea 16(%sp),%sp
+        tst.l %d0
+        beq.s core_stock_kit_set
+        rts
+core_stock_kit_set:
+        .byte 0x4e,0x56,0xff,0xdc,0x48,0xd7,0x04,0x7c
+        jmp 0x4001351e
 core_native_machine_select:
         tst.b core_native_interest+8
         beq.s 8f
