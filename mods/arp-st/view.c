@@ -401,6 +401,7 @@ static int arp_edit(unsigned int field,int delta)
 static void arp_view_tick(void *controller)
 {
     arp_u32 now=arp_host->machine_telemetry[0];(void)controller;
+    arp_rec_ui();
     if(arp_foreground() && arp_main && view_word(arp_main,0xa4)){
         arp_u32 track=UI_CALL(0x4001ff74u,arp_u32 (*)(void *))(*(void **)(arp_main+0xa4));
         if(track!=arp_track){
@@ -431,8 +432,14 @@ static int arp_view_encoder(void *app,const void *event)
     if(!arp_foreground())return 0;
     arp_lock_sync();
     if(arp_page){
-        /* E..H: NOTE, NOT2..NOT4, on the held steps or the track defaults. */
-        if(knob>=5 && knob<=8 && (steps=arp_encoder_steps(knob-1,event)))arp_chord_edit(knob-5,steps);
+        /* E uses the native choices travel. On the unit F..H could select a
+         * step (inverted value) without advancing NOT2..NOT4. Apply their
+         * signed native ticks directly, including the pressed x8 rate. */
+        if(knob>=5 && knob<=8){
+            steps=knob==5?arp_encoder_steps(knob-1,event):
+                UI_CALL(0x400f66a2u,int (*)(const void *,arp_u32,arp_u32))(event,1,8);
+            if(steps)arp_chord_edit(knob-5,steps);
+        }
         return 1;
     }
     if(knob>=1 && knob<=6){

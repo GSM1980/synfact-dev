@@ -310,6 +310,8 @@ class ChordViewMachine(LockViewMachine):
     def lane(self,n,step=None):return self.read(TRACKDATA+(0x3c5+n if step is None else 0x2c0+n*0x40+step),1)[0]
     def code(self,u,pc,n,ctx):
         if self.ready:
+            if pc==0x400f68d2 and getattr(self,'no_extra_chord_travel',False) and self.args(5)[1]>=5:
+                self.ret(0);return
             if pc==TDATA:assert self.args(1)==(MODEL,);self.ret(TRACKDATA);return
             if pc==TNOTIFY:
                 track,notice=self.args(2);assert track==MODEL
@@ -349,6 +351,14 @@ def chord_page(core,bank):
     m.notices=[];m.encoder(7,2)
     assert (m.lane(2,31),m.lane(2,47),m.lane(2))==(73,82,71)
     assert m.notices==[0x401c68fc]*2 and m.read(selection+0x160,1)==b'\x01'
+    # Hardware reported no effective native choices travel for F..H. Their
+    # step edits still advance directly from the event's signed tick count.
+    m.no_extra_chord_travel=True
+    m.notices=[];m.encoder(6,1);m.encoder(8,1)
+    got=(m.lane(1,31),m.lane(1,47),m.lane(3,31),m.lane(3,47))
+    assert got==(68,68,3,3),got
+    assert m.notices==[0x401c68fc]*4
+    assert m.texts()[1:8:2]==['B3','+4','+9','-61']
     m.texts();assert ['shape',0x400f7df2,66,47,93,54,0xffffffff] in m.rows # NOT3 shown as the step's own
     # G's push: the held steps inherit NOT3 again. E's push leaves NOTE alone.
     m.u.mem_write(TRACKDATA+0x2c0+31,b'\x30');m.notices=[]

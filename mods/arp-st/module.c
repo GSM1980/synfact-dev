@@ -25,6 +25,7 @@ static arp_u32 arp_bound_sound[ARP_TRACKS] DATA={0};
 static unsigned char arp_lab_override[ARP_TRACKS] DATA={0};
 #include "locks.h"
 #include "chord.h"
+#include "record.c"
 /* 1.2: a sequence root plays its step's NOT2..NOT4 too (the chord page).
  * TRIG prepares each trig's event from its step; ENQUEUE and NOTE_ACCEPT then
  * see the same pointer, so the step's intervals are kept by event pointer,
@@ -183,10 +184,12 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
     if(op==ST_NATIVE_TRIG){chord_trig(a);return 0;}  /* observer: stock prepares it */
     if(op==ST_NATIVE_IMMEDIATE){
         e=(arp_u32 *)a[0];if(e[0]!=ARP_COMMAND){
-            int held;
+            int held,fresh;
             track=e[2];
             if(track>=ARP_TRACKS || e[0]>1 || e[3]!=2 ||
                (e[1]!=1 && e[1]!=2) || !eligible(track))return 0;
+            fresh=e[1]==1 && e[6]<128 &&
+                (!arp_live[track] || !(arp_voice[track].selector.mask[e[6]>>5]&(1u<<(e[6]&31))));
             restore_sound(track,e[11]?e[11]:e[10]?e[10]:*(const volatile arp_u32 *)0x43bd743cu+0x2a+track*0x123u);
             if(!arp_parameters[track].mode)return 0;
             if(arp_live[track]) {
@@ -213,6 +216,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
                 arp_live[track]=1;arp_running|=1u<<track;arp_root_lock[track].mask=0;
                 arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
             }
+            if(fresh)arp_rec_note(track,e[6]);
             /* IMMEDIATE owns a pooled input. As for POLY's consuming handler,
              * release it exactly once; outputs use ENQUEUE, avoiding recursion. */
             if(!e[0])ARP_EVENT_FREE(e);

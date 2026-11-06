@@ -26,10 +26,12 @@ is kept apart for the next root without a record, and a root with neither
 takes the track defaults. Held keyboard chords are unchanged. A track that
 has NOT2..NOT4 left from earlier POLY use now arpeggiates them.
 
-The knobs turn as the native pages' (both pages): ticks ×1, ×8 with the knob
-pressed (`400f66a2(event,1,8)`), through the stock increment with the native
-choices table `443da178` for every control. Only whole values move; partial
-travel adds up until the knob turns back. The MIDI TRIG page's table
+The knobs use native ticks ×1, ×8 with the knob pressed
+(`400f66a2(event,1,8)`). The ARP page and NOTE on the chord page pass them
+through the stock increment with choices table `443da178`; only whole values
+move, and partial travel adds up until the knob turns back. NOT2..NOT4 apply
+the signed ticks directly (1.4), because their native choices travel could
+select a step without changing the value on the instrument. The MIDI TRIG page's table
 `443da124`, first used for LEN, OFS and the chord page, gave them no travel
 at all on the unit. 1.1 used control 13h's multipliers, those of a 0..127 Sound parameter,
 and rounded any travel up to a whole value, so a slight turn moved them.
@@ -38,6 +40,21 @@ and rounded any travel up to a whole value, so a slight turn moved them.
 track model's data and notify as doubles; `tests/test_st_arp_generator_emu.py`
 runs lanes by event, defaults, the first-step static and zeroed lanes through
 the core's dispatch and pools. The instrument has not run either.
+
+## Live chord recording (1.4)
+
+The stock live recorder keeps the last key pressed on a step as NOTE and leaves
+NOT2..NOT4 inherited. With ARP active, each fresh physical note press on that
+step is captured. Once the stock recorder has written its last key, the ARP
+restores the first key as NOTE and stores the remaining keys as relative
+intervals in NOT2..NOT4, in both the UI pattern and the sequencer copy. A
+single recorded note is left alone. Releasing a key or the native priority
+resend does not add another chord note. A new step or REC off resets capture.
+
+`tests/test_st_arp_record_emu.py` executes native UI note production, the
+linked ARP fixup and sequence playback for C4–E4–G4 in TRUE/RANGE 2. The
+stock recorder's step write and model lookup are explicit doubles. Physical
+recording and the F/G/H encoder feel still need a Syntakt check.
 
 ## Pattern locks (2026-11-01)
 
