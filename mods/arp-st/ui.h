@@ -2,7 +2,7 @@
 #ifndef SYNFACT_ST_ARP_UI_H
 #define SYNFACT_ST_ARP_UI_H
 #include "arp.h"
-enum {ARP_FILL,ARP_RECT,ARP_VLINE,ARP_HLINE,ARP_PIXEL};
+enum {ARP_FILL,ARP_RECT,ARP_VLINE,ARP_HLINE,ARP_PIXEL,ARP_PATTERN};
 struct arp_canvas {
     void *context;
     void (*text)(void *,unsigned int font,int x,int y,unsigned int align,const char *);
@@ -19,4 +19,12 @@ struct arp_screen {
 /* Coordinates, primitive order and labels from DN 1.44 40051390..40051928.
  * Bitmap/font resources are supplied by the adapter; no firmware bytes here. */
 void arp_draw(const struct arp_screen *,const struct arp_canvas *);
+/* The chord page (1.2): NOTE and NOT2..NOT4 on E..H as raw lane values
+ * (chord.h), and POLY's keyboard over the chord. */
+struct arp_chord_screen {
+    unsigned int track;
+    unsigned int value[4];
+    unsigned int locked; /* NOTE, NOT2..NOT4: bits 0..3, drawn inverted */
+};
+void arp_draw_chord(const struct arp_chord_screen *,const struct arp_canvas *);
 #endif

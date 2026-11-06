@@ -26,6 +26,9 @@ static arp_u32 arp_held[2] DATA={0,0};
  * and whether an encoder edited them during this hold. */
 static arp_u32 arp_steps_held DATA=0;
 static unsigned int arp_steps_edited DATA=0;
+/* 1.2: TRIG on the open view switches page 0 (the arp) and page 1 (the
+ * chord: NOTE, NOT2..NOT4). A double tap always opens page 0. */
+static unsigned int arp_page DATA=0;
 extern int lfo3_pattern_get(void *,arp_u32,arp_u32,arp_u32);
 extern arp_u32 lfo3_pattern_set(void *,arp_u32,arp_u32,arp_u32,int);
 /* The application (4016e804) and its active track model (40019036), as
@@ -112,6 +115,61 @@ static void arp_lock_clear(unsigned int slot)
     if(done)arp_lock_mark();
     arp_lock_step=first;arp_lock_read();ARP_DIRTY(arp_view);
 }
+/* The chord page edits chord.h's lanes of the active track through the
+ * track model's native setters, which notify as the TRIG page's edits do.
+ * Without held trigs, the track defaults; with them (the native selection,
+ * as the locks above), each held step within the track length, starting from
+ * its own value or the default. */
+static volatile arp_u8 *arp_chord_data(void **track)
+{
+    void *app=arp_app(),*t=app?st_pattern_active_track(app):0;
+    if(track)*track=t;
+    return t?(volatile arp_u8 *)st_pattern_track_data(t):0;
+}
+static void arp_chord_store(void *track,unsigned int lane,unsigned int step,unsigned int value)
+{
+    static const arp_u32 set_default[4]=ST_CHORD_SET_DEFAULT,set_step[4]=ST_CHORD_SET_STEP;
+    if(step<ST_CHORD_STEPS)UI_CALL(set_step[lane],void (*)(void *,arp_u32,arp_u32))(track,step,value);
+    else UI_CALL(set_default[lane],void (*)(void *,arp_u32))(track,value);
+}
+static unsigned int arp_chord_value(const volatile arp_u8 *data,unsigned int lane,unsigned int *locked)
+{
+    unsigned int raw=arp_lock_mode?data[ST_CHORD_STEP(lane,arp_lock_step)]:ST_CHORD_INHERIT;
+    if(raw!=ST_CHORD_INHERIT){*locked|=1u<<lane;return raw;}
+    return data[ST_CHORD_DEFAULT(lane)];
+}
+static int arp_chord_edit(unsigned int lane,int delta)
+{
+    void *track;volatile arp_u8 *data=arp_chord_data(&track);
+    unsigned int i,raw,limit=lane?127u:arp_track<8?127u:84u,done=0;int n;
+    if(!data || lane>3 || !delta)return 0;
+    for(i=0;i<64;i++){
+        if(arp_lock_mode){
+            if(!(arp_held[i>>5]&(1u<<(i&31))) || i>=st_pattern_track_length(track))continue;
+            raw=data[ST_CHORD_STEP(lane,i)];
+            if(raw==ST_CHORD_INHERIT)raw=data[ST_CHORD_DEFAULT(lane)];
+        }else raw=data[ST_CHORD_DEFAULT(lane)];
+        if(lane && (!raw || raw>127u))raw=ST_CHORD_OFF;
+        n=(int)raw+delta;if(n<(lane?1:0))n=lane?1:0;if(n>(int)limit)n=(int)limit;
+        arp_chord_store(track,lane,arp_lock_mode?i:ST_CHORD_STEPS,(unsigned int)n);
+        done=1;
+        if(!arp_lock_mode)break;
+    }
+    if(done && arp_lock_mode)arp_lock_mark();
+    if(done)ARP_DIRTY(arp_view);
+    return done;
+}
+/* Encoder push with trigs held: the held steps inherit NOT2..NOT4 again. */
+static void arp_chord_clear(unsigned int lane)
+{
+    void *track;volatile arp_u8 *data=arp_chord_data(&track);unsigned int i,done=0;
+    if(!data || lane<1 || lane>3)return;
+    for(i=0;i<64;i++)if((arp_held[i>>5]&(1u<<(i&31))) && data[ST_CHORD_STEP(lane,i)]!=ST_CHORD_INHERIT){
+        arp_chord_store(track,lane,i,ST_CHORD_INHERIT);done=1;
+    }
+    if(done)arp_lock_mark();
+    ARP_DIRTY(arp_view);
+}
 static arp_u32 proxy_sound(void *proxy)
 {
     arp_u32 *vt,*inner;
@@ -152,7 +210,7 @@ static int arp_foreground(void)
 static void arp_dispose(void *v)
 {
     if(v==arp_view){arp_view=arp_manager=arp_main=0;arp_proxy=0;arp_ui_sound=0;arp_taps.pending=0;arp_length_show=0;arp_lock_mode=0;
-        arp_steps_held=0;arp_steps_edited=0;}
+        arp_steps_held=0;arp_steps_edited=0;arp_page=0;}
     UI_CALL(0x400ffdfcu,void (*)(void *))(v);
 }
 /* Key LEDs. Each UI frame (400094f4) clears the LEDs, then the view stack
@@ -176,7 +234,7 @@ static void arp_view_leds(void *handler,void *claimed,void *offered)
 {
     struct arp_settings *p=&arp_ui_parameters;
     unsigned int k,mode,palette;void *mgr;(void)claimed;(void)offered;
-    if(!arp_view || handler!=arp_view+ARP_VIEW_BYTES || arp_lock_mode || arp_recording())return;
+    if(!arp_view || handler!=arp_view+ARP_VIEW_BYTES || arp_lock_mode || arp_page || arp_recording())return;
     mgr=UI_CALL(0x4016ede0u,void *(*)(void))();
     for(k=0;k<16;k++){
         if(k>p->length){mode=1;palette=2;}
@@ -202,6 +260,8 @@ static void arp_shape(void *bmp,unsigned int kind,int x,int y,int x2,int y2,unsi
 {
     if(kind==ARP_RECT)
         UI_CALL(0x400f7bd6u,void (*)(void *,int,int,int,int,arp_u32))(bmp,x,y,x2,y2,col);
+    else if(kind==ARP_PATTERN)   /* the hatched key fill of POLY's keyboard */
+        UI_CALL(0x400f8104u,void (*)(void *,int,int,int,int,arp_u32))(bmp,x,y,x2,y2,col);
     else ARP_FILLRECT(bmp,x,y,x2,y2,col);
 }
 /* Negative of a p-locked length marker: its colour plane inverted, its mask
@@ -240,6 +300,14 @@ static void arp_view_draw(void *v,void *bmp,arp_u32 phase)
     struct arp_canvas c={bmp,arp_text,arp_shape,arp_bitmap};
     struct arp_screen s;arp_u32 first,last,count,index;char length[12];(void)phase;
     if(v!=arp_view || !arp_view)return;
+    if(arp_page){
+        struct arp_chord_screen cs;const volatile arp_u8 *data=arp_chord_data(0);unsigned int i;
+        ARP_FILLRECT(bmp,0,0,127,63,0);
+        if(!data)return;
+        cs.track=arp_track;cs.locked=0;
+        for(i=0;i<4;i++)cs.value[i]=arp_chord_value(data,i,&cs.locked);
+        arp_draw_chord(&cs,&c);return;
+    }
     first=*(const volatile arp_u32 *)0x444df618u;last=*(const volatile arp_u32 *)0x444df61cu;
     count=(last-first)/28u;if(count<24 || count>128)return;
     index=12u+((count-23u)*arp_ui_parameters.note_length>>7);
@@ -274,33 +342,45 @@ static int arp_open(void *app,arp_u32 track)
     *(const arp_u32 **)(v+ARP_VIEW_BYTES)=arp_led_vtable+2;
     *(arp_u32 *)(v+ARP_VIEW_BYTES+4)=0;*(arp_u32 *)(v+ARP_VIEW_BYTES+8)=0;
     arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;arp_view=v;arp_main=main;arp_manager=(arp_u8 *)app+0x40;arp_selected=0;
-    arp_steps_held=0;arp_steps_edited=0;arp_enc_reset();
+    arp_steps_held=0;arp_steps_edited=0;arp_page=0;arp_enc_reset();
     pair[0]=v;pair[1]=root;
     UI_CALL(0x40100bc2u,arp_u32 (*)(void *,void *,arp_u32))(arp_manager,pair,0);
     UI_CALL(0x4016dde8u,void (*)(void *))(pair+1);ARP_DIRTY(v);return 1;
 }
-/* Encoder A..F turns use the stock increment (400f68d2) with control 0x13's
- * policy, as POLY and FM TONE do. The routine keeps one 20-byte record per
- * position p at base+20*p+20, so the block holds six fields from base+20. Its
- * sub-step travel is per field and is cleared when the view opens or the
- * track changes. */
-#define ARP_ENC_FIELDS 6
+/* Encoder turns as the native pages take them (1.2). 400f66a2 scales the
+ * event's ticks by 1, or 8 with the knob pressed; the stock increment
+ * (400f68d2) turns them into travel in 1/256 of a value with the native
+ * choices table 443da178, as the native menu at 40049766 takes whole values
+ * from it, for every control. Only whole values move; the rest waits for the
+ * next turn the same way. 1.1 took control 13h's multipliers (a 0..127 Sound
+ * parameter's) and rounded any travel up to a whole value, so a slight turn
+ * moved every control. The MIDI TRIG page's table 443da124, tried for LEN,
+ * OFS and the chord page, gave them no travel at all on the unit (2026-11-06).
+ * The routine keeps one 20-byte record per position p at base+20*p+20, so the
+ * block holds eight fields from base+20 (A..F on the arp page, E..H on the
+ * chord page). Records and rests are cleared when the view opens, the track
+ * or the page changes. */
+#define ARP_ENC_FIELDS 8
+#define ARP_ENC_CHOICES 0x443da178u
 static arp_u8 arp_enc_state[20*(ARP_ENC_FIELDS+1)] DATA={0};
+static int arp_enc_rest[ARP_ENC_FIELDS] DATA={0};
 static void arp_enc_reset(void)
 {
     unsigned int i;
     for(i=0;i<sizeof(arp_enc_state);i++)((volatile arp_u8 *)arp_enc_state)[i]=0;
+    for(i=0;i<ARP_ENC_FIELDS;i++)arp_enc_rest[i]=0;
 }
 static int arp_encoder_steps(unsigned int field,const void *event)
 {
-    arp_u32 policy,increment[7],pressed,i;int delta;
-    policy=UI_CALL(0x4007b9b2u,arp_u32 (*)(arp_u32))(0x13);
-    for(i=0;i<7;i++)increment[i]=((const arp_u32 *)*(const arp_u32 *)(policy+16))[i];
-    delta=UI_CALL(0x400f66a2u,int (*)(const void *,arp_u32,arp_u32))(event,*(const arp_u32 *)(policy+4),*(const arp_u32 *)(policy+8));
+    arp_u32 pressed;int delta,steps;
+    if(field>=ARP_ENC_FIELDS)return 0;
+    delta=UI_CALL(0x400f66a2u,int (*)(const void *,arp_u32,arp_u32))(event,1,8);
     pressed=UI_CALL(0x400f66c0u,arp_u32 (*)(const void *))(event);
-    delta=UI_CALL(0x400f68d2u,int (*)(void *,arp_u32,int,void *,arp_u32))(arp_enc_state,field,delta,increment,pressed);
+    delta=UI_CALL(0x400f68d2u,int (*)(void *,arp_u32,int,arp_u32,arp_u32))(arp_enc_state,field,delta,ARP_ENC_CHOICES,pressed&255u);
     if(!delta)return 0;
-    return delta/256?delta/256:(delta<0?-1:1);
+    if((delta<0)!=(arp_enc_rest[field]<0))arp_enc_rest[field]=0;
+    arp_enc_rest[field]+=delta;steps=arp_enc_rest[field]/256;
+    arp_enc_rest[field]-=steps*256;return steps;
 }
 static int arp_edit(unsigned int field,int delta)
 {
@@ -350,6 +430,11 @@ static int arp_view_encoder(void *app,const void *event)
     int steps;
     if(!arp_foreground())return 0;
     arp_lock_sync();
+    if(arp_page){
+        /* E..H: NOTE, NOT2..NOT4, on the held steps or the track defaults. */
+        if(knob>=5 && knob<=8 && (steps=arp_encoder_steps(knob-1,event)))arp_chord_edit(knob-5,steps);
+        return 1;
+    }
     if(knob>=1 && knob<=6){
         /* One native increment per turn: held steps and locks all take it. */
         steps=arp_encoder_steps(knob-1,event);
@@ -409,9 +494,25 @@ static int arp_view_key(void *app,const void *event)
     }
     if(action==ARP_TAP_CONSUME)return 1;
     if(!arp_foreground())return 0;
-    if(key>=24 && key<=39)return arp_step_key(key,flags);
+    /* TRIG (13h) on the open view: the other page. */
+    if(key==0x13){
+        if((flags&1) && !(flags&8)){
+            arp_page^=1u;arp_steps_held=0;arp_steps_edited=0;arp_enc_reset();ARP_DIRTY(arp_view);
+        }
+        return 1;
+    }
+    /* On the chord page the trig keys stay the sequencer's: with REC, held
+     * trigs select the steps E..H edit. */
+    if(key>=24 && key<=39)return arp_page?0:arp_step_key(key,flags);
     arp_lock_sync();
     if(key==13){if(flags&1)ARP_CLOSE(arp_view);return 1;}
+    if(arp_page){
+        if(arp_lock_mode && key>=45 && key<=47){
+            if((flags&1) && !(flags&8))arp_chord_clear(key-44);
+            return 1;
+        }
+        return key==12 || (key>=14 && key<=17) || (key>=40 && key<=47);
+    }
     if(arp_lock_mode && key>=40 && key<40+ARP_LOCK_SLOTS){
         if((flags&1) && !(flags&8))arp_lock_clear(key-40);
         return 1;

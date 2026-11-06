@@ -24,6 +24,45 @@ static unsigned int arp_live[ARP_TRACKS] DATA={0};
 static arp_u32 arp_bound_sound[ARP_TRACKS] DATA={0};
 static unsigned char arp_lab_override[ARP_TRACKS] DATA={0};
 #include "locks.h"
+#include "chord.h"
+/* 1.2: a sequence root plays its step's NOT2..NOT4 too (the chord page).
+ * TRIG prepares each trig's event from its step; ENQUEUE and NOTE_ACCEPT then
+ * see the same pointer, so the step's intervals are kept by event pointer,
+ * four per track. The first step after STOP is prepared in a static event
+ * (444e2438 + 50h a track, as POLY's) that the native start copies: kept
+ * apart, it goes to the next root with no record. A root with neither takes
+ * the track defaults. Writers (TRIG) publish the pointer last. */
+struct arp_chord_record {arp_u32 event;int interval[3];unsigned int count;};
+static volatile struct arp_chord_record arp_chord_ring[ARP_TRACKS][4] DATA={{{0}}};
+static volatile struct arp_chord_record arp_chord_prep[ARP_TRACKS] DATA={{0}};
+static unsigned char arp_chord_next[ARP_TRACKS] DATA={0};
+#define ARP_PREP_EVENT(t) (0x444e2438u+(t)*0x50u)
+static void chord_trig(const arp_u32 *a)
+{
+    arp_u32 track=a[0],event=a[4];unsigned int i,count;int interval[3];
+    volatile struct arp_chord_record *r=0;
+    if(track>=ARP_TRACKS || !a[1] || !event)return;
+    count=st_chord_intervals((const volatile unsigned char *)a[1]+track*ST_CHORD_TRACK_BYTES,a[3],interval);
+    if(event==ARP_PREP_EVENT(track))r=&arp_chord_prep[track];
+    else {
+        for(i=0;i<4;i++)if(arp_chord_ring[track][i].event==event)r=&arp_chord_ring[track][i];
+        if(!r){r=&arp_chord_ring[track][arp_chord_next[track]&3u];arp_chord_next[track]++;}
+    }
+    r->event=0;
+    for(i=0;i<count;i++)r->interval[i]=interval[i];
+    r->count=count;r->event=event;
+}
+static unsigned int chord_take(arp_u32 track,const arp_u32 *e,int *interval)
+{
+    volatile struct arp_chord_record *r=0;unsigned int i,count;
+    const volatile unsigned char *sequence=*(const volatile unsigned char *const volatile *)0x43bd7430u;
+    for(i=0;i<4;i++)if(arp_chord_ring[track][i].event==(arp_u32)e)r=&arp_chord_ring[track][i];
+    if(!r && arp_chord_prep[track].event)r=&arp_chord_prep[track];
+    if(!r)return sequence?st_chord_intervals(sequence+track*ST_CHORD_TRACK_BYTES,ST_CHORD_STEPS,interval):0;
+    count=r->count;
+    for(i=0;i<count;i++)interval[i]=r->interval[i];
+    r->event=0;return count;
+}
 static const volatile arp_u32 *held_notes(unsigned int track)
 {return (const volatile arp_u32 *)(0x4553f6e0u+track*0x2e18u);}
 static int arp_native(arp_u32,const arp_u32 *,arp_u32 *);
@@ -65,7 +104,7 @@ static void interest(void)
 {
     /* A newly loaded Sound can enable ARP before any page has been opened. */
     arp_u32 mask=(1u<<ST_NATIVE_IMMEDIATE)|(1u<<ST_NATIVE_HEADER_LOAD)|(1u<<ST_NATIVE_HEADER_RESET)|
-        (1u<<ST_NATIVE_SOUND_META)|(1u<<ST_NATIVE_NOTE_ACCEPT);
+        (1u<<ST_NATIVE_SOUND_META)|(1u<<ST_NATIVE_NOTE_ACCEPT)|(1u<<ST_NATIVE_TRIG);
     arp_host->native_interest((void (*)(void))arp_native,mask);
 }
 /* UI/test entry. Publication uses the existing native exclusion and private
@@ -141,6 +180,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
 {
     arp_u32 *e,before;const struct arp_settings *p;unsigned int i,track;
     if(op==ST_NATIVE_SOUND_META){arp_sound_meta(a);changed_sound(a);return 0;}
+    if(op==ST_NATIVE_TRIG){chord_trig(a);return 0;}  /* observer: stock prepares it */
     if(op==ST_NATIVE_IMMEDIATE){
         e=(arp_u32 *)a[0];if(e[0]!=ARP_COMMAND){
             int held;
@@ -246,7 +286,10 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
      * track. The native gate release (400a5708) is applied by the audio
      * engine after that output and silenced the new root (LEN = the loop). */
     if(arp_voice[track].source)stop_quiet(track);
-    i=arp_runtime_start(&arp_voice[track],&effective,e,a[2],arp_generation[track],0,0);
+    {
+        int chord[3];unsigned int notes=chord_take(track,e,chord);
+        i=arp_runtime_start(&arp_voice[track],&effective,e,a[2],arp_generation[track],notes?chord:0,notes);
+    }
     if(!i)return 0;
     arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
     arp_running|=1u<<track;before=arp_voice[track].dropped;

@@ -253,10 +253,28 @@ def verify(core,bank,out):
     assert q.word(q.sym['arp_generation'])==generation and q.pool_counts()!=base
     q.frame(4320000);assert len(q.log)==2 and q.log[-1]['time']==4320000
     q.configure(mode=0);assert q.pool_counts()==base
+    # 1.2: a sequence root plays its step's NOT2..NOT4. TRIG (observed, never
+    # consumed) records them by event; NOTE_ACCEPT hands them to the runtime.
+    def trig(q,step,event,track=0):
+        q.u.mem_write(W+0x200,struct.pack('>6I',track,SEQ,KIT,step,event,0))
+        assert q.call('arp_native',0,W+0x200,W+0x240)==0
+    lane=lambda track,n,step:SEQ+track*0x499+0x2c0+n*0x40+step
+    for case,setup,expected in [
+            ('step lanes by event',lambda q,e:(q.u.mem_write(lane(0,1,3),b'\x44'),q.u.mem_write(lane(0,2,3),b'\x47'),trig(q,3,e)),[60,64,67,60]),
+            ('track defaults without a record',lambda q,e:q.u.mem_write(SEQ+0x3c6,b'\x4c'),[60,72,60,72]),
+            ('first-step static',lambda q,e:(q.u.mem_write(lane(0,3,0),b'\x3b'),trig(q,0,0x444e2438)),[55,60,55,60]),
+            ('zeroed lanes add nothing',lambda q,e:trig(q,5,e),[60,60,60,60])]:
+        q=Machine(core,bank);base=q.pool_counts();q.configure(range_=0)
+        q.u.mem_write(SEQ,bytes(0x499));q.u.mem_write(SEQ+0x2c0,b'\xff'*256)
+        e,_=q.event(length=0);setup(q,e)
+        for t in (0,5400000,10800000,16200000):q.frame(t)
+        assert [x['pitch'] for x in q.log]==expected,(case,q.log)
+        assert q.configure(mode=0)==1 and q.pool_counts()==base
+        failures.append('chord: '+case)
     result=dict(ok=True,native_pool_counts=initial,notes=m.log,limits=[
         'Native core dispatch, allocation/copy/free, lock refs, queue, pitch/gate run as target code.',
         'Sound publication, smoothing and parameter-lock application are explicit boundaries; no audio synthesis or device test.',
-        'This fixture covers sequence roots; standalone held keyboard chords are checked separately. Temporary pooled Sounds and native chord lanes remain outside this fixture; persistence has a separate fixture.'],
+        'This fixture covers sequence roots; standalone held keyboard chords are checked separately. Native chord lanes are read from a sequence fixture (TRIG observed by direct call); temporary pooled Sounds remain outside this fixture; persistence has a separate fixture.'],
         failure_cases=failures,frame_callback_instructions=dict(off=off,active_not_due=idle,due_with_native_pool_copy_queue=due),device_access=False)
     out.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
 

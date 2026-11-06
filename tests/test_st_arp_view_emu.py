@@ -14,12 +14,12 @@ from unicorn.m68k_const import UC_M68K_REG_A7
 APP,MAIN,MODEL,NODE,EV,ROOT,BMP,VECTOR=0x49011000,0x49012000,0x49012400,0x49012500,0x49012600,0x49013000,0x49014000,0x49015000
 PARAM,PROXY,PVT,INNER,IVT=0x49018000,0x49018100,0x49018200,0x49018300,0x49018400
 GET_SOUND,NOTIFY=RET+0x200,RET+0x204
-# Control policy (0x13) and the encoder natives. The real policy record is built at boot
-# from the core's object table, which this harness does not run; the increment table itself
-# is a zero fixture. The natives' lifecycle is what this test checks: a turn is one detent,
-# 256 sub-steps per detent. The acceleration curve is not modelled; it is verified on the
-# instrument (see the arp commit message).
-POLICY,INCREMENTS=0x49019000,0x4901a000
+# The encoder natives as the native pages call them (1.2): 400f66a2 with ticks x1 (x8
+# pressed), 400f68d2 with the choices table 443da178 for every control (the values table
+# 443da124 gave LEN, OFS and the chord page no travel on the unit). Both are explicit
+# doubles: a tick is self.travel sub-steps (256 = one value by default). The table is built
+# at boot and the acceleration curve is not modelled; the feel is checked on the instrument.
+CHOICES=0x443da178
 
 class ViewMachine(Machine):
     def __init__(self,core,bank):
@@ -49,11 +49,13 @@ class ViewMachine(Machine):
         if pc==0x4001ff74:assert self.args(1)==(MODEL,);self.ret(self.track);return
         if pc==0x4001c422:
             assert self.args(3)==(MODEL+0x40,0x60,0xffffffff);self.ret(PROXY);return
-        if pc==0x4007b9b2:assert self.args(1)==(0x13,);self.w(POLICY+16,INCREMENTS);self.ret(POLICY);return
-        if pc==0x400f66a2:ev,_,_=self.args(3);self.ret(self.word(ev+16));return
+        if pc==0x400f66a2:
+            ev,normal,pressed=self.args(3);assert (normal,pressed)==(1,8),(normal,pressed)
+            self.ret(self.word(ev+16));return
         if pc==0x400f68d2:
-            _,_,delta,_,_=self.args(5);delta=delta-(1<<32) if delta>>31 else delta
-            self.ret(delta*256);return # 256 sub-steps per detent, as arp_encoder_steps reads them
+            _,field,delta,table,pressed=self.args(5);delta=delta-(1<<32) if delta>>31 else delta
+            assert table==CHOICES and pressed<256,(field,hex(table))
+            self.ret(delta*getattr(self,'travel',256));return
         if pc==GET_SOUND:
             assert self.args(1)==(INNER,);self.ret(KIT+0x2a+self.track*0x123);return
         if pc==NOTIFY:
@@ -262,8 +264,97 @@ def resources(donor,core):
     for a,z in [(0x40255b58,0x402eaad4),(0x40255aec,0x402d736c)]:assert d[a-b:a-b+108]==s[z-b:z-b+108]
     return rows
 
+TRACKDATA,TVT=0x4901e000,0x4901f000
+TDATA,TNOTIFY=RET+0x208,RET+0x20c
+
+class ChordViewMachine(LockViewMachine):
+    """1.2 chord page. The native track-model setters (4002755x..400282e8) and
+    their notification descriptors execute; the active track model's data
+    accessor (+28h) and notify (+10h) are explicit doubles."""
+    def __init__(self,core,bank):
+        super().__init__(core,bank);self.notices=[]
+        self.w(MODEL,TVT);self.w(TVT+0x28,TDATA);self.w(TVT+0x10,TNOTIFY)
+        self.u.mem_write(TDATA,b'\x4e\x75');self.u.mem_write(TNOTIFY,b'\x4e\x75')
+        data=bytearray(0x499);data[0x2c0:0x3c0]=b'\xff'*256;data[0x3c5:0x3c9]=bytes([60,64,71,0])
+        self.u.mem_write(TRACKDATA,bytes(data))
+    def lane(self,n,step=None):return self.read(TRACKDATA+(0x3c5+n if step is None else 0x2c0+n*0x40+step),1)[0]
+    def code(self,u,pc,n,ctx):
+        if self.ready:
+            if pc==TDATA:assert self.args(1)==(MODEL,);self.ret(TRACKDATA);return
+            if pc==TNOTIFY:
+                track,notice=self.args(2);assert track==MODEL
+                self.notices.append(self.word(notice));self.ret();return
+            if pc==0x400f8104:self.rows.append(['shape',pc,*self.args(6)[1:]]);self.ret();return
+        return super().code(u,pc,n,ctx)
+    def texts(self):
+        self.rows=[];self.call('arp_view_draw',ROOT+16,BMP,0)
+        return [r[-1] for r in self.rows if r[0]=='text']
+
+def chord_page(core,bank):
+    m=ChordViewMachine(core,bank);page=lambda:m.word(m.sym['arp_page'])
+    m.key(0x13,1,0);m.key(0x13,16,10);m.key(0x13,1,100);m.key(0x13,16,110)
+    assert page()==0 and 'T1 ARPEGGIATOR' in m.texts()
+    # TRIG on the open view switches page; press and release are both consumed.
+    assert m.key(0x13,1,200)==1 and m.key(0x13,16,210)==1 and page()==1
+    t=m.texts();assert t[:9]==['T1 ARP CHORD','C4','NOTE','OFF','NOT2','+7','NOT3','OFF','NOT4'],t
+    keys=[r for r in m.rows if r[0]=='shape' and r[1]==0x400f8104]
+    assert len(keys)==2,keys # C4 and G4, hatched
+    # E..H edit the track defaults through the native setters; A..D do nothing.
+    base=m.read(m.sym['arp_parameters'],24)
+    for knob in (1,2,3,4):assert m.encoder(knob,3)==1
+    assert m.read(m.sym['arp_parameters'],24)==base and not m.notices
+    m.encoder(6,3);m.encoder(5,-1);m.encoder(8,-200)
+    assert (m.lane(0),m.lane(1),m.lane(3))==(59,67,1),(m.lane(0),m.lane(1),m.lane(3))
+    assert m.notices==[0x401c690c]*3
+    assert m.texts()[1:8:2]==['B3','+3','+7','-63'] # the lowest step is raw 1; 0 is OFF
+    m.encoder(8,1);assert m.lane(3)==2 and m.texts()[7]=='-62'
+    # The arp page's keys do nothing here; the trig keys stay the sequencer's.
+    assert m.key(12,1,220)==1 and m.key(16,1,221)==1 and m.read(m.sym['arp_parameters'],24)==base
+    assert m.key(24,1,230)==0 and m.key(24,16,231)==0
+    # Held trigs (REC): each held step from its own value or the default.
+    selection=W+0x1500;m.w(PARAM+0x6c,selection)
+    m.u.mem_write(selection+0x161,b'\x01');m.u.mem_write(selection+0x168,b'\x01')
+    m.w(selection+0x158,1<<15);m.w(selection+0x15c,1<<31) # steps 48 and 32
+    m.u.mem_write(TRACKDATA+0x2c0+2*0x40+47,b'\x50')
+    m.notices=[];m.encoder(7,2)
+    assert (m.lane(2,31),m.lane(2,47),m.lane(2))==(73,82,71)
+    assert m.notices==[0x401c68fc]*2 and m.read(selection+0x160,1)==b'\x01'
+    m.texts();assert ['shape',0x400f7df2,66,47,93,54,0xffffffff] in m.rows # NOT3 shown as the step's own
+    # G's push: the held steps inherit NOT3 again. E's push leaves NOTE alone.
+    m.u.mem_write(TRACKDATA+0x2c0+31,b'\x30');m.notices=[]
+    assert m.key(46,1,240)==1 and m.lane(2,31)==255 and m.lane(2,47)==255 and m.notices==[0x401c68fc]*2
+    assert m.key(44,1,241)==1 and m.lane(0,31)==0x30
+    # Back to the arp page; a reopened view starts there.
+    m.u.mem_write(selection+0x160,b'\x00');m.w(selection+0x158,0);m.w(selection+0x15c,0)
+    assert m.key(0x13,1,300)==1 and m.key(0x13,16,301)==1 and page()==0
+    m.key(0x13,1,310);m.key(0x13,16,311);assert page()==1
+    assert m.key(13,1,320)==1;m.dispose();assert page()==0
+    m.key(0x13,1,400);m.key(0x13,16,410);m.key(0x13,1,500);m.key(0x13,16,510)
+    assert page()==0 and m.word(m.sym['arp_view'])
+    return ['TRIG switches pages, both edges consumed','NOTE/NOT2..NOT4 drawn with the keyboard',
+            'E..H through the native default setters; A..D, YES and arrows inert; trig keys pass',
+            'held trigs: native step setters from each step value or default, selection marked, value inverted',
+            'G push clears held steps; E push leaves NOTE','reopen starts on the arp page']
+
+def encoder_travel(core,bank):
+    """1.2: only whole values move; partial travel adds up in the same direction."""
+    m=ViewMachine(core,bank);p=m.sym['arp_parameters']
+    m.key(0x13,1,0);m.key(0x13,16,10);m.key(0x13,1,100);m.key(0x13,16,110)
+    m.travel=100;mode=lambda:m.read(p,1)[0]
+    assert mode()==0
+    m.encoder(1,1);m.encoder(1,1);assert mode()==0  # 200/256 of a value
+    m.encoder(1,1);assert mode()==1                 # 300: one value, 44 left
+    m.encoder(1,-1);m.encoder(1,-1);assert mode()==1  # turning back drops the rest
+    m.encoder(1,-1);assert mode()==0
+    m.travel=256;m.encoder(2,1);assert m.read(p+1,1)[0]==10  # SPEED 9 -> 10
+    m.travel=600;m.encoder(4,1);assert m.read(p+3,1)[0]==32  # LEN 30 -> 32, 88 left
+    m.encoder(4,1);assert m.read(p+3,1)[0]==34
+    m.configure(mode=0);m.dispose()
+    return ['ticks x1 (x8 pressed) through the native choices table, every control',
+            'whole values only; partial travel adds up, reversing drops it']
+
 def verify(core,bank,donor,out):
-    lock_editing(core,bank);steps=step_editing(core,bank)
+    lock_editing(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank)
     fonts=resources(donor,core);m=ViewMachine(core,bank);initial=m.pool_counts()
     assert not m.key(0x13,1,0) and not m.key(0x13,16,10)
     assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
@@ -335,7 +426,7 @@ def verify(core,bank,donor,out):
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
     binding=native_key_binding(core,bank)
-    result=dict(ok=True,fonts=fonts,key_binding=binding,step_editing=steps,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
+    result=dict(ok=True,fonts=fonts,key_binding=binding,step_editing=steps,chord_page=chord,encoder_travel=travel,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
         lifecycle=['double tap opens with MODE OFF','encoders A..F clamp','selected step/mute','modal priority',
                    'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',
                    'native STOP passes','NO closes without disabling','destructor/reopen','failed opening preserves native release',

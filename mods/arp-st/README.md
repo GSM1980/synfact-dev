@@ -1,5 +1,44 @@
 # Digitone ARP → Syntakt: experimental source port
 
+## Chord page (1.2)
+
+With the ARP view open, TRIG switches between the arp page and a chord page;
+a double tap always opens the arp page. The chord page has **E: NOTE,
+F/G/H: NOT2/NOT3/NOT4** and POLY's keyboard over the chord. They are the
+pattern's own trig NOTE and chord lanes, the ones POLY plays (`chord.h`), so
+they need no new storage and are saved with the pattern. Without held trigs,
+E..H edit the track defaults; with REC and held trigs, each held step within
+the track length, starting from its own value or the default, shown inverted
+while the first held step has its own. F..H's push makes the held steps
+inherit again. A..D, YES and the arrows do nothing on this page; the trig keys
+and their LEDs stay the sequencer's. NOTE reads 60 as C4; NOT2..NOT4 read as
+semitones, OFF at 0 and at raw 0 (see `chord.h`).
+
+Edits go through the track model's native setters (`40027552..400276de` for
+the defaults, `4002817a..400282e8` for a step), the TRIG page's own, which
+notify the model as its edits do and refuse steps past the track length.
+
+A sequence root plays its step's NOT2..NOT4 too: the arp holds the root and
+those notes, in that order. ARP observes TRIG without consuming it and keeps
+each trig's intervals by its prepared event, which ENQUEUE and NOTE_ACCEPT
+see again; the first step after STOP (a static event the native start copies)
+is kept apart for the next root without a record, and a root with neither
+takes the track defaults. Held keyboard chords are unchanged. A track that
+has NOT2..NOT4 left from earlier POLY use now arpeggiates them.
+
+The knobs turn as the native pages' (both pages): ticks ×1, ×8 with the knob
+pressed (`400f66a2(event,1,8)`), through the stock increment with the native
+choices table `443da178` for every control. Only whole values move; partial
+travel adds up until the knob turns back. The MIDI TRIG page's table
+`443da124`, first used for LEN, OFS and the chord page, gave them no travel
+at all on the unit. 1.1 used control 13h's multipliers, those of a 0..127 Sound parameter,
+and rounded any travel up to a whole value, so a slight turn moved them.
+
+`tests/test_st_arp_view_emu.py` runs the page on the real setters with the
+track model's data and notify as doubles; `tests/test_st_arp_generator_emu.py`
+runs lanes by event, defaults, the first-step static and zeroed lanes through
+the core's dispatch and pools. The instrument has not run either.
+
 ## Pattern locks (2026-11-01)
 
 ARP now uses the shared pattern-lock service hosted by `lfo3-st`; both modules
@@ -79,8 +118,8 @@ No physical instrument or full scheduler test is implied by these fixtures.
 This is an **experimental SMZ module**, OFF at startup, for twelve independent
 audio tracks (eight digital, four analog), fed by sequence roots or held keyboard notes. Double tap on the TRIG parameter button opens a native
 IView with the Sound settings; a new Sound keeps MODE OFF. The selector,
-native event generator, clock and view are connected. This is an experimental hardware-test candidate: native sequencer chord lanes
-remain incomplete. Sound persistence uses the shared lifecycle
+native event generator, clock and view are connected. This is an experimental hardware-test candidate; since 1.2 sequence roots
+play their native chord lanes (the chord page above). Sound persistence uses the shared lifecycle
 adapter and needs a physical save/reload/reboot check. The ARP is monophonic and works without POLY;
 it never reserves other tracks. Each audio track has one ARP.
 
@@ -159,9 +198,9 @@ The queue adapter checks for a free bucket or matching timestamp before calling
 the native allocator (which otherwise spins on exhaustion). Later allocation or
 queue failures roll back references and recover at the next division without a
 burst. IRQ uses bounded native pools; it does not allocate from the general heap,
-wait, perform IO or draw. The module currently supplies a root plus octave/step
-offsets for sequence roots. Held keyboard chords are connected independently;
-native sequencer chord lanes are not wired.
+wait, perform IO or draw. The module supplies a root, its step's NOT2..NOT4
+(1.2) and octave/step offsets for sequence roots. Held keyboard chords are
+connected independently.
 Output gates use `length.c` arithmetic matching the original Digitone producer,
 clipped to a finite parent's remaining duration. A native-zero infinite parent
 keeps the sequence active; each output has its own LEN gate. Zero/-1 parent
