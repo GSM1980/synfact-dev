@@ -1,4 +1,4 @@
-# SP sample machines 1.1
+# SP sample machines 1.2
 
 Four source-built sample machines for Syntakt and its explicit AUDIO companion.
 Banks 0.9 and later require the existing UI API 7 and module API 3 for guarded native-view
@@ -84,17 +84,23 @@ while the popup shows **SAMP = selected sample name**, or NO SAMPLE for an empty
 slot. PLAY's popup shows REVERSE, REVERSE LOOP, FORWARD LOOP or FORWARD;
 WERP MODE uses the same names. Bank 0.4 needs core 0.8.1 for the corrected
 popup route and separate control/popup context. BR stays the discrete
-**0..127** control. OVER uses the native drive path.
+**0..127** control. OVER shapes the sampler's PCM before the native
+filter/amp/mixer path.
 
 In 1.1, BR quantizes positive and negative PCM symmetrically, preserving
 silence. Its 0..127 curve removes bits faster in the lower half of the knob;
 zero remains a bypass and 127 keeps the existing two-bit endpoint. This curve
 is an approximation because the Digitakt mk1 DSP mapping is unpublished and
-no matching device recording is available. OVER now passes the knob value to
-the drive word actually consumed by the native Syntakt AUDIO routine. Stock
-waveforms get a whole-sample preview on the first UI visit and later refine
-to exact peaks. Hardware listening and intermittent waveform reproduction are
-still needed to confirm the user-facing behavior.
+no matching device recording is available. Stock waveforms get a whole-sample
+preview on the first UI visit and later refine to exact peaks.
+
+In 1.2, OVER uses a bounded, symmetric soft clip on the sampler PCM. Zero is
+an exact bypass and does not change the track level. The common AUDIO word
+previously used for OVER is an output gain: at zero it silenced the sample.
+It is fixed at its unity value while OVER shapes the signal before the native
+filter, amp and mixer. This curve is source-built and is not claimed to match
+TwinShot's internal overdrive exactly. Hardware listening and intermittent
+waveform reproduction are still needed to confirm the user-facing behavior.
 
 ONE SHOT START/LEN/LOOP and REPITCH START/LEN use **0.00..120.00**, with the
 native fractional encoder policy and Q8 display (for example 101.94). WERP SEG

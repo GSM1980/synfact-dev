@@ -72,5 +72,15 @@ int main(void)
     assert(out[0]>0 && out[0]<12345*65536);expected=(unsigned)out[0];
     s=fresh(8192,3);sp_window(&s,0,8192,0,3,1);s.br=64;
     sp_pcm(&s,out);assert(out[0]>0 && (unsigned)out[0]<=expected);
+    /* OVER=0 must preserve audible PCM. At maximum the larger sample is
+     * compressed relative to the smaller one, proving a nonlinear drive
+     * rather than a volume multiplier. */
+    pcm[0]=4096;pcm[1]=16384;pcm[2]=-4096;pcm[3]=-16384;
+    s=fresh(8192,3);sp_window(&s,0,8192,0,3,1);
+    sp_pcm(&s,out);assert(out[0]==4096*65536 && out[1]==16384*65536);
+    s=fresh(8192,3);s.control[7]=0x7f00;sp_window(&s,0,8192,0,3,1);
+    sp_pcm(&s,out);assert(out[0]>4096*65536 && out[1]>out[0]);
+    assert(out[0]==-out[2] && out[1]==-out[3]);
+    assert(out[1]/65536<4*(out[0]/65536));
     puts("PASS: source PCM, forward/reverse/loop/fractional bounds, long scaling, REPITCH, SLICE and WERP");return 0;
 }

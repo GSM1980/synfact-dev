@@ -106,17 +106,17 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
             new_section=audio_section(out/'synfact-machines.smz4')
             old_section=audio_section(oldbank)
             if sampler_audio_changed:
-                sys.path.insert(0,str(ROOT))
-                from elekloader.sdk import elf
-                def fm_start(folder):
-                    image=elf.Elf.load(folder/'synfact-machines.work/audio.elf')
-                    return next(s.value for s in image.symbols if s.name=='fm_core')-0x4204f750
-                boundary=fm_start(out)
-                assert boundary==fm_start(previous)
-                assert len(new_section)==len(old_section) and new_section!=old_section
-                assert new_section[boundary:]==old_section[boundary:]
-                assert new_section[80:480]==old_section[80:480]
-                checks.append({'name':'sampler AUDIO changed; FM and following AUDIO identical','ok':True})
+                current=json.loads((out/'synfact-machines.smz4.json').read_text())
+                baseline=json.loads((previous/'synfact-machines.smz4.json').read_text())
+                def audio_objects(report):
+                    return {Path(name).name:digest for name,digest in report['object_sha256'].items()
+                            if Path(name).name.startswith('audio') and Path(name).suffix=='.o'}
+                new_objects,old_objects=audio_objects(current),audio_objects(baseline)
+                assert current['machines']==baseline['machines'] and current['modules']==baseline['modules']
+                assert new_section!=old_section and new_objects.keys()==old_objects.keys()
+                assert new_objects['audio0-0.o']!=old_objects['audio0-0.o']
+                assert all(new_objects[name]==old_objects[name] for name in new_objects if name!='audio0-0.o')
+                checks.append({'name':'sampler AUDIO changed; other AUDIO objects identical','ok':True})
             else:
                 assert new_section==old_section
                 checks.append({'name':'FM/SP AUDIO bank identical to previous build','ok':True})
@@ -134,7 +134,7 @@ if __name__=='__main__':
     p.add_argument('--audio-companion-changed',action='store_true',
         help='the core AUDIO companion intentionally changed: compare outside its declared window only')
     p.add_argument('--sampler-audio-changed',action='store_true',
-        help='sampler DSP changed: compare FM and later AUDIO byte for byte')
+        help='sampler DSP changed: compare all other AUDIO objects byte for byte')
     a=p.parse_args()
     window=None
     if a.audio_companion_changed:

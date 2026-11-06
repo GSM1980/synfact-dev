@@ -70,16 +70,16 @@ static void advance(struct sp_state *s,sp_u32 fade)
         }else s->frame-=whole;
     }
 }
-static sp_s32 reduce_bits(int v,sp_u32 removed)
+static int reduce_bits(int v,sp_u32 removed)
 {
     sp_u32 magnitude;
-    if(!removed)return (sp_s32)v*65536;
+    if(!removed)return v;
     /* Masking a two's-complement negative value rounds it away from zero:
      * at two bits, -1 becomes -16384 while +1 becomes 0. Quantize the
      * magnitude instead so silence stays silence and both signs match. */
     magnitude=(sp_u32)(v<0?-v:v);
     magnitude=(magnitude>>removed)<<removed;
-    return (v<0?-(sp_s32)magnitude:(sp_s32)magnitude)*65536;
+    return v<0?-(int)magnitude:(int)magnitude;
 }
 static sp_u32 bit_reduction(sp_u32 br)
 {
@@ -90,9 +90,20 @@ static sp_u32 bit_reduction(sp_u32 br)
     br=sp_min(br,127);
     return (br*(254-br)*14+8064)/16129;
 }
+static int overdrive(int v,sp_u32 gain)
+{
+    int x,absolute;
+    if(gain==256)return v;
+    /* The native SRC word +50 is an output gain, not a dry-to-drive control:
+     * zeroing it silences the entire track. Apply a bounded soft clip to our
+     * own PCM instead. The division stays 32-bit on MCF54415. */
+    x=(v*(int)gain)>>8;absolute=x<0?-x:x;
+    return (x*4096)/(4096+(absolute>>3));
+}
 void sp_pcm(struct sp_state *s,sp_s32 *out)
 {
-    sp_u32 i,width=0,span,at,weight,removed=bit_reduction(s->br);int v,other;
+    sp_u32 i,width=0,span,at,weight,removed=bit_reduction(s->br);
+    sp_u32 gain=256+(sp_min(s->control[7]>>8,127)*1792)/127;int v,other;
     if(s->play==1 || s->play==2){
         span=s->end>s->loop?s->end-s->loop:0;
         width=sp_min(span/10,(240u*sp_min(s->step,0x100000u))>>12);
@@ -110,7 +121,8 @@ void sp_pcm(struct sp_state *s,sp_s32 *out)
             weight=((width-at)<<12)-s->fraction;weight=sp_min(weight*8/width,32768);
             v+=((other-v)*(int)weight)>>15;
         }
-        out[i]=reduce_bits(v,removed);advance(s,width);
+        out[i]=(sp_s32)overdrive(reduce_bits(v,removed),gain)*65536;
+        advance(s,width);
     }
 }
 static int track(const void *v)
@@ -139,10 +151,9 @@ void sp_update(sp_u32 kind,sp_u32 pitch,void *voice,const unsigned short *params
     for(i=0;i<71;i++)native[i]=params[i];
     native[0x12]=s->control[0];native[0x13]=0x4000;native[0x14]=0x4000;
     native[0x15]=0;native[0x16]=0x4000;native[0x17]=0x4000;native[0x18]=0;
-    /* The stock AUDIO drive consumer reads word 0x19 (params + 50). Word
-     * 0x1a is beyond its 0x34-byte SRC packet, so writing OVER there left
-     * the real drive stuck at 127 regardless of the knob. */
-    native[0x19]=s->control[7];
+    /* The common AUDIO word +50 is output gain. Keep it at unity; OVER is
+     * shaped in sp_pcm so its zero setting leaves the sample audible. */
+    native[0x19]=0x7f00;
     if(kind==SP_SLICE && !(s->control[4]>>8))note=60u<<16;
     ((void (*)(sp_u32,void *,const void *))0x400097dcu)(note,voice,native);
     s->step=sp_min(v[0x6c8/4],0x100000u);s->br=sp_min(s->control[2]>>8,127);
