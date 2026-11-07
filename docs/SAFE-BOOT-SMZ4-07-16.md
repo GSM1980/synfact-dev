@@ -39,7 +39,7 @@ explicit release identity, not a hash automatically derived from every source
 change. Do not mark 07 or 16 complete before physical power-loss, rollback and
 both update-order tests.
 
-## Current behavior and gaps (2026-11-07)
+## Baseline before core 1.5 (2026-11-07)
 
 - `/mods` is one opaque file at `0x02400000..0x03400000`, with one length/CRC metadata sector at `0x03400000` (`mods/core-st/storage.c`, `STORAGE.md`). Upload invalidates the previous record **before** writing; interruption leaves no bank. A completed upload replaces the only copy. `mods.py` and the site read the bytes back, but this proves transfer integrity, not boot safety.
 - `core_machine_load` validates the disk file, validates its RAM copy again, relocates it and only then calls machine initializers and `core_modules_bind` (`mods/core-st/machine-boot.c`). Missing/corrupt/unknown feature banks are skipped; stock machines continue. The parser checks bounds, checksums, pointers, event IDs and the general `0x454c0001` ABI (`mods/core-st/smz.c`). This is a valuable first barrier.
