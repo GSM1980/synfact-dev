@@ -11,6 +11,8 @@ and change with the code, so a commit's docs match its code.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
+- **[Safe core/SMZ4 startup proposal](SAFE-BOOT-SMZ4-07-16.md)**: compatibility
+  checks, trial installation and rollback for issues 07 and 16.
 
 ## Writing mods
 
