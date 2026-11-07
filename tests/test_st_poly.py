@@ -58,14 +58,14 @@ def verify(folder,synfact=None):
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
     names+=['core_parameter_provider_set','core_native','core_sample_pool_api']
-    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',13,*[address(n) for n in names])
+    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',14,*[address(n) for n in names])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
     native_sites=[s for s in manifest['sites'] if s['target'].startswith('core_native_')]
-    assert len(native_sites)==13 and len(manifest['sites'])==102 and len(manifest['collections'])==16
+    assert len(native_sites)==14 and len(manifest['sites'])==106 and len(manifest['collections'])==16
     assert any(s['addr']=='0x400a423e' and s['target']=='core_native_note_accept' for s in native_sites)
     for site in native_sites:
         assert read(int(site['addr'],16),6)==struct.pack('>HI',0x4eb9 if site['op']=='jsr' else 0x4ef9,address(site['target']))

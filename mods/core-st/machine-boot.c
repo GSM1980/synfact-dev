@@ -3,6 +3,7 @@
  * native project/sample startup. Never writes eMMC or the boot firmware.
  */
 #include "machines.h"
+#include "boot-preimages.h"
 typedef st_u32 u32;typedef core_u8 u8;
 extern int fw_mmc_read(u32,u32,void *);
 extern u32 fw_mmc_ready[],fw_mmc_sectors[];
@@ -114,6 +115,11 @@ preflight:
     reader.context=file;reader.read=core_smz_memory_read;
     core_machine_status=2;if(!core_smz_validate(&reader,&again))goto reject;
     if(again.contract!=CORE_SMZ_CONTRACT){core_machine_status=10;goto reject;}
+    if(again.nmods &&
+       (again.info==CORE_SMZ_NONE ||
+        !core_boot_preimages_ok(file+again.image+again.info))){
+        core_machine_status=11;goto reject;
+    }
     if(trial && !core_mods_transition_io(&storage,chosen.slot,
                  CORE_MODS_CANDIDATE,CORE_MODS_TRYING))goto reject;
     core_smz_relocate(file,&again);

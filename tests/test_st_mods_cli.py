@@ -36,9 +36,16 @@ class ModsCLI(unittest.TestCase):
 
     def test_upload_and_failed_readback_close_port(self):
         with tempfile.TemporaryDirectory() as tmp:
-            source=Path(tmp)/'bank.smz4';source.write_bytes(b'bank\x80\xff')
+            source=Path(tmp)/'bank.smz4'
+            bank=bytearray(80);bank[:4]=b'SAFE'
+            struct.pack_into('>I',bank,24,16)
+            struct.pack_into('>I',bank,64,mods.CONTRACT)
+            source.write_bytes(bank)
             for readback in (source.read_bytes(),b'wrong'):
                 transport=MagicMock();client=MagicMock();client.read.return_value=readback
+                status=bytearray(128);struct.pack_into('>I',status,0,0x454c5331)
+                struct.pack_into('>I',status,88,mods.CONTRACT)
+                client.read.side_effect=[bytes(status),readback]
                 with patch.object(mods,'MidiTransport',return_value=transport) as opened, \
                      patch.object(mods,'DataClient',return_value=client),redirect_stdout(StringIO()):
                     args=['--port','Syntakt test','put',str(source),'--yes-write-device']
@@ -46,8 +53,9 @@ class ModsCLI(unittest.TestCase):
                     else:
                         with self.assertRaisesRegex(RuntimeError,'readback differs'):mods.main(args)
                     opened.assert_called_once_with('Syntakt test')
-                    client.write.assert_called_once_with('/mods',source.read_bytes())
-                    client.read.assert_called_once_with('/mods')
+                    client.write.assert_called_once_with('/mods-stage',source.read_bytes())
+                    self.assertEqual(client.read.call_args_list[0].args,('/mod-status',))
+                    self.assertEqual(client.read.call_args_list[1].args,('/mods-stage',))
                     transport.close.assert_called_once()
 
     def test_rejected_requests_never_open_port(self):
@@ -57,7 +65,7 @@ class ModsCLI(unittest.TestCase):
                 for args in (['put',str(source)],['get','--out',str(source)],
                              ['--block','1','put',str(source),'--yes-write-device']):
                     with self.assertRaises(SystemExit):mods.main(args)
-                with patch.object(mods,'MAX_BYTES',3):
+                with patch.object(mods,'SLOT_CAP',3):
                     with self.assertRaises(SystemExit):
                         mods.main(['put',str(source),'--yes-write-device'])
                 opened.assert_not_called()

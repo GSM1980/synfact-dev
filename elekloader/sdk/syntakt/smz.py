@@ -21,7 +21,7 @@ from ...devices.syntakt import DEVICE
 import hashlib
 
 ABI=0x454c0001
-CONTRACT=0x53594601  # exact resident core/SMZ contract, mods/core-st/smz.h
+CONTRACT=0x53594602  # exact resident core/SMZ contract, mods/core-st/smz.h
 AUDIO=0x4204f750
 AUDIO_MAX=0x42100000-AUDIO
 MAIN_MAX=0x200000

@@ -15,6 +15,7 @@ EMPTY(draw) EMPTY(key) EMPTY(enc) EMPTY(settings) EMPTY(render_in) EMPTY(render_
 EMPTY(fs_route) EMPTY(fs_write) EMPTY(fs_written) EMPTY(main_mix) EMPTY(track_send) EMPTY(delay_in) EMPTY(reverb_in)
 const struct st_machine_ui_api core_machine_ui_api={1};
 static u32 fail_alloc,fail_init,published,initialized;static const u32 *ticks;
+static u32 order[3],order_count;
 static u32 input_resets;
 void core_machine_input_reset(void){input_resets++;}
 void *fw_malloc(u32 n){return fail_alloc?0:VirtualAlloc((void *)0x47000000u,n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
@@ -25,6 +26,9 @@ void core_event_publish(const u32 *p)
  *(const u32 **)p[2]=ticks;published++;}
 static void extra(void *c){(void)c;}
 static int init(const struct st_smz_api *api){assert(api->version==1 && api->ui->version==1);initialized++;return fail_init;}
+static int lfo_init(const struct st_smz_api *api){(void)api;order[order_count++]=1;return 0;}
+static int skip_init(const struct st_smz_api *api){(void)api;order[order_count++]=2;return 0;}
+static int normal_init(const struct st_smz_api *api){(void)api;order[order_count++]=3;return fail_init;}
 #include "../mods/core-st/modules.c"
 int main(void)
 {
@@ -32,9 +36,17 @@ int main(void)
     const struct st_smz_module mod={"TEST",init,&s,1};
     fail_alloc=1;assert(!core_modules_bind(&mod,1) && !initialized && !published);fail_alloc=0;
     fail_init=1;assert(!core_modules_bind(&mod,1) && initialized==1 && !published && input_resets==3);fail_init=0;
-    assert(core_modules_bind(&mod,1) && initialized==2 && published==1);
+    {
+        const struct st_smz_module group[]={
+            {"LFO3",lfo_init,0,0},{"MODULATION SKIP",skip_init,0,0},{"TEST",normal_init,&s,1}};
+        order_count=0;fail_init=1;
+        assert(!core_modules_bind(group,3) && order_count==1 && order[0]==3 && !published);
+        order_count=0;fail_init=0;
+        assert(core_modules_bind(group,3) && published==1);
+        assert(order_count==3 && order[0]==3 && order[1]==1 && order[2]==2);
+    }
     assert(ticks[0]==(u32)builtin && ticks[1]==(u32)extra && !ticks[2]);
-    assert(core_module_count==1 && core_module_subscriptions==1);fw_free((void *)ticks);
+    assert(core_module_count==3 && core_module_subscriptions==1);fw_free((void *)ticks);
     {u32 i;for(i=0;i<4*NATIVE_WORDS;i++)assert(!core_native_interest[i]);} /* stock fast paths stay active */
-    puts("PASS: module init failure/heap failure publish nothing; successful module joins existing event table directly");return 0;
+    puts("PASS: module rejection precedes hook initializers; both patchers initialize last; publication remains atomic");return 0;
 }

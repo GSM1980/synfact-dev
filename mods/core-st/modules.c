@@ -91,6 +91,17 @@ int core_event_native(u32 operation,const u32 *args,u32 *result)
     return 0;
 }
 u32 core_module_count,core_module_subscriptions;
+/* These two audited modules write resident code during init. Their stock
+ * preimages are checked by machine-boot.c before any initializer runs, and
+ * they initialize after every module that may reject for an API/resource
+ * reason. Subscription order below stays in the bank's original order. */
+static int module_name_is(const char *name,const char *wanted)
+{
+    u32 i=0;while(name[i] && name[i]==wanted[i])i++;
+    return !name[i] && !wanted[i];
+}
+static int patching_module(const char *name)
+{return module_name_is(name,"LFO3") || module_name_is(name,"MODULATION SKIP");}
 /* Reuse the published collection, selecting only subscribers that requested
  * its native-view context. No module scan, input registry or retained view. */
 int core_event_view(u32 event,void *view,void *data,u32 id)
@@ -107,7 +118,7 @@ int core_event_view(u32 event,void *view,void *data,u32 id)
 }
 int core_modules_bind(const struct st_smz_module *mods,u32 count)
 {
-    u32 i,j,k,e,old[ST_EV_COUNT],add[ST_EV_COUNT],used=0,total=0,patches[4*ST_EV_COUNT+2*NATIVE_WORDS+3],n=0;
+    u32 i,j,k,e,phase,old[ST_EV_COUNT],add[ST_EV_COUNT],used=0,total=0,patches[4*ST_EV_COUNT+2*NATIVE_WORDS+3],n=0;
     u32 *memory,*dst,*lists[ST_EV_COUNT];struct st_smz_api api={1,&core_machine_ui_api};
     core_machine_input_reset();
     for(e=0;e<ST_EV_COUNT;e++){old[e]=add[e]=0;while(events[e].list[old[e]])old[e]++;}
@@ -115,7 +126,8 @@ int core_modules_bind(const struct st_smz_module *mods,u32 count)
     for(e=0;e<ST_EV_COUNT;e++)if(add[e])total+=old[e]+add[e]+1;
     memory=total?fw_malloc(total*4):0;
     if(total && (u32)memory<0x40000000u)return 0;
-    for(i=0;i<count;i++){
+    for(phase=0;phase<2;phase++)for(i=0;i<count;i++){
+        if((u32)patching_module(mods[i].name)!=phase)continue;
         /* Legacy initializers may require exactly version 1. Only a module
          * explicitly requesting native-view events needs service version 2. */
         api.version=1;

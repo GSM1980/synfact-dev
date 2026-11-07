@@ -16,7 +16,7 @@ extern volatile unsigned int core_smz_failure;
 static u32 notifications[256],notification_count;
 static void sample_notify(u32 percent){assert(notification_count<256);notifications[notification_count++]=percent;}
 static u8 *disk;static u32 bytes,stat_result=1,reads,allocs,fail_alloc,fail_load,bind_ok=1,paints,expected_count=1;
-static int select_result,fallback_enabled;static u32 slot_state,transitions;static u8 *candidate;
+static int select_result,fallback_enabled,preflight_ok=1;static u32 slot_state,transitions,preflights;static u8 *candidate;
 static u8 pixels_a[1024],pixels_b[1024];
 u32 fw_mmc_ready[]={1},fw_mmc_sectors[]={CORE_MODS_LBA+1};
 u32 fw_lcd_front[1],fw_lcd_back[1],fw_font5[1];
@@ -35,6 +35,8 @@ int core_mods_slot_io(const struct core_mods_io *io,u32 slot,struct core_mods_sl
 {(void)io;(void)slot;(void)out;return 0;}
 int core_mods_transition_io(const struct core_mods_io *io,u32 slot,u32 from,u32 to)
 {(void)io;assert(slot==0 && from==CORE_MODS_CANDIDATE && to==CORE_MODS_TRYING);transitions++;slot_state=to;return 1;}
+int core_boot_preimages_ok(const core_u8 *info)
+{assert(info);preflights++;return preflight_ok;}
 void core_native_initialize(void){}
 int fw_mmc_read(u32 lba,u32 n,void *out)
 {
@@ -67,7 +69,7 @@ void *fw_lcd_swap(void)
 static void reset(void)
 {
     if(retained)fw_free(retained);retained=0;core_machine_active=core_machine_pages=0;
-    allocs=reads=paints=fail_alloc=fail_load=transitions=0;bind_ok=stat_result=1;select_result=fallback_enabled=0;slot_state=0;candidate=0;
+    allocs=reads=paints=fail_alloc=fail_load=transitions=preflights=0;bind_ok=stat_result=preflight_ok=1;select_result=fallback_enabled=0;slot_state=0;candidate=0;
     memset(pixels_a,0x55,1024);memset(pixels_b,0xaa,1024);
     fw_lcd_front[0]=(u32)pixels_a;fw_lcd_back[0]=(u32)pixels_b;
 }
@@ -123,6 +125,8 @@ int main(int argc,char **argv)
     reset();fail_alloc=1;core_machine_load();assert(core_machine_status==4 && !paints);unchanged();
     reset();fail_alloc=2;core_machine_load();assert(core_machine_status==4 && !paints);unchanged();
     reset();fail_load=1;core_machine_load();assert(core_machine_status==3 && !core_machine_active && !core_machine_pages);unchanged();
+    reset();preflight_ok=0;core_machine_load();
+    assert(core_machine_status==11 && preflights==1 && !core_machine_active && !core_machine_pages && !retained);unchanged();
     reset();bind_ok=0;core_machine_load();assert(core_machine_status==5 && !core_machine_active && !core_machine_pages && retained);unchanged();
     reset();r.context=disk;assert(core_smz_validate(&r,&v));
     write32(disk+64,CORE_SMZ_CONTRACT+1);checksums(disk,&v);

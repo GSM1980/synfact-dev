@@ -71,7 +71,7 @@ def main(argv=None):
             labels={0:'loaded',1:'no committed file',2:'bank validation rejected',3:'bank read failed',
                     4:'not enough MAIN heap',5:'machine initialization rejected',6:'AUDIO ABI missing',
                     7:'sample-pool service missing',8:'metadata/card read failed',9:'startup hook not reached',
-                    10:'core/SMZ contract missing or incompatible'}
+                    10:'core/SMZ contract missing or incompatible',11:'resident hook preimage mismatch'}
             print(f'SMZ: {labels.get(values[2],"unknown")} (state {values[2]})')
             print(f'File: {values[3]} bytes; magic {values[4]:08X}; parser line {values[5]}')
             print(f'Active: {values[6]}; machines: {values[7]}; AUDIO pages: {values[8]}')

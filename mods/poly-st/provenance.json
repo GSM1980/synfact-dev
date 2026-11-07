@@ -25,10 +25,11 @@
     "first/last slave bounds skip independent tracks outside the publication range; scaled word addressing saves four instructions per slave",
     "native TRIG synchronizes once before grouped routing; analog-only groups never subscribe TYPE",
     "analog slave note events bind the master kit Sound when native keyboard/MIDI/preview events carry no Sound; event-only fix",
-    "1.1: sequencer notes take the group's voice started least recently, so master steps in a row overlap; lock trigs move no voice"
+    "1.1: sequencer notes take the group's voice started least recently, so master steps in a row overlap; lock trigs move no voice",
+    "core 1.4: provider query 31 exposes only NOT2..NOT4 for POLY TRIG randomize"
   ],
   "local_sha256": {
-    "main.c": "ee0fe9a479d8e0c8612b79010603ea1062836a29d6b116a694a2efd61ce78a40",
+    "main.c": "516039b11e0547954d4235b7ce369c113627c98300a8b680ea7b0a65dc8916c9",
     "poly_core.c": "b533e2c068abf55204c3ada655620b8c1b0d4e2944390f192e8c8a493c679f23",
     "poly_event.c": "3b06dd4b2b3edee382e2042af3563e772ccd3eee8c69f7576dbbbaefc5693301",
     "poly_groups.c": "29e473fec63a15d6b51b81beea8ef1b51b1027aeec999982f3dcd8cf6d110054",

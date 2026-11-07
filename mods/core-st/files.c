@@ -59,6 +59,7 @@ static void core_mods_stage_written(const struct fn *fn,const u8 *header)
     disk.base=staged.slot.base;disk.valid=0;
     reader.context=&disk;reader.read=stage_read;reader.bytes=staged.slot.bytes;
     if(!core_smz_validate(&reader,&view) || view.contract!=CORE_SMZ_CONTRACT ||
+       (view.nmods && view.info==CORE_SMZ_NONE) ||
        stage_read(&disk,0,first,sizeof(first)))return;
     staged.slot.stamp=get32(first+16);
     staged.commit_ok=core_mods_record_io(&io,&staged.slot);

@@ -56,6 +56,11 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         legacy=ROOT/'out/smz-module-0.8-final/example.smz4'
         if name=='smz-parser' and legacy.exists():args.append(legacy)
         run(name,[exe,*args])
+    run('boot preimage source',[sys.executable,'tools/generate_boot_preimages.py','--check'])
+    boot_exe=out/'boot-preimages.exe'
+    run('compile boot preimages',[cc,'-O2','-DCORE_ST_NATIVE_TEST',
+        'tests/test_core_st_boot_preimages.c','mods/core-st/boot-preimages.c','-o',boot_exe])
+    run('stock hook preimages',[boot_exe,out/'main.bin'])
     for name in ('common_hooks','destination_hooks','syn_page_hook','new_project_hook'):
         run(name,[sys.executable,'tests/test_st_'+name+'.py',out])
     run('stock/native fast paths',[sys.executable,'tests/test_st_fast_paths.py',out])

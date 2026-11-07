@@ -4,14 +4,14 @@
 
 Issue 07 asks for core/SMZ4 compatibility when the core is updated. Issue 16 asks for a restart notice, a compatibility check against the installed SYX before accepting an SMZ4, and protection against an update that makes the instrument fail to boot. The intended failure mode to avoid is a soft brick or repeatable exception during application startup. The stock bootloader is unchanged and FUNC+POWER recovery already exists, but needing a separate recovery SYX and multiple transfers is too costly for an ordinary incompatible bank.
 
-This records the design and its core 1.5 implementation. It is not a claim
+This records the design and its core 1.6 implementation. It is not a claim
 that arbitrary native code can be made exception-proof. The loader fails closed
 before executing a bank with a missing or mismatched contract, and a failed
 trial preserves a bootable path.
 
-## Implemented in core 1.5
+## Implemented in core 1.6
 
-- SMZ4 feature bit 4 carries exact core contract `53594601` in the former
+- SMZ4 feature bit 4 carries exact core contract `53594602` in the former
   global initializer field. The Python and TypeScript builders emit it;
   the core parser, boot loader, CLI and Transfer check it. The ID must be
   bumped whenever the resident host API or hook behavior changes. The
@@ -26,20 +26,27 @@ trial preserves a bootable path.
   reboot skips an unconfirmed trial. `/mods-confirm` changes a running trial
   to `GOOD` only after an explicit CLI or Transfer action. `/mod-status`
   words 23..26 expose the trial and rollback state.
+- Before relocation or any bank initializer, the core checks a compact table
+  of every stock-code preimage patched by the current LFO3 and MODULATION SKIP
+  modules. The table is generated from their own source declarations and a
+  regression detects drift; a mismatch refuses the bank with status 11. The
+  two patching initializers run after all other module initializers, while
+  event subscription order stays unchanged. If an ordinary initializer fails,
+  no bank hook has been installed.
 - Native host tests cover corrupt records, interrupted staging, failed writes,
   contract mismatch, trial boot and confirmation. The core build and all 192
   Python/TypeScript bank combinations pass. The local website build produces
   the pinned core and an approved bank with the matching contract. Hardware
   validation remains pending.
 
-The implementation does not yet have a generated per-hook preimage table or
-cryptographic whole-file digest in slot metadata. Existing LFO3 hook installation
-checks all of its preimages before patching, and the exact contract limits this
-bank to the matching core. A later extension should make hook requirements
-declarative and check them before module initializers. The contract is an
-explicit release identity, not a hash automatically derived from every source
-change. Do not mark 07 or 16 complete before physical power-loss, rollback and
-both update-order tests.
+The generated table covers the two audited stock-code patchers in this bank;
+adding another requires extending it and bumping the contract. The slot record
+does not contain a cryptographic whole-file digest: the boot parser validates
+the file's envelope checksum, MAIN checksum and AUDIO checksum before execution.
+The contract is an explicit release identity, not a hash automatically derived
+from every source change. Arbitrary native bank code cannot be guaranteed
+exception-proof. Do not mark 07 or 16 complete before physical power-loss,
+rollback and both update-order tests.
 
 ## Baseline before core 1.5 (2026-11-07)
 
