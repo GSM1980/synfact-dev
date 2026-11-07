@@ -27,8 +27,10 @@ trial preserves a bootable path.
   to `GOOD` only after an explicit CLI or Transfer action. `/mod-status`
   words 23..26 expose the trial and rollback state.
 - Native host tests cover corrupt records, interrupted staging, failed writes,
-  contract mismatch, trial boot and confirmation. The core and complete bank
-  build, and site TypeScript build, pass. Hardware validation remains pending.
+  contract mismatch, trial boot and confirmation. The core build and all 192
+  Python/TypeScript bank combinations pass. The local website build produces
+  the pinned core and an approved bank with the matching contract. Hardware
+  validation remains pending.
 
 The implementation does not yet have a generated per-hook preimage table or
 cryptographic whole-file digest in slot metadata. Existing LFO3 hook installation
