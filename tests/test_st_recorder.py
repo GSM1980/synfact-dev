@@ -47,7 +47,7 @@ def verify(folder,synfact=None):
     assert struct.unpack('>I',read(ui,4))[0]==7 and struct.unpack('>I',read(ui+40,4))[0]==host
     names=('core_hzfs_native_io','core_hzfs_open','core_hzfs_close','core_crc_update',
            'core_pool_read','core_pool_write','core_pool_ready','st_pool_live_sync','st_pool_preview_stop','core_event_view')
-    assert read(host,44)==struct.pack('>11I',13,*[s['core:'+name] for name in names])   # host API 13, prefix retained
+    assert read(host,44)==struct.pack('>11I',14,*[s['core:'+name] for name in names])   # host API 14, prefix retained
     assert read(s['core:core_high_written'],2)==bytes.fromhex('4e75')
     # The existing native close notification is conditional on a valid
     # written capture. The high-zone descriptor now supplies that no-op.

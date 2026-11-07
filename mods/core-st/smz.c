@@ -83,7 +83,7 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
        core_smz_be(h+8)!=CORE_SMZ_ABI || core_smz_be(h+12)!=r->bytes ||
        core_smz_be(h+20)!=48){core_smz_failure=__LINE__;return 0;}
     /* Bit 1 adds a machine-only UI callback directory, never a patch plan. */
-    if(core_smz_be(h+24)&~15u){core_smz_failure=__LINE__;return 0;}
+    if(core_smz_be(h+24)&~31u){core_smz_failure=__LINE__;return 0;}
     v->ui=core_smz_be(h+24)&2u?core_smz_be(h+28):CORE_SMZ_NONE;
     if(!(core_smz_be(h+24)&2u) && core_smz_be(h+28)){core_smz_failure=__LINE__;return 0;}
     v->modules=core_smz_be(h+32);v->nmods=core_smz_be(h+36);
@@ -93,7 +93,10 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
     v->descriptors=core_smz_be(h+40);v->count=count=core_smz_be(h+44);
     if((!count && !v->nmods) || count>CORE_SMZ_MACHINES || (v->descriptors&3) ||
        (!count && v->ui!=CORE_SMZ_NONE)){core_smz_failure=__LINE__;return 0;}
-    if(core_smz_be(h+48)!=0x534d5a34u || core_smz_be(h+64)!=CORE_SMZ_NONE ||
+    v->contract=core_smz_be(h+24)&16u?core_smz_be(h+64):0;
+    if(core_smz_be(h+48)!=0x534d5a34u ||
+       (!(core_smz_be(h+24)&16u) && core_smz_be(h+64)!=CORE_SMZ_NONE) ||
+       ((core_smz_be(h+24)&16u) && v->contract!=CORE_SMZ_CONTRACT) ||
        (!(core_smz_be(h+24)&8u) && core_smz_be(h+60))){core_smz_failure=__LINE__;return 0;}
     v->bytes=core_smz_be(h+52);v->nrel=core_smz_be(h+56);v->relocs=80;
     if(v->nrel>(r->bytes-80)/4){core_smz_failure=__LINE__;return 0;}

@@ -30,6 +30,11 @@ def verify(folder):
     SEND={'cached_parameter','format_value','parameter_label','parameter_long_label'}
     for name,(arg,first) in cases.items():
         at=address('core_machine_'+name);stock=address('core_stock_'+name)
+        if name=='cached_parameter':
+            # The randomizer has a separate caller-specific early path before
+            # the ordinary stock-first lookup below.
+            assert read(at,10)==bytes.fromhex('22170c8140014970661a')
+            at+=36
         flag(at,'core_machine_active');branch(at+6,0x67,stock)
         if first:
             assert read(at+10,10)==struct.pack('>HHHI',0x202f,arg,0x0c80,first)
@@ -63,7 +68,7 @@ def verify(folder):
     at=address('core_native_note_accept');interest(at,20)
     target=branch(at+6,0x67)
     assert read(target,12)==bytes.fromhex('202a002472014ef9400a4244')
-    assert len(manifest['sites'])==102 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
+    assert len(manifest['sites'])==106 and len(manifest['collections'])==16   # Current hook and mixer event tables.
     assert report['resident_ram']['free']>=0 and '-O3' in report['cflags']
     print('PASS: 23 no-bank/stock-ID lookup exits and 12 per-operation interest native replays; hidden pointers/stack untouched on fast exits; all hooks, extended paths and APIs retained')
 

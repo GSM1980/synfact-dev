@@ -8,6 +8,7 @@ export type SmzMachine = {descriptor:string; ui:string; update:string; render:st
 export type SmzBankSpec = {main:SmzObject[]; audio:SmzObject[]; machines:SmzMachine[]; modules:string[]; samplePool:boolean; modInfo?:[string,string][]}
 const align=(n:number,a:number)=>Math.ceil(n/a)*a
 const AUDIO=0x4204f750, AUDIO_MAX=0x42100000-AUDIO
+export const SMZ_CORE_CONTRACT=0x53594601 // mods/core-st/smz.h
 const word=(a:Uint8Array,n:number)=>new DataView(a.buffer,a.byteOffset,a.byteLength).getUint32(n)
 const put=(a:Uint8Array,n:number,v:number)=>new DataView(a.buffer,a.byteOffset,a.byteLength).setUint32(n,v)
 const adler=(data:Uint8Array)=>{let a=1,b=0;for(const x of data){a=(a+x)%65521;b=(b+a)%65521}return (b*65536+a)>>>0}
@@ -71,9 +72,9 @@ export function buildSmzBank(spec:SmzBankSpec):Uint8Array {
  if(80+bodySize>0x200000)throw Error('SMZ MAIN exceeds reserve')
  const result=new Uint8Array(audioAt+align(section.length,2048))
  result.set([0x53,0x41,0x46,0x45]);put(result,4,2);put(result,8,0x454c0001);put(result,12,result.length);put(result,20,48)
- put(result,24,(spec.samplePool?1:0)|(n?2:0)|(numModules?4:0)|(spec.modInfo?8:0));put(result,28,n?40*n:0);put(result,32,numModules?moduleAt:0)
+ put(result,24,(spec.samplePool?1:0)|(n?2:0)|(numModules?4:0)|(spec.modInfo?8:0)|16);put(result,28,n?40*n:0);put(result,32,numModules?moduleAt:0)
  put(result,36,numModules);put(result,44,n);result.set([0x53,0x4d,0x5a,0x34],48)
- put(result,52,body.length);put(result,56,rels.length);if(spec.modInfo)put(result,60,infoAt);put(result,64,0xffffffff);put(result,72,audioAt-48);put(result,76,section.length)
+ put(result,52,body.length);put(result,56,rels.length);if(spec.modInfo)put(result,60,infoAt);put(result,64,SMZ_CORE_CONTRACT);put(result,72,audioAt-48);put(result,76,section.length)
  rels.forEach((r,i)=>put(result,80+4*i,r));result.set(body,80+4*rels.length)
  let sum=0;for(let i=80;i<80+bodySize;i+=4)sum=(sum+word(result,i))>>>0
  put(result,68,sum);result.set(section,audioAt);put(result,16,adler(result.subarray(20)))

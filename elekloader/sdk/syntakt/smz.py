@@ -21,6 +21,7 @@ from ...devices.syntakt import DEVICE
 import hashlib
 
 ABI=0x454c0001
+CONTRACT=0x53594601  # exact resident core/SMZ contract, mods/core-st/smz.h
 AUDIO=0x4204f750
 AUDIO_MAX=0x42100000-AUDIO
 MAIN_MAX=0x200000
@@ -73,8 +74,8 @@ def pack(image,relocations,descriptors,section,features=0,ui=0,modules=0,module_
     section[12:16]=be32(zlib.adler32(section[16:])&0xffffffff)
     image_sum=sum(struct.unpack('>'+str(len(body)//4)+'I',body))&0xffffffff
     audio_at=align(80+len(body))
-    zone=b'SMZ4'+be32(len(image),len(rels),info,0xffffffff,image_sum,audio_at-48,len(section))
-    if features&~15:raise ValueError('unknown machine-bank feature')
+    zone=b'SMZ4'+be32(len(image),len(rels),info,CONTRACT if features&16 else 0xffffffff,image_sum,audio_at-48,len(section))
+    if features&~31:raise ValueError('unknown machine-bank feature')
     if bool(features&8)!=bool(info):raise ValueError('feature 8 needs the mod-info directory, and only it')
     data=bytearray(b'SAFE'+be32(2,ABI,0,0,48,features,ui,modules,module_count,0,len(descriptors))+zone+body)
     data+=bytes(audio_at-len(data))+section+bytes(align(len(section),2048)-len(section))
@@ -201,7 +202,7 @@ def build(directories,stock_path=None,output=None,module_directories=()):
     entries=b''.join(be32(t,asym[u],asym[r],0) for t,(u,r) in zip(machine_types,audio_exports))
     section=b'SMA3'+be32(n,size,0)+entries+bytes(384)+code
     # Feature 8: the mods' versions, a zero-terminated directory in the MAIN image (SMZ4.md).
-    image+=bytes(-len(image)%4);info=len(image);image+=mod_info_directory(mod_records);features|=8
+    image+=bytes(-len(image)%4);info=len(image);image+=mod_info_directory(mod_records);features|=8|16
     data=pack(bytes(image),rels,descriptors,section,features,40*n if features&2 else 0,
               module_at if modules else 0,len(modules),info)
     if any(hashlib.sha256(Path(path).read_bytes()).hexdigest()!=digest for path,digest in inputs.items()):

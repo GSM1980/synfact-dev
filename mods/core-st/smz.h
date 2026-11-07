@@ -3,6 +3,9 @@
 #define CORE_ST_SMZ_H
 #include "storage.h"
 #define CORE_SMZ_ABI 0x454c0001u
+/* Bump for every core change that can alter a bank's resident contract.
+ * SAFE feature 16 stores this exact ID in the former global-init word. */
+#define CORE_SMZ_CONTRACT 0x53594601u
 #define CORE_SMZ_AUDIO 0x4204f750u
 #define CORE_SMZ_AUDIO_MAX (0x42100000u-CORE_SMZ_AUDIO)
 #define CORE_SMZ_PAGE 2048u
@@ -19,7 +22,7 @@
 /* Disk words are BE. Only machines are supported, no runtime patch plans,
  * hook subscriptions or global module initializers. */
 struct core_smz_view {
-    core_u32 image,bytes,relocs,nrel,descriptors,count,audio,audio_bytes,ui,modules,nmods,info;
+    core_u32 image,bytes,relocs,nrel,descriptors,count,audio,audio_bytes,ui,modules,nmods,info,contract;
 };
 struct core_smz_reader {
     void *context;

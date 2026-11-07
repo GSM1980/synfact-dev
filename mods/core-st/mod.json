@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "1.4",
+  "version": "1.5",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -766,6 +766,8 @@
   "resources": {
     "names": [
       "drive:/mods",
+      "drive:/mods-stage",
+      "drive:/mods-confirm",
       "emmc:0x02400000..0x03400200",
       "emmc:0x30000000..card-end",
       "drive:/samples/high-windows",

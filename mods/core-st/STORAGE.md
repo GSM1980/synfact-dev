@@ -1,7 +1,27 @@
-# `/mods`: one opaque file, Syntakt core 0.3
+# `/mods` and safe bank staging, Syntakt core 1.5
+
+Core 1.5 adds two independent 8 MiB slots inside the original 16 MiB
+reservation. `/mods-stage` writes the inactive slot, validates the complete
+SMZ4 file and its exact core contract, then records it as `CANDIDATE`.
+The first boot changes it durably to `TRYING` before running bank code.
+After checking sound, playback and controls, the user confirms it through
+`mods confirm` or Transfer. An unconfirmed `TRYING` record is skipped on the
+next boot; the previous `GOOD` bank, or stock machines, start instead.
+
+The slot metadata sectors are at `02bffe00` and `033ffe00`; the 16-byte
+confirmation command is at `02bffc00`. Each metadata sector contains a magic,
+format version, generation, state, exact length, length complement, stamp and
+CRC32. The slot payload capacity is 8 MiB minus 1024 bytes. `/mod-status`
+reports contract, trial slot/generation and rollback in words 22..26.
+`/mods` is read-only. Legacy `/mods` metadata at `03400000` is still read
+until the first new bank is staged; that first candidate goes to slot 1 so
+the legacy bytes remain intact. A core downgrade must be treated separately:
+an older core does not understand the new slot metadata.
+
+## Legacy layout and transport details
 
 OS 1.41 only. Extends native Data RPC with the exact object path `/mods`.
-It is one file, replaced by each accepted upload, with a **16 MiB maximum**
+Before core 1.5 it was one file, replaced by each accepted upload, with a **16 MiB maximum**
 (16,777,216 payload bytes, excluding the native Data envelope). Empty and
 odd-sized files retain their exact length. There is no `SAMP` header or padding
 inside the stored file. The storage endpoint treats every payload as opaque bytes. From core 0.4,

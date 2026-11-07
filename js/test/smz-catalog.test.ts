@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {sha} from '../src/bytes.ts'
 import {buildSmzCandidate,buildSmzSelection} from '../src/smz-catalog.ts'
 const encode=(v:unknown)=>new TextEncoder().encode(JSON.stringify(v))
-const artifact=encode({id:'module',samplePool:false,machines:[],modules:['entry'],audio:[],main:[{
+const artifact=encode({id:'module',version:'1.0',samplePool:false,machines:[],modules:['entry'],audio:[],main:[{
  sections:[{name:'',size:0,align:1,data:''},{name:'.data',size:16,align:4,data:'00000000000000000000000000000000'}],
  symbols:[{name:'entry',value:0,size:16,bind:1,section:1}],relocations:[]}]})
 const cat=()=>({schema:1,device:'syntakt',os:'1.41',modules:[{id:'module',file:'module.json',sha256:sha(artifact)}],approved:[] as any[]})

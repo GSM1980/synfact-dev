@@ -31,8 +31,11 @@ Multiple machine directories may be passed to `smz`. MAIN uses the SDK's device
 toolchain profile, then a relocatable image with a contiguous descriptor directory.
 AUDIO is compiled for its final CPU2 address. The supplied example is silent
 and has 28 controls, exercising all four pages; it is separate from firmware.
-Only the native Data envelope is uploaded to `/mods`; no `SAMP` header is stored.
-Uploading a replacement does not unload live code. A reboot loads the new bank.
+The Data envelope is uploaded to `/mods-stage`; no `SAMP` header is stored.
+Uploading a candidate does not unload live code. Restart to try it, test playback
+and the controls, then explicitly confirm through `/mods-confirm` or `mods confirm`.
+If the trial is not confirmed before another restart, the previous bank returns.
+`/mods` remains a read-only view of the selected stored bank.
 
 ## On-disk structure
 
@@ -45,7 +48,7 @@ All words are 32-bit big endian. Address intervals exclude their upper end.
 | 0 / 4 / 8 | `SAFE` / version 2 / ABI `454c0001` |
 | 12 / 16 | Exact file length / Adler32 of bytes 20..EOF |
 | 20 | MAIN zone offset, exactly 48 |
-| 24 | Feature mask: bit 0 sample-pool v1; bit 1 machine-ui-v1; bit 2 modules-v1; bit 3 mod-info; other bits rejected |
+| 24 | Feature mask: bit 0 sample-pool v1; bit 1 machine-ui-v1; bit 2 modules-v1; bit 3 mod-info; bit 4 safe core contract; other bits rejected |
 | 28 | UI directory offset within MAIN image when bit 1 is set; otherwise zero |
 | 32 / 36 | Module directory offset within MAIN image / count 1..16 when bit 2 is set; otherwise zero |
 | 40 / 44 | Descriptor directory offset within MAIN image / machine count |
@@ -55,7 +58,7 @@ All words are 32-bit big endian. Address intervals exclude their upper end.
 | Offset | Value |
 |---|---|
 | 0 / 4 / 8 | `SMZ4` / MAIN image bytes / relocation count |
-| 12 / 16 | Mod-info directory offset within MAIN image when bit 3 is set, otherwise zero / `ffffffff` (no global initializer) |
+| 12 / 16 | Mod-info directory offset within MAIN image when bit 3 is set, otherwise zero / exact core contract (`53594601`) when bit 4 is set, otherwise `ffffffff` |
 | 20 | Sum of BE longwords from zone+32 through MAIN image end, modulo 2^32 |
 | 24 / 28 | AUDIO offset relative to zone / unpadded AUDIO length |
 

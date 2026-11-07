@@ -4,7 +4,40 @@
 
 Issue 07 asks for core/SMZ4 compatibility when the core is updated. Issue 16 asks for a restart notice, a compatibility check against the installed SYX before accepting an SMZ4, and protection against an update that makes the instrument fail to boot. The intended failure mode to avoid is a soft brick or repeatable exception during application startup. The stock bootloader is unchanged and FUNC+POWER recovery already exists, but needing a separate recovery SYX and multiple transfers is too costly for an ordinary incompatible bank.
 
-This is an architecture proposal, not a claim that arbitrary native code can be made exception-proof. The loader must fail closed before executing incompatible code, and a failed trial must preserve a bootable path.
+This records the design and its core 1.5 implementation. It is not a claim
+that arbitrary native code can be made exception-proof. The loader fails closed
+before executing a bank with a missing or mismatched contract, and a failed
+trial preserves a bootable path.
+
+## Implemented in core 1.5
+
+- SMZ4 feature bit 4 carries exact core contract `53594601` in the former
+  global initializer field. The Python and TypeScript builders emit it;
+  the core parser, boot loader, CLI and Transfer check it. The ID must be
+  bumped whenever the resident host API or hook behavior changes. The
+  installed core exposes it in `/mod-status` word 22.
+- The old 16 MiB reservation holds two 8 MiB slots, with checksummed metadata
+  in each slot's final sector. `/mods-stage` writes the inactive slot and
+  validates its eMMC bytes before publishing a `CANDIDATE`. The native
+  stream still handles transfer framing and bounds. The legacy record remains
+  readable during migration; the first candidate uses slot 1.
+- On reboot, the core preflights the candidate, marks it `TRYING` before any
+  bank initializer, and uses the prior `GOOD` slot on rejection. A subsequent
+  reboot skips an unconfirmed trial. `/mods-confirm` changes a running trial
+  to `GOOD` only after an explicit CLI or Transfer action. `/mod-status`
+  words 23..26 expose the trial and rollback state.
+- Native host tests cover corrupt records, interrupted staging, failed writes,
+  contract mismatch, trial boot and confirmation. The core and complete bank
+  build, and site TypeScript build, pass. Hardware validation remains pending.
+
+The implementation does not yet have a generated per-hook preimage table or
+cryptographic whole-file digest in slot metadata. Existing LFO3 hook installation
+checks all of its preimages before patching, and the exact contract limits this
+bank to the matching core. A later extension should make hook requirements
+declarative and check them before module initializers. The contract is an
+explicit release identity, not a hash automatically derived from every source
+change. Do not mark 07 or 16 complete before physical power-loss, rollback and
+both update-order tests.
 
 ## Current behavior and gaps (2026-11-07)
 

@@ -18,12 +18,12 @@ async function build(catalogBytes:Uint8Array, catalogHash:string, selected:strin
   const ordered=c.modules.filter((p:any)=>selected.includes(p.id)).map((p:any)=>p.id)
   const approved=c.approved.filter((p:any)=>Array.isArray(p.ids)&&JSON.stringify(p.ids)===JSON.stringify(ordered)&&/^[0-9a-f]{64}$/.test(p.sha256))
   if(requireApproval&&approved.length!==1)throw Error('This SMZ combination has not been validated')
-  const spec:SmzBankSpec={main:[],audio:[],machines:[],modules:[],samplePool:false}
+  const spec:SmzBankSpec={main:[],audio:[],machines:[],modules:[],samplePool:false,modInfo:[]}
   for(const pin of c.modules.filter((p:any)=>selected.includes(p.id))){
     const raw=await fetch(pin.file)
     if(sha(raw)!==pin.sha256)throw Error(`${pin.file}: SMZ artifact hash mismatch`)
     const item=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw))
-    if(item.id!==pin.id||!Array.isArray(item.main)||!Array.isArray(item.audio)||!Array.isArray(item.machines)||
+    if(item.id!==pin.id||typeof item.version!=='string'||!Array.isArray(item.main)||!Array.isArray(item.audio)||!Array.isArray(item.machines)||
       !Array.isArray(item.modules)||typeof item.samplePool!=='boolean')throw Error('Invalid SMZ artifact')
     for(const obj of [...item.main,...item.audio]){
       if(!Array.isArray(obj.sections)||!Array.isArray(obj.symbols)||!Array.isArray(obj.relocations))throw Error('Invalid SMZ object')
@@ -40,6 +40,7 @@ async function build(catalogBytes:Uint8Array, catalogHash:string, selected:strin
       }
     }
     spec.main.push(...item.main);spec.audio.push(...item.audio);spec.machines.push(...item.machines);spec.modules.push(...item.modules)
+    spec.modInfo!.push([item.id,item.version])
     spec.samplePool ||= item.samplePool
   }
   const data=buildSmzBank(spec)

@@ -6,7 +6,10 @@ provenance and redistribution review. Supply a new, empty output directory.
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+from elekloader.sdk.syntakt.smz import CONTRACT
 
 
 def main():
@@ -43,6 +46,7 @@ def main():
         (a.out / 'audio-upper.bin').write_bytes(data)
         upper = {'file': 'audio-upper.bin', 'sha256': hashlib.sha256(data).hexdigest()}
     manifest = {'schema': 1, 'device': 'syntakt', 'os': '1.41', 'coreVersion': core['version'],
+                'contract': CONTRACT,
                 'meter': a.meter, 'mods': mods, 'audio': audio, 'upper': upper, 'symbols': symbols,
                 'mainSha256': report['output']['main']['sha256'],
                 'audioSha256': report['output']['sections']['7']['stored_sha256'],
