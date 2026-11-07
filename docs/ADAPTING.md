@@ -193,10 +193,10 @@ combined with `--preset samplers`, or used alone. See
 [examples/smz-test-st](../examples/smz-test-st) and the
 [format and callback contracts](../mods/core-st/SMZ4.md). Core services remain
 functional without SMZ. Uploading an SMZ does not change running code; reboot
-to activate it. Core 1.6 banks require an exact core contract and use
-`/mods-stage`; restart, test audio and controls, then confirm the trial through
-Transfer or `python -m elekloader.sdk.syntakt.mods confirm`. A crash or restart
-before confirmation selects the previous bank or stock machines. See
+to activate it. Core 1.7 banks require an exact core contract and use
+`/mods-stage`; restart to try the bank. The core confirms it after AUDIO/sample
+startup and five seconds of normal UI ticks. A crash or restart before that
+point selects the previous bank or stock machines. See
 [the safe startup design](SAFE-BOOT-SMZ4-07-16.md).
 LFO3 and MODULATION SKIP patch stock code directly. Their source preimages
 generate the core's read-only boot gate; a new direct-code patcher must be

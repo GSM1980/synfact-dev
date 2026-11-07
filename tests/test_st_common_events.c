@@ -42,6 +42,7 @@ static int idle(const struct st_machine_ui_api *a,const struct core_machine_def 
 {assert(a==&core_machine_ui_api && m==&definition && v==view && page==1);idles++;return idle_changed;}
 static struct st_machine_ui ui={65,2,0,0,idle};
 const struct st_machine_ui *core_machine_ui(const struct core_machine_def *m){return m?&ui:0;}
+void core_mods_auto_confirm_tick(void){}
 #include "../mods/core-st/machine-events.c"
 int main(void)
 {

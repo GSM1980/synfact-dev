@@ -1,15 +1,15 @@
-# `/mods` and safe bank staging, Syntakt core 1.6
+# `/mods` and safe bank staging, Syntakt core 1.7
 
-Core 1.6 adds two independent 8 MiB slots inside the original 16 MiB
+Core 1.7 uses two independent 8 MiB slots inside the original 16 MiB
 reservation. `/mods-stage` writes the inactive slot, validates the complete
 SMZ4 file and its exact core contract, then records it as `CANDIDATE`.
 The first boot changes it durably to `TRYING` before running bank code.
-After checking sound, playback and controls, the user confirms it through
-`mods confirm` or Transfer. An unconfirmed `TRYING` record is skipped on the
+It becomes `GOOD` automatically when AUDIO is ready, sample-pool startup has
+finished (if present), and the normal UI tick has run 150 times (about five
+seconds). A `TRYING` record interrupted before that point is skipped on the
 next boot; the previous `GOOD` bank, or stock machines, start instead.
 
-The slot metadata sectors are at `02bffe00` and `033ffe00`; the 16-byte
-confirmation command is at `02bffc00`. Each metadata sector contains a magic,
+The slot metadata sectors are at `02bffe00` and `033ffe00`. Each sector contains a magic,
 format version, generation, state, exact length, length complement, stamp and
 CRC32. The slot payload capacity is 8 MiB minus 1024 bytes. `/mod-status`
 reports contract, trial slot/generation and rollback in words 22..26.

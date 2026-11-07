@@ -4,14 +4,14 @@
 
 Issue 07 asks for core/SMZ4 compatibility when the core is updated. Issue 16 asks for a restart notice, a compatibility check against the installed SYX before accepting an SMZ4, and protection against an update that makes the instrument fail to boot. The intended failure mode to avoid is a soft brick or repeatable exception during application startup. The stock bootloader is unchanged and FUNC+POWER recovery already exists, but needing a separate recovery SYX and multiple transfers is too costly for an ordinary incompatible bank.
 
-This records the design and its core 1.6 implementation. It is not a claim
+This records the design and its core 1.7 implementation. It is not a claim
 that arbitrary native code can be made exception-proof. The loader fails closed
 before executing a bank with a missing or mismatched contract, and a failed
 trial preserves a bootable path.
 
-## Implemented in core 1.6
+## Implemented in core 1.7
 
-- SMZ4 feature bit 4 carries exact core contract `53594602` in the former
+- SMZ4 feature bit 4 carries exact core contract `53594603` in the former
   global initializer field. The Python and TypeScript builders emit it;
   the core parser, boot loader, CLI and Transfer check it. The ID must be
   bumped whenever the resident host API or hook behavior changes. The
@@ -22,10 +22,12 @@ trial preserves a bootable path.
   stream still handles transfer framing and bounds. The legacy record remains
   readable during migration; the first candidate uses slot 1.
 - On reboot, the core preflights the candidate, marks it `TRYING` before any
-  bank initializer, and uses the prior `GOOD` slot on rejection. A subsequent
-  reboot skips an unconfirmed trial. `/mods-confirm` changes a running trial
-  to `GOOD` only after an explicit CLI or Transfer action. `/mod-status`
-  words 23..26 expose the trial and rollback state.
+  bank initializer, and uses the prior `GOOD` slot on rejection. The existing
+  UI tick confirms it automatically after AUDIO is ready, sample-pool startup
+  has finished (when present), and 150 normal UI ticks have run. A crash or
+  restart before then skips the trial and selects the previous `GOOD` slot or
+  stock machines. No Transfer reconnection or user confirmation is required.
+  `/mod-status` words 23..26 expose trial and rollback state.
 - Before relocation or any bank initializer, the core checks a compact table
   of every stock-code preimage patched by the current LFO3 and MODULATION SKIP
   modules. The table is generated from their own source declarations and a
@@ -34,10 +36,9 @@ trial preserves a bootable path.
   event subscription order stays unchanged. If an ordinary initializer fails,
   no bank hook has been installed.
 - Native host tests cover corrupt records, interrupted staging, failed writes,
-  contract mismatch, trial boot and confirmation. The core build and all 192
-  Python/TypeScript bank combinations pass. The local website build produces
-  the pinned core and an approved bank with the matching contract. Hardware
-  validation remains pending.
+  contract mismatch, trial boot and automatic confirmation. The core build,
+  bank matrix and site pairing are release gates. Hardware validation remains
+  pending.
 
 The generated table covers the two audited stock-code patchers in this bank;
 adding another requires extending it and bumping the contract. The slot record
@@ -45,8 +46,10 @@ does not contain a cryptographic whole-file digest: the boot parser validates
 the file's envelope checksum, MAIN checksum and AUDIO checksum before execution.
 The contract is an explicit release identity, not a hash automatically derived
 from every source change. Arbitrary native bank code cannot be guaranteed
-exception-proof. Do not mark 07 or 16 complete before physical power-loss,
-rollback and both update-order tests.
+exception-proof. Automatic confirmation proves startup and a short period of
+UI activity; it cannot predict a crash after the five-second health window.
+Do not mark 07 or 16 complete before physical power-loss, rollback and both
+update-order tests.
 
 ## Baseline before core 1.5 (2026-11-07)
 
@@ -73,7 +76,7 @@ The currently reserved 16 MiB `/mods` payload region can be split into two 8 MiB
 1. Upload writes only the inactive slot, then reads it back and runs the same structural/compatibility preflight the boot loader will use. A failed or interrupted upload leaves the old `GOOD` slot and its metadata untouched.
 2. Only after full verification, commit a `CANDIDATE` record. The response says **uploaded, restart to try; previous bank retained**. The running bank is never unloaded in place.
 3. At boot, the core checks candidate and current core ID. On a mismatch, it records a refusal and uses a compatible `GOOD` bank, or stock mode. Before it calls any candidate code, it durably changes `CANDIDATE` to `TRYING`. If this write/readback fails, it does not try the candidate.
-4. The trial is confirmed explicitly after a successful reboot and an actual playback/UI check, from a small on-device action or a Data RPC command. Do **not** mark it `GOOD` merely because its initializer returned or a timer elapsed: a late exception or silent audio could otherwise be committed. If power is cycled or the device crashes while still `TRYING`, the next boot selects the previous compatible `GOOD` bank (or stock mode) and marks the candidate failed. A user action may retry it once for diagnosis.
+4. The implemented core automatically confirms after sample/AUDIO startup and five seconds of normal UI ticks. It does **not** mark `GOOD` when an initializer merely returns. If power is cycled or the device crashes while still `TRYING`, the next boot selects the previous compatible `GOOD` bank (or stock mode). A later runtime crash cannot be inferred from a completed startup.
 5. Metadata records use independent sectors, sequence numbers and checksums. Never overwrite the only `GOOD` slot while staging. On torn writes, select the last valid compatible `GOOD` record. If neither validates, boot stock. Keep the existing manual recovery SYX as a last resort.
 
 Migration must preserve a valid legacy `/mods` file until the first new candidate has been verified. The old metadata and slot layout must be handled explicitly; a downgrade to an older core may load only its matching legacy bank or no bank, never an unrecognized candidate. The reserved-space split is a design possibility, not yet a validated disk migration.
@@ -84,13 +87,13 @@ Migration must preserve a valid legacy `/mods` file until the first new candidat
 
 **Core first:** the new SYX is installed through the stock updater. On its first boot the new core checks the stored bank's contract. If it is unknown, it boots with stock machines and a visible `MODS INCOMPATIBLE` status. The user can then upload the paired bank without reflashing a recovery core. A failed upload or trial never removes the stored `GOOD` bank.
 
-After upload, Transfer shows a persistent **restart required** result. After reconnecting, it reads status and shows `trial / confirmed / rolled back / incompatible`, with the core ID and bank ID. The UI should distinguish transfer verified from boot validated. The same information belongs in `mods status` and System Info. A failure message should identify the needed pair rather than saying only `validation rejected`.
+After upload, Transfer shows **restart required**. On reconnect it reads status and shows a trial still being checked, rollback or incompatibility. The core commits a healthy startup itself; Transfer never needs to be connected to confirm it.
 
 ## Verification gate before shipping
 
 - Unit tests of contract parsing on core and Python/TypeScript builders: matching pair, older/newer/unknown core, malformed/legacy bank, corrupt checksums and preimage mismatch. Do not relax existing parser checks.
 - Storage fault injection after every payload and metadata write, plus readback failure: the previous `GOOD` bank or stock must always remain bootable. Test migration and downgrade paths.
-- Boot-state tests for candidate accepted, rejected, initializer failure, crash/reboot before confirmation, explicit confirmation and rollback. Assert that no module callback, AUDIO page or direct hook is published before all preflight checks pass.
-- Full bank regression and physical tests for both update orders, power loss during transfer, reboot without confirmation and normal confirmation. Agents do not perform device writes; the user controls these tests.
+- Boot-state tests for candidate accepted, rejected, initializer failure, crash/reboot before the health gate, automatic confirmation and rollback. Assert that no module callback, AUDIO page or direct hook is published before all preflight checks pass.
+- Full bank regression and physical tests for both update orders, power loss during transfer, reboot before the health gate and normal automatic confirmation. Agents do not perform device writes; the user controls these tests.
 
 No `SYX`/`SMZ4` binaries or stock-derived bytes belong in the repository. Do not mark either issue complete until the on-device rollback and both update orders pass.

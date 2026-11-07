@@ -8,7 +8,7 @@ export type SmzMachine = {descriptor:string; ui:string; update:string; render:st
 export type SmzBankSpec = {main:SmzObject[]; audio:SmzObject[]; machines:SmzMachine[]; modules:string[]; samplePool:boolean; modInfo?:[string,string][]}
 const align=(n:number,a:number)=>Math.ceil(n/a)*a
 const AUDIO=0x4204f750, AUDIO_MAX=0x42100000-AUDIO
-export const SMZ_CORE_CONTRACT=0x53594602 // mods/core-st/smz.h
+export const SMZ_CORE_CONTRACT=0x53594603 // mods/core-st/smz.h
 const word=(a:Uint8Array,n:number)=>new DataView(a.buffer,a.byteOffset,a.byteLength).getUint32(n)
 const put=(a:Uint8Array,n:number,v:number)=>new DataView(a.buffer,a.byteOffset,a.byteLength).setUint32(n,v)
 const adler=(data:Uint8Array)=>{let a=1,b=0;for(const x of data){a=(a+x)%65521;b=(b+a)%65521}return (b*65536+a)>>>0}

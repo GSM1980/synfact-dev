@@ -7,11 +7,13 @@
 #include "machines.h"
 typedef st_u32 u32;typedef core_u8 u8;
 extern u32 fw_view_machine(void *);extern void fw_invalidate(void *);
+extern void core_mods_auto_confirm_tick(void);
 extern const struct st_machine_ui_api core_machine_ui_api;
 void core_machine_tick(void *raw)
 {
     u8 *ctrl=raw,*end=ctrl+0x14,*node=*(u8 **)(ctrl+0x1c),*view;
     const struct core_machine_def *m;const struct st_machine_ui *u;u32 page;
+    core_mods_auto_confirm_tick();
     if(!core_machine_active)return;
     /* Same visible range/order as native DRAWALL. UI-task callbacks cannot
      * push/pop views. Opaque overlays exclude the views underneath them. */

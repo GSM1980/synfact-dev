@@ -32,11 +32,11 @@ toolchain profile, then a relocatable image with a contiguous descriptor directo
 AUDIO is compiled for its final CPU2 address. The supplied example is silent
 and has 28 controls, exercising all four pages; it is separate from firmware.
 The Data envelope is uploaded to `/mods-stage`; no `SAMP` header is stored.
-Uploading a candidate does not unload live code. Restart to try it, test playback
-and the controls, then explicitly confirm through `/mods-confirm` or `mods confirm`.
-If the trial is not confirmed before another restart, the previous bank returns.
+Uploading a candidate does not unload live code. Restart to try it. The core
+keeps it automatically after AUDIO/sample startup and five seconds of normal
+UI ticks. A restart before that point restores the previous bank.
 `/mods` remains a read-only view of the selected stored bank.
-Core 1.6 checks the generated preimages of LFO3 and MODULATION SKIP against
+Core 1.7 checks the generated preimages of LFO3 and MODULATION SKIP against
 resident OS 1.41 code before relocating the bank or running any initializer.
 Mismatch status 11 leaves the previous bank or stock machines active.
 
@@ -61,7 +61,7 @@ All words are 32-bit big endian. Address intervals exclude their upper end.
 | Offset | Value |
 |---|---|
 | 0 / 4 / 8 | `SMZ4` / MAIN image bytes / relocation count |
-| 12 / 16 | Mod-info directory offset within MAIN image when bit 3 is set, otherwise zero / exact core contract (`53594602`) when bit 4 is set, otherwise `ffffffff` |
+| 12 / 16 | Mod-info directory offset within MAIN image when bit 3 is set, otherwise zero / exact core contract (`53594603`) when bit 4 is set, otherwise `ffffffff` |
 | 20 | Sum of BE longwords from zone+32 through MAIN image end, modulo 2^32 |
 | 24 / 28 | AUDIO offset relative to zone / unpadded AUDIO length |
 

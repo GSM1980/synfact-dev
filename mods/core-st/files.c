@@ -21,10 +21,31 @@ extern u32 core_machine_paints;
 extern volatile u32 core_machine_available_mask,core_machine_name_seen,core_machine_category_seen;
 extern volatile u32 core_machine_vector_mask,core_machine_vector_count,core_machine_vector_calls;
 extern int core_machine_present(u32);
+extern int core_pool_available(void),core_pool_ready(void);
 static u32 loader_status[32];
-static u32 confirm_ok;
+static u32 trial_ready_ticks;
+#ifdef CORE_ST_NATIVE_TEST
+extern int core_mods_audio_ready(void);
+#else
+static int core_mods_audio_ready(void)
+{return *(const volatile u32 *)0x43bdc824u!=0;}
+#endif
 static u32 sectors(void){return fw_mmc_ready[0]?fw_mmc_sectors[0]:0;}
 static const struct core_mods_io io={fw_mmc_read,fw_mmc_write,sectors};
+/* A running UI task, completed sample/AUDIO startup and five seconds of
+ * normal ticks are the automatic boot-health gate. This does no IO until the
+ * one GOOD transition. A stalled startup leaves TRYING for rollback on reboot. */
+void core_mods_auto_confirm_tick(void)
+{
+    if(!core_machine_trial || core_machine_status!=0){trial_ready_ticks=0;return;}
+    if(!core_mods_audio_ready() || (core_pool_available() && !core_pool_ready())){
+        trial_ready_ticks=0;return;
+    }
+    if(trial_ready_ticks>=150u)return;
+    if(++trial_ready_ticks==150u &&
+       core_mods_transition_io(&io,core_machine_trial_slot,
+                               CORE_MODS_TRYING,CORE_MODS_GOOD))core_machine_trial=0;
+}
 static u32 get32(const u8 *p)
 {return (u32)p[0]<<24|(u32)p[1]<<16|(u32)p[2]<<8|p[3];}
 static void zero(void *p,u32 n){u8 *q=p;while(n--)*q++=0;}
@@ -63,19 +84,6 @@ static void core_mods_stage_written(const struct fn *fn,const u8 *header)
        stage_read(&disk,0,first,sizeof(first)))return;
     staged.slot.stamp=get32(first+16);
     staged.commit_ok=core_mods_record_io(&io,&staged.slot);
-}
-static void core_mods_confirm_written(const struct fn *fn,const u8 *header)
-{
-    u8 b[512] __attribute__((aligned(16)));(void)fn;confirm_ok=0;
-    if(!header || get32(header+13)!=8 || get32(header+25)!=16 ||
-       !core_machine_trial || core_machine_status!=0 ||
-       fw_mmc_read(CORE_MODS_CONFIRM>>9,512,b))return;
-    if(get32(b)!=0x4d434631u || get32(b+4)!=core_machine_trial_sequence ||
-       get32(b+8)!=core_machine_trial_slot ||
-       get32(b+12)!=(core_machine_trial_sequence^core_machine_trial_slot^0xa55a5aa5u))return;
-    confirm_ok=core_mods_transition_io(&io,core_machine_trial_slot,
-                                       CORE_MODS_TRYING,CORE_MODS_GOOD);
-    if(confirm_ok)core_machine_trial=0;
 }
 /* The native BackupFileWriter parses the transport header and footer.
  * It passes the complete original 31-byte header after its successful close. */
@@ -136,14 +144,9 @@ int core_mods_route(void *router,const char *const *path,void *out)
             zero(out,8);r[0]=1;*(void **)(r+4)=fw_empty_string;fw_info_copy(r+8,&info);return 1;
         }
     }
-    if(!path || (!core_mods_path(*path) && !core_mods_stage_path(*path) &&
-                 !core_mods_confirm_path(*path)))return 0;
+    if(!path || (!core_mods_path(*path) && !core_mods_stage_path(*path)))return 0;
     zero(&info,sizeof(info));info.type=8;info.kind=2;info.id=1;info.tag=0xffffffffu;
-    if(core_mods_confirm_path(*path)){
-        info.permissions=6;info.address=CORE_MODS_CONFIRM;info.bytes=16;
-        capture(&info.written,core_mods_confirm_written);
-        capture(&info.validate,core_mods_validate);
-    }else if(core_mods_stage_path(*path)){
+    if(core_mods_stage_path(*path)){
         struct core_mods_slot target,existing;
         if(!core_mods_stage_io(&io,&target)){
             error(out,"/mods-stage eMMC is unavailable",0x84);return 1;}
@@ -171,12 +174,6 @@ int core_mods_write(void *router,const struct info *info,void *out)
 {
     (void)router;
     if(info->written.manager!=(void *)core_fn_manager)return 0;
-    if(info->written.invoke==(void *)core_mods_confirm_written){
-        if(info->type!=8 || info->kind!=2 || info->address!=CORE_MODS_CONFIRM ||
-           info->bytes!=16 || !core_machine_trial || core_machine_status!=0){
-            error(out,"No matching mods trial to confirm",16);return 1;}
-        confirm_ok=0;return 0;
-    }
     if(info->written.invoke!=(void *)core_mods_stage_written)return 0;
     if(info->type!=8 || info->kind!=2 || info->bytes>CORE_MODS_SLOT_CAP) {
         error(out,"/mods-stage bank exceeds 8 MiB or has an invalid destination",16);return 1;
@@ -193,9 +190,8 @@ void core_mods_finish(const struct fn *fn,const u8 *header,void *status)
 {
     (void)header;
     if(fn->manager!=(void *)core_fn_manager)return;
-    if(fn->invoke!=(void *)core_mods_stage_written &&
-       fn->invoke!=(void *)core_mods_confirm_written)return;
-    if(!(fn->invoke==(void *)core_mods_stage_written?staged.commit_ok:confirm_ok)) {
+    if(fn->invoke!=(void *)core_mods_stage_written)return;
+    if(!staged.commit_ok) {
         *(u8 *)status=0;
         fw_string_assign((u8 *)status+4,"Failed to validate or commit mods update");
     }

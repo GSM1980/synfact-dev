@@ -291,8 +291,8 @@ SMZ4 is a separate optional runtime machine format, not a replacement for
 reserved control positions are specified in [SMZ4.md](../mods/core-st/SMZ4.md).
 Ordinary mods retain the SDK format and core hook bus. The first mapping supports
 28 active controls; four positions remain reserved for a storage extension.
-Core 1.6 requires feature bit 4 in the SMZ4 envelope. Its MAIN zone word +16
-holds the exact core contract `53594602` instead of the old no-initializer
+Core 1.7 requires feature bit 4 in the SMZ4 envelope. Its MAIN zone word +16
+holds the exact core contract `53594603` instead of the old no-initializer
 sentinel. The word is covered by the envelope checksum. A missing or different
 contract prevents execution; future incompatible core changes require a new ID.
 The two-slot staging and confirmation metadata are transport state outside

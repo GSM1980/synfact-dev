@@ -40,7 +40,7 @@ int main(void)
     assert(core_mods_select_io(&io,&primary,&fallback)==1 && primary.slot==0 &&
            primary.state==CORE_MODS_CANDIDATE && !fallback.bytes);
     assert(core_mods_transition_io(&io,0,CORE_MODS_CANDIDATE,CORE_MODS_TRYING));
-    assert(core_mods_select_io(&io,&primary,&fallback)==0); /* crash before confirmation */
+    assert(core_mods_select_io(&io,&primary,&fallback)==0); /* crash before automatic health gate */
     assert(core_mods_transition_io(&io,0,CORE_MODS_TRYING,CORE_MODS_GOOD));
     assert(core_mods_select_io(&io,&primary,&fallback)==1 && primary.slot==0);
     assert(core_mods_stage_io(&io,&b) && b.slot==1 && b.sequence==2);
@@ -64,6 +64,6 @@ int main(void)
     assert(core_mods_commit_io(&legacy,&io,256));
     assert(core_mods_stat_io(&io,&n)==1 && n==256);
     assert(core_mods_stage_io(&io,&a) && a.slot==1); /* preserve legacy slot 0 */
-    puts("PASS: v2 stage, trial, confirmation, rollback, corruption, failed writes and legacy migration");
+    puts("PASS: v2 stage, trial, GOOD transition, rollback, corruption, failed writes and legacy migration");
     return 0;
 }

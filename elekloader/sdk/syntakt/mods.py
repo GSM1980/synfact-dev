@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Stage and confirm a safe SMZ4 bank with native Data RPC and verified readback.
+"""Stage a safe SMZ4 bank with native Data RPC and verified readback.
 
 python -m elekloader.sdk.syntakt.mods put out/samplers.smz4 --yes-write-device
 python -m elekloader.sdk.syntakt.mods get --out out/readback.smz4
@@ -21,7 +21,6 @@ def main(argv=None):
     put=sub.add_parser('put');put.add_argument('file')
     put.add_argument('--yes-write-device',action='store_true')
     get=sub.add_parser('get');get.add_argument('--out',required=True)
-    sub.add_parser('confirm')
     sub.add_parser('status')
     a=p.parse_args(argv)
     if not 64<=a.block<=8192:p.error('block must be 64..8192 bytes')
@@ -45,23 +44,11 @@ def main(argv=None):
                 raise RuntimeError('installed core cannot safely stage this bank; update the core first')
             client.write('/mods-stage',body)
             if client.read('/mods-stage')!=body:raise RuntimeError('/mods-stage readback differs')
-            print(f'/mods-stage: {len(body)} bytes uploaded and readback verified. Restart to try the bank; previous bank retained.')
+            print(f'/mods-stage: {len(body)} bytes uploaded and readback verified. Restart to activate; a healthy startup keeps the bank automatically.')
         elif a.cmd=='get':
             body=client.read('/mods')
             with destination.open('xb') as f:f.write(body)
             print(f'{destination}: {len(body)} bytes read from /mods')
-        elif a.cmd=='confirm':
-            status=client.read('/mod-status')
-            if len(status)!=128:raise RuntimeError('safe mods status unavailable')
-            values=struct.unpack('>32I',status)
-            if values[22]!=CONTRACT or values[2]!=0 or values[23]!=1 or values[24]>1 or not values[25]:
-                raise RuntimeError('no booted mods trial is ready to confirm')
-            slot,sequence=values[24:26]
-            client.write('/mods-confirm',struct.pack('>4I',0x4d434631,sequence,slot,
-                                                  sequence^slot^0xa55a5aa5))
-            after=struct.unpack('>32I',client.read('/mod-status'))
-            if after[23]!=0 or after[2]!=0:raise RuntimeError('mods confirmation was not recorded')
-            print('Mods trial confirmed. This bank remains active after restart.')
         else:
             body=client.read('/mod-status')
             if len(body) not in (64,128):raise RuntimeError('invalid loader status size')
@@ -82,7 +69,7 @@ def main(argv=None):
                 print(f'Available mask: {values[16]:04X}; final vector: {values[17]:04X}; rows: {values[18]}; builds: {values[19]}')
                 print(f'Name queries: {values[20]:04X}; category queries: {values[21]:04X}')
                 if len(values)>22:print(f'Core contract: {values[22]:08X}')
-                if len(values)>25 and values[23]:print(f'Trial pending confirmation: slot {values[24]}, generation {values[25]}')
+                if len(values)>25 and values[23]:print(f'Automatic startup check in progress: slot {values[24]}, generation {values[25]}')
                 if len(values)>26 and values[26]:print('Previous candidate was rolled back; the previous bank or stock machines are active.')
     finally:transport.close()
     return 0

@@ -31,13 +31,6 @@ int core_mods_stage_path(const char *p)
     for(i=0;i<sizeof(name);i++)if(p[i]!=name[i])return 0;
     return 1;
 }
-int core_mods_confirm_path(const char *p)
-{
-    static const char name[]="/mods-confirm";core_u32 i;
-    if(!p)return 0;
-    for(i=0;i<sizeof(name);i++)if(p[i]!=name[i])return 0;
-    return 1;
-}
 int core_mods_span(core_u32 address,core_u32 size)
 {return address==CORE_MODS_BASE && size<=CORE_MODS_MAX;}
 int core_mods_stat_io(const struct core_mods_io *io,core_u32 *size)

@@ -6,8 +6,9 @@
 #include <string.h>
 #define CORE_ST_NATIVE_TEST
 #include "../mods/core-st/files.c"
-static u8 mock_sector[4][512],payload[4096];
+static u8 mock_sector[3][512],payload[4096];
 static u32 reads,writes,read_fail,write_fail;
+static int audio_ready,pool_ready,pool_available=1;
 static const char *last_error;
 volatile u32 core_machine_status=2,core_machine_active,core_smz_failure=89;
 volatile u32 core_machine_trial,core_machine_trial_slot,core_machine_trial_sequence;
@@ -18,6 +19,9 @@ u32 core_machine_paints;
 volatile u32 core_machine_available_mask,core_machine_name_seen,core_machine_category_seen;
 volatile u32 core_machine_vector_mask,core_machine_vector_count,core_machine_vector_calls;
 int core_machine_present(u32 type){return type>=66 && type<=69;}
+int core_mods_audio_ready(void){return audio_ready;}
+int core_pool_available(void){return pool_available;}
+int core_pool_ready(void){return pool_ready;}
 u32 fw_mmc_ready[]={1},fw_mmc_sectors[]={CORE_MODS_LBA+1},fw_empty_string[]={0};
 int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
 {(void)r;v->contract=CORE_SMZ_CONTRACT;return 1;}
@@ -28,7 +32,6 @@ static int sector_index(u32 lba)
     if(lba==CORE_MODS_SLOT_META(0)>>9)return 0;
     if(lba==CORE_MODS_SLOT_META(1)>>9)return 1;
     if(lba==CORE_MODS_LBA)return 2;
-    if(lba==CORE_MODS_CONFIRM>>9)return 3;
     assert(0);return -1;
 }
 int fw_mmc_read(u32 lba,u32 n,void *out)
@@ -86,18 +89,41 @@ int main(void)
     assert(route("/mods-stage").bytes==4096 && route("/mods").bytes==4096);
     assert(core_mods_transition_io(&io,0,CORE_MODS_CANDIDATE,CORE_MODS_TRYING));
     core_machine_trial=1;core_machine_trial_slot=0;core_machine_trial_sequence=bank.sequence;
+    core_machine_status=5;audio_ready=1;pool_ready=1;
+    for(i=0;i<150;i++)core_mods_auto_confirm_tick();
+    assert(core_mods_slot_io(&io,0,&bank)==1 && bank.state==CORE_MODS_TRYING);
     core_machine_status=0;
-    info=route("/mods-confirm");assert(info.address==CORE_MODS_CONFIRM && info.bytes==16);
-    assert(core_mods_write(0,&info,out)==0);
-    put(mock_sector[3],0x4d434631);put(mock_sector[3]+4,bank.sequence);
-    put(mock_sector[3]+8,0);put(mock_sector[3]+12,bank.sequence^0xa55a5aa5u);
-    close_stage(info,16);
+    audio_ready=0;pool_ready=0;
+    for(i=0;i<150;i++)core_mods_auto_confirm_tick();
+    assert(core_mods_slot_io(&io,0,&bank)==1 && bank.state==CORE_MODS_TRYING);
+    audio_ready=1;
+    for(i=0;i<150;i++)core_mods_auto_confirm_tick();
+    assert(core_mods_slot_io(&io,0,&bank)==1 && bank.state==CORE_MODS_TRYING);
+    pool_ready=1;
+    for(i=0;i<149;i++)core_mods_auto_confirm_tick();
+    assert(core_mods_slot_io(&io,0,&bank)==1 && bank.state==CORE_MODS_TRYING);
+    core_mods_auto_confirm_tick();
     assert(!core_machine_trial && core_mods_slot_io(&io,0,&bank)==1 && bank.state==CORE_MODS_GOOD);
+    before=writes;core_mods_auto_confirm_tick();assert(writes==before);
     info=route("/mods-stage");assert(info.address==CORE_MODS_BASE+CORE_MODS_SLOT_BYTES);
     info.bytes=4096;assert(core_mods_write(0,&info,out)==0);
     /* Interrupted replacement invalidates only the inactive slot. */
     staged.pending=0;assert(core_mods_slot_io(&io,0,&bank)==1 && bank.state==CORE_MODS_GOOD);
     assert(route("/mods").address==CORE_MODS_BASE);
+    /* A metadata write failure cannot silently confirm the trial. */
+    assert(core_mods_stage_io(&io,&bank) && bank.slot==1);
+    bank.bytes=4096;assert(core_mods_record_io(&io,&bank));
+    assert(core_mods_transition_io(&io,1,CORE_MODS_CANDIDATE,CORE_MODS_TRYING));
+    core_machine_trial=1;core_machine_trial_slot=1;trial_ready_ticks=0;
+    pool_available=0;pool_ready=0; /* a module-only bank needs AUDIO, no pool */
+    write_fail=1;before=writes;
+    for(i=0;i<150;i++)core_mods_auto_confirm_tick();
+    write_fail=0;
+    assert(writes==before+1);
+    assert(core_machine_trial && core_mods_slot_io(&io,1,&bank)==1 && bank.state==CORE_MODS_TRYING);
+    core_mods_auto_confirm_tick();assert(core_machine_trial); /* no write storm */
+    assert(route("/mods").address==CORE_MODS_BASE); /* reboot would pick old GOOD */
+    core_machine_trial=0;
     fw_mmc_ready[0]=0;before=reads+writes;
     path="/mods-stage";assert(core_mods_route(0,&path,out)==1 && *(u8 *)out==0);
     assert(reads+writes==before);
@@ -108,6 +134,6 @@ int main(void)
     put(header+25,16);put(header+13,1);core_mods_check_header(out,header);assert(*(u8 *)out==0);
     write_fail=1;info=route("/mods-stage");info.bytes=4096;
     assert(core_mods_write(0,&info,out)==1 && last_error);write_fail=0;
-    puts("PASS: safe /mods routes, staging, confirmation, rollback, bounds and IO failures");
+    puts("PASS: safe /mods routes, staging, automatic confirmation, rollback, bounds and IO failures");
     return 0;
 }
