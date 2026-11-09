@@ -16,6 +16,14 @@ TABLES=(0x40040e00,0x40040e50,0x40040ec0)
 # [40040860,40041050) companion cave Synfact's AUDIO code ran in), after the
 # scheduler tables and the two 16-byte ABI directories at 40040f40/40040f50.
 UPPER=(0x40040f60,0x40041050)
+# The window is also the zero tail of the stock base-width filter's pole table
+# (40040060, 4-byte poles): stock 40002320 reads T[(BASE+WDTH)>>6] up to index
+# 1023. Indices 508..1023 are zero on the stock OS (an open low-pass), so both
+# low-pass lookups call audio_bw_index (audio-bw-filter.s), which bounds the
+# index to 508. Index 508 is below the window; the output is the stock one.
+BW_TABLE,BW_OPEN=0x40040060,508
+BW_SITES=(0x40002364,0x400023e8)
+BW_STOCK=bytes.fromhex('d081ec8041f00c00')   # add.l d1,d0; asr.l #6,d0; lea (a0,d0.l*4),a0
 
 def audit(code,base=0):
     """Check an explicit code range, including its complete final instruction."""
@@ -45,7 +53,7 @@ def build(stock,dev,out,meter=False):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     prefix=os.environ.get('ELEKLOADER_CROSS',dev.toolchain['prefix'])
     objects=[];audits={}
-    sources=['audio-machines.s','audio-machines.c']+(['audio-meter.s'] if meter else [])
+    sources=['audio-machines.s','audio-machines.c','audio-bw-filter.s']+(['audio-meter.s'] if meter else [])
     for name in sources:
         obj=out/(name+'.o');src=HERE/name
         if src.suffix=='.c':sdk.run([prefix+'gcc',*dev.toolchain['cflags'],'-fno-jump-tables','-c',str(src),'-o',str(obj)])
@@ -107,6 +115,11 @@ def build(stock,dev,out,meter=False):
     for at,old,new in scheduler:patch(at,bytes.fromhex(old),new)
     patch(0x40001016,bytes.fromhex('4ebafcee4eb940001860'),jsr('audio_machine_boot')+b'\x4e\x71'*2)
     patch(0x40000b04,bytes.fromhex('4ab940040050'),jsr('audio_machine_exit'))
+    # The bound is exact only while the stock poles from index 508 on are zero.
+    tail=original[BW_TABLE+4*BW_OPEN-BASE:BW_TABLE+4*1024-BASE]
+    if any(tail) or not all(original[BW_TABLE+4*i-BASE:BW_TABLE+4*i+4-BASE]!=bytes(4) for i in range(BW_OPEN)):
+        raise ValueError('stock base-width pole table is not 508 poles and a zero tail')
+    for at in BW_SITES:patch(at,BW_STOCK,jsr('audio_bw_index')+b'\x4e\x71')
     # Fixed ABI directory, separate from scheduler tables; only core services.
     api=struct.pack('>4I',0x454c0001,symbols['audio_machine_params'],32,24)
     patch(0x40040f40,bytes(16),api)

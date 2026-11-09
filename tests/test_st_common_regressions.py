@@ -104,9 +104,17 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
             for site in (0x4000094a,0x40000b04,0x40001016):
                 i=site-base;assert new[i:i+2]==old[i:i+2]==b'\x4e\xb9'
                 operands.update(range(i+2,i+6))
+            # The base-width filter's two low-pass lookups (core 1.7.2) call the
+            # companion: jsr + nop now; a previous build has them stock or as a call.
+            for site in (0x40002364,0x400023e8):
+                i=site-base;assert new[i:i+2]==b'\x4e\xb9' and new[i+6:i+8]==b'\x4e\x71'
+                if old[i:i+8]==bytes.fromhex('d081ec8041f00c00'):operands.update(range(i,i+8))
+                else:
+                    assert old[i:i+2]==b'\x4e\xb9' and old[i+6:i+8]==b'\x4e\x71'
+                    operands.update(range(i+2,i+6))
             assert all(new[i]==old[i] or lo<=i<hi or i in operands for i in range(len(new)))
             checks.append({'name':'AUDIO identical to previous build outside companion window %#x..%#x '
-                           '(except the three companion jsr targets)'%audio_window,'ok':True})
+                           '(except the companion jsr sites and targets)'%audio_window,'ok':True})
         else:
             assert new==old
             checks.append({'name':'AUDIO identical to previous build','ok':True})

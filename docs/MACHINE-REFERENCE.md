@@ -142,6 +142,26 @@ are the reference.
 - `0x40006764`: the TwinShot PCM reader.
 - `0x40003ee0`: the stock voice reset (section above, `+0x56c`).
 
+### After the render: the track chain on CPU2
+
+The machine's `render` writes the track's dry signal. The filters run after it,
+in the AUDIO IRQ (`0x40000934`), not in the render. The IRQ calls, in this order:
+the scheduler (`0x40004324`), then `0x4000112c`, then `0x40002320`, then
+`0x400019d6` once per track, then `0x4000168e`. It then sends the eight
+tracks' buffers (`0x80003840`, 128 bytes per track) to MAIN by DMA. MAIN mixes
+them; it does not filter them.
+
+- `0x40002320` is the base-width filter (BASE, WDTH). It reads the row words
+  `0x33` (BASE) and `0x34` (WDTH) and takes two Q31 poles from the table at
+  `0x40040060`: `T[BASE>>6]` for a one-pole high-pass and
+  `T[(BASE+WDTH)>>6]` for a one-pole low-pass, which runs first. The poles
+  change once per block, with no smoothing. The stock table is 508 poles and
+  zeros up to index 1023. A zero pole leaves the low-pass open. The core
+  bounds the low-pass index to 508 (`mods/core-st/audio-bw-filter.s`),
+  because the AUDIO companion runs in that zero tail.
+- What the other three routines do is not recorded in this repository. The
+  multimode filter (FREQ, RESO, TYPE) has not been located.
+
 ### Units and limits
 
 - Pitch Q16, parameters Q8, playback cursor Q12. Write the unit in every function.

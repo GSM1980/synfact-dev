@@ -174,6 +174,9 @@ derives ratio = table + (offset - 0x4000) << 12, saturated at zero; offsets of
 zero silence the carrier.) The AUDIO companion uses the device's declared
 runtime window `40040860..40041050`: code to `40040e00`, scheduler tables,
 the two ABI directories, then directory entries and glue from `40040f60`.
+That window is not unused on the stock OS: it is the zero tail of the
+base-width filter's pole table (`40040060`). From core 1.7.2 the filter's
+low-pass lookup is bounded below the window (core README, "Core 1.7.2").
 Native update ABI: pitch, voice pointer, params pointer on the C stack. Render:
 output pointer, voice pointer. Block: 32 frames at 48 kHz. Machine authors own
 their reset/retrigger/release state and must preserve the native voice geometry.

@@ -491,6 +491,13 @@ MAIN SRAM never misses in cache, which an audio-IRQ module pays for in DDR.
 kernel and bank, the chorus's state, per-block C code and kernels); each owner checks only its
 own window at init and falls back to DDR, so bank order does not matter.
 
+Zeros in the stock image are not free memory by themselves: a table can end
+in zeros that the stock code reads. The AUDIO companion's window was the zero
+tail of the base-width filter's pole table, and BASE made artifacts until core
+1.7.2 bounded the lookup (mods/core-st/README.md). Before you claim a stock-zero
+range, look for every stock reader of it, including indexed reads from a
+table that starts below the range.
+
 ## Syntakt: page randomize for new pages (core 1.4)
 
 The page key + YES randomizes the page shown (list item 22). Core 1.4 makes

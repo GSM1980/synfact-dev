@@ -852,6 +852,32 @@ notification helper is shared out of line; its extended controls plus final
 word are copied as one contiguous 34-byte range before notification. This
 keeps the combined core within its unchanged 64 KiB reserve and build flags.
 
+## Core 1.7.2: the base-width filter reads stock poles
+
+Moving BASE on a digital track made artifacts: random cutoffs from one step to
+the next, and a silent track at some values (BASE 2 with WDTH 127, for one).
+The base-width filter is stock AUDIO `40002320`. The AUDIO IRQ runs it after
+the scheduler, on the eight digital tracks. It takes its poles from the Q31
+table at `40040060`: `T[BASE>>6]` for the high-pass and `T[(BASE+WDTH)>>6]`
+for the low-pass, read up to index 1023. The stock table is 508 poles and a
+zero tail, and a zero pole leaves the low-pass open. The companion's runtime
+window `40040860..40041050` is that zero tail (indices 512..1019). Since the
+companion has run there, every BASE+WDTH of 128 or more read its code as a
+pole. In core 1.7.1, 467 of those entries were nonzero and 77 were outside
+[0, 1).
+
+1.7.2 keeps the companion where it is: SMZ banks read the AUDIO directory at
+its fixed address `40040f40`. Instead, both low-pass lookups (`40002364` and
+`400023e8`, two new AUDIO patch windows) call `audio_bw_index`
+(`audio-bw-filter.s`, 22 bytes in the upper reserve). It bounds the index to
+508, the stock table's first zero, which lies below the window. The builder
+refuses a stock table that is not 508 poles and a zero tail. The high-pass
+index stays at most 511 and keeps its stock lookup. The filter's output is the
+stock one for every BASE and WDTH: `tests/test_st_bw_filter_emu.py` runs the
+stock routine on both images (docs/SYNTAKT-BUILD.md). MAIN, the bank contract
+and the banks are unchanged. Confirmed on the unit: moving BASE no longer
+makes artifacts.
+
 ## Core 1.7.1: the trial boot writes its record
 
 Core 1.7 crashed (EXCEPTION, vector 3) at the first boot of every staged

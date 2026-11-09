@@ -171,6 +171,16 @@ test says so and skips when it is not set.
     --object mods/core-st/out/core.work/preview.s.o
 ```
 
+The base-width filter (core 1.7.2+) has a differential that runs the stock
+AUDIO routine `40002320` on the stock image and on the build's `audio.bin`,
+with a negative control that restores the stock lookups. It needs a Unicorn
+with ColdFire MAC-with-load (`LIBUNICORN_PATH`); without one it prints
+`SKIPPED` and exits 2:
+
+```bash
+"$PY" tests/test_st_bw_filter_emu.py --stock "$SYNTAKT_STOCK" out/core-st-X.Y.Z-name
+```
+
 The core's lock-preview site (0.12.18+) has an in-repository differential
 that runs the real `40039160` of two MAIN images with the same interpreter.
 Test against the stock MAIN **and** the installed core's image
