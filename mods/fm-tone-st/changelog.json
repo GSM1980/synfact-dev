@@ -1,0 +1,66 @@
+{
+  "id": "fm-tone-st",
+  "title": "SY FM DTONE",
+  "latest": "1.1",
+  "entries": [
+    {
+      "version": "1.1",
+      "date": "2026-11-09",
+      "commits": [
+        {
+          "sha": "f89c72b",
+          "date": "2026-11-09",
+          "subject": "ARP 1.8, FM TONE 1.1, POLY 1.4: TRIG pages, SCALE, falling RANGE, FUNC snaps"
+        },
+        {
+          "sha": "1fd3823",
+          "date": "2026-11-09",
+          "subject": "POLY: build the native kernels from the stock OS alone; add mod licences"
+        }
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-02",
+      "commits": [
+        {
+          "sha": "347ef8e",
+          "date": "2026-11-02",
+          "subject": "Set the mod versions: 1.0, and ARP 0.1"
+        },
+        {
+          "sha": "95b3057",
+          "date": "2026-11-02",
+          "subject": "Remove internal studies and notes; drop the MIT notices from our own files"
+        },
+        {
+          "sha": "ea68888",
+          "date": "2026-11-02",
+          "subject": "Build FM TONE from the owner's Digitone OS with a copy recipe"
+        },
+        {
+          "sha": "24b6b63",
+          "date": "2026-11-02",
+          "subject": "Serve FM TONE in the browser with the visitor's own Digitone OS"
+        },
+        {
+          "sha": "5381c8e",
+          "date": "2026-11-02",
+          "subject": "Rename FM TONE to SY FM DTONE; list the machine types taken and free"
+        }
+      ]
+    },
+    {
+      "version": "0.2",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "2c41add",
+          "date": "2026-10-29",
+          "subject": "Syntakt OS 1.41: core-st, SMZ banks, machines, modules and the modulation skip"
+        }
+      ]
+    }
+  ],
+  "slug": "fm-tone-st"
+}

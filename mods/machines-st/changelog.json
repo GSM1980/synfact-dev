@@ -1,0 +1,30 @@
+{
+  "id": "machines-st",
+  "title": "Syntakt machine loader",
+  "latest": "1.0",
+  "entries": [
+    {
+      "version": "1.0",
+      "date": "2026-11-03",
+      "commits": [
+        {
+          "sha": "38a39d5",
+          "date": "2026-11-03",
+          "subject": "machines-st 1.0"
+        }
+      ]
+    },
+    {
+      "version": "0.1",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "2c41add",
+          "date": "2026-10-29",
+          "subject": "Syntakt OS 1.41: core-st, SMZ banks, machines, modules and the modulation skip"
+        }
+      ]
+    }
+  ],
+  "slug": "machines-st"
+}

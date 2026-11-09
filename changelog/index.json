@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "mods": [
+    {
+      "slug": "arp-st",
+      "id": "arp-st",
+      "title": "ARP experiment",
+      "latest": "1.8",
+      "path": "mods/arp-st"
+    },
+    {
+      "slug": "chorus-st",
+      "id": "chorus-st",
+      "title": "Chorus",
+      "latest": "1.1",
+      "path": "mods/chorus-st"
+    },
+    {
+      "slug": "core-st",
+      "id": "core",
+      "title": "core",
+      "latest": "1.7.1",
+      "path": "mods/core-st"
+    },
+    {
+      "slug": "fm-tone-st",
+      "id": "fm-tone-st",
+      "title": "SY FM DTONE",
+      "latest": "1.1",
+      "path": "mods/fm-tone-st"
+    },
+    {
+      "slug": "lfo3-st",
+      "id": "lfo3-st",
+      "title": "Third LFO",
+      "latest": "1.2",
+      "path": "mods/lfo3-st"
+    },
+    {
+      "slug": "machines-st",
+      "id": "machines-st",
+      "title": "Syntakt machine loader",
+      "latest": "1.0",
+      "path": "mods/machines-st"
+    },
+    {
+      "slug": "modulation-skip-st",
+      "id": "modulation-skip-st",
+      "title": "Skip unchanged modulation per track",
+      "latest": "1.2.3",
+      "path": "mods/modulation-skip-st"
+    },
+    {
+      "slug": "poly-st",
+      "id": "poly-st",
+      "title": "POLY",
+      "latest": "1.4",
+      "path": "mods/poly-st"
+    },
+    {
+      "slug": "recorder-st",
+      "id": "recorder-st",
+      "title": "Audio Recorder",
+      "latest": "1.0",
+      "path": "mods/recorder-st"
+    },
+    {
+      "slug": "sample-manager-st",
+      "id": "sample-manager-st",
+      "title": "Sample Manager",
+      "latest": "1.0",
+      "path": "mods/sample-manager-st"
+    },
+    {
+      "slug": "samplers-st",
+      "id": "samplers-st",
+      "title": "SP sample machines",
+      "latest": "1.2",
+      "path": "mods/samplers-st"
+    },
+    {
+      "slug": "system-info-smz-st",
+      "id": "system-info-smz-st",
+      "title": "System info",
+      "latest": "1.1",
+      "path": "mods/system-info-smz-st"
+    },
+    {
+      "slug": "system-info-st",
+      "id": "system-info-st",
+      "title": "System info",
+      "latest": "1.1",
+      "path": "mods/system-info-st"
+    }
+  ]
+}

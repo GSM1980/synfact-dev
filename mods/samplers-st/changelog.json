@@ -1,0 +1,52 @@
+{
+  "id": "samplers-st",
+  "title": "SP sample machines",
+  "latest": "1.2",
+  "entries": [
+    {
+      "version": "1.2",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "aa44b36",
+          "date": "2026-11-06",
+          "subject": "Make sampler OVER a soft clip without muting at zero"
+        }
+      ]
+    },
+    {
+      "version": "1.1",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "60985cb",
+          "date": "2026-11-06",
+          "subject": "Fix sampler waveform cache, OVER routing and BR response"
+        }
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-02",
+      "commits": [
+        {
+          "sha": "347ef8e",
+          "date": "2026-11-02",
+          "subject": "Set the mod versions: 1.0, and ARP 0.1"
+        }
+      ]
+    },
+    {
+      "version": "0.12",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "2c41add",
+          "date": "2026-10-29",
+          "subject": "Syntakt OS 1.41: core-st, SMZ banks, machines, modules and the modulation skip"
+        }
+      ]
+    }
+  ],
+  "slug": "samplers-st"
+}

@@ -1,0 +1,148 @@
+{
+  "id": "arp-st",
+  "title": "ARP experiment",
+  "latest": "1.8",
+  "entries": [
+    {
+      "version": "1.8",
+      "date": "2026-11-09",
+      "commits": [
+        {
+          "sha": "f89c72b",
+          "date": "2026-11-09",
+          "subject": "ARP 1.8, FM TONE 1.1, POLY 1.4: TRIG pages, SCALE, falling RANGE, FUNC snaps"
+        },
+        {
+          "sha": "c8071dd",
+          "date": "2026-11-09",
+          "subject": "Syntakt docs: setup guide, machine guides, and environment variables"
+        }
+      ]
+    },
+    {
+      "version": "1.6",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "d4ad3ae",
+          "date": "2026-11-06",
+          "subject": "Core 1.4: page randomize on the new pages (list item 22)"
+        },
+        {
+          "sha": "79d45d7",
+          "date": "2026-11-06",
+          "subject": "Keep ARP settings bound to active Kit Sound"
+        }
+      ]
+    },
+    {
+      "version": "1.5",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "f80a711",
+          "date": "2026-11-06",
+          "subject": "Mirror ARP chord locks to active sequencer pattern"
+        },
+        {
+          "sha": "5ca3877",
+          "date": "2026-11-06",
+          "subject": "Fix ARP chord locks across native trig event replacement"
+        },
+        {
+          "sha": "bb430c4",
+          "date": "2026-11-06",
+          "subject": "Optimize ARP project metadata for default sounds"
+        }
+      ]
+    },
+    {
+      "version": "1.4",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "1ec17b1",
+          "date": "2026-11-06",
+          "subject": "Fix ARP live chord recording and chord encoder edits"
+        }
+      ]
+    },
+    {
+      "version": "1.3",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "c3fd8fd",
+          "date": "2026-11-06",
+          "subject": "Fix ARP handoff to native parameter pages"
+        }
+      ]
+    },
+    {
+      "version": "1.2",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "24ae549",
+          "date": "2026-11-06",
+          "subject": "ARP 1.2: chord page, sequencer chords and native knob travel"
+        }
+      ]
+    },
+    {
+      "version": "1.1",
+      "date": "2026-11-03",
+      "commits": [
+        {
+          "sha": "3986f51",
+          "date": "2026-11-03",
+          "subject": "ARP 1.1: native encoder steps, p-lock LEN marker"
+        }
+      ]
+    },
+    {
+      "version": "0.1",
+      "date": "2026-11-02",
+      "commits": [
+        {
+          "sha": "347ef8e",
+          "date": "2026-11-02",
+          "subject": "Set the mod versions: 1.0, and ARP 0.1"
+        },
+        {
+          "sha": "95b3057",
+          "date": "2026-11-02",
+          "subject": "Remove internal studies and notes; drop the MIT notices from our own files"
+        }
+      ]
+    },
+    {
+      "version": "0.0.3",
+      "date": "2026-10-31",
+      "commits": [
+        {
+          "sha": "7f1580b",
+          "date": "2026-11-02",
+          "subject": "Add ARP p-locks and step keys; show LFO3 locks on held trigs"
+        },
+        {
+          "sha": "33d4c71",
+          "date": "2026-10-31",
+          "subject": "Add client-side Syntakt firmware and SMZ builders"
+        }
+      ]
+    },
+    {
+      "version": "0.0.2",
+      "date": "2026-10-30",
+      "commits": [
+        {
+          "sha": "b69c039",
+          "date": "2026-10-30",
+          "subject": "Add Sound-owned Digitone-style arpeggiator on all Syntakt audio tracks"
+        }
+      ]
+    }
+  ],
+  "slug": "arp-st"
+}

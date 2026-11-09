@@ -1,0 +1,30 @@
+{
+  "id": "system-info-st",
+  "title": "System info",
+  "latest": "1.1",
+  "entries": [
+    {
+      "version": "1.1",
+      "date": "2026-11-03",
+      "commits": [
+        {
+          "sha": "1827c4b",
+          "date": "2026-11-03",
+          "subject": "Core 1.1: mod list in System info, bank mod-info directory"
+        }
+      ]
+    },
+    {
+      "version": "0.1",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "2c41add",
+          "date": "2026-10-29",
+          "subject": "Syntakt OS 1.41: core-st, SMZ banks, machines, modules and the modulation skip"
+        }
+      ]
+    }
+  ],
+  "slug": "system-info-st"
+}

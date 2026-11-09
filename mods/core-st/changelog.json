@@ -1,0 +1,176 @@
+{
+  "id": "core",
+  "title": "core",
+  "latest": "1.7.1",
+  "entries": [
+    {
+      "version": "1.7.1",
+      "date": "2026-11-09",
+      "commits": [
+        {
+          "sha": "8529889",
+          "date": "2026-11-09",
+          "subject": "Core 1.7.1: write the trial record at boot; safe-boot guards"
+        },
+        {
+          "sha": "c8071dd",
+          "date": "2026-11-09",
+          "subject": "Syntakt docs: setup guide, machine guides, and environment variables"
+        }
+      ]
+    },
+    {
+      "version": "1.7",
+      "date": "2026-11-07",
+      "commits": [
+        {
+          "sha": "42c9d25",
+          "date": "2026-11-07",
+          "subject": "Automatically keep staged bank after healthy startup"
+        }
+      ]
+    },
+    {
+      "version": "1.6",
+      "date": "2026-11-07",
+      "commits": [
+        {
+          "sha": "6032516",
+          "date": "2026-11-07",
+          "subject": "Gate stock hook preimages before safe bank startup"
+        }
+      ]
+    },
+    {
+      "version": "1.5",
+      "date": "2026-11-07",
+      "commits": [
+        {
+          "sha": "677b598",
+          "date": "2026-11-07",
+          "subject": "Stage SMZ4 banks with core contract and rollback trial"
+        }
+      ]
+    },
+    {
+      "version": "1.4",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "d4ad3ae",
+          "date": "2026-11-06",
+          "subject": "Core 1.4: page randomize on the new pages (list item 22)"
+        }
+      ]
+    },
+    {
+      "version": "1.3",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "23420f9",
+          "date": "2026-11-06",
+          "subject": "Bump integrated sampler core to 1.3"
+        }
+      ]
+    },
+    {
+      "version": "1.2",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "30b08c6",
+          "date": "2026-11-06",
+          "subject": "Chorus 1.0 and core 1.2: mixer FX-send events, chained providers"
+        },
+        {
+          "sha": "60985cb",
+          "date": "2026-11-06",
+          "subject": "Fix sampler waveform cache, OVER routing and BR response"
+        }
+      ]
+    },
+    {
+      "version": "1.1",
+      "date": "2026-11-03",
+      "commits": [
+        {
+          "sha": "7e80835",
+          "date": "2026-11-04",
+          "subject": "Core: FX track SYN keeps its encoder (DRIVE)"
+        },
+        {
+          "sha": "1827c4b",
+          "date": "2026-11-03",
+          "subject": "Core 1.1: mod list in System info, bank mod-info directory"
+        }
+      ]
+    },
+    {
+      "version": "0.13.1",
+      "date": "2026-11-01",
+      "commits": [
+        {
+          "sha": "804b4bb",
+          "date": "2026-11-01",
+          "subject": "Keep only the Syntakt: remove other devices' mods, examples and apps"
+        }
+      ]
+    },
+    {
+      "version": "0.13.0",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "56ba161",
+          "date": "2026-10-29",
+          "subject": "Add persistent sample folders and move Sample Manager UI to SMZ"
+        }
+      ]
+    },
+    {
+      "version": "0.12.22",
+      "date": "2026-10-30",
+      "commits": [
+        {
+          "sha": "b69c039",
+          "date": "2026-10-30",
+          "subject": "Add Sound-owned Digitone-style arpeggiator on all Syntakt audio tracks"
+        },
+        {
+          "sha": "8bae41d",
+          "date": "2026-10-30",
+          "subject": "Preserve POLY host ABI and compact Sound codecs for ARP integration"
+        }
+      ]
+    },
+    {
+      "version": "0.12.19",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "ee0e455",
+          "date": "2026-10-29",
+          "subject": "Add analog POLY with bounded publication and cached guards"
+        },
+        {
+          "sha": "4cd9c23",
+          "date": "2026-10-29",
+          "subject": "Add per-voice POLY LFO modes and native mono controls"
+        }
+      ]
+    },
+    {
+      "version": "0.12.18",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "2c41add",
+          "date": "2026-10-29",
+          "subject": "Syntakt OS 1.41: core-st, SMZ banks, machines, modules and the modulation skip"
+        }
+      ]
+    }
+  ],
+  "slug": "core-st"
+}

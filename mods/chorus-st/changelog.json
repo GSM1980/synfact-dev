@@ -1,0 +1,30 @@
+{
+  "id": "chorus-st",
+  "title": "Chorus",
+  "latest": "1.1",
+  "entries": [
+    {
+      "version": "1.1",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "d4ad3ae",
+          "date": "2026-11-06",
+          "subject": "Core 1.4: page randomize on the new pages (list item 22)"
+        }
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "30b08c6",
+          "date": "2026-11-06",
+          "subject": "Chorus 1.0 and core 1.2: mixer FX-send events, chained providers"
+        }
+      ]
+    }
+  ],
+  "slug": "chorus-st"
+}

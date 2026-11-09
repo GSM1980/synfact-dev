@@ -1,0 +1,97 @@
+{
+  "id": "lfo3-st",
+  "title": "Third LFO",
+  "latest": "1.2",
+  "entries": [
+    {
+      "version": "1.2",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "c8071dd",
+          "date": "2026-11-09",
+          "subject": "Syntakt docs: setup guide, machine guides, and environment variables"
+        },
+        {
+          "sha": "d4ad3ae",
+          "date": "2026-11-06",
+          "subject": "Core 1.4: page randomize on the new pages (list item 22)"
+        }
+      ]
+    },
+    {
+      "version": "1.1",
+      "date": "2026-11-06",
+      "commits": [
+        {
+          "sha": "30b08c6",
+          "date": "2026-11-06",
+          "subject": "Chorus 1.0 and core 1.2: mixer FX-send events, chained providers"
+        }
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-02",
+      "commits": [
+        {
+          "sha": "347ef8e",
+          "date": "2026-11-02",
+          "subject": "Set the mod versions: 1.0, and ARP 0.1"
+        },
+        {
+          "sha": "95b3057",
+          "date": "2026-11-02",
+          "subject": "Remove internal studies and notes; drop the MIT notices from our own files"
+        }
+      ]
+    },
+    {
+      "version": "0.1",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "7f1580b",
+          "date": "2026-11-02",
+          "subject": "Add ARP p-locks and step keys; show LFO3 locks on held trigs"
+        },
+        {
+          "sha": "0b911a6",
+          "date": "2026-11-02",
+          "subject": "Light the LFO and TRIG page keys for LFO3 and ARP locks"
+        },
+        {
+          "sha": "fd48b6c",
+          "date": "2026-11-02",
+          "subject": "Apply LFO3 and ARP locks on the first step when PLAY starts"
+        },
+        {
+          "sha": "b69c039",
+          "date": "2026-10-30",
+          "subject": "Add Sound-owned Digitone-style arpeggiator on all Syntakt audio tracks"
+        },
+        {
+          "sha": "2c41add",
+          "date": "2026-10-29",
+          "subject": "Syntakt OS 1.41: core-st, SMZ banks, machines, modules and the modulation skip"
+        },
+        {
+          "sha": "4cd9c23",
+          "date": "2026-10-29",
+          "subject": "Add per-voice POLY LFO modes and native mono controls"
+        },
+        {
+          "sha": "7f23657",
+          "date": "2026-10-29",
+          "subject": "Keep per-voice LFO parameters in SRAM and use native unguarded paths"
+        },
+        {
+          "sha": "7682e91",
+          "date": "2026-10-29",
+          "subject": "Copy POLY Sounds on setup and edits; use native track engines"
+        }
+      ]
+    }
+  ],
+  "slug": "lfo3-st"
+}

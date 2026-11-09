@@ -1,0 +1,51 @@
+{
+  "id": "modulation-skip-st",
+  "title": "Skip unchanged modulation per track",
+  "latest": "1.2.3",
+  "entries": [
+    {
+      "version": "1.2.3",
+      "date": "2026-11-09",
+      "commits": [
+        {
+          "sha": "a442be8",
+          "date": "2026-11-09",
+          "subject": "Optimize modulation skip by track and Sound publication"
+        }
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-02",
+      "commits": [
+        {
+          "sha": "347ef8e",
+          "date": "2026-11-02",
+          "subject": "Set the mod versions: 1.0, and ARP 0.1"
+        },
+        {
+          "sha": "95b3057",
+          "date": "2026-11-02",
+          "subject": "Remove internal studies and notes; drop the MIT notices from our own files"
+        }
+      ]
+    },
+    {
+      "version": "0.1",
+      "date": "2026-10-29",
+      "commits": [
+        {
+          "sha": "db8317a",
+          "date": "2026-11-02",
+          "subject": "Drop references to the retired diagnostic mods"
+        },
+        {
+          "sha": "2c41add",
+          "date": "2026-10-29",
+          "subject": "Syntakt OS 1.41: core-st, SMZ banks, machines, modules and the modulation skip"
+        }
+      ]
+    }
+  ],
+  "slug": "modulation-skip-st"
+}
