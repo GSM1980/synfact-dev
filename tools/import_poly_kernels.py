@@ -10,7 +10,7 @@ from elekloader import formats
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--stock',required=True)
-    p.add_argument('--synfact',required=True,type=Path);a=p.parse_args()
+    a=p.parse_args()
     stock,dev,rel=formats.load(a.stock)
     assert dev.key=='syntakt' and rel.version=='1.41'
     assert stock.sha256=='8e2488f462c4a5656396a895f113bcd415e9900fa8709340dccf45d4cb9ed19e'
@@ -51,7 +51,8 @@ def main():
           'poly_mod_second:','.word 0x4ef9','.long poly_mod_second_guard','.word 0x4e71,0x4e71',
           'poly_mod_second_continue:',part(0x6c,0x114),'poly_mod_return:',part(0x114,len(mod)),
           'poly_mod_helper_bridge:','jmp 0x40097aac']
-    guards=(a.synfact/'src/features/lfo3/poly/guards.s').read_text(encoding='utf-8')
+    guards_path=ROOT/'mods/poly-st/guards.s'
+    guards=guards_path.read_text(encoding='utf-8')
     guards=guards[guards.index('poly_mod_first_guard:'):guards.index('poly_native_dispatch:')]+guards[guards.index('poly_native_lfo_guard:'):]
     # Local guard adaptation: owners has 12 entries. Keep the bound: the
     # second native modulation loop also visits index 12 (FX). Bodies unchanged.
@@ -65,7 +66,7 @@ def main():
     text='| Private source import. Pinned OS 1.41 kernels; authored Synfact guards.\n'+ '\n'.join(asm)+'\n'+guards
     (out/'kernels.s').write_text(text.replace('poly_fast_owners','poly_lfo_map'),encoding='utf-8')
     (out/'provenance.json').write_text(json.dumps({'stock_sha256':stock.sha256,
-        'source':'src/features/lfo3/poly/guards.s','guards_sha256':hashlib.sha256((a.synfact/'src/features/lfo3/poly/guards.s').read_bytes()).hexdigest(),
+        'source':'mods/poly-st/guards.s','guards_sha256':hashlib.sha256(guards_path.read_bytes()).hexdigest(),
         'local_guard_changes':['owner bound 8 -> 12; retains FX index 12 exclusion; native bodies unchanged', 'IRQ-published slave bitmap replaces owner lookup; avoids added independent analog guard cost'],
         'ranges':{'native_lfo':'40119266..4011958c','modulation':'40097afc..40097c1a'},
         'kernel_sha256':hashlib.sha256((out/'kernels.s').read_bytes()).hexdigest()},indent=2)+'\n',encoding='utf-8')

@@ -2,6 +2,7 @@
   "id": "recorder-st",
   "version": "1.0",
   "title": "Audio Recorder",
+  "license": "GPL-2.0-or-later",
   "device": "syntakt",
   "os": "1.41",
   "sources": ["main.c", "irq.s"],

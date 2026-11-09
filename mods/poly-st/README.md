@@ -170,7 +170,7 @@ LFO3 locks, retaining the reference count. `test_st_poly_main_cost_emu.py`
 includes actual native bus dispatch, LFO3, type queries and extended transport,
 and distinguishes one-FM-plus-two-stock from three-FM baselines. It deliberately
 excludes conversion, scheduling and cache timing; it cannot predict the MAIN
-percentage on hardware. The user reported MAIN 91â€“92% OFF, 96% M.LFO, 97% POLY
+percentage on hardware. The user reported MAIN 91–92% OFF, 96% M.LFO, 97% POLY
 with three voices and different original slave machines on the previous bank.
 That physical comparison must be repeated with this implementation.
 
@@ -245,12 +245,11 @@ Bank: `out/poly-integrated-0.8-delivery/synfact-machines.smz4`.
 
 ## Source and build
 
-[provenance.json](provenance.json) pins authored donor files. `tools/adapt_synfact_poly.py --synfact PATH` is the original bootstrap import;
-it overwrites local adaptations and must not be rerun to maintain this port.
-Neither it nor the kernel importer imports legacy builders. Local authored
-source hashes are pinned separately from the unchanged donor hashes. Native optimized kernels are prepared explicitly by
-`tools/import_poly_kernels.py --stock Syntakt_OS1.41.syx --synfact PATH`, using
-the pinned official Syntakt image and authored guards. Generated private
+[provenance.json](provenance.json) pins the authored source files and their hashes.
+`guards.s` in this folder is the authored guard code the kernel importer reads.
+Native optimized kernels are prepared explicitly by
+`tools/import_poly_kernels.py --stock Syntakt_OS1.41.syx`, using the pinned
+official Syntakt image and `guards.s`. Generated private
 assembler/provenance remain ignored in `imported/`. Normal bank compilation
 uses local C/assembler and does not read donor firmware or old SMZ files.
 
@@ -388,20 +387,18 @@ Unchanged native bodies remain covered by the linked byte-for-byte audit.
 
 Reproduce using the Unicorn interpreter/environment in `docs/SYNTAKT-BUILD.md`:
 
-```powershell
-$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
-& C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_poly_cost_emu.py `
-  --before out/poly-analog-20261029-evidence/baseline.smz4 `
-  --after out/core-st-0.12.19-poly-analog-ready/synfact-machines.smz4 `
-  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
+```bash
+"$PY" -B tests/test_st_poly_cost_emu.py \
+  --before out/poly-analog-20261029-evidence/baseline.smz4 \
+  --after out/core-st-0.12.19-poly-analog-ready/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" \
   --out out/core-st-0.12.19-poly-analog-ready/poly-cost.json
 ```
 
 The baseline was built with the same builder/flags before editing, from main
 `dbf6e12`. Both `.work/main.elf` files are required. Their bank hashes and the
-complete counts are recorded in the output JSON. Workstation stock/EFT inputs
-currently live under `C:/Desarrollo/syntakt-dev/elektron-firmware-tool` (the build
-guide's former `C:/Desarrollo/elektron-firmware-tool` location is absent).
+complete counts are recorded in the output JSON. The baseline bank is a build
+folder of your own: build the same commit with the same flags first.
 
 ## Physical validation — still required
 
@@ -465,13 +462,12 @@ SYX are identical copies of the preceding verified delivery, not a changed core.
 The user confirmed the alternating-note correction works on the Syntakt on
 2026-10-29. Physical CPU/timing measurements remain pending.
 
-```powershell
-$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
-& C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_poly_keyboard_emu.py `
-  --before out/core-st-0.12.19-poly-analog-ready/synfact-machines.smz4 `
-  --after out/poly-analog-keyboard-20261029/synfact-machines.smz4 `
-  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
-  --core out/poly-analog-keyboard-20261029/main.bin `
+```bash
+"$PY" -B tests/test_st_poly_keyboard_emu.py \
+  --before out/core-st-0.12.19-poly-analog-ready/synfact-machines.smz4 \
+  --after out/poly-analog-keyboard-20261029/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" \
+  --core out/poly-analog-keyboard-20261029/main.bin \
   --out out/poly-analog-keyboard-20261029/keyboard.json
 ```
 

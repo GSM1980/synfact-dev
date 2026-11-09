@@ -10,7 +10,7 @@
     "src/current/poly_type.c": "de148e7c0b7597059dc719597098eeb632bb4080a26281edcc25d41b09338ff3",
     "src/current/poly_ui.c": "4d37a4328cbee0cab31c6684293340d33f92b33673303c043991a413c7aa34a1",
     "src/features/lfo3/poly/publication.s": "043e8c34da99f7228da5f89494137bc976dbb150442176bc81b924196c8ad59b",
-    "src/features/lfo3/poly/guards.s": "b86c71f8b7d6b581dafdcd0d17227502417a1acb65b58a8f20a30bf20db51a0f"
+    "guards.s": "b86c71f8b7d6b581dafdcd0d17227502417a1acb65b58a8f20a30bf20db51a0f"
   },
   "changes": [
     "shared core events and bounded native transaction replays",
