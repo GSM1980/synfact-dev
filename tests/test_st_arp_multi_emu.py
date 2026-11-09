@@ -58,8 +58,7 @@ def verify(core,bank,out):
     m=ViewMachine(core,bank)
     for t in range(8):
         m.track=t;at=1000*t
-        assert not m.key(0x13,1,at);m.key(0x13,16,at+10)
-        assert m.key(0x13,1,at+100)==1;m.key(0x13,16,at+110)
+        assert m.open(at)==1
         p=m.track_address('arp_parameters',t)
         assert m.read(p,1)==b'\x00'
         m.encoder(4,t);assert m.read(p+3,1)==bytes([30+t])

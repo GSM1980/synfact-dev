@@ -43,12 +43,14 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
         'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c']}
     cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
+    cases['trig-pages']=['tests/test_st_trig_pages.c']
     has_recorder='recorder_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']
     if 'poly_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:cases['poly']=['tests/test_st_poly.c']
     if has_recorder:cases['recorder']=['tests/test_st_recorder.c','mods/core-st/hzfs.c','mods/core-st/crc.c']
     if 'arp_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
         cases['arp-clock']=['tests/test_st_arp_clock.c','mods/arp-st/clock.c']
         cases['arp-runtime']=['tests/test_st_arp_runtime.c','mods/arp-st/runtime.c','mods/arp-st/selector.c','mods/arp-st/clock.c','mods/arp-st/length.c']
+        cases['arp-ui']=['tests/test_st_arp_ui.c','mods/arp-st/ui.c']
     for name,sources in cases.items():
         exe=out/(name+'.exe')
         run('compile '+name,[cc,'-O2','-Wl,--large-address-aware','-I','elekloader/sdk/include',*sources,'-o',exe])

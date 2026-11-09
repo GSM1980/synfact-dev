@@ -36,7 +36,10 @@ int arp_release(struct arp_selector *s,unsigned int note)
     s->count--;return 1;
 }
 static void next_octave(struct arp_selector *s,const struct arp_settings *p)
-{if(++s->octave>p->range)s->octave=0;}
+{
+    if(p->range<=3){if(++s->octave>p->range)s->octave=0;}
+    else if(--s->octave< -(int)(p->range-3))s->octave=0;   /* falling RANGE */
+}
 /* Match ColdFire's zero result for a logical shift by 32, without undefined C. */
 static arp_u32 left(arp_u32 n,unsigned int k){return k>=32?0:n<<k;}
 static arp_u32 right(arp_u32 n,unsigned int k){return k>=32?0:n>>k;}

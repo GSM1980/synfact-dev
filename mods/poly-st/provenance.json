@@ -26,7 +26,9 @@
     "native TRIG synchronizes once before grouped routing; analog-only groups never subscribe TYPE",
     "analog slave note events bind the master kit Sound when native keyboard/MIDI/preview events carry no Sound; event-only fix",
     "1.1: sequencer notes take the group's voice started least recently, so master steps in a row overlap; lock trigs move no voice",
-    "core 1.4: provider query 31 exposes only NOT2..NOT4 for POLY TRIG randomize"
+    "core 1.4: provider query 31 exposes only NOT2..NOT4 for POLY TRIG randomize",
+    "TRIG pages shared with ARP (list item 37, syntakt/trig-pages.h): POLY sets only its third page; the indicator counts every page",
+    "page 3 descriptor with the title Polyphonic mode on its page (header), also outside page actions"
   ],
   "local_sha256": {
     "main.c": "516039b11e0547954d4235b7ce369c113627c98300a8b680ea7b0a65dc8916c9",
@@ -36,7 +38,7 @@
     "poly_pattern.c": "c503a5afda21197951d627f849378a7a5b2e60bf7b16e843e1b6c852035669d1",
     "poly_sequence.c": "78a4fbe18e9b21588b6f5ebe0312b4d95fbc6b2880ecce0edbded0673b405ec6",
     "poly_publication.c": "55671a510144abef6a1acc5f292a1192896841672b4adafd4e454ff9af9d4220",
-    "poly_ui.c": "3e61477755dc4e523bf111cbabff2191a62d3348377bca6ea3fcaf3e4cd48228",
+    "poly_ui.c": "e26bd4d3d6e84f52a87d18a1ba90afe7bfb477c5dc455f227cad8a61dbb90255",
     "publication.s": "b6f30f056ce165a7cdf0f6ee858c636d60d454225ec1e9b01520e7771d0494e6",
     "poly_codec.c": "62cf3ca5e409f1e2b6624fa4d7a4abbe4bdf27a35319d165310a29d0c4f6a222",
     "poly_play.c": "dc71f514af45dc27afc79fb853d039e5eca113e00d645b9258d62b6f1fc6ad13",

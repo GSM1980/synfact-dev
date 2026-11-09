@@ -8,7 +8,7 @@ static void arp_locks_apply(struct arp_settings *p,arp_u32 mask,const unsigned s
 {
     if((mask&1) && v[0]<=4)p->mode=v[0];
     if((mask&2) && v[1]<18)p->speed=v[1];
-    if((mask&4) && v[2]<=3)p->range=v[2];
+    if((mask&4) && v[2]<=ARP_RANGE_MAX)p->range=v[2];
     if((mask&8) && v[3]<128)p->note_length=v[3];
 }
 /* The locks of the trig that started each track's arp, captured at

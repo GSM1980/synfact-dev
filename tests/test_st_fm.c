@@ -61,13 +61,18 @@ static void indicator(void *v,void *ctx,T pages,T page,T last)
 #define TOGGLE toggle
 #define FM_PAGE_INDICATOR indicator
 static T policy_words[5],increments[7];
-static T policy_mock(T id){assert(id==0x13);policy_words[4]=(T)increments;return (T)policy_words;}
+static T expected_policy=0x13,expected_knob=3,expected_id=0x21c,held_func;
+static T policy_mock(T id){assert(id==expected_policy);policy_words[4]=(T)increments;return (T)policy_words;}
 static int delta_mock(void *e,T a,T b){(void)e;(void)a;(void)b;delta_calls++;return event_delta;}
 static T pressed_mock(void *e){(void)e;return event_pressed;}
 static int increment_mock(void *v,T k,int delta,void *inc,T p)
-{assert(v==view+0x94 && k==3 && p==event_pressed && !memcmp(inc,increments,sizeof(increments)));increment_calls++;return delta;}
+{assert(v==view+0x94 && k==expected_knob && p==event_pressed && !memcmp(inc,increments,sizeof(increments)));increment_calls++;return delta;}
 static T trig_mock(void *c){(void)c;return held_trig;}
-static T held_mock(T k){assert(k==2 || k==0x12);return k==2?held_selection:held_page;}
+static T held_mock(T k){assert(k==1 || k==2 || k==0x12);return k==1?held_func:k==2?held_selection:held_page;}
+/* The native FUNC snap gate (400f6ad4 arm, 400f6b02 blocked, shared flag). */
+static unsigned char snap_active;static T snap_arms,snap_blocked;
+static void snap_arm_mock(void *s,T k){assert(s==view+0x94 && k==expected_knob);snap_arms++;}
+static T snap_blocked_mock(void *s,T k){assert(s==view+0x94 && k==expected_knob);return snap_blocked;}
 static T key_mock(void *e){(void)e;return key_code;}
 static T down_mock(void *e){(void)e;return key_down;}
 static void invalidate_mock(void *v){assert(v==view);invalidated++;}
@@ -80,6 +85,9 @@ static void set_mock(void *p,T id,T raw,T track,T f7,T f6)
 #define FM_INCREMENT increment_mock
 #define FM_TRIG_HELD trig_mock
 #define FM_KEY_HELD held_mock
+#define FM_SNAP_ARM snap_arm_mock
+#define FM_SNAP_BLOCKED snap_blocked_mock
+#define FM_SNAP_ACTIVE snap_active
 #define FM_EVENT_KEY key_mock
 #define FM_EVENT_DOWN down_mock
 #define FM_INVALIDATE invalidate_mock
@@ -96,7 +104,7 @@ static const unsigned short *extended_mock(const void *p){return p;}
 #include "../mods/fm-tone-st/receive.c"
 
 static void edit_mock(void *v,T id,int delta,T knob)
-{assert(v==view && id==0x21c && knob==3 && edits<8);edit_ids[edits]=id;edit_deltas[edits]=delta;values[3]+=delta;edits++;}
+{assert(v==view && id==expected_id && knob==expected_knob && edits<8);edit_ids[edits]=id;edit_deltas[edits]=delta;values[id-0x219]+=delta;edits++;}
 static void clear_mock(void *v,T id,T page,T knob){(void)v;(void)id;(void)page;(void)knob;assert(0);}
 static int bind_mock(T t,int (*enc)(void *,void *,T),void (*k)(void *,void *))
 {(void)t;(void)enc;(void)k;assert(0);return 0;}
@@ -133,6 +141,51 @@ static void verify_ratio_reference(void)
     assert(comparisons==23826);
     puts("PASS: 23826 cases against original Synfact RATIO B C on one stored control; 361 combinations, both directions/carry/clamp, pressed encoder, trig/page lock seeding");
     event_pressed=0;held_trig=held_selection=held_page=0;edits=0;
+}
+#endif
+#ifndef FM_REFERENCE
+/* List item 29: FUNC + encoder snaps, through the native increment, gate
+ * and edit route. Every start value of each control, both directions. */
+static void verify_func_snaps(void)
+{
+    static const struct {T id,page,knob,policy,min,max;int n;T list[5];} c[]={
+        {0x21d,0,4,0x1f1,0x2500,0x5900,5,{0x2700,0x3300,0x3f00,0x4b00,0x5700}},
+        {0x220,0,7,0x13,0,0x7f00,3,{0,0x4000,0x7f00}},
+        {0x230,1,0,0x1f1,0,0x7ffe,3,{0,0x4000,0x7ffe}},
+        {0x232,1,1,0x1f1,0,0x7ffe,3,{0,0x4000,0x7ffe}},
+        {0x233,1,2,0x1f1,0,0x7ffe,3,{0,0x4000,0x7ffe}},
+        {0x234,1,3,0x1f1,0,0x7ffe,3,{0,0x4000,0x7ffe}}};
+    T k,raw,cases=0;int d,j;
+    *(T *)(view+0x88)=0x14;machine_type=65;held_trig=held_selection=held_page=0;
+    for(k=0;k<6;k++){
+        *(T *)(view+0x90)=c[k].page;expected_knob=c[k].knob;expected_policy=c[k].policy;expected_id=c[k].id;
+        /* Without FUNC the native editor keeps the turn. */
+        held_func=0;event_delta=256;edits=0;assert(!encoder(view,0,c[k].id) && !edits);
+        /* On the other page the control is not there. */
+        held_func=1;*(T *)(view+0x90)=c[k].page^1;assert(!encoder(view,0,c[k].id) && !edits);
+        *(T *)(view+0x90)=c[k].page;
+        for(raw=c[k].min;raw<=c[k].max;raw+=raw+64>c[k].max && raw<c[k].max?c[k].max-raw:64)
+        for(d=-1;d<=1;d+=2){
+            T want=raw;
+            if(d>0){for(j=0;j<c[k].n;j++)if(c[k].list[j]>raw){want=c[k].list[j];break;}}
+            else for(j=c[k].n-1;j>=0;j--)if(c[k].list[j]<raw){want=c[k].list[j];break;}
+            values[c[k].id-0x219]=(unsigned short)raw;event_delta=d*256;edits=0;snap_arms=0;snap_active=0;snap_blocked=0;
+            assert(encoder(view,0,c[k].id) && edits==1 && values[c[k].id-0x219]==want);
+            assert(snap_active==1 && snap_arms==2);              /* entry arm, then re-arm */
+            snap_arms=0;edits=0;snap_blocked=1;                  /* gate closed: no edit */
+            values[c[k].id-0x219]=(unsigned short)raw;
+            assert(encoder(view,0,c[k].id) && !edits && values[c[k].id-0x219]==raw && !snap_arms);
+            snap_blocked=0;cases++;
+        }
+        /* No accepted increment: consumed, nothing edited. */
+        event_delta=0;edits=0;assert(encoder(view,0,c[k].id) && !edits);
+        /* A held trig with the page key: the lock is seeded first. */
+        held_trig=held_page=1;values[c[k].id-0x219]=(unsigned short)c[k].min;event_delta=256;edits=0;
+        assert(encoder(view,0,c[k].id) && edits==2 && !edit_deltas[0] && values[c[k].id-0x219]==c[k].list[c[k].list[0]==c[k].min?1:0]);
+        held_trig=held_page=0;
+    }
+    held_func=0;expected_knob=3;expected_policy=0x13;expected_id=0x21c;*(T *)(view+0x90)=0;
+    printf("PASS: %u FUNC snaps: HARM -24..+24 through 0, MIX -64/0/+63, RATIO OFFSETs -1/0/+0.999; gate, locks, pages\n",cases);
 }
 #endif
 static void verify_controls(void)
@@ -201,6 +254,7 @@ static void verify_controls(void)
         held_trig=held_selection=0;
         *(T *)(view+0x90)=1;assert(!encoder(view,0,0x21c));
         verify_ratio_reference();
+        verify_func_snaps();
     }
 #endif
 }

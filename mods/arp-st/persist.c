@@ -34,9 +34,9 @@ static arp_u32 writer_mutex[4] DATA={0};
 static void enter(void){((void (*)(void *))0x40001980u)(writer_mutex);}
 static void leave(void){((void (*)(void *))0x40001aa2u)(writer_mutex);}
 arp_u32 arp_persist_denied DATA=0;
-static const struct arp_settings defaults={0,9,1,30,15,0xffff,{0}};
+static const struct arp_settings defaults={0,9,1,30,15,0,0xffff,{0}};
 static void copy_settings(struct arp_settings *d,const struct arp_settings *s)
-{unsigned int i;for(i=0;i<sizeof(*s);i++)((volatile unsigned char *)d)[i]=i==5?0:((const unsigned char *)s)[i];}
+{unsigned int i;for(i=0;i<sizeof(*s);i++)((volatile unsigned char *)d)[i]=((const unsigned char *)s)[i];}
 static arp_u32 hash(const unsigned char *p,unsigned int n)
 {arp_u32 h=0x811c9dc5u;while(n--)h=(h^*p++)*0x1000193u;return h;}
 static arp_u32 word(const unsigned char *p)
@@ -45,29 +45,28 @@ static void put(unsigned char *p,arp_u32 v)
 {p[0]=v>>24;p[1]=v>>16;p[2]=v>>8;p[3]=v;}
 static int valid(const struct arp_settings *p)
 {
-    unsigned int i;if(p->mode>4 || p->speed>=18 || p->range>3 || p->note_length>=128 || p->length>=16)return 0;
+    unsigned int i;if(p->mode>4 || p->speed>=18 || p->range>ARP_RANGE_MAX || p->scale>1 || p->note_length>=128 || p->length>=16)return 0;
     for(i=0;i<16;i++)if(p->offset[i]<-24 || p->offset[i]>24)return 0;
     return 1;
 }
 static int ordinary(const struct arp_settings *p)
 {
     unsigned int i;
-    if(p->mode || p->speed!=9 || p->range!=1 || p->note_length!=30 ||
+    if(p->mode || p->speed!=9 || p->range!=1 || p->note_length!=30 || p->scale ||
        p->length!=15 || p->enabled!=0xffff)return 0;
     for(i=0;i<16;i++)if(p->offset[i])return 0;
     return 1;
 }
 static void pack(unsigned char *d,const struct arp_settings *p)
 {
-    unsigned int i;d[0]=p->mode;d[1]=p->speed;d[2]=p->range;d[3]=p->note_length;d[4]=p->length;d[5]=0;
+    unsigned int i;d[0]=p->mode;d[1]=p->speed;d[2]=p->range;d[3]=p->note_length;d[4]=p->length;d[5]=p->scale;
     d[6]=p->enabled>>8;d[7]=p->enabled;for(i=0;i<16;i++)d[8+i]=(unsigned char)p->offset[i];
 }
 static int unpack(struct arp_settings *p,const unsigned char *s)
 {
-    unsigned int i;p->mode=s[0];p->speed=s[1];p->range=s[2];p->note_length=s[3];p->length=s[4];
-    ((volatile unsigned char *)p)[5]=0;
+    unsigned int i;p->mode=s[0];p->speed=s[1];p->range=s[2];p->note_length=s[3];p->length=s[4];p->scale=s[5];
     p->enabled=((unsigned int)s[6]<<8)|s[7];for(i=0;i<16;i++)p->offset[i]=(signed char)s[8+i];
-    return !s[5] && valid(p);
+    return valid(p);
 }
 static struct cell *find(arp_u32 a,int create)
 {
@@ -136,7 +135,7 @@ static arp_u32 row_record(arp_u32 container,unsigned int index,unsigned int row)
 static void row_pack(unsigned char *d,const struct arp_settings *p,arp_u32 record)
 {
     unsigned int i,j,v;
-    d[0]=p->mode;d[1]=p->speed;d[2]=p->range;d[3]=p->note_length;d[4]=p->length;d[5]=0;
+    d[0]=p->mode;d[1]=p->speed;d[2]=p->range;d[3]=p->note_length;d[4]=p->length;d[5]=p->scale;
     d[6]=p->enabled>>8;d[7]=p->enabled;
     for(i=0;i<12;i++)d[8+i]=0;
     for(i=0;i<16;i++){
@@ -150,12 +149,12 @@ static int row_unpack(struct arp_settings *p,const unsigned char *d,arp_u32 reco
     unsigned int i,j,v;
     if(word(d+20)!=hash((const unsigned char *)record,RECORD))return 0;
     p->mode=d[0];p->speed=d[1];p->range=d[2];p->note_length=d[3];p->length=d[4];
-    ((volatile unsigned char *)p)[5]=0;p->enabled=((unsigned int)d[6]<<8)|d[7];
+    p->scale=d[5];p->enabled=((unsigned int)d[6]<<8)|d[7];
     for(i=0;i<16;i++){
         v=0;for(j=0;j<6;j++)if(d[8+(i*6+j)/8]&(1u<<((i*6+j)%8)))v|=1u<<j;
         p->offset[i]=(int)v-24;
     }
-    return !d[5] && valid(p);
+    return valid(p);
 }
 static void carrier_init(unsigned char *p,arp_u32 container,unsigned int index)
 {unsigned int i;put(p,0x41504331u);for(i=0;i<13;i++)row_pack(p+4+i*24,&defaults,row_record(container,index,i));}

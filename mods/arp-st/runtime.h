@@ -26,6 +26,12 @@ struct arp_runtime {
      * select another track. Outputs are due in their current MAIN frame. */
     unsigned char live_sound[0x123];
 };
+/* SCALE (1.8): the pattern's keyboard scale, as the UI task last read it:
+ * bit k of bits 0..11 = the note k semitones above the root is in the scale
+ * (0: no scale, chromatic), the root's pitch class in bits 16..19. */
+extern volatile arp_u32 arp_scale_key;
+/* note, or the nearest note of key's scale (the lower one on a tie). */
+int arp_scale_snap(int note,arp_u32 key);
 void arp_runtime_init(struct arp_runtime *,const struct arp_runtime_api *);
 void arp_runtime_stop(struct arp_runtime *);
 /* Start a sequence-note chord from an accepted event. Returns nonzero only

@@ -11,6 +11,19 @@ static arp_u32 *retain(struct arp_runtime *r,const arp_u32 *source)
     if(source[0] && source[17])(*(arp_u32 *)source[17])++;
     e[0]=0;e[19]=0;return e;
 }
+volatile arp_u32 arp_scale_key;
+int arp_scale_snap(int note,arp_u32 key)
+{
+    arp_u32 mask=key&0xfffu;int pc,d;
+    if(!mask || note<0)return note;
+    pc=(note-(int)((key>>16)%12u))%12;if(pc<0)pc+=12;
+    if(mask>>pc&1u)return note;
+    for(d=1;d<=6;d++){
+        if(mask>>((pc-d+12)%12)&1u)return note-d;
+        if(mask>>((pc+d)%12)&1u)return note+d;
+    }
+    return note;
+}
 void arp_runtime_init(struct arp_runtime *r,const struct arp_runtime_api *api)
 {
     unsigned int i;
@@ -97,6 +110,7 @@ int arp_runtime_frame(struct arp_runtime *r,const struct arp_settings *p,
     if(!arp_clock_poll(&r->clock,begin,end,generation,&due))return 0;
     if(r->finite && (int)(due-r->until)>=0){arp_runtime_stop(r);return 0;}
     note=arp_next(&r->selector,p,generation);
+    if(p->scale)note=arp_scale_snap(note,arp_scale_key);
     if(note<0 || note>127)return 0;
     e=retain(r,r->source);
     if(!e){r->dropped++;return 0;}

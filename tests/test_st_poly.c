@@ -104,9 +104,14 @@ static void toggle_mock(void *v,T on,void *ctx,int x,int y,T flag)
 static void tail_mock(void *v,void *ctx,T a){(void)v;(void)ctx;(void)a;}
 static void widget_mock(void *v,void *ctx,int x,int y,T id,T value,T state,T lock,T turning,T hide)
 {(void)v;(void)ctx;(void)x;(void)y;(void)id;(void)value;(void)state;(void)lock;(void)turning;(void)hide;}
-static void page_mock(void *v,void *ctx,T a,T b,T c){(void)v;(void)ctx;(void)a;(void)b;(void)c;}
+static T indicator_pages;
+static void page_mock(void *v,void *ctx,T a,T b,T c){(void)v;(void)ctx;(void)b;(void)c;indicator_pages=a;}
 static void blit_mock(void *ctx,void *bmp,int x,int y,T flag){(void)ctx;(void)bmp;(void)x;(void)y;(void)flag;}
 static void rec_position(T clock,T track,B *out){(void)clock;assert(track<12);memset(out,0,4);}
+/* The application, its view manager and the MainScreen showing the TRIG view
+ * (syntakt/trig-pages.h st_trig_current): manager +40h, opaque node +1Ch. */
+static B app_fixture[0x100],node_fixture[16],main_fixture[0x100];
+static void *app_mock(void){return app_fixture;}
 static B *rec_model_mock(T track){assert(track==(T)PATTERN+(rec_track+1)*0x70);return rec_model;}
 static void *poly_test_function(T address)
 {
@@ -115,11 +120,12 @@ static void *poly_test_function(T address)
     case 0x40019000:return pattern_mock;case 0x400f660a:return event_check;case 0x400f6632:return position_mock;
     case 0x4007b9b2:return policy_mock;case 0x400f66a2:return delta_mock;case 0x400f66c0:return pressed_mock;
     case 0x400f68d2:return increment_mock;case 0x400ffc5e:return dirty_mock;case 0x400f95c8:return key_mock;
-    case 0x400f68aa:case 0x400f6abc:return zero_mock;case 0x40039160:return get_mock;
+    case 0x400f68aa:case 0x400f6abc:case 0x400f6730:return zero_mock;case 0x40039160:return get_mock;
     case 0x400f8a0c:return text_mock;case 0x400f7df2:case 0x400f7bd6:case 0x400f8104:return shape_mock;
     case 0x40070362:return toggle_mock;case 0x4003a1c2:return page_mock;case 0x400f8dac:return blit_mock;
     case 0x4008da6e:return rec_position;
     case 0x40115f78:return memcpy;
+    case 0x4016e804:return app_mock;
     default:fprintf(stderr,"unexpected native function %08x\n",address);abort();
     }
 }
@@ -390,6 +396,32 @@ static void ui(void)
     evt[1]=1;assert(poly_ui_encoder(view,evt));assert(poly_seq_config.states[0]==4);
     evt[1]=4;assert(!poly_ui_encoder(view,evt));assert(poly_ui_control(view,4)==0x15);
     labels[0]=0;assert(poly_ui_draw(view,0));assert(strstr(labels,"POLY;") && strstr(labels,"VOICES;"));
+    assert(indicator_pages==3);
+    /* List item 37: ARP's two pages follow POLY's (syntakt/trig-pages.h). POLY's
+     * page stays index 2, its indicator counts five; the ARP indices are not
+     * POLY's; POLY's sync leaves them. */
+    assert(st_trig_set(view,ST_TRIG_ARP,1));pages=*(T **)(view+0x7c);
+    poly_ui_sync(view);assert(*(T **)(view+0x80)==pages+5 && poly_ui_third(view));
+    labels[0]=0;assert(poly_ui_draw(view,0) && indicator_pages==5);
+    for(i=3;i<5;i++){*(T *)(view+0x90)=i;assert(!poly_ui_third(view) && poly_ui_control(view,4)==0xffffffffu);}
+    *(T *)(view+0x90)=2;assert(st_trig_set(view,ST_TRIG_ARP,0));pages=*(T **)(view+0x7c);
+    assert(*(T **)(view+0x80)==pages+3 && poly_ui_third(view));
+    /* 1.3: outside a page action, page 3 is POLY's descriptor while the
+     * MainScreen's TRIG view shows POLY's page: the header reads "Polyphonic
+     * mode", not page 3's "Euclidean". Another page or view: stock. */
+    {
+        const T *d;const char *title;
+        *(B **)(app_fixture+0x40+0x1c)=node_fixture;*(B **)(node_fixture+8)=main_fixture;
+        *(T *)main_fixture=0x401c81fcu;*(B **)(main_fixture+0xc0)=view;*(T *)(view+0x88)=0x13;
+        native_layout[0]=0x1111;native_layout[1]=0x2222;native_layout[10]=0x3333;
+        d=(const T *)poly_ui_layout(3);assert(d && d[0]==0x1111 && d[2+4]==0x15 && d[10]==10);
+        title=(const char *)d[1];assert(!strcmp(title,"Polyphonic mode"));
+        assert(((const T *)title)[-3]==15 && ((const int *)title)[-1]==-1);
+        assert(!poly_ui_layout(25));
+        *(T *)(view+0x90)=1;assert(!poly_ui_layout(3));*(T *)(view+0x90)=2;
+        *(T *)main_fixture=0;assert(!poly_ui_layout(3));
+        *(T *)(view+0x88)=0x12;
+    }
     *(T *)(KIT+0x2a+0x10a)=0x12345678;*(T *)(KIT+0x2a+0x10e)=0x87654321;
     evt[1]=2;evt[2]=(T)-1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==1);
     assert(poly_ui_encoder(view,evt) && poly_modes[0]==1); /* left bound */

@@ -23,8 +23,9 @@ class Device:
         def fail():return bytes((0,0,0,0,kind|128,0))+b'test failure\0'
         if kind in (0x54,0x57):
             at=0 if kind==0x54 else 4;path=payload[at:payload.index(0,at)].decode()
-            n=1 if path in ('/mods','/mod-status') else R.sample_slot(path)
-            k=0x49 if path=='/mod-status' else 0x48 if path=='/mods' else (n+7 if n<=64 else n-R.RAW_FIRST)
+            n=1 if path in ('/mods','/mods-stage','/mod-status') else R.sample_slot(path)
+            k=(0x49 if path=='/mod-status' else 0x48 if path=='/mods' else 0x4a if path=='/mods-stage' else
+               (n+7 if n<=64 else n-R.RAW_FIRST))
             job=self.next_job;self.next_job+=1
             if kind==0x54:
                 if self.fail_read:return fail()
@@ -87,10 +88,18 @@ class Storage(unittest.TestCase):
     def test_write_preflight_no_request(self):
         for path,body,capacity in [('/samples/65',b'x',None),('/samples/9721',b'x',None),
                                   ('/samples/9721',b'x',0x30000000),('/mods',bytes(16*1024*1024+1),None),
-                                  ('/samples/64',b'SAMP',None),('/samples/064',b'',None),('/projects/1',b'',None)]:
+                                  ('/samples/64',b'SAMP',None),('/samples/064',b'',None),('/projects/1',b'',None),
+                                  ('/mods-stage',b'',None),('/mods-stage',bytes(R.STAGE_CAP+1),None),
+                                  ('/mods-stages',b'x',None)]:
             before=list(self.dev.calls)
             with self.assertRaises((ValueError,PermissionError)):self.client.write(path,body,card_bytes=capacity)
             self.assertEqual(self.dev.calls,before)
+    def test_mods_stage(self):
+        # The trial slot `mods put` writes (core 1.7): the whole body, read back.
+        body=bytes(range(256))*20
+        self.client.write('/mods-stage',body);self.assertEqual(self.dev.writes,[(0x4a,len(body))])
+        self.assertEqual(self.client.read('/mods-stage')[:len(body)],body)
+        self.assertEqual(R.checked_body('/mods-stage',bytes(R.STAGE_CAP))[0],1)
     def test_index_crc_matches_core(self):
         packed=H.Index(seq=1,windows=0xe90).pack()
         self.assertEqual(R.u32(packed,32),0x1b940a04)

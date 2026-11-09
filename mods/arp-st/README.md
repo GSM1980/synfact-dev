@@ -1,9 +1,115 @@
 # Digitone ARP → Syntakt: experimental source port
 
+## Native TRIG pages and SCALE (1.8)
+
+**The two ARP pages look like the other TRIG pages.** They draw inside the
+native TRIG view, as POLY's page does, so the header (pattern, name, tempo),
+the track/LEV rail on the left and the page indicator on the right are the
+native ones on both pages. A page fills x 20..123, rows 0..53 (`ui.h`):
+
+| page | top row (A..D) | bottom row |
+|---|---|---|
+| arp | MODE, SPEED, RANGE, LEN | the sixteen steps (smaller), OFS (E), LEN (F) |
+| chord | NOTE, NOT2, NOT3, NOT4 | SCALE (E), the keyboard over the chord |
+
+The controls take the native positions (x 24, 50, 76, 102) and label font
+(`443da230`); a p-locked value is inverted. The native fonts are about five
+pixels a character, so TRUE, DOWN, CYCL or 1/12 crossed their 17-pixel boxes
+on the unit: MODE, SPEED, NOTE and NOT2..NOT4 take ARP's own 3x5 font
+(`arp_small_text`, four pixels a character, at most 15), RANGE the native
+value font (`443da210`). LEN is always the native knob; while it turns (and
+1500 telemetry blocks after) its value ("1/16", "1.5", "128") takes the place
+of its label, as the native controls show a value, then "LEN" again. On the chord page,
+NOTE..NOT4 moved from E..H to A..D (their pushes clear held steps' NOT2..NOT4
+from B..D), and F..H do nothing. On the arp page G and H do nothing.
+
+The ARP view stays on the view stack, but no longer opaque (`+16h` = 0,
+`400ffaf4`): the manager (`40100ade`) hides only the views below the highest
+opaque one, so the MainScreen and its TRIG view draw beneath. The ARP view
+draws nothing; it keeps the step LEDs (a LedHandler) and the key handling.
+The pages are drawn by the contextual DRAW after the TRIG view, which then
+runs the view's tail (`+b8h`) and the indicator (`4003a1c2`). The Digitone
+fonts, rail artwork and framed labels of 1.0..1.7 are gone, and with them
+`test_st_arp_ui_emu.py`'s drawing differential against the Digitone page
+(it had failed on main since the speed/length fields changed).
+`tests/test_st_arp_ui.c` checks 18,640 frames of both pages: everything inside
+the page area, controls at the native positions, locks, LEN, SCALE, keyboard.
+
+**Header titles and the native editor.** Added TRIG pages are page 3 (the
+second TRIG page, Euclidean), so the header read "Euclidean (4/5)" and the
+native editor took Euclidean's controls: on the unit, the arp page's
+encoders changed Euclidean settings. Page 3's descriptor (PAGE_LAYOUT,
+`4007b9d0`) is now ARP's while the MainScreen's TRIG view shows an ARP page:
+the title "Arpeggiator" (header "Arpeggiator (4/5)") and no control IDs.
+Encoders and their pushes on an ARP page are ARP's even without the ARP view
+on top. The ARP view's "on top" test reads the stack's top (the sentinel's
+previous node, manager `+14h`/`+4`), not `+1Ch`: that is the highest opaque
+view, which stays the MainScreen since the ARP view is transparent. Reading
+`+1Ch`, TRIG on the arp page went to the native page index without the chord
+page (page 5 showed page 4). `test_st_arp_view_emu.py` models both
+references and fails with the old test.
+
+**SCALE** (list item 28, user's choice: snap to the nearest note). With SCALE
+ON, every arp output snaps to the nearest note of the pattern's keyboard
+scale (the lower one on a tie); notes already in the scale, and every note
+with no scale (CHROMATIC), are unchanged. The scale and root are the active
+pattern's, as the keyboard setup shows them: its PatternSettings record
+(pattern `+2Ch`, data through vtable `+28h`, as `40015c00`/`40015b74` read it)
+holds the scale at `+1Eh` (signed, -1 none) and the root key at `+20h`. The
+native degree table `40248818` gives each scale's notes (row scale+1, words
+8..15). The UI tick reads them while some Sound has SCALE on and publishes a
+12-bit mask with the root (`arp_scale_key`); the generator snaps each output
+with it (`arp_scale_snap`). SCALE is the Sound's byte 5 (the former padding,
+always 0 before): earlier Sounds read SCALE OFF; an earlier ARP refuses a
+Sound with SCALE ON and restores OFF. SCALE has no p-lock.
+Its test and the falling RANGE branch add six instructions per emitted
+note, SCALE off, against core 1.7's bank (analog
+fixture: 685 → 691 for one track, 5,274 → 5,322 for eight; the fixture's
+cost-equality check against that bank fails by these six).
+`test_st_arp_runtime.c` checks every note against two scales and twelve
+roots and the generator's outputs; the view fixture checks the toggle, the
+Sound byte and the mask read from a pattern record.
+
+## TRIG pages and falling RANGE (1.7)
+
+**The ARP is in the TRIG pages** (list item 37). The double tap on TRIG is
+gone. The arp page and the chord page are the last two TRIG pages, after
+the two native ones and POLY's when the track has it: four pages without
+POLY, five with it. TRIG on the last page before them opens the arp page;
+TRIG there shows the chord page; TRIG on the chord page goes back to the
+first TRIG page, on its release. The native page indicator counts every
+page. The pages are shared with POLY through `syntakt/trig-pages.h`
+([ADAPTING.md](../../docs/ADAPTING.md), "pages added to TRIG"): ARP adds its
+two from PAGE_SYNC on an eligible audio track (not MIDI, FX or POLY
+groups), and the TRIG view's page index follows the page the ARP view
+shows. If the TRIG view reaches an arp page some other way, the tick opens
+it. NO closes the view on the first TRIG page; SYN, FLTR, AMP and LFO close
+it and reach their page as before. FUNC + TRIG and repeats stay native.
+
+TRIG + YES (item 22) still randomizes the page shown before the TRIG press:
+on the chord page, the chord (the view stays); just after TRIG went to the
+chord page, the arp page; just after TRIG opened the arp page, the native
+page before it (the view closes and the native randomizes it).
+
+Until 1.8 the ARP view drew no page indicator (its Digitone layout used that
+column); 1.8 draws the pages inside the TRIG view, indicator included.
+
+**RANGE goes down too** (list item 27): -4, -3, -2, 1, 2, 3, 4. A falling
+range plays the root octave, then each octave below it (-2: two octaves,
+the root's and the one below). -1 would be 1 again, so it is skipped. Stored
+values 0..3 keep their meaning (1..4); 4, 5, 6 are -2, -3, -4, in the Sound
+metadata and in RANGE p-locks alike, so earlier Sounds and locks read the
+same. An older ARP reading a falling RANGE refuses that Sound's metadata and
+restores OFF. A note below 0 is skipped (a rest), as one above 127 was.
+The selector's falling branch costs three instructions per emitted note
+(analog fixture: 685 → 688 for one track, 5,274 → 5,298 for eight).
+
+FUNC + encoder (item 26) stays as it is on the ARP pages.
+
 ## Chord page (1.2)
 
-With the ARP view open, TRIG switches between the arp page and a chord page;
-a double tap always opens the arp page. The chord page has **E: NOTE,
+With the ARP view open, TRIG switches between the arp page and a chord page
+(since 1.7 the last two TRIG pages, above). The chord page has **E: NOTE,
 F/G/H: NOT2/NOT3/NOT4** and POLY's keyboard over the chord. They are the
 pattern's own trig NOTE and chord lanes, the ones POLY plays (`chord.h`), so
 they need no new storage and are saved with the pattern. Without held trigs,
@@ -139,7 +245,7 @@ LED setter as a double.
 No physical instrument or full scheduler test is implied by these fixtures.
 
 This is an **experimental SMZ module**, OFF at startup, for twelve independent
-audio tracks (eight digital, four analog), fed by sequence roots or held keyboard notes. Double tap on the TRIG parameter button opens a native
+audio tracks (eight digital, four analog), fed by sequence roots or held keyboard notes. The last two TRIG pages (1.7, above) open a native
 IView with the Sound settings; a new Sound keeps MODE OFF. The selector,
 native event generator, clock and view are connected. This is an experimental hardware-test candidate; since 1.2 sequence roots
 play their native chord lanes (the chord page above). Sound persistence uses the shared lifecycle
@@ -148,11 +254,11 @@ it never reserves other tracks. Each audio track has one ARP.
 
 ## Controls and view
 
-Two distinct TRIG presses (key 0x13), on the same selected track, within 525 MAIN
-blocks / 350 ms. First press/release retain native behavior. The second pair
-opens the page. FUNC, repeats and modal views do not open it. Failed opening
-on an unsupported track preserves the native action and release. The adapter
-qualifies MainScreenView before borrowing its selected-track model.
+Until 1.6 two TRIG presses (key 0x13) within 350 ms opened the view; since
+1.7 TRIG on the last TRIG page before ARP's does (above). FUNC, repeats and
+modal views do not open it. Failed opening on an unsupported track preserves
+the native action and release. The adapter qualifies MainScreenView before
+borrowing its selected-track model.
 
 TEST02 corrects TEST01's key binding: the original MainScreen key switch
 `40033ee0` routes key 19/0x13 to parameter page 0 (TRIG), and key 20/0x14 to
@@ -174,19 +280,13 @@ Its temporary value label uses the original length spelling and fractions.
 Settings follow the Sound through native copies, Kit/project and pool codecs,
 Kit save/reload buffers and +Drive Sound records. Missing metadata restores OFF.
 
-`ui.c` reproduces Digitone 1.44 `40051390..40051928`: labels, positions, step
-selection, rests, offsets, adaptive scale, length marker and rail. `view.c`
-connects the native stack lifetime using the same plain IView ownership as
-Recorder; complete-view drawing keeps later system overlays above it. It uses
-the original small-label framed-text renderer, whose alignment differs from
-plain text. Native fonts/maps/pixels and rail image/mask are identical to the
-Digitone resources, verified against SHA-pinned local MAIN inputs. No donor
-firmware bytes are shipped. The real font height is five pixels: title y=59.
-The earlier laboratory height double had placed it two pixels too low.
+Until 1.7 `ui.c` reproduced the Digitone 1.44 ARP page (`40051390..40051928`)
+with its fonts and rail artwork; since 1.8 it draws the native TRIG page
+layout (above), keeping the Digitone step marks. `view.c` connects the native
+stack lifetime using the same plain IView ownership as Recorder.
 
-The canvas consumes strings synchronously. `length_bitmap` is adapter-owned;
-0xffffffff is the rail resource ID, not a native pointer. Native framebuffer
-equality and physical UI operation remain unverified.
+The canvas consumes strings synchronously. `length_bitmap` is adapter-owned.
+Native framebuffer equality and physical UI operation remain unverified.
 
 ## Selector, native generation and clock
 
@@ -361,12 +461,13 @@ All outputs go under ignored `out/`; no MIDI/USB/device access.
 
 - `test_st_arp_selector_emu.py`: 360 configurations / 11,520 selector calls
   against untouched Digitone instructions; twelve independent selector states,
-  held-note invariants, MODE OFF opening and nine gesture cases. Also 2,772 target
+  held-note invariants and MODE OFF opening (the nine double-tap cases went with
+  the gesture in 1.7). Also 2,772 target
   clock polls across 54 division/tempo configurations. Stack/register checks,
   unchanged instruction audit and negative control.
-- `test_st_arp_ui_emu.py`: 192 original/authored drawing streams, corrected
-  native font height, negative control. Model/font/bitmap resolution are doubles;
-  this test alone is not a pixel comparison.
+- `test_st_arp_ui.c` (1.8, host, in the common regressions): both TRIG pages
+  inside the page area, native control positions, locks, LEN, SCALE, keyboard.
+  It replaces `test_st_arp_ui_emu.py`'s Digitone drawing differential.
 - `test_st_note_accept_emu.py`: 384 stock/core acceptance cases and four native
   cleanup cases. Condition/dispatcher are doubles; host tests run real dispatch.
 - `test_st_arp_generator_emu.py`: linked module, real core dispatch, native
@@ -380,7 +481,8 @@ All outputs go under ignored `out/`; no MIDI/USB/device access.
   stock/core countdown comparisons at 30/120/300 BPM. The 128 settings also
   reach native output gates through the linked module, retaining a held root
   across edits. Checks the note-off flag boundary, not synthesis or audio.
-- `test_st_arp_view_emu.py`: linked double tap, MODE OFF, A..F limits, steps,
+- `test_st_arp_view_emu.py`: linked TRIG-page opening (1.7: PAGE_SYNC, the
+  tick, the page index, TRIG + YES), MODE OFF, A..F limits, steps,
   modal priority, STOP, close/dispose/reopen and failure passthrough. Stack
   ownership, allocation, base view ctor/dtor and text rasterization are doubles;
   the native rail constructor executes. Font metrics/maps/pixels (453 and 599
@@ -413,11 +515,10 @@ $env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.
 & C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_arp_view_emu.py `
   --core out/core-st-0.12.21-arp-len-checked/main.bin `
   --bank out/core-st-0.12.21-arp-len-checked/synfact-machines.smz4 `
-  --digitone-main C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_3_MAIN_OS.bin `
   --out out/core-st-0.12.21-arp-len-checked/view.json
 ```
 
-The selector/UI differential scripts take `--digitone-main`, `--toolchain` and
+The selector differential script takes `--digitone-main`, `--toolchain` and
 `--out` (a new output directory). The SHA-pinned donor remains a read-only local
 input. No firmware or generated assets belong in Git.
 
