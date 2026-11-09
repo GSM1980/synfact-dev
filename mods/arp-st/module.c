@@ -15,7 +15,7 @@
 #define ARP_STOP 0x53544f50u
 static const struct st_machine_host_api *arp_host DATA=0;
 static struct arp_runtime arp_voice[ARP_TRACKS] DATA={{0}};
-#define ARP_DEFAULT {0,9,1,30,15,0xffff,{0}}
+#define ARP_DEFAULT {0,9,1,30,15,0,0xffff,{0}}
 static struct arp_settings arp_parameters[ARP_TRACKS] DATA={ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,
     ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT};
 static arp_u32 arp_track DATA=0,arp_running DATA=0;
@@ -76,6 +76,8 @@ static unsigned int chord_take(arp_u32 track,const arp_u32 *e,int *interval)
 static const volatile arp_u32 *held_notes(unsigned int track)
 {return (const volatile arp_u32 *)(0x4553f6e0u+track*0x2e18u);}
 static int arp_native(arp_u32,const arp_u32 *,arp_u32 *);
+static void arp_trig_sync(void *);
+static int arp_trig_layout(const arp_u32 *,arp_u32 *);
 static int queue(arp_u32 *e,arp_u32 time)
 {
     const volatile arp_u32 *b=*(const volatile arp_u32 **)0x444de434u;
@@ -114,7 +116,8 @@ static void interest(void)
 {
     /* A newly loaded Sound can enable ARP before any page has been opened. */
     arp_u32 mask=(1u<<ST_NATIVE_IMMEDIATE)|(1u<<ST_NATIVE_HEADER_LOAD)|(1u<<ST_NATIVE_HEADER_RESET)|
-        (1u<<ST_NATIVE_SOUND_META)|(1u<<ST_NATIVE_NOTE_ACCEPT)|(1u<<ST_NATIVE_TRIG);
+        (1u<<ST_NATIVE_SOUND_META)|(1u<<ST_NATIVE_NOTE_ACCEPT)|(1u<<ST_NATIVE_TRIG)|
+        (1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_LAYOUT);
     arp_host->native_interest((void (*)(void))arp_native,mask);
 }
 /* UI/test entry. Publication uses the existing native exclusion and private
@@ -134,7 +137,7 @@ static void restore_sound(unsigned int track,arp_u32 sound)
     const struct arp_settings *p;unsigned int i;int different=0;
     if(arp_lab_override[track])return;
     p=arp_sound_settings(sound);
-    for(i=0;i<sizeof(*p);i++)if(i!=5 && ((const unsigned char *)p)[i]!=((const unsigned char *)&arp_parameters[track])[i]){different=1;break;}
+    for(i=0;i<sizeof(*p);i++)if(((const unsigned char *)p)[i]!=((const unsigned char *)&arp_parameters[track])[i]){different=1;break;}
     if(arp_bound_sound[track]!=sound || (different && (p->mode!=arp_parameters[track].mode || p->speed!=arp_parameters[track].speed)))stop_locked(track);
     if(different)for(i=0;i<sizeof(*p);i++)((volatile unsigned char *)&arp_parameters[track])[i]=((const unsigned char *)p)[i];
     arp_bound_sound[track]=sound;
@@ -153,7 +156,7 @@ static void changed_sound(const arp_u32 *a)
     for(t=0;t<ARP_TRACKS;t++){
         sound=arp_bound_sound[t];if(!sound || arp_lab_override[t] || sound-a[1]>=bytes)continue;
         arp_sound_read(sound,&p);
-        for(i=0;i<sizeof(p);i++)if(i!=5 && ((const unsigned char *)&p)[i]!=((const volatile unsigned char *)&arp_parameters[t])[i])break;
+        for(i=0;i<sizeof(p);i++)if(((const unsigned char *)&p)[i]!=((const volatile unsigned char *)&arp_parameters[t])[i])break;
         if(i<sizeof(p))arp_sound_configure(t,&p,sound);
     }
 }
@@ -190,6 +193,9 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
 {
     arp_u32 *e,before;const struct arp_settings *p;unsigned int i,track;
     if(op==ST_NATIVE_SOUND_META){arp_sound_meta(a);changed_sound(a);return 0;}
+    /* UI task: ARP's two TRIG pages (list item 37); a notification. */
+    if(op==ST_NATIVE_PAGE_SYNC){if(a && a[0])arp_trig_sync((void *)a[0]);return 0;}
+    if(op==ST_NATIVE_PAGE_LAYOUT)return arp_trig_layout(a,result);
     if(op==ST_NATIVE_TRIG){
         /* Only independent audio tracks reach the stock replay here. POLY
          * owns grouped tracks and must prepare their voices itself. */
@@ -241,11 +247,11 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
         if(e[1]==ARP_STOP){for(i=0;i<ARP_TRACKS;i++)if(arp_voice[i].source)stop_locked(i);*result=1;return 1;}
         if(e[1]!=ARP_CONFIG){*result=1;return 1;}
         p=(const struct arp_settings *)e[3];track=e[2];e[5]=0;
-        if(p && p->mode<=4 && p->speed<18 && p->range<=3 && p->note_length<128 && p->length<16 && e[2]<ARP_TRACKS &&
+        if(p && p->mode<=4 && p->speed<18 && p->range<=ARP_RANGE_MAX && p->scale<=1 && p->note_length<128 && p->length<16 && e[2]<ARP_TRACKS &&
            (!p->mode || eligible(e[2]))){
             if(e[4]){
                 const struct arp_settings *current=arp_sound_settings(e[4]);
-                for(i=0;i<sizeof(*p);i++)if(i!=5 && ((const unsigned char *)current)[i]!=((const unsigned char *)p)[i])break;
+                for(i=0;i<sizeof(*p);i++)if(((const unsigned char *)current)[i]!=((const unsigned char *)p)[i])break;
                 if(i<sizeof(*p)){*result=1;return 1;} /* task snapshot was superseded */
                 if(arp_voice[track].source && arp_bound_sound[track]!=e[4]){
                     e[5]=1;*result=1;return 1; /* another Sound owns this root */
@@ -325,7 +331,9 @@ static int arp_initialize(const struct st_smz_api *a)
     if(!a || a->version<3 || !a->ui || !a->ui->host || a->ui->host->version<9 ||
        !a->ui->host->native_dispatch || !a->ui->host->storage ||
        !a->ui->host->machine_telemetry || a->ui->host->version<10)return 1;
-    arp_host=a->ui->host;arp_persist_init();for(i=0;i<ARP_TRACKS;i++)arp_runtime_init(&arp_voice[i],&arp_native_api);interest();return 0;
+    arp_host=a->ui->host;arp_persist_init();for(i=0;i<ARP_TRACKS;i++)arp_runtime_init(&arp_voice[i],&arp_native_api);interest();
+    /* PAGE_SYNC for the TRIG view only, as POLY declares (host API 6). */
+    arp_host->native_page_view((void (*)(void))arp_native,ST_TRIG_VIEW);return 0;
 }
 static const struct st_smz_subscription subscriptions[]={
     {ST_EV_KEY,(void (*)(void))arp_view_key},

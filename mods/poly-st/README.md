@@ -14,6 +14,16 @@ limited to the TRIG ParameterView.
 
 ## Operation
 
+1.4: the header reads "Polyphonic mode (3/n)": page 3's descriptor is POLY's
+(title and IDs) also outside page actions, while the MainScreen's TRIG view
+shows POLY's page (`syntakt/trig-pages.h`, `st_trig_current`); before, it read
+page 3's "Euclidean".
+
+1.3: the third TRIG page is POLY's share of the TRIG page vector it shares
+with ARP (`syntakt/trig-pages.h`, list item 37). POLY sets only its page
+(index 2); ARP's two pages may follow it, and POLY's page indicator counts
+every TRIG page (five with ARP). `tests/test_st_poly.c` checks both.
+
 On a digital track, open the third TRIG page. It preserves Synfact's layout:
 **A: POLY, B: VOICES, C: PLAY, D: empty, E: NOTE, F/G/H: NOT2/NOT3/NOT4**, with its keyboard graphic.
 OFF hides/disables the remaining controls. VOICES selects 2, 3 or 4 contiguous

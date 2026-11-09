@@ -1,5 +1,5 @@
 {
-  "id":"fm-tone-st","version":"1.0","device":"syntakt","os":"1.41",
+  "id":"fm-tone-st","version":"1.1","device":"syntakt","os":"1.41",
   "title":"SY FM DTONE","category":"Synth","author":"Synfact port",
   "sources":["main.c","ui.c"],
   "smz":{

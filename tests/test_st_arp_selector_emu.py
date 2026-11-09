@@ -79,21 +79,6 @@ def build(out,toolchain):
     subprocess.run([str(toolchain/'ld.exe'),'-T',str(script),'-o',str(image),*map(str,objects)],env=env,check=True)
     return image
 
-def taps(lab):
-    s=OWN
-    def clear():lab.u.mem_write(s,bytes(20))
-    def key(flags,now,t=0,main=1,k=0x13):return lab.call('arp_trig_tap',s,k,flags,t,now,main)[0]
-    clear();assert key(1,0)==0;assert key(16,1)==0;assert key(1,525)==2;assert key(16,526)==1
-    clear();assert key(1,0)==0;assert key(9,300)==0;assert key(16,400)==0;assert key(1,526)==0
-    clear();key(1,0);key(16,1);assert key(1,10,t=1)==0
-    clear();key(1,0);key(16,1);assert key(1,10,main=0)==0
-    clear();assert key(3,0)==0;key(16,1);assert key(1,10)==0
-    clear();key(1,0);key(16,1);key(1,2,k=12);assert key(1,10)==0
-    clear();key(1,0xfffffff0);key(16,0xfffffff1);assert key(1,20)==2
-    clear();key(1,0,t=11);key(16,1,t=11);assert key(1,300,t=11)==2
-    clear();assert key(1,0,t=12)==0;key(16,1,t=12);assert key(1,300,t=12)==0
-    return 9
-
 def clocks(lab):
     """Execute actual target clock functions at native frame boundaries."""
     state=OWN+0x31000;due=SETTINGS+0x300;polls=0
@@ -152,10 +137,10 @@ def verify(donor_path,out,toolchain):
         lab.u.mem_write(SETTINGS,bytes([mode]));lab.call('arp_activate',SETTINGS)
         assert lab.read(SETTINGS,1)==bytes([mode])
     result=dict(ok=True,donor_main_sha256=DONOR_SHA,donor_selector=[hex(ENTRY),hex(END)],
-                configurations=len(configs),compared_calls=calls,tracks=12,tap_cases=taps(lab),negative_controls=1,
+                configurations=len(configs),compared_calls=calls,tracks=12,negative_controls=1,
                 donor_instructions=[min(native_cost),max(native_cost)],source_instructions=[min(source_cost),max(source_cost)],
                 clock=clocks(lab),audit=lab.audit,source_sha256={n:hashlib.sha256((ROOT/'mods/arp-st'/n).read_bytes()).hexdigest() for n in ['arp.h','selector.c','input.c','ui.h','ui.c','clock.h','clock.c']},
-                limits=['Selector and gesture only; no native scheduling, note events, persistence or UI execution.',
+                limits=['Selector and clock only; no native scheduling, note events, persistence or UI execution.',
                         'Instruction counts are emulator instructions, not cycles or physical CPU percentages.',
                         'Held-note mutation has source invariants but no complete donor lifecycle differential.'],device_access=False)
     (out/'result.json').write_text(json.dumps(result,indent=2)+'\n')

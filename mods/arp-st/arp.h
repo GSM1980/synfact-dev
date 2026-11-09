@@ -6,11 +6,22 @@ typedef unsigned int arp_u32;
 #define ARP_TRACKS 12u
 /* Sound-independent selector. All storage belongs to the caller. No firmware
  * addresses, allocations, UI calls, timers or floating point in this layer. */
+/* scale (1.8, list item 28): 1 = every output snaps to the nearest note of
+ * the pattern's keyboard scale. It takes the byte that was padding (5), which
+ * earlier ARPs wrote as 0: their Sounds read SCALE OFF. */
 struct arp_settings {
-    unsigned char mode, speed, range, note_length, length;
+    unsigned char mode, speed, range, note_length, length, scale;
     unsigned short enabled;
     signed char offset[16];
 };
+/* RANGE (list item 27): 0..3 climb 1..4 octaves, as on the Digitone; 4..6
+ * fall 2..4 octaves (shown -2..-4; -1 would be 1 again). Stored values 0..3
+ * keep their meaning, so earlier Sounds and locks read the same. The encoder
+ * moves through the shown order -4,-3,-2,1,2,3,4: positions 0..6. */
+#define ARP_RANGE_MAX 6u
+static __inline__ int arp_range_label(unsigned int r){return r<=3?(int)r+1:-(int)(r-2);}
+static __inline__ int arp_range_position(unsigned int r){return r<=3?(int)r+3:6-(int)r;}
+static __inline__ unsigned int arp_range_value(int position){return position<3?(unsigned int)(6-position):(unsigned int)(position-3);}
 void arp_activate(struct arp_settings *);
 struct arp_selector {
     arp_u32 mask[4];
@@ -25,11 +36,4 @@ int arp_release(struct arp_selector *,unsigned int note);
 /* Donor result convention: -2 = stale generation/no held notes; -1 = rest.
  * A nonnegative result still needs the native scale/transpose/range policy. */
 int arp_next(struct arp_selector *,const struct arp_settings *,arp_u32 generation);
-
-/* UI-only recognizer. TRIG is the parameter-page button, key 0x13, rather
- * than the sixteen sequencer keys. Clock unit is a 32-frame MAIN block. */
-struct arp_double_tap {arp_u32 at, track;unsigned int pending,down,consume_release;};
-enum {ARP_TAP_PASS,ARP_TAP_CONSUME,ARP_TAP_OPEN};
-int arp_trig_tap(struct arp_double_tap *,arp_u32 key,arp_u32 flags,
-                 arp_u32 track,arp_u32 blocks,int main_screen);
 #endif

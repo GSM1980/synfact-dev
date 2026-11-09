@@ -1,6 +1,12 @@
 /* Native views retain their vtables and owning models. All POLY dispatch lives
  * in the existing file-owned hook table, so replacing the machine file leaves
  * no callbacks or data pointers inside native views. */
+/* TRIG pages shared with ARP (list item 37), through POLY_CALL. */
+#define ST_TRIG_NEW POLY_CALL(0x40103788u,u32 *(*)(u32))
+#define ST_TRIG_DELETE POLY_CALL(0x40103794u,void (*)(void *))
+#define ST_TRIG_RESET POLY_CALL(0x400f6730u,void (*)(void *))
+#define ST_TRIG_APP POLY_CALL(0x4016e804u,u8 *(*)(void))
+#include <syntakt/trig-pages.h>
 #define UI_GET POLY_CALL(0x40039160u,u32 (*)(void *,u32,u8 *))
 #define UI_TEXT POLY_CALL(0x400f8a0cu,void (*)(void *,void *,s32,s32,u32,const char *,const char *))
 #define UI_FILL POLY_CALL(0x400f7df2u,void (*)(void *,s32,s32,s32,s32,u32))
@@ -47,46 +53,30 @@ u32 poly_ui_slave(u8 *view)
 void poly_ui_sync(u8 *view)
 {
     u32 key,vt=*(u32 *)view,track;
-    u32 *pages,*replacement,count;
+    u32 *pages;
     /* The draw queue also contains small, unrelated widgets. Qualify the
      * immutable ParameterView vtable before reading any derived fields. */
     if(!poly_ui_parameter_view(view))return;
     key=*(u32 *)(view+0x88);
     if(key<0x12 || key>0x18)return;
     track=poly_ui_track(view);if(track>=13)return;
-    if(vt!=0x401c97fcu)return;
+    if(vt!=ST_TRIG_VIEW)return;
     pages=*(u32 **)(view+0x7c);
     if(!pages)return;
-    count=(*(u32 *)(view+0x80)-(u32)pages)/4u;
     /* MainScreen 4003209c selects bank +140h for digital tracks 0..7:
      * ROM 401c7f84 [2,3]. Analog is +f8h / 401c7fcc [1,3];
-     * MIDI is +188h / 401c7f74 [26,3]. All share this TRIG vtable. */
-    if(track>=10 || pages[0]!=(track<8?2u:1u)) {
-        if(count==3 && pages[2]==3u) {
-            *(u32 *)(view+0x80)=(u32)(pages+2);
-            if(*(u32 *)(view+0x90)>1)*(u32 *)(view+0x90)=0;
-        }
-        return;
-    }
-    if(count!=2)return;
-    if(*(u32 *)(view+0x84)-(u32)pages<12u) {
-        replacement=POLY_CALL(0x40103788u,u32 *(*)(u32))(12);
-        if(!replacement)return;
-        replacement[0]=pages[0];replacement[1]=pages[1];replacement[2]=3;
-        POLY_CALL(0x40103794u,void (*)(void *))(pages);
-        pages=replacement;
-        *(u32 *)(view+0x7c)=(u32)pages;
-        *(u32 *)(view+0x84)=(u32)(pages+3);
-    }else pages[2]=3;
-    *(u32 *)(view+0x80)=(u32)(pages+3);
+     * MIDI is +188h / 401c7f74 [26,3]. All share this TRIG vtable. The
+     * third page is POLY's share of the vector (syntakt/trig-pages.h);
+     * ARP's pages may follow it. */
+    st_trig_set(view,ST_TRIG_POLY,track<10 && pages[0]==(track<8?2u:1u));
 }
 
 u32 poly_ui_third(u8 *view)
 {
     volatile u32 answer=0;
-    if(*(u32 *)view!=0x401c97fcu)return 0;
+    if(*(u32 *)view!=ST_TRIG_VIEW)return 0;
     if(poly_ui_track(view)>=10)return 0;
-    if(*(u32 *)(view+0x90)==2)answer=1;
+    if(*(u32 *)(view+0x90)==ST_TRIG_NATIVE_PAGES && (st_trig_mask(view)&ST_TRIG_POLY))answer=1;
     return answer;
 }
 
@@ -107,12 +97,19 @@ static const u32 *poly_ui_ids(u8 *view)
     return poly_off_ids;
 }
 
+/* POLY's page descriptor: page 3's first word, POLY's title (the header's
+ * "Polyphonic mode (3/n)", syntakt/trig-pages.h) and POLY's IDs. In a page
+ * action, for its view; otherwise for the TRIG view the MainScreen shows, so
+ * the header and the native editor never see page 3's (Euclidean's). */
+static const struct st_trig_title poly_title=ST_TRIG_TITLE("Polyphonic mode");
 u32 poly_ui_layout(u32 page)
 {
     u32 i;u8 *view=(u8 *)poly_layout_view;const u32 *native,*ids;
-    if(page!=3 || !view || !poly_ui_third(view))return 0;
+    if(page!=3)return 0;
+    if(!view)view=st_trig_current();
+    if(!view || !poly_ui_third(view))return 0;
     native=stock_page_layout(3);ids=poly_ui_ids(view);
-    poly_trig_layout[0]=native[0];poly_trig_layout[1]=native[1];
+    poly_trig_layout[0]=native[0];poly_trig_layout[1]=(u32)poly_title.text;
     for(i=0;i<9;i++)poly_trig_layout[i+2]=ids[i];
     return (u32)poly_trig_layout;
 }
@@ -322,7 +319,8 @@ u32 poly_ui_draw(u8 *view,void *ctx)
         poly_ui_keyboard(ctx,notes,voices);
     }
     ((void (*)(void *,void *,u32))(*(u32 **)(view))[0xb8/4])(view,ctx,0);
-    POLY_CALL(0x4003a1c2u,void (*)(void *,void *,u32,u32,u32))(view,ctx,3,2,7);
+    /* Every TRIG page counts, ARP's included (syntakt/trig-pages.h). */
+    POLY_CALL(0x4003a1c2u,void (*)(void *,void *,u32,u32,u32))(view,ctx,st_trig_count(view),2,7);
     return 1;
 }
 

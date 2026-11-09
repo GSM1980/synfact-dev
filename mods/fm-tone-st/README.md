@@ -14,6 +14,27 @@ machine-selection defaults. Older UI service APIs reject
 the FM module initializer before publishing AUDIO. Graphics, formatting, input
 semantics and FM DSP belong to the SMZ; core services are machine-independent.
 
+## FUNC + encoder (1.1, list item 29)
+
+With FUNC held, four controls snap through fixed values instead of fine steps:
+
+| control | page | values |
+|---|---|---|
+| HARM | 1 | -24, -12, 0, +12, +24 (through 0: the centre is 3f00) |
+| MIX | 1 | -64, 0, +63 |
+| RATIO OFFSET C, A, B1, B2 | 2 | -1, 0, +0.999 |
+
+As FUNC+TUNE on the sampler machines: the control's native encoder policy and
+increment, then the native FUNC-entry/repetition gate (`400f6ad4`/`400f6b02`)
+and its transition flag, then one snap to the next stored value past the
+current one through the native edit route (Sound, lock, undo; a held trig and
+the page key seed the lock first). Before 1.1 HARM borrowed TUNE's cached
+alias `1f1`, whose fixed FUNC list (TUNE's 4000 +/- 24 semitones) gave -23,
+-11, +1, +13, +25 on HARM's 3f00 centre; it now borrows the scalar `13`, as
+the sampler TUNEs do, and keeps `1f1` as its encoder policy, so ordinary and
+pressed turning are unchanged. `tests/test_st_fm.c` checks 5,540 snaps (every
+start value of each control, both directions, the gate, locks, pages).
+
 ## Build it from your own Digitone OS
 
 FM TONE's DSP, its tables and some of its drawings are the Digitone's. This

@@ -1,4 +1,4 @@
-"""Linked ARP view/gesture/edit lifecycle and SHA-pinned native resources.
+"""Linked ARP view/TRIG pages/edit lifecycle and SHA-pinned native resources.
 
 UI allocation, stack publication, base IView ctor/dtor and text rasterization
 are explicit doubles. Native immediate exclusion/core dispatcher, configuration,
@@ -8,11 +8,12 @@ import argparse,hashlib,json,struct,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from test_st_arp_generator_emu import Machine,W,SP,RET,KIT,SEQ
-from test_st_arp_selector_emu import DONOR_SHA
 from unicorn.m68k_const import UC_M68K_REG_A7
 
 APP,MAIN,MODEL,NODE,EV,ROOT,BMP,VECTOR=0x49011000,0x49012000,0x49012400,0x49012500,0x49012600,0x49013000,0x49014000,0x49015000
+TOPNODE=NODE+0x10
 PARAM,PROXY,PVT,INNER,IVT=0x49018000,0x49018100,0x49018200,0x49018300,0x49018400
+PAGES=0x49018500 # the TRIG view's page vector (syntakt/trig-pages.h), capacity 8
 GET_SOUND,NOTIFY=RET+0x200,RET+0x204
 # The encoder natives as the native pages call them (1.2): 400f66a2 with ticks x1 (x8
 # pressed), 400f68d2 with the choices table 443da178 for every control (the values table
@@ -29,11 +30,30 @@ class ViewMachine(Machine):
         self.alloc=self.word(storage+12);self.telemetry=self.word(host+64)
         self.w(MAIN,0x401c81fc);self.w(MAIN+0xa4,MODEL);self.top(MAIN)
         self.w(MAIN+0xc0,PARAM);self.w(PARAM,0x401c97fc);self.w(PARAM+0x68,MODEL+0x40)
+        # List item 37: the TRIG view (key 13h) of a digital track with ARP's two
+        # pages after the native two, on the second native page.
+        self.w(PARAM+0x88,0x13);self.w(PARAM+0x74,MODEL);self.pages([2,3,3,3]);self.w(PARAM+0x90,1)
+        self.resets=0;self.held=set();self.tail=self.word(0x401c97fc+0xb8)
         self.w(PROXY,PVT);self.w(PVT+0x28,0x40012986);self.w(PROXY+0x10,INNER)
         self.w(INNER,IVT);self.w(IVT+0x28,GET_SOUND);self.w(IVT+0x10,NOTIFY)
         self.u.mem_write(GET_SOUND,b'\x4e\x75');self.u.mem_write(NOTIFY,b'\x4e\x75');self.notified=0
         self.w(0x444df618,VECTOR);self.w(0x444df61c,VECTOR+96*28)
-    def top(self,v):self.w(APP+0x40+0x1c,NODE);self.w(NODE+8,v)
+    # The view manager at APP+40h: +1Ch the highest opaque view's node, the
+    # sentinel at +14h whose previous node (+4) is the top of the stack. An
+    # opaque view on top is both; since 1.8 the ARP view is not opaque, so it
+    # is the top while +1Ch stays the MainScreen (the 1.8 device bug read +1Ch).
+    def top(self,v):self.w(APP+0x40+0x1c,NODE);self.w(NODE+8,v);self.w(APP+0x40+0x18,NODE)
+    def stack_top(self,v):self.w(TOPNODE+8,v);self.w(APP+0x40+0x18,TOPNODE)
+    def pages(self,ids):
+        for i,n in enumerate(ids):self.w(PAGES+4*i,n)
+        self.w(PARAM+0x7c,PAGES);self.w(PARAM+0x80,PAGES+4*len(ids));self.w(PARAM+0x84,PAGES+32)
+    def vector(self):return [self.word(PAGES+4*i) for i in range((self.word(PARAM+0x80)-PAGES)//4)]
+    def index(self):return self.word(PARAM+0x90)
+    def draw(self):
+        self.rows=[];self.call('arp_view_draw',PARAM,BMP,0);return self.rows
+    def open(self,block=0):
+        """TRIG on the last native TRIG page: the arp page; both edges consumed."""
+        self.w(PARAM+0x90,1);r=self.key(0x13,1,block);assert self.key(0x13,16,block+10)==1;return r
     def args(self,n):return struct.unpack('>%dI'%n,self.read(self.u.reg_read(UC_M68K_REG_A7)+4,4*n))
     def string(self,a):
         x=bytearray()
@@ -47,6 +67,8 @@ class ViewMachine(Machine):
         if pc==self.alloc:
             assert self.args(1)==(16+0x50+12,);self.allocs+=1;self.ret(0 if self.oom else ROOT);return
         if pc==0x4001ff74:assert self.args(1)==(MODEL,);self.ret(self.track);return
+        if pc==0x400f6730:assert self.args(1)==(PARAM+0x94,);self.resets+=1;self.ret();return
+        if pc==0x40102d7c:self.ret(1 if self.args(1)[0] in self.held else 0);return
         if pc==0x4001c422:
             assert self.args(3)==(MODEL+0x40,0x60,0xffffffff);self.ret(PROXY);return
         if pc==0x400f66a2:
@@ -63,11 +85,11 @@ class ViewMachine(Machine):
         if pc==0x400ffba6:
             v,title=self.args(2);assert v==ROOT+16 and self.string(title)=='ARPEGGIATOR'
             self.u.mem_write(v,bytes(80));self.w(v,0x40241bdc);self.ret();return
-        if pc==0x400ffaf4:assert self.args(2)==(ROOT+16,1);self.ret();return
+        if pc==0x400ffaf4:assert self.args(2)==(ROOT+16,0);self.ret();return  # 1.8: not opaque
         if pc==0x40100bc2:
             manager,pair,flags=self.args(3);assert manager==APP+0x40 and flags==0
             assert self.word(pair)==ROOT+16 and self.word(pair+4)==ROOT
-            self.top(ROOT+16);self.ret(1);return
+            self.stack_top(ROOT+16);self.ret(1);return
         if pc==0x4016dde8:
             # Shared owner release: stack manager retains the view after push.
             assert self.word(self.args(1)[0])==ROOT;self.ret();return
@@ -77,24 +99,30 @@ class ViewMachine(Machine):
             # Native close removes the view from the foreground stack.
             self.w(ROOT+16+0x30,1);self.top(MAIN);self.ret();return
         if pc==0x400ffc5e:self.dirty+=1;self.ret();return
+        # 1.8: the pages draw in the TRIG view (PARAM) with the native page
+        # fonts (labels 443da230, values 443da210), primitives, the stock
+        # toggle, the TRIG view's tail (+b8h) and the page indicator 4003a1c2.
         if pc==0x400f8a0c:
             bmp,font,x,y,align,fmt,text=self.args(7);assert bmp==BMP and self.string(fmt)=='%s'
-            self.rows.append(['text',self.word(font+4),x,y,align,self.string(text)]);self.ret();return
-        if pc==0x400f8c18:
-            bmp,font,x,y,align,frame,erase,fmt,text=self.args(9)
-            assert bmp==BMP and font==0x402a9dc4 and frame==0 and align==1 and self.string(fmt)=='%s'
-            assert self.string(erase)==('ARP XX' if x==14 else 'OFS' if y==9 else 'LEN' if y==26 else 'XXX')
-            self.rows.append(['framed-text',font,x,y,align,self.string(text)]);self.ret();return
+            assert font in (0x443da230,0x443da210)
+            self.rows.append(['text',font,x,y,align,self.string(text)]);self.ret();return
+        if pc==self.sym['arp_small_text']:
+            # ARP's 3x5 font (its pixels are checked by test_st_arp_ui.c).
+            ctx,fill,x,y,align,text=self.args(6);assert ctx==BMP
+            self.rows.append(['small',x,y,align,self.string(text)]);self.ret();return
         if pc in [0x400f7df2,0x400f7bd6]:
             self.rows.append(['shape',pc,*self.args(6)[1:]]);self.ret();return
         if pc==0x400f8dac:
-            bmp,resource,x,y,mode=self.args(5);assert bmp==BMP
-            if resource>=VECTOR and resource<VECTOR+96*28:resource=(resource-VECTOR)//28
-            else:
-                assert self.word(resource+4)==27 and self.word(resource+8)==27
-                assert self.word(resource+16)==0x402eaad4 and self.word(resource+20)==0x402d736c
-                resource='rail'
-            self.rows.append(['bitmap',resource,x,y,mode]);self.ret();return
+            bmp,resource,x,y,mode=self.args(5);assert bmp==BMP and VECTOR<=resource<VECTOR+96*28
+            self.rows.append(['bitmap',(resource-VECTOR)//28,x,y,mode]);self.ret();return
+        if pc==0x40070362:
+            view,value,bmp,x,y,mode=self.args(6);assert view==0 and bmp==BMP and mode==0
+            self.rows.append(['toggle',value,x,y]);self.ret();return
+        if pc==0x4003a1c2:
+            view,bmp,count,page,step=self.args(5);assert view==PARAM and bmp==BMP and step==7
+            self.rows.append(['indicator',count,page]);self.ret();return
+        if pc==self.tail:
+            assert self.args(3)==(PARAM,BMP,0);self.rows.append(['tail']);self.ret();return
         return super().code(u,pc,n,ctx)
     def key(self,key,flags,block):
         self.w(EV+12,key);self.w(EV+16,flags);self.w(self.telemetry,block)
@@ -165,8 +193,7 @@ class LockViewMachine(ViewMachine):
 
 def lock_editing(core,bank):
     m=LockViewMachine(core,bank)
-    m.key(0x13,1,0);m.key(0x13,16,10);assert m.key(0x13,1,100)==1
-    m.key(0x13,16,110)
+    assert m.open()==1
     selection=W+0x1500;m.w(PARAM+0x6c,selection)
     # Grid REC (+168h, what REC toggles) without a held trig edits the base Sound.
     m.u.mem_write(selection+0x161,b'\x01');m.u.mem_write(selection+0x168,b'\x01')
@@ -188,7 +215,7 @@ def lock_editing(core,bank):
     assert len(m.step_locks)==8 # MODE, SPEED, RANGE and LEN only: no OFS, LEN (F) or G
     m.key(12,1,120);m.key(12,16,121);assert len(m.step_locks)==8 # YES locks nothing
     assert m.read(m.sym['arp_parameters'],24)==base
-    m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
+    m.draw()
     assert not any(r[0]=='text' and str(r[-1]).startswith('LOCK') for r in m.rows) # no footer over the controls
     # Releasing trigs restores base values; subsequent knob movement is normal.
     m.u.mem_write(selection+0x160,b'\x00');m.w(selection+0x158,0);m.w(selection+0x15c,0)
@@ -198,7 +225,7 @@ def lock_editing(core,bank):
 
 def step_editing(core,bank):
     m=LockViewMachine(core,bank)
-    m.key(0x13,1,0);m.key(0x13,16,10);m.key(0x13,1,100);m.key(0x13,16,110)
+    assert m.open()==1
     selection=W+0x1500;m.w(PARAM+0x6c,selection);m.u.mem_write(selection+0x161,b'\x01')
     p,view=m.sym['arp_parameters'],ROOT+16
     enabled=lambda:int.from_bytes(m.read(p+6,2),'big')
@@ -246,11 +273,15 @@ def native_key_binding(core,bank):
     assert not m.global_key(0x12,1,0) and not m.global_key(0x12,16,10)
     assert not m.global_key(0x12,1,20) and not m.global_key(0x12,16,30)
     assert not m.word(m.sym['arp_view']) and m.manager_calls==4
+    # TRIG on the first TRIG page is the native TRIG; on the second it opens ARP.
+    m.w(PARAM+0x90,0)
     assert not m.global_key(0x13,1,100) and not m.global_key(0x13,16,110)
+    assert not m.word(m.sym['arp_view']) and m.manager_calls==6
+    m.w(PARAM+0x90,1)
     assert m.global_key(0x13,1,200)==1 and m.word(m.sym['arp_view'])==ROOT+16
-    assert m.global_key(0x13,16,210)==1 and m.manager_calls==6
+    assert m.global_key(0x13,16,210)==1 and m.manager_calls==6 and m.index()==2
     return {'TRIG':19,'SYN':20,'FLTR':21,'AMP':22,'LFO':23,'old_wrong_key':18,'native_page_switch_executed':True,
-            'global_core_key_dispatch_executed':True,'wrong_key_double_tap_rejected':True,
+            'global_core_key_dispatch_executed':True,'wrong_key_rejected':True,'opens_from_last_native_trig_page':True,
             'boundaries':['parameter-page selection','view-manager dispatch','view allocation/base/stack/raster as above']}
 
 def parameter_page_handoff(core,bank):
@@ -260,18 +291,17 @@ def parameter_page_handoff(core,bank):
             keys=W+0x900;m.w(keys,m.sym['arp_view_key']);m.w(keys+4,0)
             m.w(m.cs['core:core_key_table']+2,keys)
             m.w(m.cs['core:events']+2*8,keys)
-            for key,flags,block in ((0x13,1,0),(0x13,16,10),(0x13,1,100),(0x13,16,110)):
-                m.global_key(key,flags,block)
-            assert m.word(m.sym['arp_view'])==ROOT+16
+            assert m.global_key(0x13,1,100)==1 and m.global_key(0x13,16,110)==1
+            assert m.word(m.sym['arp_view'])==ROOT+16 and m.index()==2
             if arp_page:
                 assert m.global_key(0x13,1,200)==1
                 assert m.global_key(0x13,16,210)==1
-            assert m.word(m.sym['arp_page'])==arp_page
+            assert m.word(m.sym['arp_page'])==arp_page and m.index()==2+arp_page
             before=m.manager_calls
             # The first page press removes ARP and reaches the native manager;
             # release and another press remain available for native gestures.
             assert m.global_key(page_key,1,300)==0
-            assert m.closed==1 and m.word(ROOT+16+0x30)==1
+            assert m.closed==1 and m.word(ROOT+16+0x30)==1 and m.index()==0
             assert m.word(NODE+8)==MAIN and m.manager_calls==before+1
             assert m.global_key(page_key,16,310)==0
             assert m.global_key(page_key,1,320)==0
@@ -281,21 +311,42 @@ def parameter_page_handoff(core,bank):
             'first_press_closes_before_native_dispatch':True,
             'release_and_second_press_reach_native_manager':True}
 
-def resources(donor,core):
-    d=donor.read_bytes();assert hashlib.sha256(d).hexdigest()==DONOR_SHA
-    s=core.read_bytes();b=0x40000400;rows=[]
-    for a,z in [(0x4022ef58,0x402a7354),(0x402319c8,0x402a9dc4)]:
-        dh=struct.unpack_from('>5I',d,a-b);sh=struct.unpack_from('>5I',s,z-b)
-        assert dh[:2]==sh[:2]
-        widths=d[dh[2]-b:dh[2]-b+256];offsets=struct.unpack_from('>256H',d,dh[3]-b)
-        pixels=max(off+width for off,width in zip(offsets,widths) if off!=65535)
-        for dp,sp,n in zip(dh[2:],sh[2:],[256,512,pixels]):assert d[dp-b:dp-b+n]==s[sp-b:sp-b+n]
-        rows.append(dict(digitone=hex(a),syntakt=hex(z),glyph_bytes=pixels,metrics_equal=True))
-    for a,z in [(0x40255b58,0x402eaad4),(0x40255aec,0x402d736c)]:assert d[a-b:a-b+108]==s[z-b:z-b+108]
-    return rows
+def page_descriptors(core,bank):
+    """1.8: page 3's descriptor on ARP's pages is ARP's: the header title
+    "Arpeggiator" (a leaked COW string the native copy clones) and no control
+    IDs, so the native editor cannot reach Euclidean's controls from there;
+    encoders on an ARP page stay ARP's even without the ARP view on top."""
+    m=LockViewMachine(core,bank);args,result=W+0x9a0,W+0x9b0;m.w(args,3)
+    def layout(index,page=3):
+        m.w(PARAM+0x90,index);m.w(args,page);m.w(result,0)
+        return m.word(result) if m.call('arp_native',11,args,result) else None
+    stock=m.call(m.cs['core:core_stock_page_layout'],3)
+    assert layout(0) is None and layout(1) is None and layout(2,25) is None   # native pages, other IDs
+    for index in (2,3):
+        d=layout(index);title=m.word(d+4)
+        assert m.string(title)=='Arpeggiator' and m.word(title-4)==0xffffffff and m.word(title-12)==11==m.word(title-8)
+        assert [m.word(d+8+4*i) for i in range(8)]==[0]*8 and m.word(d)==m.word(stock) and m.word(d+40)==m.word(stock+40)
+    m.pages([2,3,3,3,3]);assert layout(2) is None and layout(3) and layout(4)  # POLY's page is POLY's
+    m.pages([2,3,3,3]);m.top(MAIN+0x800);assert layout(2) is None;m.top(MAIN)  # another view on top
+    # The ARP view open, not opaque: it is the stack's top and keeps the keys
+    # and encoders while the MainScreen stays the highest opaque view.
+    assert m.open()==1 and m.word(APP+0x40+0x18)==TOPNODE and m.word(NODE+8)==MAIN
+    p=m.sym['arp_parameters'];assert m.encoder(1,1)==1 and m.read(p,1)==b'\x01'
+    assert m.key(0x13,1,20)==1 and m.word(m.sym['arp_page'])==1 and m.index()==3
+    m.key(0x13,16,21);m.key(13,1,22);m.dispose()
+    # An ARP page without the ARP view: encoders and their pushes are ARP's
+    # (consumed, nothing edited), not page 3's.
+    before=m.read(p,24);m.w(PARAM+0x90,2)
+    assert m.encoder(3,5)==1 and m.key(42,1,30)==1 and m.read(p,24)==before
+    m.w(PARAM+0x90,1);assert m.encoder(3,5)==0 and m.key(42,1,31)==0
+    return ['ARP pages: "Arpeggiator" title, no control IDs; native pages and POLY\'s keep theirs',
+            'ARP view on top while not opaque','encoders/pushes on an ARP page never reach the native editor']
 
 TRACKDATA,TVT=0x4901e000,0x4901f000
 TDATA,TNOTIFY=RET+0x208,RET+0x20c
+# SCALE (1.8): the active pattern's PatternSettings model (pattern +2Ch) and its
+# record (vtable +28h): +1Eh scale (0 = Ionian, table row 1), +20h root (2 = D).
+PATTERN=APP+0x3394+2*0x680;SVT,SHEADER,SDATA=0x4901f400,0x4901f500,RET+0x210
 
 class ChordViewMachine(LockViewMachine):
     """1.2 chord page. The native track-model setters (4002755x..400282e8) and
@@ -305,6 +356,8 @@ class ChordViewMachine(LockViewMachine):
         super().__init__(core,bank);self.notices=[]
         self.w(MODEL,TVT);self.w(TVT+0x28,TDATA);self.w(TVT+0x10,TNOTIFY)
         self.u.mem_write(TDATA,b'\x4e\x75');self.u.mem_write(TNOTIFY,b'\x4e\x75')
+        self.w(PATTERN+0x2c,SVT);self.w(SVT+0x28,SDATA);self.u.mem_write(SDATA,b'\x4e\x75')
+        header=bytearray(0x40);header[0x1e]=0;header[0x20]=2;self.u.mem_write(SHEADER,bytes(header))
         data=bytearray(0x499);data[0x2c0:0x3c0]=b'\xff'*256;data[0x3c5:0x3c9]=bytes([60,64,71,0])
         self.u.mem_write(TRACKDATA,bytes(data))
     def lane(self,n,step=None):return self.read(TRACKDATA+(0x3c5+n if step is None else 0x2c0+n*0x40+step),1)[0]
@@ -313,35 +366,48 @@ class ChordViewMachine(LockViewMachine):
             if pc==0x400f68d2 and getattr(self,'no_extra_chord_travel',False) and self.args(5)[1]>=5:
                 self.ret(0);return
             if pc==TDATA:assert self.args(1)==(MODEL,);self.ret(TRACKDATA);return
+            if pc==SDATA:assert self.args(1)==(PATTERN+0x2c,);self.ret(SHEADER);return
             if pc==TNOTIFY:
                 track,notice=self.args(2);assert track==MODEL
                 self.notices.append(self.word(notice));self.ret();return
             if pc==0x400f8104:self.rows.append(['shape',pc,*self.args(6)[1:]]);self.ret();return
         return super().code(u,pc,n,ctx)
     def texts(self):
-        self.rows=[];self.call('arp_view_draw',ROOT+16,BMP,0)
-        return [r[-1] for r in self.rows if r[0]=='text']
+        self.draw()
+        return [r[-1] for r in self.rows if r[0] in ('text','small')]
 
 def chord_page(core,bank):
     m=ChordViewMachine(core,bank);page=lambda:m.word(m.sym['arp_page'])
     m.u.mem_write(SEQ,m.read(TRACKDATA,0x499))
-    m.key(0x13,1,0);m.key(0x13,16,10);m.key(0x13,1,100);m.key(0x13,16,110)
-    assert page()==0 and 'T1 ARPEGGIATOR' in m.texts()
-    # TRIG on the open view switches page; press and release are both consumed.
-    assert m.key(0x13,1,200)==1 and m.key(0x13,16,210)==1 and page()==1
-    t=m.texts();assert t[:9]==['T1 ARP CHORD','C4','NOTE','OFF','NOT2','+7','NOT3','OFF','NOT4'],t
+    assert m.open()==1
+    assert page()==0 and m.texts()[:2]==['MODE','OFF'] and m.index()==2
+    # TRIG on the arp page: the chord page; press and release are both consumed.
+    assert m.key(0x13,1,200)==1 and m.key(0x13,16,210)==1 and page()==1 and m.index()==3
+    t=m.texts();assert t[:9]==['NOTE','C4','NOT2','OFF','NOT3','+7','NOT4','OFF','SCALE'],t
+    # 1.8: inside the TRIG view's page area, the rail/header untouched, the
+    # tail and the indicator (4 pages, the chord page is the fourth) after it.
+    assert ['shape',0x400f7df2,20,0,127,53,0] in m.rows and m.rows[-2:]==[['tail'],['indicator',4,3]]
+    assert ['toggle',0,24,7] in m.rows
     keys=[r for r in m.rows if r[0]=='shape' and r[1]==0x400f8104]
     assert len(keys)==2,keys # C4 and G4, hatched
-    # E..H edit the track defaults through the native setters; A..D do nothing.
+    # 1.8: A..D edit the track defaults through the native setters; F..H do nothing.
     base=m.read(m.sym['arp_parameters'],24)
-    for knob in (1,2,3,4):assert m.encoder(knob,3)==1
+    for knob in (6,7,8):assert m.encoder(knob,3)==1
     assert m.read(m.sym['arp_parameters'],24)==base and not m.notices
-    m.encoder(6,3);m.encoder(5,-1);m.encoder(8,-200)
+    # E: SCALE on and off (the Sound's byte 5), drawn as the toggle.
+    assert m.encoder(5,1)==1 and m.read(m.sym['arp_parameters']+5,1)==b'\x01'
+    m.texts();assert ['toggle',0x100,24,7] in m.rows
+    # The pattern's scale (Ionian from D: the native degree table row 1) and root.
+    assert m.word(m.sym['arp_scale_key'])==0xab5|(2<<16),hex(m.word(m.sym['arp_scale_key']))
+    assert m.encoder(5,1)==1 and m.read(m.sym['arp_parameters']+5,1)==b'\x01'
+    assert m.encoder(5,-1)==1 and m.read(m.sym['arp_parameters'],24)==base and not m.notices
+    m.call('arp_view_tick',APP);assert m.word(m.sym['arp_scale_key'])==0  # no Sound uses it
+    m.encoder(2,3);m.encoder(1,-1);m.encoder(4,-200)
     assert (m.lane(0),m.lane(1),m.lane(3))==(59,67,1),(m.lane(0),m.lane(1),m.lane(3))
     assert m.read(SEQ+0x3c6,1)==b'\x43' and m.read(SEQ+0x3c8,1)==b'\x01'
     assert m.notices==[0x401c690c]*3
     assert m.texts()[1:8:2]==['B3','+3','+7','-63'] # the lowest step is raw 1; 0 is OFF
-    m.encoder(8,1);assert m.lane(3)==2 and m.texts()[7]=='-62'
+    m.encoder(4,1);assert m.lane(3)==2 and m.texts()[7]=='-62'
     # The arp page's keys do nothing here; the trig keys stay the sequencer's.
     assert m.key(12,1,220)==1 and m.key(16,1,221)==1 and m.read(m.sym['arp_parameters'],24)==base
     assert m.key(24,1,230)==0 and m.key(24,16,231)==0
@@ -350,7 +416,7 @@ def chord_page(core,bank):
     m.u.mem_write(selection+0x161,b'\x01');m.u.mem_write(selection+0x168,b'\x01')
     m.w(selection+0x158,1<<15);m.w(selection+0x15c,1<<31) # steps 48 and 32
     m.u.mem_write(TRACKDATA+0x2c0+2*0x40+47,b'\x50')
-    m.notices=[];m.encoder(7,2)
+    m.notices=[];m.encoder(3,2)
     assert (m.lane(2,31),m.lane(2,47),m.lane(2))==(73,82,71)
     assert m.read(SEQ+0x2c0+2*0x40+31,1)==b'\x49'
     assert m.read(SEQ+0x2c0+2*0x40+47,1)==b'\x52'
@@ -358,36 +424,59 @@ def chord_page(core,bank):
     # Hardware reported no effective native choices travel for F..H. Their
     # step edits still advance directly from the event's signed tick count.
     m.no_extra_chord_travel=True
-    m.notices=[];m.encoder(6,1);m.encoder(8,1)
+    m.notices=[];m.encoder(2,1);m.encoder(4,1)
     got=(m.lane(1,31),m.lane(1,47),m.lane(3,31),m.lane(3,47))
     assert got==(68,68,3,3),got
     assert [m.read(SEQ+0x2c0+lane*0x40+step,1)[0]
             for lane in (1,2,3) for step in (31,47)]==[68,68,73,82,3,3]
     assert m.notices==[0x401c68fc]*4
     assert m.texts()[1:8:2]==['B3','+4','+9','-61']
-    m.texts();assert ['shape',0x400f7df2,66,47,93,54,0xffffffff] in m.rows # NOT3 shown as the step's own
-    # G's push: the held steps inherit NOT3 again. E's push leaves NOTE alone.
+    m.texts();assert ['shape',0x400f7df2,76,34,94,50,0xffffffff] in m.rows # NOT3 shown as the step's own
+    # C's push: the held steps inherit NOT3 again. A's push leaves NOTE alone.
     m.u.mem_write(TRACKDATA+0x2c0+31,b'\x30');m.notices=[]
-    assert m.key(46,1,240)==1 and m.lane(2,31)==255 and m.lane(2,47)==255 and m.notices==[0x401c68fc]*2
+    assert m.key(42,1,240)==1 and m.lane(2,31)==255 and m.lane(2,47)==255 and m.notices==[0x401c68fc]*2
     assert m.read(SEQ+0x2c0+2*0x40+31,1)==b'\xff'
     assert m.read(SEQ+0x2c0+2*0x40+47,1)==b'\xff'
-    assert m.key(44,1,241)==1 and m.lane(0,31)==0x30
-    # Back to the arp page; a reopened view starts there.
+    assert m.key(40,1,241)==1 and m.lane(0,31)==0x30
+    # TRIG on the chord page: on its release, the first TRIG page (item 37).
     m.u.mem_write(selection+0x160,b'\x00');m.w(selection+0x158,0);m.w(selection+0x15c,0)
-    assert m.key(0x13,1,300)==1 and m.key(0x13,16,301)==1 and page()==0
-    m.key(0x13,1,310);m.key(0x13,16,311);assert page()==1
-    assert m.key(13,1,320)==1;m.dispose();assert page()==0
-    m.key(0x13,1,400);m.key(0x13,16,410);m.key(0x13,1,500);m.key(0x13,16,510)
-    assert page()==0 and m.word(m.sym['arp_view'])
-    return ['TRIG switches pages, both edges consumed','NOTE/NOT2..NOT4 drawn with the keyboard',
-            'E..H through the native default setters; A..D, YES and arrows inert; trig keys pass',
+    assert m.key(0x13,1,300)==1 and page()==1 and not m.closed
+    assert m.key(0x13,16,301)==1 and m.closed==1 and m.index()==0
+    m.dispose();assert page()==0 and not m.word(m.sym['arp_view'])
+    # NO closes on the first TRIG page; a reopened view starts on the arp page.
+    assert m.open(400)==1 and page()==0 and m.index()==2
+    m.key(0x13,1,410);m.key(0x13,16,411);assert page()==1 and m.index()==3
+    m.closed=0;assert m.key(13,1,420)==1 and m.closed==1 and m.index()==0;m.dispose();assert page()==0
+    # TRIG + YES (list item 22): the page shown before the TRIG press.
+    # On the chord page: its NOT2..NOT4 defaults, and the view stays.
+    assert m.open(500)==1;m.key(0x13,1,510);m.key(0x13,16,511);assert page()==1
+    m.notices=[];m.closed=0;m.held={0x13};assert m.key(0x13,1,520)==1
+    assert m.key(12,1,521)==1 and m.notices==[0x401c690c]*3 and page()==1
+    m.held=set();assert m.key(0x13,16,522)==1 and not m.closed and page()==1 and m.index()==3
+    # Just switched to the chord page: back to the arp page, randomized there.
+    m.key(13,1,523);m.dispose();assert m.open(600)==1
+    arp=m.read(m.sym['arp_parameters'],24);m.held={0x13};m.notices=[]
+    assert m.key(0x13,1,610)==1 and page()==1 and m.key(12,1,611)==1
+    assert page()==0 and m.index()==2 and not m.notices and m.read(m.sym['arp_parameters'],24)!=arp
+    m.held=set();m.key(0x13,16,612);assert page()==0
+    m.key(13,1,613);m.dispose()
+    # Just opened from the native page before: the view closes on that page
+    # and YES reaches the native page's own randomize.
+    m.closed=0;m.held={0x13};m.w(PARAM+0x90,1)
+    assert m.key(0x13,1,700)==1 and m.word(m.sym['arp_view'])
+    assert m.key(12,1,701)==0 and m.closed==1 and m.index()==1
+    m.held=set();m.dispose()
+    return ['TRIG: arp page, chord page, then the first TRIG page; the TRIG view index follows',
+            'NOTE/NOT2..NOT4 on A..D, SCALE on E, keyboard in the bottom row, inside the TRIG view',
+            'A..D through the native default setters; F..H, YES and arrows inert; trig keys pass',
             'held trigs: native step setters from each step value or default, selection marked, value inverted',
-            'G push clears held steps; E push leaves NOTE','reopen starts on the arp page']
+            'C push clears held steps; A push leaves NOTE','NO closes on the first TRIG page; reopen starts on the arp page',
+            'TRIG+YES: chord page randomized and kept; arp page after a switch; native page before after an opening']
 
 def encoder_travel(core,bank):
     """1.2: only whole values move; partial travel adds up in the same direction."""
     m=ViewMachine(core,bank);p=m.sym['arp_parameters']
-    m.key(0x13,1,0);m.key(0x13,16,10);m.key(0x13,1,100);m.key(0x13,16,110)
+    assert m.open()==1
     m.travel=100;mode=lambda:m.read(p,1)[0]
     assert mode()==0
     m.encoder(1,1);m.encoder(1,1);assert mode()==0  # 200/256 of a value
@@ -410,38 +499,47 @@ def kit_sound_mirror(core,bank):
     initial=struct.pack('>5BxH16b',2,10,1,30,15,0xffff,*([0]*16))
     m.u.mem_write(W+0x100,initial)
     assert m.call('arp_sound_store',owned,W+0x100)==1
-    m.key(0x13,1,0);m.key(0x13,16,10)
-    assert m.key(0x13,1,100)==1 and m.key(0x13,16,110)==1
+    assert m.open()==1
     assert m.read(m.sym['arp_ui_parameters'],24)==initial
     assert m.encoder(1,1)==1
     assert m.read(m.call('arp_sound_settings',owned),24)==m.read(m.sym['arp_ui_parameters'],24)
     m.dispose()
     return 'ARP view reads restored Kit settings; edits update UI mirror and Kit Sound'
 
-def verify(core,bank,donor,out):
-    lock_editing(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank);mirror=kit_sound_mirror(core,bank)
-    fonts=resources(donor,core);m=ViewMachine(core,bank);initial=m.pool_counts()
-    assert not m.key(0x13,1,0) and not m.key(0x13,16,10)
-    assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
-    assert m.key(0x13,16,110)==1
+def verify(core,bank,out):
+    lock_editing(core,bank);descriptors=page_descriptors(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank);mirror=kit_sound_mirror(core,bank)
+    m=ViewMachine(core,bank);initial=m.pool_counts()
+    m.w(PARAM+0x90,0);assert not m.key(0x13,1,0) and not m.key(0x13,16,10) and not m.word(m.sym['arp_view'])
+    m.w(PARAM+0x90,1);assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
+    assert m.key(0x13,16,110)==1 and m.index()==2 and m.resets==1
     assert m.read(m.sym['arp_parameters'],1)==b'\x00' # opening keeps MODE OFF
     assert m.word(ROOT+16)!=0x40241bdc and m.allocs==1
-    m.call('arp_view_draw',ROOT+16,BMP,0)
-    assert ['text',0x402a7354,64,59,2,'T1 ARPEGGIATOR'] in m.rows
-    assert ['framed-text',0x402a9dc4,14,2,1,'ARP T1'] in m.rows
-    assert ['bitmap','rail',1,7,0] in m.rows
+    m.draw()
+    # 1.8: MODE, SPEED, RANGE, LEN at the native positions; the LEN icon;
+    # the steps and OFS/LEN (F); the tail and the indicator (page 3 of 4).
+    for x,label in ((33,'MODE'),(59,'SPEED'),(85,'RANGE'),(111,'LEN')):assert ['text',0x443da230,x,27,2,label] in m.rows
+    assert ['small',33,40,2,'OFF'] in m.rows and ['small',59,40,2,'1/16'] in m.rows
+    assert ['text',0x443da210,85,39,2,'2'] in m.rows and any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows)
+    assert ['text',0x443da230,108,20,2,'OFS (E)'] in m.rows and ['text',0x443da230,108,1,2,'16'] in m.rows
+    assert m.rows[0]==['shape',0x400f7df2,20,0,127,53,0] and m.rows[-2:]==[['tail'],['indicator',4,2]]
+    assert all(r[0]!='text' or 20<=r[2]<=123 for r in m.rows)
+    # Another TRIG page, or another view, is not ARP's.
+    m.w(PARAM+0x90,1);assert not m.draw();m.w(PARAM+0x90,2)
+    m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0);assert not m.rows
     # The open page follows the selected track and edits its own Sound.
-    m.track=1;m.call('arp_view_tick',APP);m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
-    assert ['text',0x402a7354,64,59,2,'T2 ARPEGGIATOR'] in m.rows
+    m.track=1;m.call('arp_view_tick',APP);m.draw()
+    assert ['text',0x443da230,33,27,2,'MODE'] in m.rows
     assert m.encoder(1,1)==1 and m.read(m.track_address('arp_parameters',1),1)==b'\x01'
     m.track=0;m.call('arp_view_tick',APP)
     for knob,delta in [(1,3),(2,127),(3,127),(4,127),(5,-127),(6,-127)]:assert m.encoder(knob,delta)==1
     p=m.sym['arp_parameters'];assert m.read(p,5)==bytes([3,17,3,127,0])
     assert m.read(p+8,1)==b'\xe8'
-    m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
-    assert ['text',0x402a7354,112,37,2,'128'] in m.rows
-    m.w(m.telemetry,1610);m.call('arp_view_tick',APP);m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
-    assert ['text',0x402a7354,112,37,2,'LEN'] in m.rows
+    m.draw()   # LEN stays the native knob; while it turns its value takes the label's place
+    assert any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows) and ['text',0x443da230,111,27,2,'128'] in m.rows
+    assert ['text',0x443da230,111,27,2,'LEN'] not in m.rows
+    assert ['small',33,40,2,'DOWN'] in m.rows and ['small',59,40,2,'1/96'] in m.rows and ['text',0x443da210,85,39,2,'4'] in m.rows
+    m.w(m.telemetry,1610);m.call('arp_view_tick',APP);m.draw()   # 1500 blocks later: the label again
+    assert ['text',0x443da230,111,27,2,'LEN'] in m.rows and not any(r[-1]=='128' for r in m.rows)
     assert m.key(17,1,200)==1 and m.word(m.sym['arp_selected'])==1
     assert m.key(12,1,210)==1 and int.from_bytes(m.read(p+6,2),'big')==0xfffd
     assert m.key(12,16,211)==1
@@ -449,36 +547,57 @@ def verify(core,bank,donor,out):
     m.top(MAIN+0x800);assert m.encoder(1,1)==0 and m.key(13,1,220)==0
     m.top(ROOT+16);assert m.key(11,1,230)==0 # native STOP
     # Closing does not disable mode; destructor removes only UI pointers.
-    assert m.key(13,1,240)==1 and m.closed==1;m.dispose()
+    assert m.key(13,1,240)==1 and m.closed==1 and m.index()==0;m.dispose()
     assert m.disposals==1 and m.word(m.sym['arp_view'])==0 and m.read(p,1)==b'\x03'
-    assert m.key(0x13,1,300)==0 and m.key(0x13,16,310)==0 and m.key(0x13,1,400)==1
+    assert m.key(0x13,1,300)==0 and m.key(0x13,16,310)==0 # first TRIG page: native
+    m.w(PARAM+0x90,1);assert m.key(0x13,1,400)==1
     assert m.read(p,1)==b'\x03';m.key(0x13,16,410);m.dispose()
-    # Wrong view/FUNC/held repeat/track change/OOM/FX leave native action.
+    # Wrong view/FUNC/repeat/OOM/FX/other page/no ARP pages/not TRIG leave native action.
     q=ViewMachine(core,bank);q.top(MAIN+0x800)
     assert not q.key(0x13,1,0);q.top(MAIN);q.key(0x13,16,1)
     assert not q.key(0x13,3,10);q.key(0x13,16,11)
-    assert not q.key(0x13,1,20) and not q.key(0x13,9,30)
-    q.key(0x13,16,31);q.track=1;assert not q.key(0x13,1,40);q.key(0x13,16,41)
+    assert not q.key(0x13,9,30);q.key(0x13,16,31)
     q.oom=True;assert not q.key(0x13,1,50) and not q.key(0x13,16,51)
-    q.oom=False;q.track=12;assert not q.key(0x13,1,70);q.key(0x13,16,71)
-    assert not q.key(0x13,1,90) and not q.key(0x13,16,91)
+    q.oom=False;q.track=12;assert not q.key(0x13,1,70);q.key(0x13,16,71);q.track=0
+    for index in (0,2,3):
+        q.w(PARAM+0x90,index);assert not q.key(0x13,1,80) and not q.key(0x13,16,81)
+    q.w(PARAM+0x90,1);q.pages([2,3]);assert not q.key(0x13,1,82) and not q.key(0x13,16,83)
+    q.pages([2,3,3,3]);q.w(PARAM+0x88,0x15);assert not q.key(0x13,1,84) and not q.key(0x13,16,85)
+    q.w(PARAM+0x88,0x13);assert q.word(q.sym['arp_view'])==0 and q.allocs==1
+    # PAGE_SYNC (native op 9) gives an eligible audio track ARP's two pages;
+    # MIDI, the FX track and other pages get none. No vector growth needed.
+    args,result=W+0x980,W+0x990;q.w(args,PARAM);q.w(args+4,0)
+    sync=lambda:q.call('arp_native',9,args,result)
+    q.pages([2,3]);assert sync()==0 and q.vector()==[2,3,3,3]
+    q.pages([1,3]);q.track=9;assert sync()==0 and q.vector()==[1,3,3,3]
+    q.pages([2,3,3,3,3]);q.track=0;q.w(PARAM+0x90,4);assert sync()==0 and q.vector()==[2,3,3,3,3] and q.index()==4
+    q.track=11;assert sync()==0 and q.vector()==[2,3,3,3,3]  # T12 is an audio track
+    q.track=12;assert sync()==0 and q.vector()==[2,3,3] and q.index()==0   # FX: POLY's page stays
+    q.pages([26,3]);q.track=0;assert sync()==0 and q.vector()==[26,3]
+    q.pages([2,3]);q.w(PARAM+0x88,0x15);assert sync()==0 and q.vector()==[2,3];q.w(PARAM+0x88,0x13)
+    # The TRIG view on an arp page some other way: the tick opens that page;
+    # on a track without ARP it leaves for the first TRIG page.
+    q.pages([2,3,3,3]);q.w(PARAM+0x90,3);q.key(0x12,1,90);q.key(0x12,16,91)
+    q.call('arp_view_tick',APP);assert q.word(q.sym['arp_view'])==ROOT+16 and q.word(q.sym['arp_page'])==1 and q.index()==3
+    q.key(13,1,92);q.dispose();q.w(PARAM+0x90,2);q.track=12
+    q.call('arp_view_tick',APP);assert not q.word(q.sym['arp_view']) and q.index()==0;q.track=0
     assert q.word(q.sym['arp_view'])==0
     # Encoder D updates a held root's next output rather than killing it.
-    q=ViewMachine(core,bank);q.key(0x13,1,0);q.key(0x13,16,10);q.key(0x13,1,100);q.key(0x13,16,110)
+    q=ViewMachine(core,bank);assert q.open()==1
     q.encoder(1,1)
     base=q.pool_counts();q.event(length=0);q.frame(0);generation=q.word(q.sym['arp_generation'])
     assert q.log[-1]['gate']==2784375 and q.encoder(4,1)==1
     assert q.word(q.sym['arp_generation'])==generation
     q.frame(5400000);assert q.log[-1]['gate']==2868750
-    q.rows=[];q.call('arp_view_draw',ROOT+16,BMP,0)
-    assert ['text',0x402a7354,112,37,2,'1.03'] in q.rows
+    q.draw();assert any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in q.rows)
+    assert ['text',0x443da230,111,27,2,'1.03'] in q.rows
     q.w(q.telemetry,0xfffffa24);assert q.encoder(4,1)==1 # deadline wraps exactly to zero
     assert q.word(q.sym['arp_length_until'])==0
     q.w(q.telemetry,0);q.call('arp_view_tick',APP);assert q.word(q.sym['arp_length_show'])==0
     q.configure(mode=0);assert q.pool_counts()==base;q.dispose()
     # A Sound-locked sequence root has its own ARP. Viewing/editing the track's
     # Sound must not show or overwrite that other Sound's runtime settings.
-    q=ViewMachine(core,bank);q.key(0x13,1,0);q.key(0x13,16,10);q.key(0x13,1,100);q.key(0x13,16,110)
+    q=ViewMachine(core,bank);assert q.open()==1
     other=KIT+0x500
     q.u.mem_write(W+0x100,struct.pack('>5BxH16b',3,9,1,30,15,0xffff,*([0]*16)))
     assert q.call('arp_sound_store',other,W+0x100)==1
@@ -491,8 +610,9 @@ def verify(core,bank,donor,out):
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
     binding=native_key_binding(core,bank);page_handoff=parameter_page_handoff(core,bank)
-    result=dict(ok=True,fonts=fonts,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,kit_sound_mirror=mirror,rail_pixels_and_mask_equal=True,native_constructor_executed_for_rail=True,
-        lifecycle=['double tap opens with MODE OFF','encoders A..F clamp','selected step/mute','modal priority',
+    result=dict(ok=True,page_descriptors=descriptors,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,kit_sound_mirror=mirror,drawn_in_trig_view=True,
+        lifecycle=['TRIG on the last native TRIG page opens with MODE OFF','PAGE_SYNC adds two pages on eligible audio tracks',
+                   'tick opens a page reached otherwise','encoders A..F clamp','selected step/mute','modal priority',
                    'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',
                    'native STOP passes','NO closes without disabling','destructor/reopen','failed opening preserves native release',
                    'D changes next gate with held root retained','native length labels and popup expiry/wrap',
@@ -504,5 +624,5 @@ def verify(core,bank,donor,out):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    for n in ['core','bank','digitone-main','out']:p.add_argument('--'+n,type=Path,required=True)
-    a=p.parse_args();verify(a.core,a.bank,a.digitone_main,a.out)
+    for n in ['core','bank','out']:p.add_argument('--'+n,type=Path,required=True)
+    a=p.parse_args();verify(a.core,a.bank,a.out)

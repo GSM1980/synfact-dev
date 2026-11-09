@@ -125,11 +125,10 @@ def verify(core,bank,previous,out):
     # Analog pages display correct track numbers and start with OFF.
     m=ViewMachine(core,bank)
     for t in range(8,12):
-        m.track=t;now=t*1000;m.key(0x13,1,now);m.key(0x13,16,now+10)
-        assert m.key(0x13,1,now+100)==1;m.key(0x13,16,now+110)
+        m.track=t;now=t*1000
+        assert m.open(now)==1
         assert m.read(m.sym['arp_ui_parameters'],1)==b'\0'
-        m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0)
-        assert ['text',0x402a7354,64,59,2,'T%d ARPEGGIATOR'%(t+1)] in m.rows
+        m.draw();assert ['text',0x443da230,33,27,2,'MODE'] in m.rows and m.rows[-1]==['indicator',4,2]
         assert m.encoder(1,1)==1;m.key(12,1,now+120);m.dispose()
     cases.append('analog-T9-T12-pages-MODE-OFF-edit-YES')
     measured=[costs(core,bank,n) for n in [0,1,4,8,9,10,11,12]]

@@ -404,6 +404,38 @@ See [ARP](../mods/arp-st/README.md) for tests, native boundaries and persistence
 Project APC1 carriers may be absent when all thirteen associated ARP Sound rows
 are defaults; readers must restore those defaults without requiring a carrier.
 
+## Syntakt: pages added to TRIG (bank modules, no core change)
+
+The TRIG ParameterView (vtable `401c97fc`, page key `13h` at `+88h`) gets two
+native pages from the MainScreen: page IDs `{2,3}` on a digital track,
+`{1,3}` analog, `{26,3}` MIDI, in its owned vector `+7ch..+80h` (capacity end
+`+84h`); `+90h` is the page shown. Native TRIG steps through the vector and
+wraps, and the native indicator (`4003a1c2`) counts it. A module that adds
+TRIG pages does it through `syntakt/trig-pages.h`, from its PAGE_SYNC
+handler (declare `native_page_view(callback, 0x401c97fc)`, host API 6, so
+the core keeps filtering PAGE_SYNC by view class):
+
+| module | pages | index |
+|---|---|---|
+| POLY | 1 | 2 |
+| ARP | 2 | after POLY's: 2..3 without it, 3..4 with it |
+
+Each added page is page ID 3, whose descriptor (`4007b9d0`, 44 bytes: a word,
+the header title as a COW `std::string`, nine control IDs) the core asks for
+through PAGE_LAYOUT. While the MainScreen's TRIG view (`st_trig_current`)
+shows its page, a module answers with its own (`st_trig_descriptor`, a
+static `ST_TRIG_TITLE`): the header then reads its title ("Polyphonic mode",
+"Arpeggiator") and the native editor its control IDs, never page 3's
+(Euclidean's). There is no other state: the vector's size (2, 3, 4 or 5) says which are
+there, and `st_trig_set(view, module, want)` changes only that module's
+part, keeping the page shown (or going to 0 when it went away). Either order,
+either module alone. The added entries are page ID 3, so the native view
+beneath is always a valid TRIG page; the module draws or opens its own view
+over it. A new module that adds TRIG pages takes the next bit in the header,
+after ARP. The core could own this vector later
+([CORE-CONTRIBUTING.md](CORE-CONTRIBUTING.md)); its resident RAM is full today.
+`tests/test_st_trig_pages.c` covers every transition.
+
 ## Syntakt: mixer events, the FX codec and several providers (core 1.2)
 
 Three events of the MAIN audio interrupt (`mods/core-st/fx-send.s`) let a
