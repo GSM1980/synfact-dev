@@ -65,6 +65,12 @@ def pack(image,relocations,descriptors,section,features=0,ui=0,modules=0,module_
     if len(rels)!=len(set(rels)) or any(a+4>b for a,b in zip(rels,rels[1:])):
         raise ValueError('overlapping relocations')
     if len(image)%4:raise ValueError('MAIN image must be longword aligned')
+    # The core relocates each longword by adding the bank base. A GCC-folded
+    # absolute RAM address can still carry R_68K_32 against .image; reject it
+    # here, as the on-device parser does, before publishing an unloadable bank.
+    for at in rels:
+        if at<0 or (at&1) or at+4>len(image) or struct.unpack_from('>I',image,at)[0]>=len(image):
+            raise ValueError('invalid SMZ runtime relocation at 0x%x'%at)
     body=be32(*rels)+image
     if 80+len(body)>MAIN_MAX:raise ValueError('MAIN bank allocation exceeds 2 MiB')
     if len(section)>AUDIO_MAX:raise ValueError('AUDIO bank exceeds its owned reserve')

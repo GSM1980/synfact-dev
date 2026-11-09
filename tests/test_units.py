@@ -613,6 +613,19 @@ def test_smz_mod_info_directory():
         raise AssertionError('accepted %r' % (bad,))
 
 
+def test_smz_runtime_relocations_stay_inside_the_image():
+    from elekloader.sdk.syntakt import smz
+    section=b'SMA3'+bytes(28)
+    good=struct.pack('>II',4,0)
+    assert smz.pack(good,[0],[],section,module_count=1)[:4]==b'SAFE'
+    for image,relocs in ((struct.pack('>II',0x800743fa,0),[0]),
+                         (good,[1]),(good,[6])):
+        try:smz.pack(image,relocs,[],section,module_count=1)
+        except ValueError as error:
+            assert 'runtime relocation' in str(error)
+        else:raise AssertionError('accepted invalid runtime relocation')
+
+
 def test_parts_stay_in_the_image():
     d, r = devices.identify(devices.devices()[0].releases['1.53'].syx_sha256)
     ok = elemod.parse_parts([['hex', '00ff'], ['stock', '0x40000400', 8]], 't', d, r)

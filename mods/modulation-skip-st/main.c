@@ -1,26 +1,27 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * modulation-skip-st: skips the stock modulation 40097afc (the velocity/
- * modulation matrix of the MAIN audio IRQ, ~5.7 CPU points) in blocks where
- * it would write exactly what it wrote last time.
+ * modulation-skip-st: caches the stock modulation 40097afc per track and
+ * runs only tracks whose inputs changed. The full stock body costs about
+ * 5.7 CPU points in the MAIN audio IRQ.
  *
  * The stock body writes, per track t, working[t] + 2*index for 4 entries of
  * 12 velocity groups and 13x5 source groups; entry = {amount, index} longs of
- * the track's unsmoothed machine data. Its output depends only on (memo rule,
- * validated in Unicorn): the velocity and
- * source tables (45 longs), the machine data it reads (13 x 24 longs) and the
- * values of its destination words on entry. When all of them equal the last
- * real run's, it would write the same: write those final values and return.
+ * the track's unsmoothed machine data. Its output depends on that track's
+ * source tables, machine data and destination words. Zero-amount entries still
+ * saturate out-of-range words; normal filter values need no recalculation.
+ * A filtered copy of the stock kernel runs dirty tracks; clean tracks receive
+ * cached active outputs and zero-depth saturation. Out-of-track destinations
+ * and dense matrices use stock.
  *
  * Site: 40097b04, the stock body after its prologue, where core-st's
- * modulation adapter jumps when no module replaces it (POLY with groups does,
+ * modulation adapter jumps when no module replaces it (analog POLY does,
  * and that path is untouched). Its six bytes (two instructions) are replaced
  * by `jmp abs.l`; the stock path re-executes them. Install once at init,
  * nothing if the bytes differ (header `MSKIP NO1`).
  * Modes: VERIFY always runs stock and compares (errors counted, never skips);
- * ON skips, and every 64th would-skip block runs stock and compares; the first
+ * ON skips or runs selected tracks, with periodic stock comparisons; the first
  * difference turns it OFF (stock forever). Header page 3 of 3 (System info,
- * irq-timer-st, this): `MSKIP ON  H99 S98 E000` = mode, % of blocks whose
- * inputs matched, % skipped, differences found.
+ * irq-timer-st, this): `MSKIP ON  H99 S98 E000` = mode, % of blocks with no
+ * dirty tracks, % avoiding the full stock body, differences found.
  */
 #include <syntakt/modules.h>
 typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;typedef short s16;typedef int s32;
@@ -40,37 +41,108 @@ typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;typ
 #define RAW(t) (WORKING+0x754u+0x7cu*(t))
 #define SITE 0x40097b04u
 #define WRITER 0x400a30c4u
-#define DESTS (12*4+13*5*4)
-#define INPUTS (6+13+26+13*24)
-#define MAP_BASE 0x80006000u
-#define MAP_WORDS 0x1000u
 #define CHECK_EVERY 64u
 enum {OFF,VERIFY,ON,REFUSED};
-enum {RUN_STOCK,SKIPPED,RUN_AND_CHECK};
-extern void modulation_skip_entry(void),modulation_skip_machine_entry(void);
+enum {RUN_STOCK,SKIPPED,RUN_AND_CHECK,RUN_FILTERED,RUN_SPARSE};
+extern void modulation_skip_entry(void),modulation_skip_machine_entry(void),modulation_skip_filtered(void);
 extern u32 modulation_skip_lock(void);
 extern void modulation_skip_unlock(u32),modulation_skip_code16(u32,u32),modulation_skip_sync(void);
 u32 modulation_skip_mode;                       /* OFF until installed */
-static u32 shadow[INPUTS],valid,n,count,capture;
-static u32 dest[DESTS];static u16 pre[DESTS],post[DESTS];
-static u8 seen[MAP_WORDS],epoch;
-volatile u32 modulation_skip_blocks,modulation_skip_hits,modulation_skip_skips,modulation_skip_errors;
-/* The inputs in the order they are compared: velocity, sources, then each
- * track's machine data (track 12's first group is not read; comparing it only
- * costs a needless real run if it changes). */
-static const u32 ranges[3][2]={{0x80004670u,0x80004688u},{0x800046b8u,0x800046ecu},{0x800046f8u,0x80004760u}};
-/* Compare with the last run's inputs and store the current ones; 1 if equal. */
-static u32 tables_equal(void)
+/* The stock source reads, in the same group order as RAW(t). Group 5 is a
+ * longword shifted by eight; all other groups read signed halfwords. */
+static const u32 source_base[6]={0x80004670u,0x80004746u,0x8000472cu,
+                                  0x80004712u,0x800046f8u,0x800046b8u};
+#define TRACKS 13u
+#define ALL_TRACKS ((1u<<TRACKS)-1u)
+#define ENTRIES 24u
+#define GROUPS 6u
+#define TRACK_WORDS (0x8eu/2u)
+#define PARTIAL_LIMIT 12u
+#define DEST_LIMIT 100u
+static u32 raw_shadow[TRACKS][ENTRIES],source_shadow[TRACKS][GROUPS];
+static u32 dest[TRACKS][ENTRIES];static u16 pre[TRACKS][ENTRIES],post[TRACKS][ENTRIES];
+static u32 zero_dest[TRACKS][ENTRIES];static u16 zero_pre[TRACKS][ENTRIES];
+static u8 used[TRACKS],zero_used[TRACKS],active_groups[TRACKS],sparse_safe[TRACKS];
+static u8 active_seen[TRACK_WORDS],zero_seen[TRACK_WORDS],epoch;
+static u8 active_ids[TRACKS],zero_ids[TRACKS],active_count,zero_count;
+static u32 valid_mask,unsafe_mask,active_track_mask,zero_track_mask,total_used,raw_ready,count,check_mask,capture_mask;
+volatile u32 modulation_skip_run_mask;
+volatile u32 modulation_skip_blocks,modulation_skip_hits,modulation_skip_skips;
+volatile u32 modulation_skip_partial_runs,modulation_skip_errors;
+static u32 source(u32 t,u32 g)
+{return g==5u?SKIP_R32(source_base[g]+4u*t):SKIP_R16(source_base[g]+2u*t);}
+/* Keep the stock RAM address independent of the relocatable cache pointer.
+ * GCC otherwise folds their difference into an invalid bank relocation. */
+static __attribute__((noinline)) u32 raw_word(u32 t,u32 k)
+{return SKIP_R32(RAW(t)+4u*k);}
+static void build_track(u32 t)
 {
-    u32 *s=shadow,a,v,eq=1,i;
-    for(i=0;i<3;i++)for(a=ranges[i][0];a<ranges[i][1];a+=4){v=SKIP_R32(a);if(*s!=v){eq=0;*s=v;}s++;}
-    return eq;
+    u32 g,k,e,i,at,bit=1u<<t;
+    used[t]=zero_used[t]=0;active_groups[t]=0;sparse_safe[t]=0;unsafe_mask&=~bit;
+    if(!++epoch){for(i=0;i<TRACK_WORDS;i++)active_seen[i]=zero_seen[i]=0;epoch=1;}
+    for(g=t==12u?1u:0u;g<GROUPS;g++)for(k=0;k<4u;k++){
+        e=raw_shadow[t][4u*g+k];
+        if(!(e>>16))continue;
+        active_groups[t]|=(u8)(1u<<g);
+        i=(u32)(s32)(s16)e;
+        if(i>=TRACK_WORDS){unsafe_mask|=bit;continue;}
+        at=TRACK(t)+2u*i;
+        if(active_seen[i]!=epoch){active_seen[i]=epoch;dest[t][used[t]++]=at;}
+    }
+    /* Zero-depth writes still saturate out-of-range words. Keep only zero-only
+     * addresses; they must not be overwritten by a cached post value. */
+    for(g=t==12u?1u:0u;g<GROUPS;g++)for(k=0;k<4u;k++){
+        e=raw_shadow[t][4u*g+k];
+        if(e>>16)continue;
+        i=(u32)(s32)(s16)e;
+        if(i>=TRACK_WORDS){unsafe_mask|=bit;continue;}
+        at=TRACK(t)+2u*i;
+        if(active_seen[i]==epoch || zero_seen[i]==epoch)continue;
+        zero_seen[i]=epoch;zero_dest[t][zero_used[t]++]=at;
+    }
+    /* External zero groups may project an active destination before or after
+     * its source group. Let the guarded full kernel retain their order. */
+    if(active_groups[t] && !(active_groups[t]&(active_groups[t]-1u)) && !(active_groups[t]&0x20u)){
+        sparse_safe[t]=1;
+        for(g=t==12u?1u:0u;g<GROUPS;g++)if(!(active_groups[t]&(1u<<g)))
+            for(k=0;k<4u;k++){
+                e=raw_shadow[t][4u*g+k];
+                if(e>>16)continue;
+                i=(u32)(s32)(s16)e;
+                if(i<TRACK_WORDS && active_seen[i]==epoch)sparse_safe[t]=0;
+            }
+    }
+    for(g=t==12u?1u:0u;g<GROUPS;g++)if(active_groups[t]&(1u<<g))source_shadow[t][g]=source(t,g);
 }
-static u32 machine_equal(void)
+/* The writer supplies a track hint. Scan its 24 entries on publication;
+ * every 64th block still scans all 312 to catch any unobserved writer. */
+static __attribute__((noinline)) u32 refresh_machine(u32 scan)
 {
-    u32 *s=shadow+6+13+26,a,v,t,eq=1;
-    for(t=0;t<13;t++)for(a=RAW(t);a<RAW(t)+0x60u;a+=4){v=SKIP_R32(a);if(*s!=v){eq=0;*s=v;}s++;}
-    return eq;
+    u32 t,k,v,any,changed=0,bit;
+    for(t=0;t<TRACKS;t++){
+        bit=1u<<t;if(!(scan&bit))continue;any=0;
+        for(k=0;k<ENTRIES;k++){
+            v=raw_word(t,k);any|=v;
+            if(!raw_ready || raw_shadow[t][k]!=v){raw_shadow[t][k]=v;changed|=bit;}
+        }
+        if(changed&bit){
+            if(any)build_track(t);
+            else{
+                used[t]=0;zero_used[t]=1;active_groups[t]=0;sparse_safe[t]=0;
+                zero_dest[t][0]=TRACK(t);unsafe_mask&=~bit;
+            }
+        }
+    }
+    if(changed){
+        active_track_mask=zero_track_mask=total_used=0;active_count=zero_count=0;
+        for(t=0;t<TRACKS;t++){
+            if(active_groups[t]){active_track_mask|=1u<<t;active_ids[active_count++]=(u8)t;}
+            if(zero_used[t]){zero_track_mask|=1u<<t;zero_ids[zero_count++]=(u8)t;}
+            total_used+=(u32)used[t]+(u32)zero_used[t];
+        }
+    }
+    raw_ready=1;valid_mask&=~changed;
+    return changed;
 }
 /* The machine data is the conversion's copy of the unsmoothed mirror, which
  * only 400a30c4 writes (sound publication, machine change). Its hook adds one
@@ -78,67 +150,119 @@ static u32 machine_equal(void)
  * 312 longs. Every CHECK_EVERY blocks they are compared anyway: a difference
  * without a write is an unknown writer, and turns ON off. */
 volatile u32 modulation_skip_machine_writes;
+volatile u8 modulation_skip_machine_dirty[TRACKS];
 static u32 machine_seen,ticks_irq;
-static void add(u32 at)
+static void capture_pre(u32 mask)
+{u32 j,t,i;for(j=0;j<active_count;j++){t=active_ids[j];if(mask&(1u<<t))for(i=0;i<used[t];i++)pre[t][i]=SKIP_R16(dest[t][i]);}}
+static void replay(u32 mask)
+{u32 j,t,i;for(j=0;j<active_count;j++){t=active_ids[j];if(mask&(1u<<t))for(i=0;i<used[t];i++)SKIP_W16(dest[t][i],post[t][i]);}}
+/* Measured against each of the six native source groups: a zero amount maps
+ * 0000..7fff to itself, 8000..bfff to 7fff, c000..ffff to zero. */
+static u32 zero_result(u32 v)
+{return v<0x8000u?v:v<0xc000u?0x7fffu:0u;}
+static void capture_zero(u32 mask)
+{u32 j,t,i;for(j=0;j<zero_count;j++){t=zero_ids[j];if(mask&(1u<<t))for(i=0;i<zero_used[t];i++)zero_pre[t][i]=SKIP_R16(zero_dest[t][i]);}}
+static void project_zero(u32 mask)
+{u32 j,t,i,v;for(j=0;j<zero_count;j++){t=zero_ids[j];if(mask&(1u<<t))for(i=0;i<zero_used[t];i++){
+    v=SKIP_R16(zero_dest[t][i]);if(v>=0x8000u)SKIP_W16(zero_dest[t][i],zero_result(v));}}}
+static u32 dirty_inputs(void)
 {
-    u32 i;
-    if(at-MAP_BASE<2u*MAP_WORDS){
-        if(seen[(at-MAP_BASE)>>1]==epoch)return;
-        seen[(at-MAP_BASE)>>1]=epoch;
-    }else for(i=0;i<n;i++)if(dest[i]==at)return;
-    dest[n]=at;pre[n]=SKIP_R16(at);n++;
-}
-/* The destination words, as the stock body computes them (MVS.W of each
- * entry's low word), each once, with its value on entry. */
-static void build(void)
-{
-    u32 t,g,k,src;
-    if(!++epoch){for(k=0;k<MAP_WORDS;k++)seen[k]=0;epoch=1;}
-    n=0;
-    for(t=0;t<12;t++)for(k=0;k<4;k++)
-        add(TRACK(t)+2u*(u32)(s32)(s16)SKIP_R32(RAW(t)+4u*k));
-    for(t=0;t<13;t++)for(g=1;g<=5;g++)for(k=0;k<4;k++){
-        src=RAW(t)+0x10u*g+4u*k;
-        add(TRACK(t)+2u*(u32)(s32)(s16)SKIP_R32(src));
+    u32 j,t,g,i,mask=ALL_TRACKS&~valid_mask;
+    for(j=0;j<active_count;j++){
+        t=active_ids[j];
+        for(g=t==12u?1u:0u;g<GROUPS;g++)if(active_groups[t]&(1u<<g)){
+            u32 v=source(t,g);
+            if(source_shadow[t][g]!=v){source_shadow[t][g]=v;mask|=1u<<t;}
+        }
+        if(valid_mask&(1u<<t))for(i=0;i<used[t];i++)
+            if(SKIP_R16(dest[t][i])!=pre[t][i]){mask|=1u<<t;break;}
     }
+    return mask;
 }
-static u32 entries_equal(void)
-{u32 i;for(i=0;i<n;i++)if(SKIP_R16(dest[i])!=pre[i])return 0;return 1;}
-/* IRQ, at the stock body: RUN_STOCK, SKIPPED (outputs written) or RUN_AND_CHECK
- * (run stock, then modulation_skip_after). */
+static u32 many(u32 mask)
+{u32 n=0;while(mask){mask&=mask-1u;n++;}return n>=PARTIAL_LIMIT;}
+/* Stock 40097aac processes one four-entry source group. When exactly one of
+ * the first five groups is active and no external zero group touches its
+ * destinations, the other groups are independent zero-only projections. */
+static u32 sparse_ok(u32 mask)
+{
+    u32 t;
+    for(t=0;t<TRACKS;t++)if(mask&(1u<<t)){
+        if(!sparse_safe[t])return 0;
+    }
+    return 1;
+}
+#ifndef SKIP_HOST
+static void native_group(u32 row,s32 value,u32 entries)
+{((void (*)(u32,s32,u32))0x40097aacu)(row,value,entries);}
+#else
+extern void modulation_skip_host_group(u32,s32,u32);
+static void native_group(u32 row,s32 value,u32 entries)
+{modulation_skip_host_group(row,value,entries);}
+#endif
+void modulation_skip_sparse(u32 working)
+{
+    u32 t,g,groups,mask=modulation_skip_run_mask;(void)working;
+    for(t=0;t<TRACKS;t++)if(mask&(1u<<t)){
+        groups=active_groups[t];
+        for(g=0;g<5u;g++)if(groups&(1u<<g))break;
+        native_group(TRACK(t),(s16)source(t,g),RAW(t)+16u*g);
+    }
+    project_zero(mask);
+}
+/* IRQ, at the stock body: full stock, cached replay, full stock with a check,
+ * the guarded kernel, or a single native source group for dirty tracks. */
 u32 modulation_skip_decide(u32 working)
 {
-    u32 i,same,writes,written;
+    u32 dirty,changed=0,writes,written,periodic,scan=0,t;
     if(modulation_skip_mode!=VERIFY && modulation_skip_mode!=ON)return RUN_STOCK;
-    if(working!=WORKING){valid=0;return RUN_STOCK;}
+    if(working!=WORKING){valid_mask=0;return RUN_STOCK;}
     modulation_skip_blocks++;
     writes=modulation_skip_machine_writes;written=writes!=machine_seen;machine_seen=writes;
-    same=tables_equal();
-    if(written || modulation_skip_mode==VERIFY || !(++ticks_irq%CHECK_EVERY)){
-        if(!machine_equal()){
-            same=0;
-            if(!written && valid){                   /* changed with no write seen */
-                modulation_skip_errors++;
-                if(modulation_skip_mode==ON){modulation_skip_mode=OFF;valid=0;return RUN_STOCK;}
-            }
+    periodic=!(++ticks_irq%CHECK_EVERY);
+    if(written || !raw_ready || modulation_skip_mode==VERIFY || periodic){
+        for(t=0;t<TRACKS;t++)if(modulation_skip_machine_dirty[t]){
+            scan|=1u<<t;modulation_skip_machine_dirty[t]=0;
+        }
+        if(!raw_ready || modulation_skip_mode==VERIFY || periodic || !scan)scan=ALL_TRACKS;
+        changed=refresh_machine(scan);
+        if(changed && !written && modulation_skip_blocks>1u){
+            modulation_skip_errors++;
+            if(modulation_skip_mode==ON){modulation_skip_mode=OFF;valid_mask=0;return RUN_STOCK;}
         }
     }
-    if(same && valid && entries_equal()){
-        modulation_skip_hits++;
-        if(modulation_skip_mode==ON && ++count%CHECK_EVERY){
-            for(i=0;i<n;i++)SKIP_W16(dest[i],post[i]);
-            modulation_skip_skips++;return SKIPPED;
-        }
-        capture=0;return RUN_AND_CHECK;
+    if(unsafe_mask || total_used>DEST_LIMIT){valid_mask=0;return RUN_STOCK;}
+    if(!active_track_mask && valid_mask==ALL_TRACKS && modulation_skip_mode==ON && !periodic){
+        if(++count%CHECK_EVERY){project_zero(ALL_TRACKS);modulation_skip_hits++;modulation_skip_skips++;return SKIPPED;}
+        periodic=1;
     }
-    machine_equal();                            /* the run's machine data, for later checks */
-    build();valid=0;capture=1;return RUN_AND_CHECK;
+    dirty=dirty_inputs();
+    if(!dirty)modulation_skip_hits++;
+    if(modulation_skip_mode==ON && !periodic && !(++count%CHECK_EVERY))periodic=1;
+    if(modulation_skip_mode==ON && !periodic && !dirty){
+        replay(ALL_TRACKS);project_zero(ALL_TRACKS);modulation_skip_skips++;return SKIPPED;
+    }
+    if(modulation_skip_mode==ON && !periodic && !many(dirty)){
+        modulation_skip_run_mask=dirty;
+        capture_pre(dirty);capture_zero(dirty);replay(ALL_TRACKS&~dirty);project_zero(ALL_TRACKS&~dirty);
+        capture_mask=dirty;check_mask=0;
+        modulation_skip_skips++;modulation_skip_partial_runs++;
+        return sparse_ok(dirty)?RUN_SPARSE:RUN_FILTERED;
+    }
+    check_mask=valid_mask&~dirty;
+    capture_pre(ALL_TRACKS);capture_zero(ALL_TRACKS);capture_mask=ALL_TRACKS;
+    return RUN_AND_CHECK;
 }
 void modulation_skip_after(u32 working)
 {
-    u32 i,v,bad=0;(void)working;
-    for(i=0;i<n;i++){v=SKIP_R16(dest[i]);if(!capture && v!=post[i])bad=1;post[i]=(u16)v;}
-    valid=1;
+    u32 j,t,i,v,bad=0,mask=capture_mask&(active_track_mask|zero_track_mask);(void)working;
+    for(j=0;j<active_count;j++){t=active_ids[j];if(mask&(1u<<t))for(i=0;i<used[t];i++){
+        v=SKIP_R16(dest[t][i]);if((check_mask&(1u<<t)) && v!=post[t][i])bad=1;
+        post[t][i]=(u16)v;
+    }}
+    for(j=0;j<zero_count;j++){t=zero_ids[j];if(mask&(1u<<t))for(i=0;i<zero_used[t];i++)
+        if(SKIP_R16(zero_dest[t][i])!=zero_result(zero_pre[t][i]))bad=1;}
+    valid_mask|=capture_mask;
     if(bad){modulation_skip_errors++;if(modulation_skip_mode==ON)modulation_skip_mode=OFF;}
 }
 
@@ -161,8 +285,22 @@ __asm__(
 "        jmp 0x40097b0a\n"
 "1:      subq.l #1,%d0\n"
 "        beq.s 3f\n"
+"        cmpi.l #3,%d0\n"
+"        beq.s 5f\n"
+"        cmpi.l #2,%d0\n"
+"        beq.s 4f\n"
 "        move.l 64(%sp),-(%sp)\n"
 "        jsr 2f\n"
+"        jsr modulation_skip_after\n"
+"        addq.l #4,%sp\n"
+"        bra.s 3f\n"
+"5:      move.l 64(%sp),-(%sp)\n"
+"        jsr modulation_skip_sparse\n"
+"        jsr modulation_skip_after\n"
+"        addq.l #4,%sp\n"
+"        bra.s 3f\n"
+"4:      move.l 64(%sp),-(%sp)\n"
+"        jsr modulation_skip_filtered\n"
 "        jsr modulation_skip_after\n"
 "        addq.l #4,%sp\n"
 "3:      movem.l (%sp),%d2-%d7/%a2-%a6\n"
@@ -179,11 +317,31 @@ __asm__(
 "        .globl modulation_skip_machine_entry\n"
 "modulation_skip_machine_entry:\n"
 "        addq.l #1,modulation_skip_machine_writes\n"
+"        lea -8(%sp),%sp\n"
+"        movem.l %d0/%a0,(%sp)\n"
+"        move.l 16(%sp),%d0\n"
+"        cmpi.l #13,%d0\n"
+"        bhs.s 6f\n"
+"        lea modulation_skip_machine_dirty,%a0\n"
+"        lea 0(%a0,%d0.l),%a0\n"
+"        move.b #1,(%a0)\n"
+"6:      movem.l (%sp),%d0/%a0\n"
+"        addq.l #8,%sp\n"
 "        move.l 8(%sp),-(%sp)\n"
 "        move.l 8(%sp),-(%sp)\n"
 "        jsr 4f\n"
 "        addq.l #8,%sp\n"
 "        addq.l #1,modulation_skip_machine_writes\n"
+"        lea -8(%sp),%sp\n"
+"        movem.l %d0/%a0,(%sp)\n"
+"        move.l 16(%sp),%d0\n"
+"        cmpi.l #13,%d0\n"
+"        bhs.s 7f\n"
+"        lea modulation_skip_machine_dirty,%a0\n"
+"        lea 0(%a0,%d0.l),%a0\n"
+"        move.b #1,(%a0)\n"
+"7:      movem.l (%sp),%d0/%a0\n"
+"        addq.l #8,%sp\n"
 "        rts\n"
 "4:      lea -12(%sp),%sp\n"
 "        movem.l %d2/%a2-%a3,(%sp)\n"
