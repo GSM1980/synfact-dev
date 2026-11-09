@@ -17,6 +17,9 @@ static core_u32 crc32(const core_u8 *p,core_u32 n)
 static void clear(core_u8 *p){core_u32 i;for(i=0;i<512;i++)p[i]=0;}
 static int card_ok(const struct core_mods_io *io)
 {core_u32 n=io->sectors();return n!=0xffffffffu && n>CORE_MODS_LBA;}
+/* Every write path fails closed without a write function (core 1.7's boot
+ * table had none, and its trial boot called address 0). */
+static int writable(const struct core_mods_io *io){return io->write!=0 && card_ok(io);}
 int core_mods_path(const char *p)
 {
     static const char name[]="/mods";core_u32 i;
@@ -47,7 +50,7 @@ int core_mods_stat_io(const struct core_mods_io *io,core_u32 *size)
 int core_mods_begin_io(struct core_mods_store *s,const struct core_mods_io *io,core_u32 size)
 {
     core_u8 record[512] __attribute__((aligned(16)));
-    if(!core_mods_span(CORE_MODS_BASE,size) || !card_ok(io))return 0;
+    if(!core_mods_span(CORE_MODS_BASE,size) || !writable(io))return 0;
     /* A rejected request leaves an earlier file intact. Once accepted,
      * replacement is destructive; an interrupted file must not be published. */
     clear(record);s->pending=0;s->commit_ok=0;
@@ -60,7 +63,7 @@ int core_mods_commit_io(struct core_mods_store *s,const struct core_mods_io *io,
     s->commit_ok=0;
     if(!s->pending || size!=s->bytes || !core_mods_span(CORE_MODS_BASE,size))return 0;
     s->pending=0;
-    if(!card_ok(io))return 0;
+    if(!writable(io))return 0;
     clear(record);put32(record,0x454c4d4fu);put32(record+4,0x44533031u);
     put32(record+8,1);put32(record+12,size);put32(record+16,~size);
     put32(record+20,crc32(record,20));
@@ -123,7 +126,7 @@ int core_mods_record_io(const struct core_mods_io *io,const struct core_mods_slo
 {
     core_u8 b[512] __attribute__((aligned(16)));struct core_mods_slot check;
     if(!p || p->slot>1 || !p->sequence || !p->bytes ||
-       p->bytes>CORE_MODS_SLOT_CAP || !card_ok(io))return 0;
+       p->bytes>CORE_MODS_SLOT_CAP || !writable(io))return 0;
     clear(b);put32(b,0x454d4232u);put32(b+4,2);put32(b+8,p->sequence);
     put32(b+12,p->state);put32(b+16,p->bytes);put32(b+20,~p->bytes);
     put32(b+24,p->stamp);put32(b+32,crc32(b,32));
@@ -135,7 +138,7 @@ int core_mods_record_io(const struct core_mods_io *io,const struct core_mods_slo
 int core_mods_invalidate_slot_io(const struct core_mods_io *io,core_u32 slot)
 {
     core_u8 b[512] __attribute__((aligned(16)));struct core_mods_slot check;
-    if(slot>1 || !card_ok(io))return 0;
+    if(slot>1 || !writable(io))return 0;
     clear(b);
     if(io->write(CORE_MODS_SLOT_META(slot)>>9,512,b))return 0;
     return core_mods_slot_io(io,slot,&check)==0;

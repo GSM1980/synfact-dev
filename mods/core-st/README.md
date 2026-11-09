@@ -849,6 +849,15 @@ notification helper is shared out of line; its extended controls plus final
 word are copied as one contiguous 34-byte range before notification. This
 keeps the combined core within its unchanged 64 KiB reserve and build flags.
 
+## Core 1.7.1: the trial boot writes its record
+
+Core 1.7 crashed (EXCEPTION, vector 3) at the first boot of every staged
+bank: the boot's eMMC accessor table had no write function, and marking the
+candidate TRYING called address 0. 1.7.1 gives it `fw_mmc_write`, and the slot
+storage refuses any write through a table without one. Contract unchanged:
+banks built for 1.7 load as they are. What happened, why no test saw it and
+the guards added: [docs/SAFE-BOOT-SMZ4-07-16.md](../../docs/SAFE-BOOT-SMZ4-07-16.md).
+
 ## Core 1.4: page randomize for new pages
 
 Page key + YES now reaches the bank's machines and the modules' pages

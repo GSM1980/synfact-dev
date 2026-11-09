@@ -1,11 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Optional machine bank: silent preflight/load, private initialization, then
- * native project/sample startup. Never writes eMMC or the boot firmware.
+ * native project/sample startup. Never writes the boot firmware. Its only
+ * eMMC write is a trial slot's record (CANDIDATE -> TRYING), so the boot
+ * storage must have a write function: core 1.7 had none and called address 0
+ * at the first trial boot, on every boot (fixed in 1.7.1).
  */
 #include "machines.h"
 #include "boot-preimages.h"
 typedef st_u32 u32;typedef core_u8 u8;
-extern int fw_mmc_read(u32,u32,void *);
+extern int fw_mmc_read(u32,u32,void *),fw_mmc_write(u32,u32,const void *);
 extern u32 fw_mmc_ready[],fw_mmc_sectors[];
 extern void *fw_malloc(u32);extern void fw_free(void *);
 extern void core_machine_flush(void *,u32);
@@ -15,7 +18,7 @@ struct st_smz_module;
 extern int core_modules_bind(const struct st_smz_module *,u32);
 extern void core_native_initialize(void);
 static u32 sectors(void){return fw_mmc_ready[0]?fw_mmc_sectors[0]:0;}
-static const struct core_mods_io storage={fw_mmc_read,0,sectors};
+static const struct core_mods_io storage={fw_mmc_read,fw_mmc_write,sectors};
 volatile u32 core_machine_status=9;
 volatile u32 core_machine_trial,core_machine_trial_slot,core_machine_trial_sequence;
 volatile u32 core_machine_rollback;

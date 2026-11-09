@@ -13,6 +13,8 @@ WINDOW=0x80000
 RAW_FIRST=8185
 STOCK_FRAMES=48000*5
 STOCK_BODY=64+2*STOCK_FRAMES
+# /mods-stage: the core's trial bank slot (mods/core-st/storage.h CORE_MODS_SLOT_CAP).
+STAGE_CAP=8*1024*1024-1024
 
 def be32(n):return struct.pack('>I',n)
 def u32(b,o):
@@ -82,6 +84,9 @@ def checked_body(path,body,card_bytes=None):
     if path=='/mods':
         if len(body)>16*1024*1024:raise ValueError('/mods exceeds 16 MiB')
         return 1,body
+    if path=='/mods-stage':
+        if not body or len(body)>STAGE_CAP:raise ValueError('/mods-stage takes 1 byte to 8 MiB - 1 KiB')
+        return 1,body
     raise PermissionError('unsupported write destination')
 
 class MidiTransport:
@@ -135,9 +140,9 @@ class DataClient:
         if self.rest:time.sleep(self.rest)
         return ok(self.transport.call(kind,payload,timeout=15),kind)
     def read(self,path,*,header_only=False):
-        n=1 if path in ('/mods','/mod-status') else sample_slot(path)
+        n=1 if path in ('/mods','/mods-stage','/mod-status') else sample_slot(path)
         if n is None or not (1<=n<=64 or 0x600<=n-RAW_FIRST<0x2000):
-            if path not in ('/mods','/mod-status'):raise PermissionError('unsupported read destination')
+            if path not in ('/mods','/mods-stage','/mod-status'):raise PermissionError('unsupported read destination')
         rx=self.call(0x54,path.encode('ascii')+b'\0'+be32(self.block)+b'\0');job=u32(rx,6)
         out=bytearray();seq=empty=0;expected=None
         try:
@@ -150,7 +155,8 @@ class DataClient:
                 if empty>64:raise RuntimeError('read made no progress')
                 if len(out)>=31 and expected is None:
                     body_len=u32(out,25)
-                    limit=128 if path=='/mod-status' else 16*1024*1024 if path=='/mods' else WINDOW
+                    limit=(128 if path=='/mod-status' else 16*1024*1024 if path=='/mods' else
+                           STAGE_CAP if path=='/mods-stage' else WINDOW)
                     if body_len>limit:raise ValueError('read object exceeds destination size')
                     expected=43+body_len
                     if header_only:

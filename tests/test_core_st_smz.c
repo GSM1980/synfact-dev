@@ -25,16 +25,20 @@ int core_pool_available(void){return 1;}
 volatile u32 core_machine_active;
 const struct st_machine_ui *core_machine_ui_definitions;
 int core_modules_bind(const struct st_smz_module *m,u32 n){assert(m && n);return 1;}
+/* Every storage call gets the boot's real accessors: core 1.7 passed a null
+ * write to the trial transition and crashed on the device at address 0. */
+static void complete_io(const struct core_mods_io *io)
+{assert(io && io->read==fw_mmc_read && io->write==fw_mmc_write && io->sectors);}
 int core_mods_stat_io(const struct core_mods_io *io,u32 *size)
-{(void)io;*size=bytes;return stat_result;}
+{complete_io(io);*size=bytes;return stat_result;}
 int core_mods_select_io(const struct core_mods_io *io,struct core_mods_slot *primary,struct core_mods_slot *backup)
-{(void)io;backup->bytes=0;if(select_result==1){primary->base=CORE_MODS_BASE;primary->bytes=bytes;primary->slot=0;primary->sequence=7;primary->state=slot_state;
+{complete_io(io);backup->bytes=0;if(select_result==1){primary->base=CORE_MODS_BASE;primary->bytes=bytes;primary->slot=0;primary->sequence=7;primary->state=slot_state;
  if(fallback_enabled){backup->base=CORE_MODS_BASE+CORE_MODS_SLOT_BYTES;backup->bytes=bytes;backup->slot=1;backup->state=CORE_MODS_GOOD;}}
  return select_result;}
 int core_mods_slot_io(const struct core_mods_io *io,u32 slot,struct core_mods_slot *out)
-{(void)io;(void)slot;(void)out;return 0;}
+{complete_io(io);(void)slot;(void)out;return 0;}
 int core_mods_transition_io(const struct core_mods_io *io,u32 slot,u32 from,u32 to)
-{(void)io;assert(slot==0 && from==CORE_MODS_CANDIDATE && to==CORE_MODS_TRYING);transitions++;slot_state=to;return 1;}
+{complete_io(io);assert(slot==0 && from==CORE_MODS_CANDIDATE && to==CORE_MODS_TRYING);transitions++;slot_state=to;return 1;}
 int core_boot_preimages_ok(const core_u8 *info)
 {assert(info);preflights++;return preflight_ok;}
 void core_native_initialize(void){}
@@ -48,6 +52,7 @@ int fw_mmc_read(u32 lba,u32 n,void *out)
     memset(out,0,n);if(at<bytes){u32 copy=bytes-at;if(copy>n)copy=n;memcpy(out,source+at,copy);}
     return 0;
 }
+int fw_mmc_write(u32 lba,u32 n,const void *in){(void)lba;(void)n;(void)in;assert(0 && "doubles above write");return -1;}
 void *fw_malloc(u32 n)
 {allocs++;return allocs==fail_alloc?0:VirtualAlloc((void *)(0x46000000u+0x1000000u*allocs),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
