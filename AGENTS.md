@@ -5,17 +5,28 @@ the user's machine or in their browser, from the stock OS file they supply. It
 is built on elekloader's engine and keeps only the Syntakt. Read README.md
 first; the rest of the docs start at docs/README.md.
 
-**Building on this workstation** (core-st, SMZ banks): follow
-[docs/SYNTAKT-BUILD.md](docs/SYNTAKT-BUILD.md) exactly. It gives the m68k
-toolchain location (`C:\Desarrollo\syntakt-dev\toolchains\sgdk211\bin`,
-unprefixed GCC 13.2.0), the required `ELEKLOADER_CROSS=''` and
-`GCC_EXEC_PREFIX`, the compiler flags and the build, lint, bank and
-regression commands. Do not change flags or builders to make a build pass.
+**First time on a machine**: install the tools and set the environment
+variables in [docs/SETUP.md](docs/SETUP.md). Where the tools are is never
+written into a file: it is read from `$SGDK_BIN`, `$SYNTAKT_STOCK`,
+`$SYNTAKT_EFT` and the other variables SETUP.md lists. Ask the user for the
+stock OS file if it is not set; never look for it elsewhere on the machine.
+
+**Building** (core-st, SMZ banks): follow
+[docs/SYNTAKT-BUILD.md](docs/SYNTAKT-BUILD.md) exactly. It gives the commands,
+the compiler flags and the environment (SGDK 2.11's m68k compiler; the
+`ELEKLOADER_CROSS=''` and `GCC_EXEC_PREFIX` settings for unprefixed binaries),
+and the lint, bank and regression steps. Do not change flags or builders to
+make a build pass.
 
 **Several agents at once**: each works in its own git worktree, never in a
 folder another agent uses; see [docs/PARALLEL-AGENTS.md](docs/PARALLEL-AGENTS.md).
 
 ## If you are adapting or writing a mod
+
+**A machine or a module in the SMZ4 bank**: follow
+[docs/MACHINES.md](docs/MACHINES.md). Facts it relies on are in
+[docs/MACHINE-REFERENCE.md](docs/MACHINE-REFERENCE.md). Where that page says a fact
+is not recorded, ask the user before you guess an address or an offset.
 
 **Core first.** Before you add a code site to a mod, check whether the core
 (`mods/core-st`) already has an event, a table or a firmware export for it,
@@ -88,4 +99,9 @@ Rules:
 Done means all of these:
 - the tests that could run pass;
 - the docs match the code;
-- `git status` shows no firmware.
+- `git status` shows no firmware;
+- no path from your machine is in any file you change.
+
+To send the work: a branch, a fork, and a pull request against `main`. The
+steps, with the firmware check, are in [docs/SETUP.md](docs/SETUP.md),
+section 5. Open the pull request only when the user asks for it.

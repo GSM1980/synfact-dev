@@ -3,6 +3,8 @@
 This MAIN module subscribes to the existing tick and draw events and displays
 a small `SMZ` tick counter. It defines no machine or firmware hook site. It
 requires Syntakt core 0.8 and is not included in the default sampler bank.
+The module's rules (events, initializers, what the builder refuses) are in
+[docs/MACHINES.md](../../docs/MACHINES.md), section 7.
 
 ```sh
 python -m elekloader.sdk.syntakt.smz --module examples/smz-test-st --out out/module.smz4

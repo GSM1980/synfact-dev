@@ -1,0 +1,12 @@
+{
+  "id": "ui-machine-test-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "Machine UI test", "category": "Synth", "author": "example",
+  "description": "A silent 28-control machine with its own four-page SYN layout, for checking the UI descriptor.",
+  "device": "syntakt", "os": "1.41", "sources": ["main.c"], "cflags": ["-fno-jump-tables"],
+  "smz": {
+    "machines": [{"descriptor": "ui_machine_test_st", "ui": "ui_machine_test_ui",
+                  "update": "machine_test_update", "render": "machine_test_render"}],
+    "features": ["machine-ui-v1"],
+    "audio": {"sources": ["audio.s"]}
+  }
+}

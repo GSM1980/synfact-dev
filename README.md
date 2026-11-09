@@ -40,8 +40,10 @@ bank that can change without reinstalling the firmware:
 
 ## Build it
 
-From source: [docs/SYNTAKT-BUILD.md](docs/SYNTAKT-BUILD.md) has the toolchain,
-the flags and the exact commands for the core SYX and the SMZ4 bank. The same
+First set up your machine: [docs/SETUP.md](docs/SETUP.md) lists every tool,
+where to get it, how to install it and the environment variables it needs.
+From source: [docs/SYNTAKT-BUILD.md](docs/SYNTAKT-BUILD.md) has the flags and
+the exact commands for the core SYX and the SMZ4 bank. The same
 build runs in a browser from validated, precompiled pieces
 ([docs/SYNFACT-WEB.md](docs/SYNFACT-WEB.md)).
 
@@ -52,7 +54,9 @@ The bootloader is never changed, so the stock OS file can be installed again.
 
 ## Write mods
 
-[docs/ADAPTING.md](docs/ADAPTING.md) takes you from the first build to done;
+[docs/MACHINES.md](docs/MACHINES.md) takes you from an empty folder to a
+machine or module in the SMZ4 bank; [docs/ADAPTING.md](docs/ADAPTING.md) takes
+you from the first build to done for any mod;
 [examples/](examples) has a test machine and a test bank. Coding agents start
 with [AGENTS.md](AGENTS.md). All the docs: [docs/README.md](docs/README.md).
 

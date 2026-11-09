@@ -11,16 +11,21 @@ smoothed values change the modulation's inputs). After every call SRAM and the
 LFO heap must be identical. Counts how often the stock body did not run.
 
 Run with the Unicorn build from docs/SYNTAKT-BUILD.md:
-  LIBUNICORN_PATH=... sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_modulation_skip_emu.py \
+  SYNTAKT_WORK=... "$PY" -B tests/test_st_modulation_skip_emu.py \
       --bank <bank with modulation-skip-st> [--blocks 400]
+SYNTAKT_WORK is the folder with the emulator fixtures (sp-one-shot/); without it the test is SKIPPED.
 """
 import argparse
+import os
 import random
 import struct
 import sys
 from pathlib import Path
 
-WORK = Path('C:/Desarrollo/syntakt-dev/syntakt-work')
+WORK = Path(os.environ['SYNTAKT_WORK']) if os.environ.get('SYNTAKT_WORK') else None
+if WORK is None or not (WORK / 'sp-one-shot').is_dir():
+    print('SKIPPED: needs the emulator fixtures: set SYNTAKT_WORK (docs/SETUP.md)')
+    sys.exit(0)
 sys.dont_write_bytecode = True
 sys.path[:0] = [str(WORK / 'sp-one-shot'), str(Path(__file__).resolve().parents[1])]
 from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_UNMAPPED   # noqa: E402

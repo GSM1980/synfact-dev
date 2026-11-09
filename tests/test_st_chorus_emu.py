@@ -14,8 +14,9 @@ C. The whole mono chorus against Synfact's V56 (compiled from its pinned
    counts are reported. Not bit-exact: the send is mono (chorus 0.2).
 
 Run with the Unicorn build and toolchain from docs/SYNTAKT-BUILD.md:
-  LIBUNICORN_PATH=... sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_chorus_emu.py \\
+  SYNTAKT_WORK=... "$PY" -B tests/test_st_chorus_emu.py \\
       --bank <bank with chorus-st> --digitone <Digitone OS 1.44 .syx> [--blocks 300]
+SYNTAKT_WORK is optional: without it test C is reported as SKIPPED.
 """
 import argparse
 import re
@@ -41,7 +42,10 @@ from elekloader import formats                                           # noqa:
 from elekloader.sdk import elf                                           # noqa: E402
 from elekloader.devices.syntakt import DEVICE                            # noqa: E402
 
-V56 = Path('C:/Desarrollo/syntakt-dev/syntakt-work/loader-v14r56-chorus-fast')
+# V56 is a build of Synfact's chorus (test C). It is an input the repository does not include;
+# without that variable test C is skipped and says so (see docs/SETUP.md).
+_SYNTAKT_WORK = os.environ.get('SYNTAKT_WORK')
+V56 = Path(_SYNTAKT_WORK) / 'loader-v14r56-chorus-fast' if _SYNTAKT_WORK else None
 PINNED = {
     'chorus_dsp.c': '01ee4296d042a16183e65881bd362559c39e459e228a752312c404165a26dd54',
     'chorus_mix.c': 'bc7fcc68ab102990acd5e9fe51fc757dcdc322215db7643b5b882436d91b8bee',
@@ -502,11 +506,16 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         test_stubs(Path(tmp), rnd)
         test_kernels(a.bank, rnd)
-        test_chain(a.bank, a.digitone, Path(tmp), rnd, a.blocks)
+        chain_ran = V56 is not None and V56.is_dir()
+        if chain_ran:
+            test_chain(a.bank, a.digitone, Path(tmp), rnd, a.blocks)
         test_span(a.bank)
         if a.reference:
             test_reference(a.bank, a.reference, rnd, 4 * a.blocks)
-    print('ALL PASS; no device access')
+    if chain_ran:
+        print('ALL PASS; no device access')
+    else:
+        print('PASS (A, B, D); C SKIPPED: set SYNTAKT_WORK to the folder with loader-v14r56-chorus-fast; no device access')
 
 
 if __name__ == '__main__':

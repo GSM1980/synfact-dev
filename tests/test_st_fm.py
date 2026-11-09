@@ -1,6 +1,6 @@
 """FM source/relocation/cache/UI regressions, without CPU emulation or hardware.
 
-python tests/test_st_fm.py --bank out/.../synfact-machines.smz4 --synfact C:/Desarrollo/synfact --cc .../i686-w64-mingw32-clang.exe
+python tests/test_st_fm.py --bank out/.../synfact-machines.smz4 --synfact "$SYNFACT_SRC" --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe"
 The reference build is a test input only; normal SMZ compilation needs no donor.
 """
 import argparse,ast,hashlib,json,re,struct,subprocess,sys

@@ -8,6 +8,8 @@ dist/
 # Firmware, and anything built from it, never goes in this repository.
 *.syx
 *.syx.json
+*.smz4
+*.smz4.json
 *.map.json
 *.bin
 *.elemod

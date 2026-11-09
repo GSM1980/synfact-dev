@@ -119,17 +119,20 @@ explicit dependency. Build outputs must stay in ignored `out/`. Firmware and
 SMZ builders are offline; the separate `long_samples` CLI opens MIDI only for
 an explicitly requested transfer/storage command.
 
-### Toolchain and flags (Windows host)
+### Toolchain and flags
 
-The compiler is GCC 13.2.0 `m68k-elf` (crosstool-NG) from SGDK 2.11, in
-`C:\Desarrollo\syntakt-dev\toolchains\sgdk211\bin`. Its tools carry no prefix
-(`gcc.exe`, `as.exe`, `ld.exe`) and `gcc` finds `cc1.exe` only through `PATH`,
-so put that directory on `PATH` **and** give its full path as the prefix:
+The compiler is GCC 13.2.0 `m68k-elf` (crosstool-NG) from SGDK 2.11, in the
+folder `$SGDK_BIN` ([SETUP.md](../../docs/SETUP.md) explains how to install it).
+In the SGDK 2.11 build used for testing its tools carry no prefix (`gcc.exe`, `as.exe`,
+`ld.exe`), and `gcc` finds `cc1.exe` only through `PATH`, so put that folder on
+`PATH` **and** give its full path as the prefix:
 
 ```sh
-export PATH="/c/Desarrollo/syntakt-dev/toolchains/sgdk211/bin:$PATH"
-export ELEKLOADER_CROSS='C:/Desarrollo/syntakt-dev/toolchains/sgdk211/bin/'
+export PATH="$SGDK_BIN:$PATH"
+export ELEKLOADER_CROSS="$SGDK_BIN/"
 ```
+
+If your binaries carry the `m68k-elf-` prefix, set neither variable.
 
 Every MAIN/AUDIO C source of the core and of SMZ banks compiles with the
 Syntakt profile's flags (`elekloader/devices/syntakt.py`), never typed by hand:
@@ -142,10 +145,10 @@ compare them with the previous build. `--eft` takes the executable
 i686 clang of llvm-mingw (`--cc`). Full sequence:
 
 ```sh
-python -m elekloader.sdk.syntakt --stock Syntakt_OS1.41.syx --eft elektron-firmware-tool.exe --system-info --out out/core-st-<ver>
-python -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st --module mods/recorder-st --module mods/lfo3-st --module mods/poly-st --module mods/system-info-smz-st --stock Syntakt_OS1.41.syx --out out/core-st-<ver>/synfact-machines.smz4
-python -m elekloader.lint mods/core-st/out/core-<ver>.elemod --stock Syntakt_OS1.41.syx --with mods/machines-st/out/machines-st-0.1.elemod --json > out/core-st-<ver>/lint.json
-python tests/test_st_common_regressions.py out/core-st-<ver> --cc i686-w64-mingw32-clang.exe --synfact <synfact>
+python -m elekloader.sdk.syntakt --stock "$SYNTAKT_STOCK" --eft "$SYNTAKT_EFT" --system-info --out out/core-st-<ver>
+python -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st --module mods/recorder-st --module mods/lfo3-st --module mods/poly-st --module mods/system-info-smz-st --stock "$SYNTAKT_STOCK" --out out/core-st-<ver>/synfact-machines.smz4
+python -m elekloader.lint mods/core-st/out/core-<ver>.elemod --stock "$SYNTAKT_STOCK" --with mods/machines-st/out/machines-st-0.1.elemod --json > out/core-st-<ver>/lint.json
+python tests/test_st_common_regressions.py out/core-st-<ver> --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe"   # add --synfact "$SYNFACT_SRC" if you have it
 ```
 
 ## Core services

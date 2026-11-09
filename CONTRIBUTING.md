@@ -15,7 +15,9 @@ Good things to send:
   [elekloader](https://github.com/irpina/elekloader), which supports every
   device. Propose engine changes there first.
 
-Using a coding agent? Point it at [AGENTS.md](AGENTS.md).
+Using a coding agent? Point it at [AGENTS.md](AGENTS.md). Setting up a
+machine for the first time? [docs/SETUP.md](docs/SETUP.md) lists the tools,
+where to get them and the steps to open a pull request.
 
 Before you open one:
 

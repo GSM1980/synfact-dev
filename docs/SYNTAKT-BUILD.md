@@ -1,33 +1,32 @@
-[elekloader docs](README.md) › Syntakt builds on this workstation
+[elekloader docs](README.md) › Syntakt builds (core-st, SMZ banks)
 
-# Syntakt builds on this workstation (core-st, SMZ banks)
+# Syntakt builds (core-st, SMZ banks)
 
 The exact toolchain, flags and commands used for the Syntakt OS 1.41 core
-(`mods/core-st`) and its SMZ4 machine/module banks on this Windows host.
-Every command below was run as written (Git Bash, from
-`C:\Desarrollo\synfact-dev`). If a step fails, fix the environment;
+(`mods/core-st`) and its SMZ4 machine/module banks. Every command below is run
+from the repository root in Git Bash, with the environment variables set as
+[SETUP.md](SETUP.md) section 2 says. If a step fails, fix the environment;
 do not change flags or the builders to make it pass.
 
 ## Toolchain
 
 | What | Where / value |
 |---|---|
-| Cross compiler | `C:\Desarrollo\syntakt-dev\toolchains\sgdk211\bin` (SGDK 2.11's m68k toolchain) |
-| Version | `gcc` 13.2.0 (crosstool-NG), `as` GNU binutils 2.40, target `m68k-elf` |
-| Executable names | **no prefix**: `gcc.exe`, `as.exe`, `ld.exe`, `objcopy.exe`, `objdump.exe`, `nm.exe` |
-| Python | `C:\Users\pc\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe` (3.12.14). `elekloader` is imported from the repository (run from its root) |
-| Stock OS | `C:\Desarrollo\syntakt-dev\elektron-firmware-tool\Syntakt_OS1.41.syx` |
-| Elektron firmware tool | `C:\Desarrollo\syntakt-dev\elektron-firmware-tool\elektron-firmware-tool.exe` |
-| Host compiler for regressions | `C:\Desarrollo\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin\i686-w64-mingw32-clang.exe` |
+| Cross compiler | `$SGDK_BIN`: the folder with SGDK 2.11's m68k toolchain (GCC 13.2.0, `m68k-elf`) |
+| Executable names | `gcc`, `as`, `ld`, `objcopy`, `objdump`, `nm`. Unprefixed in the SGDK 2.11 build used for testing; the engine's default prefix is `m68k-elf-` |
+| Python | `$PY` (3.9 or newer). `elekloader` is imported from the repository (run from its root) |
+| Stock OS | `$SYNTAKT_STOCK`: your Syntakt OS 1.41 `.syx` from Elektron |
+| Elektron firmware tool | `$SYNTAKT_EFT`: the `elektron-firmware-tool` executable |
+| Host compiler for regressions | `$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe` (llvm-mingw, UCRT x86_64) |
+| Digitone OS (optional) | `$DIGITONE_OS`: your Digitone OS 1.44 `.syx`, for FM TONE and the chorus |
 
-The device profile expects the prefix `m68k-elf-`. This toolchain has none,
-so **every build needs three environment settings**:
+Every build needs these settings. Unprefixed binaries need the first two;
+prefixed binaries need neither:
 
 ```bash
-export PATH="/c/Desarrollo/syntakt-dev/toolchains/sgdk211/bin:$PATH"
-export ELEKLOADER_CROSS=''
-export GCC_EXEC_PREFIX='C:/Desarrollo/syntakt-dev/toolchains/sgdk211/bin/'
-PY=/c/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe
+export PATH="$SGDK_BIN:$PATH"
+export ELEKLOADER_CROSS=''                  # unprefixed binaries only
+export GCC_EXEC_PREFIX="$SGDK_BIN/"         # unprefixed binaries only
 ```
 
 - `ELEKLOADER_CROSS=''` makes the builders call `gcc`, `as`, `ld`… without
@@ -67,8 +66,8 @@ committed: no firmware or derived binaries in Git.
 Bump `"version"` in `mods/core-st/mod.json` first (it names the files).
 
 ```bash
-$PY -m elekloader.sdk.syntakt --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx \
-    --eft C:/Desarrollo/syntakt-dev/elektron-firmware-tool/elektron-firmware-tool.exe --system-info \
+"$PY" -m elekloader.sdk.syntakt --stock "$SYNTAKT_STOCK" \
+    --eft "$SYNTAKT_EFT" --system-info \
     --out out/core-st-X.Y.Z-name
 ```
 
@@ -81,8 +80,8 @@ MAIN and 7 AUDIO change).
 ### Lint report (needed by the regressions)
 
 ```bash
-$PY -m elekloader.lint mods/core-st/out/core-X.Y.Z.elemod \
-    --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx --json > out/core-st-X.Y.Z-name/lint.json
+"$PY" -m elekloader.lint mods/core-st/out/core-X.Y.Z.elemod \
+    --stock "$SYNTAKT_STOCK" --json > out/core-st-X.Y.Z-name/lint.json
 ```
 
 ### SMZ4 bank (machines + modules)
@@ -91,12 +90,13 @@ FM TONE needs its Digitone parts first (once per checkout, or after a change
 to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
 
 ```bash
-$PY mods/fm-tone-st/tools/import_digitone.py C:/Desarrollo/synfact/inputs/local/official/Digitone_and_Digitone_Keys_OS1.44.syx
+"$PY" mods/fm-tone-st/tools/import_digitone.py "$DIGITONE_OS"
 ```
 
 ```bash
-$PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
-    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st     --module mods/modulation-skip-st \
+"$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
+    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
+    --module mods/modulation-skip-st \
     --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
@@ -106,9 +106,10 @@ $PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
   goes in every bank, last; it is not a choice (`"always": true` in
   `js/config/syntakt-normal.json`). The regressions run its host test; with
   a bank built without it as the reference, the full checks are:
-  `$PY tests/test_st_modulation_skip.py --cc <clang> --bank <bank> --reference
-  <normal bank> --stock <syx> --core <main.bin>` and, with the Unicorn
-  environment below, `tests/test_st_modulation_skip_emu.py --bank <bank>`.
+  `"$PY" tests/test_st_modulation_skip.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" --bank <bank> --reference
+  <normal bank> --stock "$SYNTAKT_STOCK" --core <main.bin>` and, with the Unicorn
+  environment below, `tests/test_st_modulation_skip_emu.py --bank <bank>`
+  (that one needs the owner's fixtures in `SYNTAKT_WORK`; without them it is skipped).
 - `ValueError: machine sources changed during compilation`: a source file
   changed while building (another agent editing). Build again.
 - Editing any included header (for example `elekloader/sdk/include/syntakt/host.h`)
@@ -121,22 +122,23 @@ $PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
 The folder must contain the SYX build, `lint.json` and `synfact-machines.smz4`.
 
 ```bash
-$PY tests/test_st_common_regressions.py out/core-st-X.Y.Z-name \
-    --cc C:/Desarrollo/toolchains/llvm-mingw-20261006-ucrt-x86_64/bin/i686-w64-mingw32-clang.exe \
-    --synfact C:/Desarrollo/synfact --previous-build out/<previous core folder> \
-    --unicorn-python C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe
+"$PY" tests/test_st_common_regressions.py out/core-st-X.Y.Z-name \
+    --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" \
+    --previous-build out/<previous core folder> \
+    --unicorn-python "$PY"
+# add  --synfact "$SYNFACT_SRC"  when you have the Synfact source tree
 ```
 
 `--unicorn-python` runs the linked core's safe-boot record writes in Unicorn
-(`tests/test_st_safe_boot_emu.py`; set `LIBUNICORN_PATH` as for the other
-emulator tests). Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.
-`C:\Desarrollo\synfact` is read only.
+(`tests/test_st_safe_boot_emu.py`; see SETUP.md for Unicorn). Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.
+A comparison that needs an input you did not give is printed as skipped; it is
+not a pass. `SYNFACT_SRC`, when you use it, is read only.
 
 ### Generated LFO3 lock sources
 
 `mods/lfo3-st/locks/*` are generated from the pinned Synfact sources (read
-only) by `$PY -B mods/lfo3-st/gen_locks.py`; provenance hashes are in
-`mods/lfo3-st/locks/PROVENANCE.txt`. Do not edit the generated files.
+only) by `"$PY" -B mods/lfo3-st/gen_locks.py`, which needs `SYNFACT_SRC`;
+provenance hashes are in `mods/lfo3-st/locks/PROVENANCE.txt`. Do not edit the generated files.
 The generator applies the local lazy-census optimization to the pinned pattern
 setter; regeneration preserves it without modifying the Synfact input.
 It also inserts publication-pointer invalidation at the owner metadata mutators
@@ -148,7 +150,7 @@ Agents never send MIDI/USB, install firmware or write the instrument. The
 user sends the SYX with FUNC+POWER and writes the bank with:
 
 ```bash
-python -m elekloader.sdk.syntakt.mods put out/core-st-X.Y.Z-name/synfact-machines.smz4 --yes-write-device
+"$PY" -m elekloader.sdk.syntakt.mods put out/core-st-X.Y.Z-name/synfact-machines.smz4 --yes-write-device
 ```
 
 Recovery after a bank that hangs at boot: FUNC+POWER with
@@ -156,42 +158,37 @@ Recovery after a bank that hangs at boot: FUNC+POWER with
 (a core that never loads `/mods`), write a good bank, then install the normal
 core SYX again.
 
-## Emulator checks (syntakt-work)
+## Emulator checks
 
-The Unicorn fixtures live in `C:\Desarrollo\syntakt-dev\syntakt-work`
-(`analysis/`, `sp-one-shot/`) with their own interpreter and Unicorn build:
-
-```bash
-cd /c/Desarrollo/syntakt-dev/syntakt-work
-LIBUNICORN_PATH='C:\Desarrollo\syntakt-dev\syntakt-work\analysis\unicorn-2.1.4-oneshot-build\Release' \
-    sp-one-shot/.venv/Scripts/python.exe -B analysis/main-irq-cache-20261027/lfo3_emu.py
-```
-
-The core's lock-preview site (0.12.18+) has an in-repository differential
-that runs the real `40039160` of two MAIN images with the same interpreter:
+The emulator tests run in Python with `unicorn` (see SETUP.md, "Unicorn").
+They read the same stock file and build folders as the commands above. Some
+also need fixtures that the repository does not include (`SYNTAKT_WORK`); the
+test says so and skips when it is not set.
 
 ```bash
-LIBUNICORN_PATH='C:\Desarrollo\syntakt-dev\syntakt-work\analysis\unicorn-2.1.4-oneshot-build\Release' \
-    /c/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe tests/test_st_preview_emu.py \
+"$PY" tests/test_st_preview_emu.py \
     --native out/core-st-0.12.17-preview-direct/main.bin --patched out/core-st-X.Y.Z-name/main.bin \
     --object mods/core-st/out/core.work/preview.s.o
 ```
 
+The core's lock-preview site (0.12.18+) has an in-repository differential
+that runs the real `40039160` of two MAIN images with the same interpreter.
 Test against the stock MAIN **and** the installed core's image
 (`out/core-st-<ver>/main.bin`): the core patches stock routines, so code
 that checks or patches stock bytes must be verified against both.
 
 The LFO3 native-lock setter differential runs before/after bank code against
 both stock MAIN and the delivered core. It requires the banks' sibling `.work/`
-directories with `main.elf`; its model/mutex/sparse-backend doubles are explicit:
+directories with `main.elf`; its model/mutex/sparse-backend doubles are explicit.
+These need the owner's earlier build folders (`out/lfo3-lock-edit-20261028/`
+and so on); a new build can use its own folders in the same places:
 
-```powershell
-$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
-& 'C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe' -B tests/test_st_lfo3_setter_emu.py `
-  --before out/lfo3-lock-edit-20261028/baseline/synfact-machines.smz4 `
-  --after out/lfo3-lock-edit-20261028/synfact-machines.smz4 `
-  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
-  --core out/lfo3-lock-edit-20261028/main.bin `
+```bash
+"$PY" -B tests/test_st_lfo3_setter_emu.py \
+  --before out/lfo3-lock-edit-20261028/baseline/synfact-machines.smz4 \
+  --after out/lfo3-lock-edit-20261028/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" \
+  --core out/lfo3-lock-edit-20261028/main.bin \
   --out out/lfo3-lock-edit-20261028/setter-differential.json
 ```
 
@@ -200,41 +197,40 @@ including owner lifetime invalidation. Native allocation/mutex/copy/descriptor
 boundaries are doubles; it also reruns 584 setter cases and a broken-invalidator
 negative control. It does not simulate scheduler contention or a full boot.
 
-```powershell
-$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
-& 'C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe' -B tests/test_st_lfo3_publication_emu.py `
-  --before out/lfo3-lock-edit-20261028/synfact-machines.smz4 `
-  --after out/lfo3-publication-20261028-final/synfact-machines.smz4 `
-  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
-  --core out/lfo3-publication-20261028-final/main.bin `
+```bash
+"$PY" -B tests/test_st_lfo3_publication_emu.py \
+  --before out/lfo3-lock-edit-20261028/synfact-machines.smz4 \
+  --after out/lfo3-publication-20261028-final/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" \
+  --core out/lfo3-publication-20261028-final/main.bin \
   --out out/lfo3-publication-20261028-final/publication-differential.json
 ```
 
 The FM audio differential needs the original Digitone AUDIO section as a
 read-only, SHA-pinned test input. It executes x1 and the retained x2 path in
 emulator memory without changing the delivered bank. It does not exercise
-Syntakt AMP/filter/FX, the POLY allocator or a full boot:
+Syntakt AMP/filter/FX, the POLY allocator or a full boot. The section is an
+extract of the Digitone OS (`DIGITONE_SECTIONS`, not included)
+(`DIGITONE_SECTIONS`, owner's input):
 
-```powershell
-$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
-$env:PYTHONPATH='C:/Desarrollo/synfact/tools/local/python-packages'
-& 'C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tests/test_st_fm_audio.py `
-  --bank out/fm-fb-20261028/synfact-machines.smz4 `
-  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
-  --digitone-audio C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_7_blob.raw `
+```bash
+"$PY" tests/test_st_fm_audio.py \
+  --bank out/fm-fb-20261028/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" \
+  --digitone-audio "$DIGITONE_SECTIONS/section_7_blob.raw" \
   --out out/fm-clicks-20261028/audio-regression.json
 ```
 
 To compare first-note FM plus the original native AMP routines, with fixed-gain
 24-bit WAV exports, also supply the pinned Digitone MAIN section. Keep the same
-Unicorn environment settings above:
+environment:
 
-```powershell
-& 'C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tests/test_st_fm_onset.py `
-  --bank out/fm-fb-20261028/synfact-machines.smz4 `
-  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
-  --digitone-audio C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_7_blob.raw `
-  --digitone-main C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_3_MAIN_OS.bin `
+```bash
+"$PY" tests/test_st_fm_onset.py \
+  --bank out/fm-fb-20261028/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" \
+  --digitone-audio "$DIGITONE_SECTIONS/section_7_blob.raw" \
+  --digitone-main "$DIGITONE_SECTIONS/section_3_MAIN_OS.bin" \
   --out out/fm-onset-20261028-comparison
 ```
 
@@ -290,25 +286,24 @@ the owner's OS file once per checkout, then goes in the bank before
 modulation skip ([its README](../mods/chorus-st/README.md)):
 
 ```bash
-$PY mods/chorus-st/tools/import_digitone.py C:/Desarrollo/synfact/inputs/local/official/Digitone_and_Digitone_Keys_OS1.44.syx
+"$PY" mods/chorus-st/tools/import_digitone.py "$DIGITONE_OS"
 ```
 
 ```bash
-$PY -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
+"$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st \
     --module mods/system-info-smz-st --module mods/sample-manager-st --module mods/chorus-st \
     --module mods/modulation-skip-st --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
 The core's three mixer stubs against the stock instructions, and the chorus
-against Synfact's V56 compiled from its pinned sources in syntakt-work, with
-the toolchain settings above:
+against Synfact's V56 compiled from its pinned sources. V56 is a build in the
+`SYNTAKT_WORK` folder, which the repository does not include; without it the test is skipped:
 
 ```bash
-LIBUNICORN_PATH='C:\Desarrollo\syntakt-dev\syntakt-work\analysis\unicorn-2.1.4-oneshot-build\Release' \
-    /c/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_chorus_emu.py \
+"$PY" -B tests/test_st_chorus_emu.py \
     --bank out/core-st-X.Y.Z-name/synfact-machines.smz4 \
-    --digitone C:/Desarrollo/synfact/inputs/local/official/Digitone_and_Digitone_Keys_OS1.44.syx
+    --digitone "$DIGITONE_OS"
 ```
 
 Add `--reference <other bank>` when a change must not alter the chorus's
@@ -319,7 +314,6 @@ The chorus's controls on the delivered core image (labels, formats, values,
 codec, page 25, REVERB's pages, AMP's branch, the dials), same environment:
 
 ```bash
-LIBUNICORN_PATH='C:\Desarrollo\syntakt-dev\syntakt-work\analysis\unicorn-2.1.4-oneshot-build\Release' \
-    /c/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_chorus_ui_emu.py \
+"$PY" -B tests/test_st_chorus_ui_emu.py \
     --core out/core-st-X.Y.Z-name/main.bin --bank out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```

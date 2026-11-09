@@ -2,7 +2,11 @@
 
 This source-only example declares type 64 with 28 generic controls. It exercises
 four SYN pages and MAIN private initialization. Its AUDIO callbacks are silent;
-it is a loader/UI example, not FM Tone or a finished sound engine.
+it is a loader/UI example, not a finished sound engine.
+
+To write your own machine, copy this folder and follow
+[docs/MACHINES.md](../../docs/MACHINES.md). Type 64 is for this test only: a
+new machine takes a free type from 70 to 79 (see ADAPTING.md, section 3).
 
 ```sh
 python -m elekloader.sdk.syntakt.smz examples/machine-test-st --out out/machine-test.smz4

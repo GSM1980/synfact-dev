@@ -12,12 +12,16 @@ Output: locks/*.c, locks/*.s (committed; regenerate only from the pinned
 Synfact sources below).
 """
 import hashlib
+import os
 import re
 import sys
 from shared_locks import shared_locks
 from pathlib import Path
 
-SYNFACT = Path('C:/Desarrollo/synfact/src')
+SYNFACT_ROOT = os.environ.get('SYNFACT_SRC')   # the Synfact working tree (the folder holding src/)
+if not SYNFACT_ROOT:
+    sys.exit('gen_locks.py needs SYNFACT_SRC: the pinned Synfact working tree (not in this repository; docs/SETUP.md)')
+SYNFACT = Path(SYNFACT_ROOT) / 'src'
 R = SYNFACT / 'research-runtime/lfo3-coherence-20261021'
 sys.path.insert(0, str(SYNFACT / 'features/lfo3'))
 from locks_link import definition, locked_source          # noqa: E402  (pure text helpers)

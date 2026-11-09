@@ -372,11 +372,10 @@ API field or reserve is needed for keys. Isolated callbacks: held keyboard not
 due 140 instructions, due 508; sequence OFF 7, not due 89, due 585. These are
 fixture instruction counts, not cycles or device CPU percentages.
 
-```powershell
-$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
-& C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_arp_keyboard_emu.py `
-  --core out/core-st-0.12.21-arp-keyboard-checked/main.bin `
-  --bank out/core-st-0.12.21-arp-keyboard-checked/synfact-machines.smz4 `
+```bash
+"$PY" -B tests/test_st_arp_keyboard_emu.py \
+  --core out/core-st-0.12.21-arp-keyboard-checked/main.bin \
+  --bank out/core-st-0.12.21-arp-keyboard-checked/synfact-machines.smz4 \
   --out out/core-st-0.12.21-arp-keyboard-checked/keyboard.json
 ```
 
@@ -506,15 +505,14 @@ percentages or active LFO3/POLY composition measurements. Core resident memory i
 
 Example emulator environment and connected checks:
 
-```powershell
-$env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.1.4-oneshot-build/Release'
-& C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_arp_generator_emu.py `
-  --core out/core-st-0.12.21-arp-len-checked/main.bin `
-  --bank out/core-st-0.12.21-arp-len-checked/synfact-machines.smz4 `
+```bash
+"$PY" -B tests/test_st_arp_generator_emu.py \
+  --core out/core-st-0.12.21-arp-len-checked/main.bin \
+  --bank out/core-st-0.12.21-arp-len-checked/synfact-machines.smz4 \
   --out out/core-st-0.12.21-arp-len-checked/generator.json
-& C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_arp_view_emu.py `
-  --core out/core-st-0.12.21-arp-len-checked/main.bin `
-  --bank out/core-st-0.12.21-arp-len-checked/synfact-machines.smz4 `
+"$PY" -B tests/test_st_arp_view_emu.py \
+  --core out/core-st-0.12.21-arp-len-checked/main.bin \
+  --bank out/core-st-0.12.21-arp-len-checked/synfact-machines.smz4 \
   --out out/core-st-0.12.21-arp-len-checked/view.json
 ```
 
@@ -536,16 +534,16 @@ The compatibility case retains that observed value, not an infinity sentinel.
 A finite parent clips it; STOP/disable release it through the native track
 release path. This does not assert parity for other Digitone OS versions.
 
-Current LEN differential: `out/arp-length-r5/result.json`. Run with the Unicorn
-environment above and a new output directory:
+Current LEN differential: `out/arp-length-r5/result.json`. Run it with `"$PY"`
+(Unicorn, see [SETUP.md](../../docs/SETUP.md)) and a new output directory:
 
-```powershell
-& C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_arp_length_emu.py `
-  --digitone-main C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_3_MAIN_OS.bin `
-  --stock-main out/arp-study/stock-main.bin `
-  --core out/core-st-0.12.21-arp-len-checked/main.bin `
-  --bank out/core-st-0.12.21-arp-len-checked/synfact-machines.smz4 `
-  --toolchain C:/Desarrollo/syntakt-dev/toolchains/sgdk211/bin `
+```bash
+"$PY" -B tests/test_st_arp_length_emu.py \
+  --digitone-main "$DIGITONE_SECTIONS/section_3_MAIN_OS.bin" \
+  --stock-main out/arp-study/stock-main.bin \
+  --core out/core-st-0.12.21-arp-len-checked/main.bin \
+  --bank out/core-st-0.12.21-arp-len-checked/synfact-machines.smz4 \
+  --toolchain "$SGDK_BIN" \
   --out out/arp-length-NEW
 ```
 

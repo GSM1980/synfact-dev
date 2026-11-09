@@ -276,7 +276,9 @@ not silently authorize replacement of another firmware section.
 A Syntakt mod is a machine or a module in the core's SMZ4 bank, built from
 C and assembler with the SDK (`elekloader.sdk.syntakt.smz`). Start from
 `examples/machine-test-st` or `examples/smz-test-st`, or from a mod in
-`mods/*-st`, and use the core's services from the sections above.
+`mods/*-st`, and use the core's services from the sections above. The
+step-by-step guide, with the descriptor, the AUDIO contract, `mod.json` and
+the checklist for a pull request, is [MACHINES.md](MACHINES.md).
 [SYNTAKT-BUILD.md](SYNTAKT-BUILD.md) has the bank command, the order the
 modules must keep, the parser check and the regressions; `lint` reports the
 sites a mod hooks itself under `core_candidates` (section 2's "core first").
@@ -313,7 +315,7 @@ format is in [FORMAT.md](FORMAT.md); the step-by-step guide, with its
 examples for elekloader's other devices, is elekloader's own
 [ADAPTING.md](https://github.com/irpina/elekloader/blob/main/docs/ADAPTING.md).
 
-## 5. When the loader refuses: message Ã¢â€ â€™ fix
+## 5. When the loader refuses: message → fix
 
 | message contains | means | fix |
 |---|---|---|

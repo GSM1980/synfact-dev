@@ -11,7 +11,7 @@ codec through the core's notifications. Stock IDs keep the stock answers.
 Native string construction, allocation, page drawing and blits are recorded
 stubs; no complete view, boot or physical display is modeled.
 
-  LIBUNICORN_PATH=... sp-one-shot/.venv/Scripts/python.exe -B tests/test_st_chorus_ui_emu.py \\
+  "$PY" -B tests/test_st_chorus_ui_emu.py \\
       --core out/core-st-X.Y.Z-name/main.bin --bank <bank with chorus-st>
 """
 import argparse

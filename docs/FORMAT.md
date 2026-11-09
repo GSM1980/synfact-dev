@@ -99,7 +99,7 @@ A format-2 mod is a relocatable object:
      `reserve`: the Octatrack's sample memory), a core may take only what
      the mods use. When a mod imports one of the profile's reserve
      symbols, and none exports one, the linker counts n, the units the
-     mods' RAM fills (at least one), and defines each symbol as a + bÃ‚Â·n;
+     mods' RAM fills (at least one), and defines each symbol as a + b·n;
      the layout then says `reserve: {units, end}`. The Octatrack's are
      `arena_base`, `__arena_pages`, `__arena_fill` and `__arena_clear`
      (core-ot 0.3). The RAM budget is still the device's `ddr`.

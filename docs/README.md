@@ -5,9 +5,11 @@ and change with the code, so a commit's docs match its code.
 
 ## Building and testing
 
-- **[Syntakt builds on this workstation](SYNTAKT-BUILD.md)**: the toolchain,
-  the flags, and the exact commands for the core SYX, the SMZ4 bank, the
-  regressions and the emulator checks.
+- **[Setting up a workstation](SETUP.md)**: every tool, where to get it, how
+  to install it, the environment variables, and the steps to a pull request.
+  Start here.
+- **[Syntakt builds](SYNTAKT-BUILD.md)**: the flags and the exact commands for
+  the core SYX, the SMZ4 bank, the regressions and the emulator checks.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
@@ -16,6 +18,12 @@ and change with the code, so a commit's docs match its code.
 
 ## Writing mods
 
+- **[Machine reference](MACHINE-REFERENCE.md)**: the limits, the control and page
+  mapping, the IDs, the menu and aliases, the audio voice and its calls.
+- **[Writing a machine or a module](MACHINES.md)**: from an empty folder to
+  a machine in the SMZ4 bank that is ready for a pull request. The descriptor,
+  the sound contract, `mod.json`, the headers, and a checklist. Start here for
+  a Syntakt machine.
 - **[Adapting your mod](ADAPTING.md)**: the rules, the Syntakt core's events
   and tables, every command with the output it should print, every refusal
   with its fix, and a definition of done. Coding agents: start with
@@ -32,6 +40,14 @@ and change with the code, so a commit's docs match its code.
   core), [mods/machines-st](../mods/machines-st), and each mod's folder.
 - **Examples** ([examples/](../examples)): `machine-test-st`, a test machine,
   and `smz-test-st`, a test SMZ4 bank.
+
+## Versions and changes
+
+- **Changelogs** of the Syntakt core and every Syntakt mod: `mods/<mod>/CHANGELOG.md`
+  (for people) and `mods/<mod>/changelog.json` (for the website). Each version lists
+  its commits. `changelog/index.json` gives the latest version of each mod.
+  They are generated from git history by `python tools/changelog.py`. Run it after
+  a commit that changes a mod, then commit the result.
 
 ## Building in the browser
 
