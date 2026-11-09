@@ -1,5 +1,5 @@
 {
-  "id":"modulation-skip-st","version":"1.0","title":"Skip the stock modulation when unchanged",
+  "id":"modulation-skip-st","version":"1.2.3","title":"Skip unchanged modulation per track",
   "device":"syntakt","os":"1.41","license":"GPL-2.0-or-later",
-  "sources":["main.c"],"smz_module":{"descriptor":"modulation_skip_module"}
+  "sources":["main.c","kernel.s"],"smz_module":{"descriptor":"modulation_skip_module"}
 }
