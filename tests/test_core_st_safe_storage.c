@@ -27,6 +27,8 @@ static int write_sector(unsigned int lba,unsigned int n,const void *in)
 }
 static unsigned int card_sectors(void){return CORE_MODS_LBA+1;}
 static const struct core_mods_io io={read_sector,write_sector,card_sectors};
+/* A table without write (core 1.7's boot): every write path refuses, no call. */
+static const struct core_mods_io read_only={read_sector,0,card_sectors};
 int main(void)
 {
     struct core_mods_slot a,b,primary,fallback;struct core_mods_store legacy={0};
@@ -64,6 +66,13 @@ int main(void)
     assert(core_mods_commit_io(&legacy,&io,256));
     assert(core_mods_stat_io(&io,&n)==1 && n==256);
     assert(core_mods_stage_io(&io,&a) && a.slot==1); /* preserve legacy slot 0 */
-    puts("PASS: v2 stage, trial, GOOD transition, rollback, corruption, failed writes and legacy migration");
+    /* No write function: every write path refuses (fails closed), reads go on. */
+    memset(sectors,0,sizeof(sectors));
+    assert(core_mods_stage_io(&read_only,&a) && a.slot==0);a.bytes=4096;
+    assert(!core_mods_record_io(&read_only,&a) && !core_mods_invalidate_slot_io(&read_only,0));
+    assert(core_mods_record_io(&io,&a) && !core_mods_transition_io(&read_only,0,CORE_MODS_CANDIDATE,CORE_MODS_TRYING));
+    assert(core_mods_select_io(&read_only,&primary,&fallback)==1 && primary.state==CORE_MODS_CANDIDATE);
+    assert(!core_mods_begin_io(&legacy,&read_only,256) && !core_mods_commit_io(&legacy,&read_only,256));
+    puts("PASS: v2 stage, trial, GOOD transition, rollback, corruption, failed writes, legacy migration and no-write tables refused");
     return 0;
 }

@@ -16,8 +16,8 @@ do not change flags or the builders to make it pass.
 | Version | `gcc` 13.2.0 (crosstool-NG), `as` GNU binutils 2.40, target `m68k-elf` |
 | Executable names | **no prefix**: `gcc.exe`, `as.exe`, `ld.exe`, `objcopy.exe`, `objdump.exe`, `nm.exe` |
 | Python | `C:\Users\pc\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe` (3.12.14). `elekloader` is imported from the repository (run from its root) |
-| Stock OS | `C:\Desarrollo\elektron-firmware-tool\Syntakt_OS1.41.syx` |
-| Elektron firmware tool | `C:\Desarrollo\elektron-firmware-tool\elektron-firmware-tool.exe` |
+| Stock OS | `C:\Desarrollo\syntakt-dev\elektron-firmware-tool\Syntakt_OS1.41.syx` |
+| Elektron firmware tool | `C:\Desarrollo\syntakt-dev\elektron-firmware-tool\elektron-firmware-tool.exe` |
 | Host compiler for regressions | `C:\Desarrollo\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin\i686-w64-mingw32-clang.exe` |
 
 The device profile expects the prefix `m68k-elf-`. This toolchain has none,
@@ -67,8 +67,8 @@ committed: no firmware or derived binaries in Git.
 Bump `"version"` in `mods/core-st/mod.json` first (it names the files).
 
 ```bash
-$PY -m elekloader.sdk.syntakt --stock C:/Desarrollo/elektron-firmware-tool/Syntakt_OS1.41.syx \
-    --eft C:/Desarrollo/elektron-firmware-tool/elektron-firmware-tool.exe --system-info \
+$PY -m elekloader.sdk.syntakt --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx \
+    --eft C:/Desarrollo/syntakt-dev/elektron-firmware-tool/elektron-firmware-tool.exe --system-info \
     --out out/core-st-X.Y.Z-name
 ```
 
@@ -82,7 +82,7 @@ MAIN and 7 AUDIO change).
 
 ```bash
 $PY -m elekloader.lint mods/core-st/out/core-X.Y.Z.elemod \
-    --stock C:/Desarrollo/elektron-firmware-tool/Syntakt_OS1.41.syx --json > out/core-st-X.Y.Z-name/lint.json
+    --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx --json > out/core-st-X.Y.Z-name/lint.json
 ```
 
 ### SMZ4 bank (machines + modules)
@@ -123,10 +123,13 @@ The folder must contain the SYX build, `lint.json` and `synfact-machines.smz4`.
 ```bash
 $PY tests/test_st_common_regressions.py out/core-st-X.Y.Z-name \
     --cc C:/Desarrollo/toolchains/llvm-mingw-20261006-ucrt-x86_64/bin/i686-w64-mingw32-clang.exe \
-    --synfact C:/Desarrollo/synfact --previous-build out/<previous core folder>
+    --synfact C:/Desarrollo/synfact --previous-build out/<previous core folder> \
+    --unicorn-python C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe
 ```
 
-Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.
+`--unicorn-python` runs the linked core's safe-boot record writes in Unicorn
+(`tests/test_st_safe_boot_emu.py`; set `LIBUNICORN_PATH` as for the other
+emulator tests). Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.
 `C:\Desarrollo\synfact` is read only.
 
 ### Generated LFO3 lock sources
@@ -187,7 +190,7 @@ $env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.
 & 'C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe' -B tests/test_st_lfo3_setter_emu.py `
   --before out/lfo3-lock-edit-20261028/baseline/synfact-machines.smz4 `
   --after out/lfo3-lock-edit-20261028/synfact-machines.smz4 `
-  --stock C:/Desarrollo/elektron-firmware-tool/Syntakt_OS1.41.syx `
+  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
   --core out/lfo3-lock-edit-20261028/main.bin `
   --out out/lfo3-lock-edit-20261028/setter-differential.json
 ```
@@ -202,7 +205,7 @@ $env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.
 & 'C:/Desarrollo/syntakt-dev/syntakt-work/sp-one-shot/.venv/Scripts/python.exe' -B tests/test_st_lfo3_publication_emu.py `
   --before out/lfo3-lock-edit-20261028/synfact-machines.smz4 `
   --after out/lfo3-publication-20261028-final/synfact-machines.smz4 `
-  --stock C:/Desarrollo/elektron-firmware-tool/Syntakt_OS1.41.syx `
+  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
   --core out/lfo3-publication-20261028-final/main.bin `
   --out out/lfo3-publication-20261028-final/publication-differential.json
 ```
@@ -217,7 +220,7 @@ $env:LIBUNICORN_PATH='C:/Desarrollo/syntakt-dev/syntakt-work/analysis/unicorn-2.
 $env:PYTHONPATH='C:/Desarrollo/synfact/tools/local/python-packages'
 & 'C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tests/test_st_fm_audio.py `
   --bank out/fm-fb-20261028/synfact-machines.smz4 `
-  --stock C:/Desarrollo/elektron-firmware-tool/Syntakt_OS1.41.syx `
+  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
   --digitone-audio C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_7_blob.raw `
   --out out/fm-clicks-20261028/audio-regression.json
 ```
@@ -229,7 +232,7 @@ Unicorn environment settings above:
 ```powershell
 & 'C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tests/test_st_fm_onset.py `
   --bank out/fm-fb-20261028/synfact-machines.smz4 `
-  --stock C:/Desarrollo/elektron-firmware-tool/Syntakt_OS1.41.syx `
+  --stock C:/Desarrollo/syntakt-dev/elektron-firmware-tool/Syntakt_OS1.41.syx `
   --digitone-audio C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_7_blob.raw `
   --digitone-main C:/Desarrollo/synfact/build/smz-1/work/analysis/digitone-1.44-sections/section_3_MAIN_OS.bin `
   --out out/fm-onset-20261028-comparison

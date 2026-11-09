@@ -51,6 +51,56 @@ UI activity; it cannot predict a crash after the five-second health window.
 Do not mark 07 or 16 complete before physical power-loss, rollback and both
 update-order tests.
 
+## Core 1.7.1: the first trial boot crashed (2026-11-09)
+
+**What happened.** The first `mods put` of a bank to `/mods-stage` with core
+1.7, then a restart, gave `EXCEPTION DK0094 V03` (address error) at startup,
+and would again at every startup. The words on that screen located it:
+`4600289C` returns inside `core_mods_record_io`, `00019FFF` is slot 1's
+record sector and `00000200` its 512 bytes.
+
+**Why.** `machine-boot.c` read the card through its own accessor table,
+`{fw_mmc_read, 0, sectors}`, written when the boot never wrote. The trial
+added one write (CANDIDATE → TRYING, before any bank code) through that
+table: `io->write` was 0, so the core called address 0. The record never
+changed, so every boot chose the same candidate and crashed again: the
+protection failed on its own first step, before any bank code ran. The bank
+being tried had nothing to do with it.
+
+**Why the tests passed.** Each test replaced the piece it did not test:
+`test_core_st_smz.c` (the boot) replaced `core_mods_transition_io`,
+`test_core_st_safe_storage.c` (the slots) used its own complete table, and
+neither was in the regressions. The CLI's `put` had never reached the device
+either: `data_rpc.py` refused `/mods-stage` until 2026-11-09.
+
+**Fix and guards (1.7.1, contract unchanged: banks for 1.7 load as they are).**
+
+- The boot table has `fw_mmc_write` (`machine-boot.c`).
+- `storage.c` fails closed: every write path refuses a table without a write
+  function, so a boot with such a table rejects the candidate instead of
+  jumping (`test_core_st_safe_storage.c`).
+- `tests/test_core_st_trial_boot.c` links the production loader, slot
+  storage and parser, with no double, over a simulated card and a real bank:
+  trial marked TRYING, crash and rollback, confirmation, corrupt candidate,
+  GOOD restored, and the boot writing nothing but trial records. With 1.7's
+  table it reproduces the crash (segmentation fault).
+- `test_core_st_smz.c` checks that every storage call gets the boot's real
+  accessors.
+- `tests/test_st_common_hooks.py` checks, in the linked SYX, that every
+  accessor table (`storage`, `io`) holds `fw_mmc_read`, `fw_mmc_write`.
+- `tests/test_st_safe_boot_emu.py` runs the linked core's own
+  `core_mods_transition_io` with both tables in Unicorn, behind the stock
+  read/write entry points. On 1.7's `main.bin` it faults at PC 0, as the
+  device did.
+- The three host tests run in `tests/test_st_common_regressions.py`; the
+  Unicorn one with `--unicorn-python` (reported as skipped without it).
+
+**Before calling a safe-boot change done**, on the device, by the user:
+install the core; `mods status` shows contract `53594603`; `mods put` a
+bank; restart; `mods status` shows the trial and, a few seconds later, the
+bank loaded with no rollback; restart again: loaded, no trial. Then the same
+with a bank that fails its checksum (rollback to the previous bank).
+
 ## Baseline before core 1.5 (2026-11-07)
 
 - `/mods` is one opaque file at `0x02400000..0x03400000`, with one length/CRC metadata sector at `0x03400000` (`mods/core-st/storage.c`, `STORAGE.md`). Upload invalidates the previous record **before** writing; interruption leaves no bank. A completed upload replaces the only copy. `mods.py` and the site read the bytes back, but this proves transfer integrity, not boot safety.

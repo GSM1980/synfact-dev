@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 
-def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False):
+def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None):
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
     def run(name,args):
@@ -43,6 +43,11 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
         'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c']}
     cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
+    # Safe boot (core 1.7.1): slot storage alone, the boot orchestration, and the
+    # production loader with the production storage end to end (both on the bank).
+    cases['safe-storage']=['tests/test_core_st_safe_storage.c','mods/core-st/storage.c']
+    cases['smz-boot']=['tests/test_core_st_smz.c','mods/core-st/smz.c']
+    cases['trial-boot']=['tests/test_core_st_trial_boot.c','mods/core-st/smz.c','mods/core-st/storage.c']
     has_recorder='recorder_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']
     if 'poly_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:cases['poly']=['tests/test_st_poly.c']
     if has_recorder:cases['recorder']=['tests/test_st_recorder.c','mods/core-st/hzfs.c','mods/core-st/crc.c']
@@ -52,7 +57,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     for name,sources in cases.items():
         exe=out/(name+'.exe')
         run('compile '+name,[cc,'-O2','-Wl,--large-address-aware','-I','elekloader/sdk/include',*sources,'-o',exe])
-        args=[out/'synfact-machines.smz4'] if name=='smz-parser' else []
+        args=[out/'synfact-machines.smz4'] if name in ('smz-parser','smz-boot','trial-boot') else []
         legacy=ROOT/'out/smz-module-0.8-final/example.smz4'
         if name=='smz-parser' and legacy.exists():args.append(legacy)
         run(name,[exe,*args])
@@ -126,6 +131,10 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 assert new_section==old_section
                 checks.append({'name':'FM/SP AUDIO bank identical to previous build','ok':True})
     else:skipped.append('AUDIO comparison: supply --previous-build')
+    # The linked core's own safe-boot record writes, executed (core 1.7.1): the
+    # path core 1.7 crashed on at its first trial boot. Needs Unicorn.
+    if unicorn_python:run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
+    else:skipped.append('safe-boot emulation: supply --unicorn-python (and LIBUNICORN_PATH)')
     assert json.loads((out/'lint.json').read_text())['ok']
     checks.append({'name':'lint','ok':True})
     (out/'validation.json').write_text(json.dumps({'ok':True,'checks':checks,'skipped':skipped,
@@ -136,6 +145,7 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('folder',type=Path)
     p.add_argument('--cc',required=True,type=Path);p.add_argument('--synfact',type=Path)
     p.add_argument('--previous-build',type=Path)
+    p.add_argument('--unicorn-python',type=Path,help='a Python with unicorn: runs tests/test_st_safe_boot_emu.py')
     p.add_argument('--audio-companion-changed',action='store_true',
         help='the core AUDIO companion intentionally changed: compare outside its declared window only')
     p.add_argument('--sampler-audio-changed',action='store_true',
@@ -147,4 +157,4 @@ if __name__=='__main__':
         from elekloader.devices.syntakt import DEVICE
         window=DEVICE.secondary[7][3][-1]
         assert window==(0x40040860,0x40041050)
-    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python)

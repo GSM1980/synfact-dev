@@ -103,8 +103,15 @@ def verify(folder):
         assert read(at,6)==jump(name),name
     assert len(manifest['sites'])==106 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
     assert len({s['addr'] for s in manifest['sites']})==106
+    # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
+    # `storage`, files.c `io`) has read, write and sectors, each a code address.
+    # Core 1.7's boot table had a null write: the first trial boot jumped to 0.
+    for name in ('storage','io'):
+        words=struct.unpack('>3I',read(address(name),12))
+        assert all(0x40000400<=w<0x40400000 or layout['ddr'][0]<=w<layout['ddr'][1] for w in words),(name,[hex(w) for w in words])
+        assert words[0]==address('fw_mmc_read') and words[1]==address('fw_mmc_write'),(name,[hex(w) for w in words])
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize; 106 sites, 16 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize; eMMC accessor tables complete; 106 sites, 16 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])
