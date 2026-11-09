@@ -6,6 +6,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.8.
 
 - ARP 1.8, FM TONE 1.1, POLY 1.4: TRIG pages, SCALE, falling RANGE, FUNC snaps (`f89c72b`, 2026-11-09)
 - Syntakt docs: setup guide, machine guides, and environment variables (`c8071dd`, 2026-11-09)
+- Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)
 
 ## 1.6 (2026-11-06)
 

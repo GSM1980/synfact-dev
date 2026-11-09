@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.2.3.
 ## 1.2.3 (2026-11-09)
 
 - Optimize modulation skip by track and Sound publication (`a442be8`, 2026-11-09)
+- Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)
 
 ## 1.0 (2026-11-02)
 

@@ -4,6 +4,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.1.
 
 ## 1.1 (2026-11-06)
 
+- Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)
 - Core 1.4: page randomize on the new pages (list item 22) (`d4ad3ae`, 2026-11-06)
 
 ## 1.0 (2026-11-06)

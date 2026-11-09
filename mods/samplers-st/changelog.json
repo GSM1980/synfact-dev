@@ -8,6 +8,11 @@
       "date": "2026-11-06",
       "commits": [
         {
+          "sha": "5382765",
+          "date": "2026-11-09",
+          "subject": "Changelogs for the Syntakt core and mods, generated from git history"
+        },
+        {
           "sha": "aa44b36",
           "date": "2026-11-06",
           "subject": "Make sampler OVER a soft clip without muting at zero"

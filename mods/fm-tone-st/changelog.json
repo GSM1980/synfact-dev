@@ -16,6 +16,11 @@
           "sha": "1fd3823",
           "date": "2026-11-09",
           "subject": "POLY: build the native kernels from the stock OS alone; add mod licences"
+        },
+        {
+          "sha": "5382765",
+          "date": "2026-11-09",
+          "subject": "Changelogs for the Syntakt core and mods, generated from git history"
         }
       ]
     },

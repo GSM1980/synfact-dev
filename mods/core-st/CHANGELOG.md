@@ -1,11 +1,16 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.7.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.7.2.
+
+## 1.7.2 (2026-11-09)
+
+- Core 1.7.2: the base-width filter reads stock poles (`1378804`, 2026-11-09)
 
 ## 1.7.1 (2026-11-09)
 
 - Core 1.7.1: write the trial record at boot; safe-boot guards (`8529889`, 2026-11-09)
 - Syntakt docs: setup guide, machine guides, and environment variables (`c8071dd`, 2026-11-09)
+- Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)
 
 ## 1.7 (2026-11-07)
 

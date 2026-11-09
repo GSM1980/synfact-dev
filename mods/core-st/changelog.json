@@ -1,8 +1,19 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "1.7.1",
+  "latest": "1.7.2",
   "entries": [
+    {
+      "version": "1.7.2",
+      "date": "2026-11-09",
+      "commits": [
+        {
+          "sha": "1378804",
+          "date": "2026-11-09",
+          "subject": "Core 1.7.2: the base-width filter reads stock poles"
+        }
+      ]
+    },
     {
       "version": "1.7.1",
       "date": "2026-11-09",
@@ -16,6 +27,11 @@
           "sha": "c8071dd",
           "date": "2026-11-09",
           "subject": "Syntakt docs: setup guide, machine guides, and environment variables"
+        },
+        {
+          "sha": "5382765",
+          "date": "2026-11-09",
+          "subject": "Changelogs for the Syntakt core and mods, generated from git history"
         }
       ]
     },

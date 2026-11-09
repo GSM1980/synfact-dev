@@ -13,6 +13,11 @@
           "subject": "POLY: build the native kernels from the stock OS alone; add mod licences"
         },
         {
+          "sha": "5382765",
+          "date": "2026-11-09",
+          "subject": "Changelogs for the Syntakt core and mods, generated from git history"
+        },
+        {
           "sha": "347ef8e",
           "date": "2026-11-02",
           "subject": "Set the mod versions: 1.0, and ARP 0.1"

@@ -16,6 +16,11 @@
           "sha": "c8071dd",
           "date": "2026-11-09",
           "subject": "Syntakt docs: setup guide, machine guides, and environment variables"
+        },
+        {
+          "sha": "5382765",
+          "date": "2026-11-09",
+          "subject": "Changelogs for the Syntakt core and mods, generated from git history"
         }
       ]
     },

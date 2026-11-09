@@ -11,6 +11,11 @@
           "sha": "a442be8",
           "date": "2026-11-09",
           "subject": "Optimize modulation skip by track and Sound publication"
+        },
+        {
+          "sha": "5382765",
+          "date": "2026-11-09",
+          "subject": "Changelogs for the Syntakt core and mods, generated from git history"
         }
       ]
     },
