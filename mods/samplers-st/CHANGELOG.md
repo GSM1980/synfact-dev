@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.3.
 ## 1.3 (2026-11-10)
 
 - Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0) (`222a29d`, 2026-11-10)
+- Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
 
 ## 1.2 (2026-11-06)
 

@@ -5,6 +5,8 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.8.0.
 ## 1.8.0 (2026-11-10)
 
 - Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0) (`222a29d`, 2026-11-10)
+- Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
+- Sample Manager 1.2: FUNC+UP/DOWN steps one row after an audition (`a4bd154`, 2026-11-10)
 
 ## 1.7.2 (2026-11-09)
 

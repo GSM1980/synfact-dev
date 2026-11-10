@@ -1,8 +1,19 @@
 {
   "id": "sample-manager-st",
   "title": "Sample Manager",
-  "latest": "1.1",
+  "latest": "1.2",
   "entries": [
+    {
+      "version": "1.2",
+      "date": "2026-11-10",
+      "commits": [
+        {
+          "sha": "a4bd154",
+          "date": "2026-11-10",
+          "subject": "Sample Manager 1.2: FUNC+UP/DOWN steps one row after an audition"
+        }
+      ]
+    },
     {
       "version": "1.1",
       "date": "2026-11-10",
@@ -11,6 +22,11 @@
           "sha": "222a29d",
           "date": "2026-11-10",
           "subject": "Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0)"
+        },
+        {
+          "sha": "40e397f",
+          "date": "2026-11-10",
+          "subject": "Changelogs: core 1.8.0"
         }
       ]
     },

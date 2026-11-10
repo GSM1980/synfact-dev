@@ -8,6 +8,11 @@
       "date": "2026-11-06",
       "commits": [
         {
+          "sha": "40e397f",
+          "date": "2026-11-10",
+          "subject": "Changelogs: core 1.8.0"
+        },
+        {
           "sha": "5382765",
           "date": "2026-11-09",
           "subject": "Changelogs for the Syntakt core and mods, generated from git history"
