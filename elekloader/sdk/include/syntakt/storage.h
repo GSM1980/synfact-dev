@@ -9,6 +9,9 @@
 #define ST_HZ_FIRST 0x600u
 #define ST_HZ_DATA 0x602u
 #define ST_HZ_ENTRY 64u
+/* Core 1.8: entry flag. Two channels, interleaved L, R; frames still counts
+ * 16-bit samples (even). Readers that ignore it see a mono sample. */
+#define ST_HZ_STEREO 1u
 #define ST_HZ_ENTRIES 0x140u
 /* V2 appends folder memberships and 48-byte folder records after samples.
  * Header +40: folder count, +44: next folder ID. Root is ID zero. */

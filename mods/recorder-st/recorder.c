@@ -1,4 +1,5 @@
-/* RAM recorder: 60 s mono PCM16, allocation only on the UI thread.
+/* RAM recorder: 60 s mono or 30 s stereo PCM16 (interleaved L, R) in one
+ * buffer, allocation only on the UI thread.
  * Included after syn_wave.c; audition uses Sample Manager's mixer primitive.
  * MAIN fx3_mix is already called every 32 frames at 48 kHz. */
 static const char *sam_sources[]=SAMPLER_SOURCES;
@@ -9,7 +10,10 @@ static volatile u32 sam_source DATA=5; /* MAIN L+R: PLAY gives an immediate test
 static volatile u32 sam_enabled DATA=0,sam_peak DATA=0,sam_clock DATA=0;
 static u32 sam_last_source DATA=18,sam_rlen DATA=8,sam_thr DATA=14;
 static volatile u32 sam_mon DATA=0;
-static volatile u32 sam_post DATA=0,sam_take_post DATA=0; /*  POST FX, encoder A */
+static volatile u32 sam_post DATA=0,sam_take_post DATA=0; /*  POST FX, encoder B */
+/* STEREO, encoder A. A take keeps the mode it was started in (sam_take_stereo):
+ * its PCM is interleaved L, R and sam_frames counts frame pairs. */
+static volatile u32 sam_stereo DATA=0,sam_take_stereo DATA=0,sam_peak_r DATA=0;
 /* Stock AMP.T/FLT.T toggle renderer. Borrows the boot-owned bitmap vector. */
 #define SAM_TOGGLE REC_TOGGLE
 static u32 sam_sound_down DATA=0,sam_sound_pending DATA=0,sam_sound_at DATA=0;
@@ -17,6 +21,11 @@ static u32 sam_sound_release DATA=0,sam_focus DATA=2,sam_hint DATA=0;
 static u8 *sam_sound_origin DATA=0,*sam_sound_browser DATA=0;
 u32 sam_report[8] DATA={0}; /* opened,ticks,paints,idles,encoder edits,source,peak,closed */
 #define SAM_MAX_FRAMES (60u*48000u)
+#define SAM_STEREO_FRAMES (SAM_MAX_FRAMES/2u)   /* the same buffer, two channels */
+static u32 sam_max_frames(u32 stereo){return stereo?SAM_STEREO_FRAMES:SAM_MAX_FRAMES;}
+/* STEREO offers the stereo pairs and the tracks: IN L+R, MAIN L+R, TRK1..12. */
+static u32 sam_source_ok(u32 source,u32 stereo)
+{return !stereo || (source!=0 && source!=1 && source!=3 && source!=4);}
 #define SAM_NORM_PEAK 29204u /* nearest PCM16 magnitude to -1 dBFS */
 enum { SAM_EMPTY, SAM_ARMED, SAM_RECORDING, SAM_READY, SAM_NORMALIZING };
 static short *sam_pcm DATA=0;
@@ -31,11 +40,15 @@ static u32 sam_pcm_peak DATA=0,sam_norm_pos DATA=0,sam_norm_gain DATA=65536;
 static u32 sam_norm_init DATA=0,sam_norm_shown DATA=0,sam_norm_bin DATA=0,sam_norm_next DATA=0;
 static u32 sam_wave_ready DATA=0;
 static short sam_wave_low[126] DATA={0},sam_wave_high[126] DATA={0};
+static short sam_wave_low_r[126] DATA={0},sam_wave_high_r[126] DATA={0};   /* R of a stereo take */
 #define SAM_DETAIL_BLOCK 256u
 #define SAM_DETAIL_BINS ((SAM_MAX_FRAMES+SAM_DETAIL_BLOCK-1u)/SAM_DETAIL_BLOCK)
 /* Range extrema index, built during the existing normalization pass. No PCM
- * duplicate or whole-take traversal from paint; 45,000 bytes in the file. */
+ * duplicate or whole-take traversal from paint; 45,000 bytes in the file.
+ * A stereo take (at most half the frames) keeps L in the first half, R in
+ * the second (SAM_DETAIL_HALF). */
 static short sam_detail_low[SAM_DETAIL_BINS] DATA={0},sam_detail_high[SAM_DETAIL_BINS] DATA={0};
+#define SAM_DETAIL_HALF (SAM_DETAIL_BINS/2u)
 static u32 sam_detail_frames DATA=0,sam_display_peak DATA=1;
 static u32 sam_trim_start DATA=0,sam_trim_end DATA=0,sam_trim_valid DATA=0;
 static u32 sam_zoom[2] DATA={0,0};
@@ -95,7 +108,10 @@ static void sam_start(u32 armed)
     u32 level,peak,shift;
     if(sam_frames || !sam_prepare())return;
     preview_stop();sampler_suspend();
-    sam_frames=0;sam_limit=sam_record_limit();sam_take_source=sam_source;sam_take_post=sam_post;
+    sam_frames=0;sam_take_stereo=sam_stereo;sam_limit=sam_record_limit();
+    if(sam_limit>sam_max_frames(sam_take_stereo))sam_limit=sam_max_frames(sam_take_stereo);
+    if(!sam_source_ok(sam_source,sam_take_stereo))sam_source=sam_source<3?2:5;
+    sam_take_source=sam_source;sam_take_post=sam_post;
     sam_seq_stop=sam_rlen<8;
     sam_pcm_peak=0;sam_norm_pos=0;sam_norm_init=0;sam_norm_shown=0;sam_wave_ready=0;
     sam_trim_valid=0;sam_loupe_side=0;sam_trimmed=0;sam_detail_frames=0;
@@ -120,11 +136,22 @@ void sampler_playback_mix(void)
 {
     u32 n=sam_play_length,p=sam_play_pos,i;
     if(!n || !sam_pcm)return;
-    if(n>SAM_MAX_FRAMES || p>n){sam_play_length=0;return;}
-    for(i=0;i<32 && p<n;i++,p++)
+    if(n>sam_max_frames(sam_take_stereo) || p>n){sam_play_length=0;return;}
+    if(sam_take_stereo)for(i=0;i<32 && p<n;i++,p++){
+        preview_mix_side(2*i,(s32)sam_pcm[2*p]*2048);preview_mix_side(2*i+1,(s32)sam_pcm[2*p+1]*2048);
+    }
+    else for(i=0;i<32 && p<n;i++,p++)
         preview_mix_frame(i,(s32)sam_pcm[p]*2048);
     sam_play_pos=p;
     if(p==n)sam_play_length=0;
+}
+/* SRC as shown: in STEREO the pairs read IN LR and MAIN LR. */
+static const char *sam_source_name(u32 source,u32 stereo)
+{
+    if(source>=18)source=0;
+    if(stereo && source==2)return "IN LR";
+    if(stereo && source==5)return "MAIN LR";
+    return sam_sources[source];
 }
 static void sam_time_text(char *text,u32 frames)
 {
@@ -196,6 +223,77 @@ static s32 sam_main_side(s32 value,s32 correction)
     if(x< -32768)x=-32768;
     return (s32)((u32)x<<16);
 }
+/* STEREO, every source: 32 frames of L and R (Q31) -> meters, threshold,
+ * interleaved PCM16. The trigger and the PCM peak take the louder side. */
+static void sam_stereo_store(const s32 *left,const s32 *right,u32 source,u32 state)
+{
+    u32 i,b,mag,side[2],old,peak[2]={0,0},p=sam_frames,pcm_peak=sam_pcm_peak,pcm_mag,limit;
+    s32 value;
+    limit=sam_limit<SAM_STEREO_FRAMES?sam_limit:SAM_STEREO_FRAMES;
+    for(i=0;i<32;i++) {
+        for(b=0;b<2;b++){value=b?right[i]:left[i];side[b]=value<0?0u-(u32)value:(u32)value;if(side[b]>peak[b])peak[b]=side[b];}
+        mag=side[0]>side[1]?side[0]:side[1];
+        if(state==SAM_ARMED && mag>sam_trigger)state=SAM_RECORDING;
+        if(state==SAM_RECORDING) {
+            if(sam_pcm && p<limit) {
+                for(b=0;b<2;b++) {
+                    value=(b?right[i]:left[i])>>16;sam_pcm[2*p+b]=(short)value;
+                    pcm_mag=value<0?0u-(u32)value:(u32)value;if(pcm_mag>pcm_peak)pcm_peak=pcm_mag;
+                }
+                if(++p==limit)state=SAM_NORMALIZING;
+            } else state=p?SAM_NORMALIZING:SAM_EMPTY;
+        }
+    }
+    if(sam_state==SAM_ARMED || sam_state==SAM_RECORDING) {
+        sam_frames=p;sam_pcm_peak=pcm_peak;
+        __asm__ volatile("" ::: "memory");
+        sam_state=state;
+    }
+    old=sam_last_source==source?sam_peak:0;old-=old?(old>>9)+1u:0;sam_peak=peak[0]>old?peak[0]:old;
+    old=sam_last_source==source?sam_peak_r:0;old-=old?(old>>9)+1u:0;sam_peak_r=peak[1]>old?peak[1]:old;
+    sam_last_source=source;
+    sam_report[1]++;sam_report[5]=source;sam_report[6]=peak[0]>peak[1]?peak[0]:peak[1];
+}
+/* A stereo sampler track's R is L + D (samplers-st stereo/main.c, in PCM16
+ * units). Weak: a bank without the samplers links it to zero. */
+extern int st_stereo_track_d(u32 track,s32 *out) __attribute__((weak));
+static s32 sam_clip(s32 x){return x>32767?32767:x< -32768?-32768:x;}
+/* STEREO inputs (IN L+R) and tracks, as heard: each side with its own gain.
+ * A digital track takes its level x pan gains of this block (an LFO on PAN
+ * included), an analog track its ADC-bus gains; POST FX adds each side's own
+ * delay and reverb returns. Q15 gains x PCM16 >> 15: one side, unity = x. */
+static void sampler_stereo_tick(u32 source,u32 post,u32 state)
+{
+    const volatile s32 *del=(const volatile s32 *)0x8000dcd0u,*rev=(const volatile s32 *)0x8000ddd0u;
+    const volatile s32 *in=(const volatile s32 *)0x80003b50u,*track=0;
+    s32 out[2][32],d[32],g[2]={0,0},gd[2]={0,0},gr[2]={0,0},x,acc;u32 i,b,direct,fx,has_d=0;
+    __asm__("" : "+r"(del),"+r"(rev),"+r"(in)); /* see sam_returns */
+    if(source>=6 && source<14) {
+        track=(const volatile s32 *)(0x80003d50u+(source-6)*128u);
+        for(b=0;b<2;b++)g[b]=sam_gain(b?0x8000e160u:0x8000e188u,b?0x8000e110u:0x8000e138u,source-6);
+        has_d=st_stereo_track_d && st_stereo_track_d(source-6,d);
+    } else if(source>=14) {
+        track=(const volatile s32 *)(0x80003950u+(source-14)*128u);
+        for(b=0;b<2;b++)g[b]=((const volatile s32 *)(b?0x8000e0d0u:0x8000e0f0u))[source-14]>>16;
+    }
+    if(post)for(b=0;b<2;b++) {
+        direct=b?0x8000e160u:0x8000e188u;fx=b?0x8000e110u:0x8000e138u;
+        gd[b]=sam_gain(direct,fx,8);gr[b]=sam_gain(direct,fx,9);
+    }
+    for(i=0;i<32;i++)for(b=0;b<2;b++) {
+        acc=post?((gd[b]*(del[2*i+b]>>16))>>3)+((gr[b]*(rev[2*i+b]>>16))>>3):0;
+        if(track) {
+            x=track[i]>>16;if(b && has_d)x+=d[i];
+            acc+=(g[b]*x)>>3;x=-(acc>>12);
+        } else x=(in[i+32*b]>>16)-(acc>>12);
+        out[b][i]=(s32)((u32)sam_clip(x)<<16);
+        /* MON: external inputs only, each on its own side. */
+        if(b==1 && sam_mon && !track && ((state==SAM_EMPTY && !sam_frames) || state==SAM_ARMED || state==SAM_RECORDING)) {
+            preview_mix_side(2*i,out[0][i]>>5);preview_mix_side(2*i+1,out[1][i]>>5);
+        }
+    }
+    sam_stereo_store(out[0],out[1],source,state);
+}
 /* Sources are read-only; the IRQ writes only our owned PCM and scalar state.
  * Peak decay is producer-owned, with no read/reset race. */
 static void sampler_base_tick(void)
@@ -209,6 +307,10 @@ static void sampler_base_tick(void)
     sam_clock+=32;
     if(!sam_enabled || source>=18) return;
     if(state==SAM_ARMED || state==SAM_RECORDING){source=sam_take_source;post=sam_take_post;}
+    if((state==SAM_ARMED || state==SAM_RECORDING)?sam_take_stereo:sam_stereo) {
+        if(source<3 || source>=6)sampler_stereo_tick(source,post,state);
+        return;
+    }
     /* MAIN: PRE/POST corrections below, not the bus terms of the other sources. */
     if(source>=3 && source<6){main=post?2:1;post=0;side=source==4;}
     ready=sam_ret_clock==sam_clock-32u;
@@ -302,7 +404,7 @@ void sampler_dispose(u8 *view)
 {
     if(view==sam_view) {
         sampler_suspend();sam_keys_down=0;
-        sam_enabled=0;sam_view=0;sam_manager=0;sam_peak=0;
+        sam_enabled=0;sam_view=0;sam_manager=0;sam_peak=sam_peak_r=0;
         sam_sound_pending=0;sam_assign_phase=SAM_ASSIGN_IDLE;sam_report[7]++;
         if(sam_save_phase)sam_save_cleanup("SAVE CANCELLED");else recorder_save_release();
     }
@@ -335,22 +437,39 @@ static void recorder_ui_tick(void *controller)
     }
 }
 #include "trim.c"
+/* Fields: 0 RLEN, 1 THR, 2 SRC, 3 MON, 4 POST FX, 5 STEREO. */
 static void sam_adjust(u32 field,s32 delta)
 {
-    s32 value,limit;
-    if(!delta || field>4) return;
+    s32 value,limit,step;
+    if(!delta || field>5) return;
     if((sam_state==SAM_ARMED || sam_state==SAM_RECORDING || sam_state==SAM_NORMALIZING) && field!=3)return;
     if(delta>8)delta=8;
     if(delta< -8)delta=-8;
-    value=(s32)(field==0?sam_rlen:field==1?sam_thr:field==2?sam_source:field==3?sam_mon:sam_post);
-    limit=field==0?8:field==1?127:field==2?17:1;
+    if(field==2) {
+        /* One step per detent, skipping what STEREO does not offer. */
+        value=(s32)sam_source;step=delta>0?1:-1;
+        for(;delta;delta-=step) {
+            s32 next=value+step;
+            while(next>=0 && next<=17 && !sam_source_ok((u32)next,sam_stereo))next+=step;
+            if(next<0 || next>17)break;
+            value=next;
+        }
+        sam_source=(u32)value;sam_peak=sam_peak_r=0;sam_hint=0;
+        sam_focus=field;sam_report[4]++;sam_redraw();return;
+    }
+    value=(s32)(field==0?sam_rlen:field==1?sam_thr:field==3?sam_mon:field==4?sam_post:sam_stereo);
+    limit=field==0?8:field==1?127:1;
     value+=delta;if(value<0)value=0;if(value>limit)value=limit;
     if(field==0)sam_rlen=(u32)value;
     else if(field==1)sam_thr=(u32)value;
-    else if(field==2) {sam_source=(u32)value;sam_peak=0;sam_hint=0;}
     else if(field==3)sam_mon=(u32)value;
-    else {sam_post=(u32)value;sam_peak=0;}
-    if(field<4)sam_focus=field; /* POST FX (A) is not an arrow-key field */
+    else if(field==4){sam_post=(u32)value;sam_peak=sam_peak_r=0;}
+    else {
+        /* STEREO: the mono single sides become their stereo pair. */
+        sam_stereo=(u32)value;sam_peak=sam_peak_r=0;
+        if(!sam_source_ok(sam_source,sam_stereo))sam_source=sam_source<3?2:5;
+    }
+    if(field<4)sam_focus=field; /* STEREO (A) and POST FX (B) are not arrow-key fields */
     sam_report[4]++;sam_redraw();
 }
 u32 sampler_encoder(u8 *iface,const u8 *ev)
@@ -361,7 +480,8 @@ u32 sampler_encoder(u8 *iface,const u8 *ev)
     if(sam_state==SAM_READY && sam_wave_ready) {
         if(!sam_trimmed && !sam_save_phase && encoder>=1 && encoder<=4)sam_trim_adjust(encoder-1,(s32)be32(ev+16));
     } else if(encoder>=5 && encoder<=8) sam_adjust(encoder-5,(s32)be32(ev+16));
-    else if(encoder==1) sam_adjust(4,(s32)be32(ev+16));
+    else if(encoder==1) sam_adjust(5,(s32)be32(ev+16));   /* A: STEREO */
+    else if(encoder==2) sam_adjust(4,(s32)be32(ev+16));   /* B: POST FX */
     return encoder>=1 && encoder<=9;
 }
 static u32 sampler_key_base(u8 *iface,const u8 *ev)
@@ -434,33 +554,38 @@ static u32 sampler_key(u8 *iface,const u8 *ev)
 }
 void sampler_draw(u8 *iface,void *ctx)
 {
-    u32 i,width,mark,frames=sam_frames,state=sam_state; s32 lo,hi;
+    u32 i,width,mark,frames=sam_frames,state=sam_state,stereo; s32 lo,hi;
     const char *source,*line1,*line2;char value[12],time[6];
     (void)iface;
     sam_report[2]++;
     if(state==SAM_READY && sam_wave_ready && frames) {sam_editor_draw(ctx);return;}
-    source=sam_sources[sam_source<18?sam_source:0];
+    /* The mode of the take on screen, or the one the next take will use. */
+    stereo=frames?sam_take_stereo:sam_stereo;
+    source=sam_source_name(sam_source,sam_stereo);
     WAVE_FILL(ctx,0,0,127,63,0);
-    if(frames>SAM_MAX_FRAMES)frames=SAM_MAX_FRAMES;
-    if(state==SAM_READY && sam_wave_ready) {
-        sam_time_text(time,frames);
-        WAVE_TEXT(ctx,(void *)0x443da210u,1,56,0,"REC %s",time);
-    } else WAVE_TEXT(ctx,(void *)0x443da210u,1,56,0,"%s",sam_labels[0]);
-    sam_time_text(time,sam_pcm?SAM_MAX_FRAMES-frames:0);
-    WAVE_TEXT(ctx,(void *)0x443da210u,1,47,0,"MEM:%s",time);
+    if(frames>sam_max_frames(stereo))frames=sam_max_frames(stereo);
+    /* Top row, left to right: STEREO (encoder A) and POST FX (encoder B),
+     * stock toggles with their labels underneath as on native pages; then
+     * SRC, the meter (L above R in stereo) and MEM below it. */
+    SAM_TOGGLE(0,sam_stereo?0x100u:0u,ctx,6,47,0);
+    WAVE_TEXT(ctx,(void *)0x443da210u,16,45,2,"%s","STEREO");
+    SAM_TOGGLE(0,sam_post?0x100u:0u,ctx,36,47,0);
+    WAVE_TEXT(ctx,(void *)0x443da210u,46,45,2,"%s","POST FX");
     WAVE_TEXT(ctx,(void *)0x443da210u,64,58,0,"SRC: %s",source);
     WAVE_FILL(ctx,64,49,127,55,1);
     WAVE_FILL(ctx,65,50,126,54,0);
-    width=sampler_meter_width(sam_peak);
-    if(width)WAVE_FILL(ctx,65,50,64+(s32)width,54,1);
+    if(sam_stereo) {
+        width=sampler_meter_width(sam_peak);if(width)WAVE_FILL(ctx,65,53,64+(s32)width,54,1);
+        width=sampler_meter_width(sam_peak_r);if(width)WAVE_FILL(ctx,65,50,64+(s32)width,51,1);
+    } else {
+        width=sampler_meter_width(sam_peak);
+        if(width)WAVE_FILL(ctx,65,50,64+(s32)width,54,1);
+    }
     mark=65+sam_thr*61u/127u;
     for(i=48;i<=56;i+=2)WAVE_PIXEL(ctx,(s32)mark,(s32)i,1);
-    if(sam_peak>=0x7f000000u)WAVE_FILL(ctx,126,48,127,56,1);
-    /*  POST FX (encoder A): stock toggle in the gap x33..62; label
-     * underneath as on native parameter pages. : the group (label rows
-     * 45..49, toggle 51..59) is centred in the free rows 41..63. */
-    SAM_TOGGLE(0,sam_post?0x100u:0u,ctx,38,47,0);
-    WAVE_TEXT(ctx,(void *)0x443da210u,47,45,2,"%s","POST FX");
+    if(sam_peak>=0x7f000000u || sam_peak_r>=0x7f000000u)WAVE_FILL(ctx,126,48,127,56,1);
+    sam_time_text(time,sam_pcm?sam_max_frames(stereo)-frames:0);
+    WAVE_TEXT(ctx,(void *)0x443da210u,64,41,0,"MEM:%s",time);
     /* Original recorder frame: x0..127, y16..40. */
     WAVE_FILL(ctx,0,16,127,16,1);WAVE_FILL(ctx,0,40,127,40,1);
     WAVE_FILL(ctx,0,16,0,40,1);WAVE_FILL(ctx,127,16,127,40,1);
@@ -499,7 +624,7 @@ void sampler_draw(u8 *iface,void *ctx)
             if(sam_rlen==8)text_set(value,"MAX",11);
             else {number3(value,1u<<sam_rlen);value[3]=0;}
         } else if(i==1) {number3(value,sam_thr);value[3]=0;}
-        else if(i==2)text_set(value,sam_source==5?"MAIN+":sam_source==2?"IN L+R":source,11);
+        else if(i==2)text_set(value,sam_stereo?source:sam_source==5?"MAIN+":sam_source==2?"IN L+R":source,11);
         else text_set(value,sam_source<3?(sam_mon?"YES":"NO"):"--",11);
         WAVE_TEXT(ctx,(void *)0x443da210u,16+32*i,7,2,"%s",value);
         WAVE_TEXT(ctx,(void *)0x443da210u,16+32*i,0,2,"%s",sam_labels[3+i]);
@@ -522,7 +647,7 @@ void sampler_open(u8 *manager)
     sam_iface_table[2]=(u32)sampler_dispose;
     /* Complete-view ev_draw paints this view; keep its stock draw method. */
     *(u32 **)view=sam_iface_table+2;
-    sam_view=view;sam_manager=manager;sam_peak=0;sam_hint=0;sam_last_source=18;
+    sam_view=view;sam_manager=manager;sam_peak=sam_peak_r=0;sam_hint=0;sam_last_source=18;
     sampler_suspend();sam_keys_down=0;sam_no_clear=0;sam_prepare();
     pair[0]=view;pair[1]=root;
     UI_PUSH(manager,pair,0);UI_DROP(pair+1);

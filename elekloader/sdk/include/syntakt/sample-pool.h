@@ -12,7 +12,9 @@ int core_pool_sample_name(pool_u32,char *);
 const struct st_machine_cursor *core_pool_cursor(pool_u32,pool_u32);
 void core_pool_cursor_tick(void);
 pool_u32 core_pool_sample_source(pool_u32,const pool_u8 **,pool_u32 *);
-void core_pool_wave_begin(pool_u32,pool_u32);
+pool_u32 core_pool_sample_channels(pool_u32 slot);
+pool_u32 core_pool_code_used(pool_u32 code);
+void core_pool_wave_begin(pool_u32 code,pool_u32 frames,pool_u32 channels);
 void core_pool_wave_feed(const pool_u8 *,pool_u32);
 void core_pool_wave_finish(pool_u32);
 #define CORE_POOL_SLOTS 128u

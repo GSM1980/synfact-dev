@@ -79,15 +79,23 @@ int sp_browser_draw(const struct st_machine_ui_api *api,const struct core_machin
     first=slot>3?slot-3:0;if(first>128-SP_BROWSER_ROWS)first=128-SP_BROWSER_ROWS;
     font=SP_BROWSER_FONT(FONT);
     /* Native LCD coordinates increase upwards: y=54..63 is the header.
-     * Preserve the track rail and the first column of native controls. */
-    FILL(ctx,51,0,127,50,0);
+     * The list covers the whole page right of the track rail (x < 20), the
+     * SYN controls included, so long names fit. */
+    FILL(ctx,20,0,127,50,0);
     for(i=0;i<SP_BROWSER_ROWS;i++){
         n=first+i;p=row;if(n<9)*p++='0';p=number(p,n+1);*p++=':';
         name[0]=0;name[32]=0;s=api->sample_name(n,name)?name:"NO SAMPLE";
         for(u32 j=0;*s && j<32;j++)*p++=*s++;*p=0;
         y=44-(int)i*7;
-        SP_BROWSER_TEXT(ctx,font,53,y,70,row);
-        if(n==slot)FILL(ctx,51,y-1,123,y+5,0xffffffffu);
+        SP_BROWSER_TEXT(ctx,font,22,y,101,row);
+        /* The native text call does not clip at its width: clear the right end
+         * under the scroll bar, and under the tag of a stereo slot (UI API 8,
+         * core 1.8), so a long name never runs into either. */
+        FILL(ctx,124,y-1,127,y+5,0);
+        if(api->version>=8 && api->sample_channels && api->sample_channels(n)==2){
+            FILL(ctx,111,y-1,123,y+5,0);SP_BROWSER_TEXT(ctx,font,114,y,10,"ST");
+        }
+        if(n==slot)FILL(ctx,20,y-1,123,y+5,0xffffffffu);
     }
     for(y=1;y<=50;y++){PIXEL(ctx,126,y,(u32)y&1u);PIXEL(ctx,127,y,((u32)y^1u)&1u);}
     thumb=47-(int)(first*46u/(128-SP_BROWSER_ROWS));

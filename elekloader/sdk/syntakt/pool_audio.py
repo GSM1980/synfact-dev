@@ -10,6 +10,9 @@ from ...devices.syntakt import DEVICE
 
 BASE=0x42100750
 TABLE=BASE+0xc00
+# Core 1.8: one channel-count byte per slot, below the descriptor table, and
+# its header record {454c4801, address} at +40 (machines.h).
+CHANNELS=BASE+0xb80
 
 def build(out):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
@@ -28,11 +31,13 @@ def build(out):
     e=elf.Elf.load(exe);symbols={s.name:s.value for s in e.symbols if s.name}
     linked_audits=audit_functions(e,'.image',BASE+64)
     code=binary.read_bytes()
-    if len(code)>0xc00-64:raise ValueError('generic AUDIO pool core exceeds its owned code page')
+    if len(code)>CHANNELS-BASE-64:raise ValueError('generic AUDIO pool core exceeds its owned code page')
     image=bytearray(4096)
     struct.pack_into('>8I',image,0,0x454c5031,4096,0,symbols['audio_pool_receive'],
                      0x454c5001,128,BASE+4096,0x4404f750)
     struct.pack_into('>2I',image,32,0x454c4301,symbols['audio_pool_cursor'])
+    struct.pack_into('>2I',image,40,0x454c4801,CHANNELS)
+    image[CHANNELS-BASE:CHANNELS-BASE+128]=bytes([1])*128
     image[64:64+len(code)]=code
     struct.pack_into('>I',image,8,zlib.adler32(image[12:])&0xffffffff)
     raw=out/'core-pool.bin';raw.write_bytes(image)

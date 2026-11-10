@@ -173,7 +173,9 @@ that voice: a machine keeps its own defaults instead of reading zeros. (FM TONE
 derives ratio = table + (offset - 0x4000) << 12, saturated at zero; offsets of
 zero silence the carrier.) The AUDIO companion uses the device's declared
 runtime window `40040860..40041050`: code to `40040e00`, scheduler tables,
-the two ABI directories, then directory entries and glue from `40040f60`.
+the chain-end directory (`40040f30`, core 1.8: `{454c5301, hook, 1, 0}`, a
+hook the IRQ calls after AMP; `<syntakt/stereo.h>`), the two ABI directories,
+then directory entries and glue from `40040f60`.
 That window is not unused on the stock OS: it is the zero tail of the
 base-width filter's pole table (`40040060`). From core 1.7.2 the filter's
 low-pass lookup is bounded below the window (core README, "Core 1.7.2").

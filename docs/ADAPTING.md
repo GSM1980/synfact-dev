@@ -517,3 +517,34 @@ Host API 14 adds no field. Before host API 13 there is one provider slot, so
 a module that needs a provider only for query 31 registers it on 14. LFO3 1.2
 leaves the Kit setter `40013516` to core 1.4 and stores through query 24, as
 it does for the Sound; on an older core it hooks it as before.
+
+## Syntakt: stereo tracks (core 1.8)
+
+A digital track is mono up to MAIN's mixer. Core 1.8 adds one AUDIO site, the
+chain end (after AMP, before the track DMA), and a directory at `40040f30`
+whose word 1 is the hook it calls (`<syntakt/stereo.h>`). The stereo engine
+that uses it is in `mods/samplers-st/stereo/`, written in the core's shape:
+
+- A machine that renders stereo calls `st_stereo_claim(t)` in its render and
+  writes R where it points; L goes to its output as before. It runs on R the
+  same native render calls it runs on L (the samplers' `sp_render`).
+- The engine runs the native chain on R and sends D = R − L; the module
+  `STEREO` adds gR × D to the right buses. Pan becomes a balance.
+- The engine, its module and a claiming machine must be in the same bank (the
+  claim links to the engine). On a core before 1.8 the claim returns 0 and the
+  track stays mono.
+
+The engine owns AUDIO SRAM `0x8000f398..0x8000ffff`, the shared window
+`0x5b0..0x7ef`; no other mod may use them (docs/MACHINE-REFERENCE.md,
+"Stereo tracks").
+
+A machine that plays pool samples asks each slot's channel count with
+`st_machine_sample_channels(slot)` (core 1.8, `<syntakt/machines.h>`). For a
+stereo slot `frames` counts frame pairs and `pcm` holds L, R interleaved; a
+machine that ignores it plays the first half of the data as mono. The samplers
+claim a stereo track only for a stereo sample.
+On MAIN, UI API 8 (core 1.8) adds `api->sample_channels(slot)` and, for a
+stereo slot, `channels == 2` with R's bins `lo_r`/`hi_r` in its wave; read
+them only when `api->version >= 8`. The samplers tag stereo rows `ST` in the
+sample list and draw L above R on SYN page 2; the Sample Manager writes `ST `
+before a stereo sample's name.

@@ -24,6 +24,10 @@ UPPER=(0x40040f60,0x40041050)
 BW_TABLE,BW_OPEN=0x40040060,508
 BW_SITES=(0x40002364,0x400023e8)
 BW_STOCK=bytes.fromhex('d081ec8041f00c00')   # add.l d1,d0; asr.l #6,d0; lea (a0,d0.l*4),a0
+# Chain end (core 1.8, <syntakt/stereo.h>): the IRQ site after the AMP stage
+# and the 16-byte directory between the render table (ends 40040f30) and the
+# ABI directory at 40040f40. Word 1 is the hook audio_chain_end calls.
+CHAIN_END,CHAIN_DIRECTORY=0x40000ac6,0x40040f30
 
 def audit(code,base=0):
     """Check an explicit code range, including its complete final instruction."""
@@ -115,6 +119,8 @@ def build(stock,dev,out,meter=False):
     for at,old,new in scheduler:patch(at,bytes.fromhex(old),new)
     patch(0x40001016,bytes.fromhex('4ebafcee4eb940001860'),jsr('audio_machine_boot')+b'\x4e\x71'*2)
     patch(0x40000b04,bytes.fromhex('4ab940040050'),jsr('audio_machine_exit'))
+    # Chain end (core 1.8): after AMP, before the track DMA (move.l 4004f6e0,d0).
+    patch(CHAIN_END,bytes.fromhex('20394004f6e0'),jsr('audio_chain_end'))
     # The bound is exact only while the stock poles from index 508 on are zero.
     tail=original[BW_TABLE+4*BW_OPEN-BASE:BW_TABLE+4*1024-BASE]
     if any(tail) or not all(original[BW_TABLE+4*i-BASE:BW_TABLE+4*i+4-BASE]!=bytes(4) for i in range(BW_OPEN)):
@@ -124,6 +130,9 @@ def build(stock,dev,out,meter=False):
     api=struct.pack('>4I',0x454c0001,symbols['audio_machine_params'],32,24)
     patch(0x40040f40,bytes(16),api)
     patch(0x40040f50,bytes(16),struct.pack('>4I',0x454c5001,symbols['audio_pool_sample'],128,0))
+    # Chain-end directory, after the render table: {magic, hook, version, 0}.
+    # A bank writes its hook into word 1; until then it is the silent rts.
+    patch(CHAIN_DIRECTORY,bytes(16),struct.pack('>4I',0x454c5301,symbols['audio_machine_silent'],1,0))
     if meter:
         patch(0x4000094a,bytes.fromhex('4bf9400010e4'),jsr('audio_enter'))
     syx._check_secondary(stock,dev,{7:bytes(image)})

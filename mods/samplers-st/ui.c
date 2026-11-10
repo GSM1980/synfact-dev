@@ -120,10 +120,19 @@ static int idle(const struct st_machine_ui_api *api,const struct core_machine_de
     for(i=0;i<8;i++){if(before[i]!=now[i])changed=1;before[i]=now[i];}
     return changed; /* Stationary waveform needs no extra paint. */
 }
+/* One channel's 96 bins over x 22..127, centred on y, +-half pixels. */
+static void wave_band(void *ctx,const short *lo,const short *hi,int y,int half)
+{
+    u32 i,bin;int low,high;
+    for(i=0;i<106;i++){
+        bin=i*95u/105;low=y-((int)hi[bin]*half/32768);high=y-((int)lo[bin]*half/32768);
+        if(lo[bin]>hi[bin])low=high=y;FILL(ctx,22+i,low,22+i,high,1);
+    }
+}
 static void wave_draw(const struct st_machine_ui_api *api,const struct core_machine_def *m,void *view,void *ctx,u32 page)
 {
     const struct st_machine_wave *w;const struct st_machine_cursor *cursor;
-    u32 raw[8],i,k=m->type-66,slot,grid,s,e,l,track;int low,high,x,y;
+    u32 raw[8],i,k=m->type-66,slot,grid,s,e,l,track;int x,y;
     u32 e0=0x1f9+(m->type-64)*32;
     if(page!=1 || k>3)return;
     for(i=0;i<8;i++)raw[i]=value(view,e0+i);slot=raw[3]>>8;if(slot>=128)slot=127;w=api->wave(slot);
@@ -133,10 +142,11 @@ static void wave_draw(const struct st_machine_ui_api *api,const struct core_mach
         TEXT(ctx,FONT,23+26*i,2,0,"%s",m->parameter[i+4].label);
     }
     if(!w || !w->ready){TEXT(ctx,FONT,74,27,2,"%s",w?"LOADING WAVE":"NO SAMPLE");return;}
-    for(i=0;i<106;i++){
-        u32 bin=i*95u/105;low=27-((int)w->hi[bin]*12/32768);high=27-((int)w->lo[bin]*12/32768);
-        if(w->lo[bin]>w->hi[bin])low=high=27;FILL(ctx,22+i,low,22+i,high,1);
-    }
+    if(api->version>=8 && w->channels==2){
+        /* UI API 8 (core 1.8): L above (y 28..38), R below (y 16..26), a gap between.
+         * Native LCD y increases upwards. */
+        wave_band(ctx,w->lo,w->hi,33,5);wave_band(ctx,w->lo_r,w->hi_r,21,5);
+    }else wave_band(ctx,w->lo,w->hi,27,12);
     if(k==0 || k==2){
         s=raw[4];e=s+raw[5];if(e>0x7800)e=0x7800;l=k==0 && raw[6]?raw[6]-1:s;
         marker(ctx,s,0x7800,"S",0);marker(ctx,e,0x7800,"E",0);if(!k)marker(ctx,l,0x7800,"L",1);

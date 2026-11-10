@@ -23,3 +23,6 @@ complete bank. Previous banks can load but do not supply this new menu.
 Tests: native production UI + core preview fixtures in test_st_manager.c,
 linked initializer/core binding in test_st_sample_manager_module_emu.py. The
 latter rejects host 10 and verifies provider cleanup/rebind. No hardware access.
+
+Core 1.8: a stereo sample's row (HZFS flag `ST_HZ_STEREO`) reads `ST ` before
+its name, in the eMMC and POOL views.

@@ -1,0 +1,12 @@
+{
+  "id": "stereo-probe-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "Stereo probe", "category": "Synth", "author": "GSM1980",
+  "description": "Test only: shows the stereo transport's counters (needs samplers-st in the same bank).",
+  "device": "syntakt", "os": "1.41", "sources": ["main.c"], "cflags": ["-fno-jump-tables"],
+  "smz": {
+    "machines": [{"descriptor": "stereo_probe_st", "ui": "stereo_probe_ui",
+                  "update": "stereo_probe_update", "render": "stereo_probe_render"}],
+    "features": ["machine-ui-v1"],
+    "audio": {"sources": ["audio.c"]}
+  }
+}

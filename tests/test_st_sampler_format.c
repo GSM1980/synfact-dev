@@ -38,6 +38,7 @@ int core_pool_sample_name(u32 slot,char *out)
     return 1;
 }
 const struct st_machine_cursor *core_pool_cursor(u32 track,u32 slot){(void)track;(void)slot;return 0;}
+u32 core_pool_sample_channels(u32 slot){(void)slot;return 1;}
 void *fw_malloc(u32 n){return malloc(n);}
 void fw_invalidate(void *v){(void)v;}
 u32 fw_view_machine(void *v){(void)v;return 66;}

@@ -296,6 +296,8 @@ static void row_name(char *s,u32 code)
         u8 *fs=MMCFS(); if(fs) { name_copy(s,fs+0x12E28+(code-1)*24,16); return; }
     }
     if((code&HZ_FLAG) && ui_index && (e=hz_find(ui_index,ui_index_len,code&~HZ_FLAG))) {
+        /* Core 1.8: entry flag ST_HZ_STEREO (interleaved L, R; an even count). */
+        if((be32(e+28)&ST_HZ_STEREO) && !(be32(e+16)&1u)){text_set(s,"ST ",4);s+=3;}
         name_copy(s,e+32,32); return;
     }
     text_set(s,"MISSING",32);

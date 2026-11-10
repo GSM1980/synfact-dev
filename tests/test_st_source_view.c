@@ -30,6 +30,7 @@ const struct st_machine_wave *core_pool_wave(u32 s){(void)s;return 0;}
 void core_pool_wave_idle(u32 s,u32 n){(void)s;(void)n;}
 int core_pool_sample_name(u32 s,char *out){(void)s;(void)out;return 0;}
 const struct st_machine_cursor *core_pool_cursor(u32 t,u32 s){(void)t;(void)s;return 0;}
+u32 core_pool_sample_channels(u32 s){(void)s;return 1;}
 void core_machine_dispatch_delta(void *v,u32 id,int delta,u32 knob){(void)v;(void)id;(void)delta;(void)knob;assert(0);}
 static void paint(const struct st_machine_ui_api *a,const struct core_machine_def *m,void *v,void *ctx,u32 page)
 {assert(a==&core_machine_ui_api && v==view && ctx==(void *)0x7777);paints++;last_type=m->type;last_page=page;}

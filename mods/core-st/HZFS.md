@@ -110,8 +110,10 @@ python -m elekloader.sdk.syntakt.long_samples stock hit.wav --slot 64 --yes-writ
 as the core; it cannot force-format damaged or occupied metadata. `put` also
 ensures an empty filesystem exists. Names must be 1..32 UTF-8 bytes; duplicate
 names are rejected. `get` checks SAMP metadata and CRC before creating the WAV.
-WAV conversion accepts PCM8/16/24/32, float32 and extensible WAV, mixes channels
-to mono, and resamples with Hermite interpolation. Sources above 48 kHz should
+WAV conversion accepts PCM8/16/24/32, float32 and extensible WAV, and resamples
+with Hermite interpolation. A two-channel WAV is stored stereo (below) unless
+its channels are identical after conversion or `put --mono` is given; other
+channel counts, and stock slots, are mixed to mono. Sources above 48 kHz should
 be prepared with a proper anti-aliasing resampler before transfer.
 
 The Data client checks destinations before DataWriteOpen, sends the native
@@ -190,3 +192,15 @@ Core owns all parsers, checks, block IO and playback infrastructure. The optiona
 [Sample Manager SMZ](../sample-manager-st) owns the native browser UI and uses
 host API 9 services; no new native code site is introduced. It shows folders
 in the HZFS library; the project pool and machine SAMP values remain flat.
+
+
+## Stereo samples (core 1.8)
+
+Entry flag bit 0 (`ST_HZ_STEREO`, `long_samples.STEREO`) marks a two-channel
+sample. Its body is the same 64-byte `SAMP` header, then PCM16BE interleaved
+L, R. The `frames` field (entry `+16` and header `+8`) still counts 16-bit
+samples, so it is even, and every size check (`bytes == 64 + 2 * frames`) is
+unchanged; a stereo sample of n frames has `frames = 2n`. A reader that does
+not know the flag sees a mono sample twice as long, and never reads past it.
+A stereo flag on an odd count is read as mono; `fsck` reports it. Other flag
+bits keep no meaning and are preserved.

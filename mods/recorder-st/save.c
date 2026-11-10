@@ -5,7 +5,7 @@
 static u8 *sam_save_index DATA=0,*sam_save_io DATA=0,*sam_save_check DATA=0;
 static u32 sam_save_phase DATA=0,sam_save_pos DATA=0,sam_save_total DATA=0;
 static u32 sam_save_first DATA=0,sam_save_id DATA=0,sam_saved_id DATA=0;
-static u32 sam_save_start DATA=0,sam_save_frames DATA=0;
+static u32 sam_save_start DATA=0,sam_save_frames DATA=0,sam_save_channels DATA=1;
 static u32 sam_save_index_len DATA=0,sam_save_target DATA=0,sam_save_crc DATA=0;
 static char sam_save_name[17] DATA={0},sam_save_message[25] DATA={0};
 static u8 *sam_name_view DATA=0;
@@ -112,7 +112,7 @@ static void sam_save_init(void)
     for(i=0;i<n;i++)if(!st_hz_member(best,i) && sam_name_equal(best+HZ_ENTRIES+i*HZ_ENTRY+32,sam_save_name)){
         error="NAME EXISTS";goto fail;
     }
-    blocks=(64+2*sam_save_frames+HZ_MAX_LEN-1)/HZ_MAX_LEN;at=HZ_DATA_FIRST;
+    blocks=(64+2*sam_save_channels*sam_save_frames+HZ_MAX_LEN-1)/HZ_MAX_LEN;at=HZ_DATA_FIRST;
     do {
         again=0;
         for(k=0;k<2;k++)if(copies[k])for(j=0;j<be32(copies[k]+12);j++) {
@@ -135,13 +135,15 @@ static void sam_save_init(void)
     put32(sam_save_index+8,seq+1);put32(sam_save_index+12,n+1);
     put32(sam_save_index+28,id+1);put32(sam_save_index+36,next);
     e=sam_save_index+HZ_ENTRIES+64*n;put32(e,id);put32(e+4,at);put32(e+8,blocks);
-    put32(e+12,64+2*sam_save_frames);put32(e+16,sam_save_frames);
+    /* A stereo take: interleaved L, R; frames counts samples; ST_HZ_STEREO. */
+    put32(e+12,64+2*sam_save_channels*sam_save_frames);put32(e+16,sam_save_channels*sam_save_frames);
+    put32(e+28,sam_save_channels==2?ST_HZ_STEREO:0);
     for(i=0;i<16 && sam_save_name[i];i++)e[32+i]=(u8)sam_save_name[i];
     sam_save_index_len=next;sam_save_first=at*HZ_BLOCK_SECTORS;sam_save_id=id;
     /* Always replace the older/invalid copy. On equal sequences choose B;
      * A remains the valid newest copy throughout the transaction. */
     sam_save_target=best_k?HZ_INDEX_A:HZ_INDEX_B;
-    sam_save_total=64+2*sam_save_frames;sam_save_pos=0;sam_save_crc=0;
+    sam_save_total=64+2*sam_save_channels*sam_save_frames;sam_save_pos=0;sam_save_crc=0;
     sam_save_phase=2;
     for(k=0;k<2;k++)if(copies[k])FREE(copies[k]);
     return;
@@ -161,12 +163,12 @@ static void sam_save_step(void)
             u32 p=sam_save_pos+i;
             sam_save_io[i]=0;
             if(i<logical && p>=64){
-                u32 q=p-64;u16 value=(u16)sam_pcm[sam_save_start+(q>>1)];
+                u32 q=p-64;u16 value=(u16)sam_pcm[sam_save_channels*sam_save_start+(q>>1)];
                 sam_save_io[i]=(u8)(q&1?value:value>>8);
             }
         }
         if(!sam_save_pos) {
-            put32(sam_save_io,0x53414d50u);put32(sam_save_io+8,sam_save_frames);
+            put32(sam_save_io,0x53414d50u);put32(sam_save_io+8,sam_save_channels*sam_save_frames);
             for(i=0;i<16 && sam_save_name[i];i++)sam_save_io[12+i]=(u8)sam_save_name[i];
         }
         lba=sam_save_first+(sam_save_pos>>9);
@@ -203,7 +205,8 @@ static void sam_name_done(const struct fn_capture *fn,u8 **q,u32 number)
     for(i=0;i<n;i++)sam_save_name[i]=(char)name[i];
     sam_save_name[n]=0;
     sam_trim_init();sam_save_start=sam_trim_start;sam_save_frames=sam_trim_end-sam_trim_start;
-    sam_save_pos=0;sam_save_total=64+2*sam_save_frames;sam_save_message[0]=0;
+    sam_save_channels=sam_take_stereo?2u:1u;
+    sam_save_pos=0;sam_save_total=64+2*sam_save_channels*sam_save_frames;sam_save_message[0]=0;
     /* Save starts after the track popup (sam_assign_step), not here. */
     sam_assign_track=-1;sam_assign_answer=-1;sam_assign_phase=SAM_ASSIGN_OPEN;
 }

@@ -32,6 +32,8 @@ export async function buildAudio(original,{code,upper,symbols,meter,codeSha256,u
     [0x400044ac,'400148f0','40040ec0']])patch(at,fromHex(old),fromHex(next))
   patch(0x40001016,fromHex('4ebafcee4eb940001860'),concat(jsr('audio_machine_boot'),fromHex('4e714e71')))
   patch(0x40000b04,fromHex('4ab940040050'),jsr('audio_machine_exit'))
+  // Chain end (core 1.8, audio.py CHAIN_END): after AMP, before the track DMA.
+  patch(0x40000ac6,fromHex('20394004f6e0'),jsr('audio_chain_end'))
   // Base-width filter (audio.py BW_*): the stock poles from index 508 on are
   // zero; both low-pass lookups call audio_bw_index, which bounds the index there.
   const pole=i=>original.slice(BW_TABLE+4*i-BASE,BW_TABLE+4*i+4-BASE)
@@ -41,6 +43,8 @@ export async function buildAudio(original,{code,upper,symbols,meter,codeSha256,u
   for(const at of BW_SITES)patch(at,fromHex('d081ec8041f00c00'),concat(jsr('audio_bw_index'),fromHex('4e71')))
   patch(0x40040f40,new Uint8Array(16),words(0x454c0001,symbol('audio_machine_params'),32,24))
   patch(0x40040f50,new Uint8Array(16),words(0x454c5001,symbol('audio_pool_sample'),128,0))
+  // Chain-end directory (audio.py CHAIN_DIRECTORY): word 1 is the bank's hook.
+  patch(0x40040f30,new Uint8Array(16),words(0x454c5301,symbol('audio_machine_silent'),1,0))
   if(meter)patch(0x4000094a,fromHex('4bf9400010e4'),jsr('audio_enter'))
   return image
 }

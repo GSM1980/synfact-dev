@@ -42,6 +42,7 @@ static volatile u32 preview_loaded DATA = 0;
 static u32 preview_lba DATA = 0;
 static u32 preview_crc DATA = 0, preview_expected_crc DATA = 0;
 static u32 preview_stock DATA = 0;
+static u32 preview_stereo DATA = 0;   /* core 1.8: interleaved L, R (ST_HZ_STEREO) */
 static volatile u32 preview_pos;
 static void service_preview_stop(void){preview_length=0;__asm__ volatile("" ::: "memory");}
 void st_pool_preview_stop(void){service_preview_stop();}
@@ -68,7 +69,7 @@ s32 manager_preview(u32 code)
 {
     const u8 *e=0;u8 saved[64];struct st_hzfs hz; u8 *fs; u32 frames=0,i; s32 result;
     service_preview_stop();
-    preview_stock=0;
+    preview_stock=0;preview_stereo=0;
     if(code>=1 && code<=STOCK_SLOTS) {
         fs=MMCFS();if(fs) frames=service_be32(fs+0x12E3C+(code-1)*24);
         if(frames>0x3FFE0u) frames=0;
@@ -77,7 +78,8 @@ s32 manager_preview(u32 code)
         u32 n=service_be32(hz.copy[hz.best]+12),k,j;
         for(k=0;k<n;k++){
             const u8 *row=hz.copy[hz.best]+ST_HZ_ENTRIES+64*k;
-            if(service_be32(row)==(code&~HZ_FLAG)){for(j=0;j<64;j++)saved[j]=row[j];e=saved;frames=service_be32(e+16);break;}
+            if(service_be32(row)==(code&~HZ_FLAG)){for(j=0;j<64;j++)saved[j]=row[j];e=saved;frames=service_be32(e+16);
+                preview_stereo=(service_be32(e+28)&ST_HZ_STEREO) && !(frames&1);break;}
         }
         core_hzfs_close(&hz);
     }
@@ -120,12 +122,23 @@ static void preview_mix_frame(u32 frame,s32 x)
 {
     st_preview_mix_frame(MAIN_BUS,frame,x);
 }
+/* One channel of a preview-bus frame, at st_preview_mix_frame's level. */
+static void preview_mix_side(u32 at,s32 x)
+{
+    s32 *bus=MAIN_BUS,y=bus[at];u32 a=(u32)y,r;x+=x>>2;r=a-(u32)x;
+    if(((a^(u32)x)&(a^r))&0x80000000u)r=y<0?0x80000000u:0x7fffffffu;
+    bus[at]=(s32)r;
+}
 void st_pool_preview_mix(void)
 {
     u32 i,n=preview_length,p=preview_pos; s32 x;
     if(n && preview_pcm) {
 
-        for(i=0;i<32 && p<n && p<preview_loaded;i++,p++) {
+        if(preview_stereo)for(i=0;i<32 && p+1<n && p+1<preview_loaded;i++,p+=2) {
+            preview_mix_side(2*i,(s32)(short)service_be16(preview_pcm+2*(p&(PREVIEW_FRAMES-1)))*2048);
+            preview_mix_side(2*i+1,(s32)(short)service_be16(preview_pcm+2*((p+1)&(PREVIEW_FRAMES-1)))*2048);
+        }
+        else for(i=0;i<32 && p<n && p<preview_loaded;i++,p++) {
             x=(s32)(short)service_be16(preview_pcm+2*(p&(PREVIEW_FRAMES-1)))*2048;
             preview_mix_frame(i,x);
         }

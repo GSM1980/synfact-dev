@@ -15,6 +15,8 @@ int core_parameter_provider(unsigned int q,unsigned int *a,void *r,unsigned int 
 {(void)q;(void)a;(void)r;(void)v;return 0;}
 #include "../mods/core-st/sample-wave.c"
 static u32 receiver_table[256],receiver_stock[128],receiver_bell,receiver_calls;
+static unsigned char receiver_channels[128];
+#define CHANNELS receiver_channels
 #define TABLE receiver_table
 #define STOCK_TABLE receiver_stock
 #define WIN ((volatile u32 *)0x10000800u)
@@ -22,7 +24,7 @@ static u32 receiver_table[256],receiver_stock[128],receiver_bell,receiver_calls;
 #include "../mods/core-st/audio-pool.c"
 static void receiver_sleep(u32 delay)
 {assert(delay==500);receiver_calls++;audio_pool_receive();}
-static unsigned char disk[3][0x80000],sample[64+2200];
+static unsigned char disk[4][0x80000],sample[64+2200];
 static unsigned char project_sector[512];
 static u32 io_fail,live,id,allocations;
 const unsigned char core_pool_image[4096]={0x45,0x4c,0x50,0x31,0,0,0x10,0};
@@ -161,14 +163,45 @@ int main(void)
     assert(wave->ready==2 && wave->hi[95]==20000);
     blob[0x1000+2*4997]=blob[0x1000+2*4997+1]=0;
     blob[0x1000+2*4999]=blob[0x1000+2*4999+1]=0;
-    core_pool_wave_begin(1,5000);core_pool_wave_idle(0,64);
+    core_pool_wave_begin(1,5000,1);core_pool_wave_idle(0,64);
     assert(wave->ready==1 && wave->hi[95]==0); /* same code, new PCM */
     state->frames[0]=state->stock_frames[0]=4;
     core_pool_wave_idle(0,64);wave=core_pool_wave(0);
     assert(wave && wave->ready && wave->frames==4);
     reset_state();
+    /* Two long samples loaded at boot both keep their waves. Before core 1.8
+     * the second evicted the first: no slot's frames are published until the
+     * boot load ends, so the cache took the first wave for unused. */
+    assert(core_hzfs_put(&core_hzfs_native_io,"two",sizeof(sample),0,sample_source,0,&id)==1 && id==2);
+    memset(PROJECT,0,512);core_pool_read(PROJECT,entries);entries[64]=0x8001;entries[65]=0x8002;
+    core_pool_write(PROJECT,entries);core_pool_prepare();assert(state && state->files==2);
+    for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+    {const struct st_machine_wave *a=core_pool_wave(64),*b=core_pool_wave(65);
+     assert(a && b && a!=b && a->ready==2 && b->ready==2 && a->code==0x8001 && b->code==0x8002);}
+    reset_state();
+    /* Core 1.8: a stereo entry (flag ST_HZ_STEREO, interleaved L, R; frames
+     * still counts samples) boots as frame pairs with channel count 2 in the
+     * image's channel table; mono slots keep 1. */
+    for(i=0;i<2;i++)if(rd(disk[i])==0x485a4653u){
+        u8 *e=disk[i]+ST_HZ_ENTRIES;u32 n=rd(disk[i]+12),k,len=rd(disk[i]+36);
+        for(k=0;k<n;k++,e+=64)if(rd(e)==1)wr(e+28,ST_HZ_STEREO);
+        wr(disk[i]+32,0);wr(disk[i]+32,~core_crc_update(0,disk[i],len));
+    }
+    memset(PROJECT,0,512);core_pool_read(PROJECT,entries);entries[64]=0x8001;core_pool_write(PROJECT,entries);
+    core_pool_prepare();assert(state && state->files==1 && state->file[0].channels==2);
+    core_pool_boot_page(0,&wire);core_pool_boot_page(1,&wire);core_pool_boot_page(2,&wire);
+    assert(rd(state->image+0xc00+64*8)==550 && rd(state->image+0xc04+64*8)==CORE_POOL_PCM);
+    assert(state->image[0xb80+64]==2 && state->image[0xb80]==1 && state->channels[64]==2);
+    wave=core_pool_wave(64);assert(wave && wave->frames==550 && wave->ready==2 && wave->channels==2);
+    assert(core_pool_sample_channels(64)==2 && core_pool_sample_channels(0)==1 && core_pool_sample_channels(65)==1);
+    /* L (even bytes 64+4k..) and R keep their own peaks: the pattern is i&255,
+     * so in bin 0 L's samples start 0x4041 and R's 0x4243. */
+    {short l=(short)(sample[64]<<8|sample[65]),r=(short)(sample[66]<<8|sample[67]);
+     assert(wave->lo[0]<=l && wave->hi[0]>=l && wave->lo_r[0]<=r && wave->hi_r[0]>=r);
+     assert(wave->lo[0]!=wave->lo_r[0] || wave->hi[0]!=wave->hi_r[0]);}
+    reset_state();
     if(waves)fw_free(waves);if(saved_record)fw_free(saved_record);assert(!live);
     assert(VirtualFree(project_ram,0,MEM_RELEASE));assert(VirtualFree(blob_ram,0,MEM_RELEASE));
     assert(VirtualFree((void *)0x10000000u,0,MEM_RELEASE));assert(VirtualFree((void *)0x43bd0000u,0,MEM_RELEASE));
-    puts("PASS: project pool codecs/migration, snapshot/validation, stock preservation, boot page mapping, full long-sample CRC and shared transfer");return 0;
+    puts("PASS: project pool codecs/migration, snapshot/validation, stock preservation, boot page mapping, full long-sample CRC, shared transfer and a stereo entry");return 0;
 }

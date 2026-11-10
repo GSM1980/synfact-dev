@@ -65,6 +65,14 @@ static u32 crc32(const u8 *p,u32 n){return ~crc_update(0,p,n);}
 #define pool_live_sync host->pool_apply
 static void preview_stop(void){host->preview_stop();}
 static void preview_mix_frame(u32 frame,s32 x){st_preview_mix_frame(MAIN_BUS,frame,x);}
+/* One side of a preview-bus frame (2*frame left, +1 right), at
+ * st_preview_mix_frame's level: a stereo take or monitor keeps its image. */
+static void preview_mix_side(u32 at,s32 x)
+{
+    s32 *bus=MAIN_BUS,y=bus[at];u32 a=(u32)y,r;x+=x>>2;r=a-(u32)x;
+    if(((a^(u32)x)&(a^r))&0x80000000u)r=y<0?0x80000000u:0x7fffffffu;
+    bus[at]=(s32)r;
+}
 #include "recorder.c"
 /* The optimized MAIN specialization uses the unchanged general source for
  * external inputs and individual tracks. Both are native integer C. */
@@ -78,7 +86,7 @@ static void recorder_prime(void)
     recorder_irq_unlock(sr);headroom_meter_phase=23;
 }
 static void recorder_resume(void)
-{recorder_prime();sam_peak=0;sam_last_source=18;}
+{recorder_prime();sam_peak=sam_peak_r=0;sam_last_source=18;}
 static void recorder_draw(void *view,void *bitmap,u32 unused)
 {(void)unused;if(view==sam_view && sam_view)sampler_draw(view,bitmap);}
 static int recorder_key(void *brain,void *event)

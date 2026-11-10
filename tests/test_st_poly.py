@@ -51,7 +51,7 @@ def verify(folder,synfact=None):
     def read(at,n):
         if layout['ddr'][0]<=at<layout['ddr'][1]:at=layout['run_load']+at-layout['ddr'][0]
         return main[at-0x40000400:at-0x40000400+n]
-    assert struct.unpack('>I',read(address('core_machine_ui_api'),4))[0]==7
+    assert struct.unpack('>I',read(address('core_machine_ui_api'),4))[0]==8   # UI API 8 (core 1.8)
     names=['core_hzfs_native_io','core_hzfs_open','core_hzfs_close','core_crc_update',
            'core_pool_read','core_pool_write','core_pool_ready','st_pool_live_sync',
            'st_pool_preview_stop','core_event_view','core_clock_snapshot','core_additem',

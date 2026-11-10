@@ -1,4 +1,4 @@
-# SP sample machines 1.2
+# SP sample machines 1.3
 
 Four source-built sample machines for Syntakt and its explicit AUDIO companion.
 Banks 0.9 and later require the existing UI API 7 and module API 3 for guarded native-view
@@ -73,6 +73,36 @@ No emulator, device transfer or flashing is part of this build workflow.
 
 The generic Sample Manager, filesystem, project record and PCM transfer live
 in [the core](../core-st/SAMPLE-POOL.md). They remain available without an SMZ.
+
+## 1.3: stereo tracks, transport only (2026-11-10)
+
+`stereo/` is the stereo-track engine (docs/MACHINE-REFERENCE.md, "Stereo
+tracks"), written in the core's shape so that it can move into the core:
+`stereo/audio.c` runs the native chain on R at the core 1.8 chain end and
+sends D = R − L; `stereo/main.c` (module `STEREO`) adds gR × D to the right
+buses. `sp_render` renders R for a claimed track with the same four native
+calls as L.
+
+A track is stereo while it plays a stereo sample (core 1.8: the reader takes
+L and R from the interleaved PCM, zero crossings on L) and until its chain's
+tail has ended on both sides; a mono sample keeps the track mono and costs
+nothing. With only mono samples the engine is never installed, and the
+module reads one window word a block. A transport test build adds a file `stereo-test.h`
+(`#define SP_STEREO_TEST 1`) to a copy of this folder: every sampler track is
+then stereo while it plays and while its chain still sounds on either side
+(a silent track costs nothing),
+with R read from the same sample 480 frames (10 ms) behind L. It
+costs what reading a stereo sample's second channel will cost, and a working
+transport sounds wider.
+
+Needs core 1.8 for stereo; on an older core the engine stays off and every
+sample plays mono.
+
+The sample list shown while turning SAMP covers the whole page right of the
+track rail, the SYN controls included, so long names fit; the right end of
+each row is cleared before the scroll bar (the native text call does not clip).
+On core 1.8 (UI API 8) it tags a stereo slot `ST` at the row's right end, and SYN page 2 draws a stereo sample as two
+bands, L above R; a mono sample keeps the single full-height wave.
 
 ## Controls and SYN pages
 

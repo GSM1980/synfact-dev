@@ -17,6 +17,19 @@ static __inline__ const struct st_pool_sample *st_machine_sample(st_u32 slot)
     if(api[0]!=0x454c5001u || slot>=128)return (const struct st_pool_sample *)0;
     return ((const struct st_pool_sample *(*)(st_u32))api[1])(slot);
 }
+/* Core 1.8: a slot's channel count, 1 or 2. A stereo sample's PCM is
+ * interleaved L, R; frames counts frame PAIRS, so a reader that ignores this
+ * reads the first half of the data as mono and never past its end. The
+ * pool service header at 42100778 holds {ST_POOL_CHANNELS_MAGIC, table};
+ * an older core has no magic: every slot is mono. */
+#define ST_POOL_CHANNELS_MAGIC 0x454c4801u
+#define ST_POOL_CHANNELS ((const volatile unsigned char *)0x421012d0u)
+static __inline__ st_u32 st_machine_sample_channels(st_u32 slot)
+{
+    const volatile st_u32 *h=(const volatile st_u32 *)0x42100778u;
+    if(slot>=128 || h[0]!=ST_POOL_CHANNELS_MAGIC || h[1]!=(st_u32)ST_POOL_CHANNELS)return 1;
+    return ST_POOL_CHANNELS[slot]==2?2:1;
+}
 #define ST_MACHINE_CONTROL_CAPACITY 32u
 /* Core 1.2: parameter IDs for modules, after the machines' blocks (types
  * 64..79: engine 0x1f9..0x3f8, UI 0x2e0..0x4df), 128 of each. They reach
@@ -48,7 +61,9 @@ struct core_machine_def {
 } __attribute__((aligned(4)));
 /* Optional SMZ machine-ui-v1 directory. All callbacks belong to the retained
  * machine image. Rendering/idle run in the UI task; no IO or waits in draw. */
-struct st_machine_wave {st_u32 code,frames,ready;short lo[96],hi[96];};
+/* lo/hi: min/max per bin (a stereo sample: of L). UI API 8 (core 1.8)
+ * appends channels and R's own bins; read them only when version >= 8. */
+struct st_machine_wave {st_u32 code,frames,ready;short lo[96],hi[96];st_u32 channels;short lo_r[96],hi_r[96];};
 struct st_machine_cursor {st_u32 pointer,frames,position,active;};
 /* Compound value codec for native page transactions only; ordinary Sound
  * values and parameter locks remain separate scalar controls. */
@@ -87,6 +102,9 @@ struct st_machine_ui_api {
      * API 7: guarded ENC context follows the actual virtual resolver, including
      * SourcePageView. Selector/native edit guards run before any subscriber. */
     const struct st_machine_host_api *host;
+    /* API 8 (core 1.8): a pool slot's channel count, 1 or 2 (2: stereo; its
+     * wave has channels 2 and R's bins). Empty slots answer 1. */
+    st_u32 (*sample_channels)(st_u32 slot);
 };
 #define ST_UI_FORMAT_POPUP 0u
 #define ST_UI_FORMAT_CONTROL 1u

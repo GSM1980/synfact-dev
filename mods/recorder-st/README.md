@@ -1,4 +1,4 @@
-# Audio Recorder for Syntakt
+# Audio Recorder for Syntakt (1.1)
 
 Source port of Synfact's recorder, UI, trim, save job, optimized capture and
 normalizer. Requires Syntakt OS 1.41 and **core 0.12.0 / UI API 6** with its
@@ -12,7 +12,8 @@ the recorder opens on the second release, after the native release processing.
 
 | Control | Action |
 |---|---|
-| A before recording | Toggle POST FX |
+| A before recording | Toggle STEREO |
+| B before recording | Toggle POST FX |
 | E / F / G / H | Recording length / threshold / source / input monitor |
 | YES on an empty take | Arm threshold recording |
 | FUNC+YES on an empty take | Start immediately |
@@ -25,8 +26,19 @@ the recorder opens on the second release, after the native release processing.
 | FUNC+NO before confirming trim | Discard take |
 | NO outside confirmed trim | Close; the take remains in RAM |
 
-Capture is mono PCM16 at 48 kHz, up to 60 seconds. Sources are IN L/R/L+R,
-MAIN L/R/L+R, and TRK 1..12. Monitor affects external inputs only. PLAY/STOP
+Capture is PCM16 at 48 kHz: mono up to 60 seconds, or STEREO up to 30 seconds
+in the same buffer (interleaved L, R). Mono sources are IN L/R/L+R, MAIN
+L/R/L+R, and TRK 1..12. STEREO offers IN LR, MAIN LR and TRK 1..12 (the single
+sides are hidden; switching to STEREO turns a single side into its pair). A
+track in STEREO is recorded as heard: each side with the mixer's level x pan
+gains of every block (so an LFO on PAN is recorded), a stereo sampler track
+with its own R (L + D from the samplers' STEREO module, core 1.8), an analog
+track with its ADC-bus gains; POST FX adds each side's own delay and reverb
+returns. The threshold takes the louder side; normalization uses one gain for
+both sides; the editor, its loupe and the trimmed overview draw L above R;
+audition and the input monitor play each side on its own side. A stereo take
+is saved interleaved with the HZFS stereo flag (core 1.8), so the pool and the
+samplers play it in stereo. Monitor affects external inputs only. PLAY/STOP
 continue through the native transport; a take that fills its set number of
 steps stops a playing sequencer (native STOP `4008c288`) before normalizing.
 Audition and monitor use the core's preview bus `8000dfd0`, outside the FX

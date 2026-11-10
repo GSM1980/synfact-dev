@@ -46,7 +46,7 @@ static void clear(void *view,u32 id,u32 whole_page,u32 knob)
     core_machine_edit_id=id;((void (*)(void *,u32,u32))vtable[(whole_page?0x68:0x6c)/4])(view,id,knob);
     core_machine_edit_id=old;
 }
-#define UI_API(context) {7,core_pool_wave,core_pool_wave_idle,core_pool_sample_name,core_pool_cursor,context,edit,clear,retired_input,bind_codec,&core_machine_host_api}
+#define UI_API(context) {8,core_pool_wave,core_pool_wave_idle,core_pool_sample_name,core_pool_cursor,context,edit,clear,retired_input,bind_codec,&core_machine_host_api,core_pool_sample_channels}
 const struct st_machine_ui_api core_machine_ui_api=UI_API(ST_UI_FORMAT_POPUP);
 static const struct st_machine_ui_api control_api=UI_API(ST_UI_FORMAT_CONTROL);
 #undef UI_API

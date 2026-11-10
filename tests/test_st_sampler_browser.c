@@ -11,6 +11,8 @@ typedef st_u32 u32;
 static unsigned char pixels[64][128],left_before[64][128],view[0x100];
 static u32 type=66,track,raw,locked,trig,recording,base_raw,edits,clears,invalidations,reads,grid;
 static u32 read_slots[7];static char rows[7][40];
+/* noclip: draw past the width, as the native text call does on the unit. */
+static u32 noclip;
 static void pixel(void *ctx,int x,int y,u32 color)
 {(void)ctx;if(x>=0 && x<128 && y>=0 && y<64){if((int)color<0)pixels[y][x]^=1;else pixels[y][x]=color!=0;}}
 static void fill(void *ctx,int x,int y,int xx,int yy,u32 color)
@@ -25,14 +27,14 @@ static const unsigned char glyphs[128][5]=FM_FONT_GLYPHS;
 static void string_draw(void *ctx,void *font,int x,int y,u32 limit,const char *s)
 {
     int start=x;(void)font;
-    if(x==53 && y<=44 && y>=2 && (44-y)%7==0){u32 row=(44-y)/7;snprintf(rows[row],40,"%s",s);}
+    if(x==22 && y<=44 && y>=2 && (44-y)%7==0){u32 row=(44-y)/7;snprintf(rows[row],40,"%s",s);}
     while(*s){unsigned char c=(unsigned char)*s++;int width;
 #ifdef SP_BROWSER_REAL_FONT
         if(c>=128)c='?';width=widths[c];
 #else
         width=c==' '?2:3;
 #endif
-        if(x+width>start+(int)limit)break;
+        if(!noclip && x+width>start+(int)limit)break;
         for(int i=0;i<width;i++)for(int j=0;j<5;j++){
 #ifdef SP_BROWSER_REAL_FONT
             if(glyphs[c][i]&(1u<<(6-j)))pixel(ctx,x+i,y+j,1);
@@ -62,6 +64,8 @@ static void edit(void *v,u32 id,int delta,u32 knob)
 {assert(v==view && id==0x1f9u+(type-64)*32+3 && knob==3);raw+=delta;edits++;}
 static void clear(void *v,u32 id,u32 whole_page,u32 knob)
 {assert(v==view && id==0x1f9u+(type-64)*32+3 && !whole_page && knob==3);raw=base_raw;locked=0;clears++;}
+static u32 stereo_slot=999;
+static u32 sample_channels(u32 slot){return slot==stereo_slot?2:1;}
 static int sample_name(u32 slot,char *out)
 {
     static const char *const reference[]={"HH2 Byggin","RS Byggin","SD1 Byggin","PC1 Spring","BD1 Weird","BD2 Weird","CP Weird"};
@@ -149,10 +153,23 @@ int main(int argc,char **argv)
         reads=0;memset(rows,0,sizeof(rows));uis[i]->draw(&api,machines[i],view,pixels,p);
         first=s>3?s-3:0;if(first>121)first=121;selected=s-first;
         assert(reads==7);for(u32 n=0;n<7;n++)assert(read_slots[n]==first+n);
-        for(int x=0;x<51;x++)for(int y=0;y<54;y++)assert(pixels[y][x]==left_before[y][x]);
-        for(u32 n=0;n<7;n++)assert(pixels[44-7*n][51]==(n==selected));
+        /* The list covers the page right of the track rail (x < 20). */
+        for(int x=0;x<20;x++)for(int y=0;y<54;y++)assert(pixels[y][x]==left_before[y][x]);
+        for(u32 n=0;n<7;n++)assert(pixels[44-7*n][20]==(n==selected));
         assert(!sp_browser_idle(&api,machines[i],view,p));
     }
+    /* UI API 8: a stereo slot gets an ST tag at the right end, and a long
+     * name drawn past its width (as on the unit) never reaches the tag or the
+     * scroll bar. Slot 127's name is 32 characters. */
+    api.version=8;api.sample_channels=sample_channels;stereo_slot=127;noclip=1;
+    begin(66,0,35<<8);raw=124<<8;memset(pixels,0,sizeof(pixels));reads=0;sp_browser_draw(&api,&sp_one_shot,view,pixels,0);
+    {int y=44-7*6,x,lit=0;   /* slot 127 is the last row (first 121) */
+     for(x=111;x<=113;x++)for(int j=y-1;j<=y+5;j++)assert(!pixels[j][x]);
+     for(x=114;x<=123;x++)for(int j=y;j<=y+4;j++)lit|=pixels[j][x];assert(lit);
+     for(int j=y-1;j<=y+5;j++)assert(!pixels[j][124]);
+     y=44-7*5;   /* slot 126, mono, also long enough to reach the right end */
+     for(int j=y-1;j<=y+5;j++)assert(!pixels[j][124]);}
+    stereo_slot=999;noclip=0;api.version=7;api.sample_channels=0;
     begin(66,0,35<<8);raw=64<<8;reads=0;sp_browser_draw(&api,&sp_one_shot,view,pixels,0);
     assert(!strcmp(rows[3],"65:NO SAMPLE"));
     raw=127<<8;reads=0;sp_browser_draw(&api,&sp_one_shot,view,pixels,0);

@@ -4,22 +4,61 @@
  * absolute peak / boundary bookkeeping per sample. No second PCM or new RAM. */
 typedef unsigned int u32;
 typedef int s32;
-extern volatile u32 sam_state,sam_frames,sam_enabled;
+extern volatile u32 sam_state,sam_frames,sam_enabled,sam_take_stereo;
 extern short *sam_pcm;
 extern u32 sam_pcm_peak,sam_norm_pos,sam_norm_gain,sam_norm_init,sam_norm_shown;
 extern u32 sam_norm_bin,sam_norm_next,sam_display_peak,sam_detail_frames;
 extern u32 sam_wave_ready,sam_trim_valid,sam_focus;
 extern short sam_wave_low[],sam_wave_high[],sam_detail_low[],sam_detail_high[];
+extern short sam_wave_low_r[],sam_wave_high_r[];
 extern void sam_trim_init(void);
 #ifndef NORM_QUOTA
 #define NORM_QUOTA 3072u
 #endif
+/* A stereo take: one gain for both channels (the image is kept), from the
+ * louder side's peak; L and R keep their own detail blocks (R in the second
+ * half, SAM_DETAIL_HALF) and wave bins. Plain C, frame by frame. */
+static void normalize_stereo(void)
+{
+    u32 n=sam_frames,p=sam_norm_pos,end,bin,next,peak,i,c,detail,mag;
+    short *pcm=sam_pcm,*low,*high;s32 gain,value;
+    if(!pcm || !n || n>1440000u){sam_state=0;return;}
+    if(!sam_norm_init) {
+        sam_norm_gain=sam_pcm_peak?(29204u*65536u)/sam_pcm_peak:65536u;
+        sam_norm_bin=0;sam_norm_next=(n+125u)/126u;
+        sam_display_peak=1;sam_detail_frames=0;
+        for(i=0;i<126;i++){sam_wave_low[i]=sam_wave_high[i]=sam_wave_low_r[i]=sam_wave_high_r[i]=0;}
+        sam_norm_init=1;
+    }
+    gain=(s32)sam_norm_gain;bin=sam_norm_bin;next=sam_norm_next;
+    peak=sam_display_peak;end=p+NORM_QUOTA;if(end>n)end=n;
+    for(;p<end;p++) {
+        while(p>=next && bin<125){bin++;next=((bin+1u)*n+125u)/126u;}
+        detail=p>>8;
+        if(!(p&255u))for(c=0;c<2;c++){sam_detail_low[c*SAM_DETAIL_HALF+detail]=0;sam_detail_high[c*SAM_DETAIL_HALF+detail]=0;}
+        for(c=0;c<2;c++) {
+            value=(s32)(short)(((u32)(s32)pcm[2*p+c]*(u32)gain)>>16);pcm[2*p+c]=(short)value;
+            if(value<sam_detail_low[c*SAM_DETAIL_HALF+detail])sam_detail_low[c*SAM_DETAIL_HALF+detail]=(short)value;
+            if(value>sam_detail_high[c*SAM_DETAIL_HALF+detail])sam_detail_high[c*SAM_DETAIL_HALF+detail]=(short)value;
+            low=c?sam_wave_low_r:sam_wave_low;high=c?sam_wave_high_r:sam_wave_high;
+            if(value<low[bin])low[bin]=(short)value;
+            if(value>high[bin])high[bin]=(short)value;
+            mag=value<0?(u32)-value:(u32)value;if(mag>peak)peak=mag;
+        }
+    }
+    sam_norm_pos=p;sam_norm_bin=bin;sam_norm_next=next;sam_display_peak=peak;
+    if(p==n) {
+        sam_detail_frames=n;sam_wave_ready=1;sam_trim_valid=0;
+        sam_trim_init();sam_focus=0;sam_state=3;
+    }
+}
 void normalize_fast(void)
 {
     u32 n=sam_frames,p=sam_norm_pos,end,stop,detail,bin,next,i,peak,mag;
     short *pcm=sam_pcm,*at,*limit;
     s32 gain,lo,hi,value;
     if(sam_state!=4 || (sam_enabled && !sam_norm_shown))return;
+    if(sam_take_stereo){normalize_stereo();return;}
     if(!pcm || !n || n>2880000u){sam_state=0;return;}
     if(!sam_norm_init) {
         sam_norm_gain=sam_pcm_peak?(29204u*65536u)/sam_pcm_peak:65536u;

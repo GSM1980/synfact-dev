@@ -221,3 +221,34 @@ Folder navigation changes the displayed HZFS library subset only. It never
 renumbers POOL positions or references. Choose a [folder] with YES and `..` to
 return; select samples and ADD TO POOL as before. FUNC+YES calls the core-owned
 preview service. Stock 1–64 remains separate/protected.
+
+
+## Stereo samples (core 1.8)
+
+An HZFS entry with `ST_HZ_STEREO` (HZFS.md) loads like any long sample: its
+whole body is planned, streamed, CRC-checked and copied to AUDIO as before.
+What changes is the descriptor:
+
+- On AUDIO a slot's `{frames, pcm}` counts frame **pairs** for a stereo
+  sample, and the channel table at `421012d0` (one byte per slot, 1 or 2)
+  says 2. The pool service header has `{454c4801, 421012d0}` at `42100778`;
+  machines read it with `st_machine_sample_channels(slot)` (machines.h). A
+  machine that ignores it plays the first half of the data as mono.
+- COMMIT (3) and ALIAS (5) carry the channel count in bit 8 of the slot.
+  COMMIT checks the extent against `2 * channels * frames`; ALIAS of a stereo
+  extent must name stereo, and stock PCM is mono only. Overlap checks use each
+  slot's real span. RETIRE (4) resets the slot to mono.
+- At boot the channel table is in the service image MAIN builds, next to the
+  descriptor table.
+- The waveform cache counts frame pairs, so a sampler's playhead still
+  matches it; `lo`/`hi` hold L's peaks and, from UI API 8, `lo_r`/`hi_r` R's,
+  with `channels` 2. UI API 8 also adds `sample_channels(slot)` for lists.
+- FUNC+YES audition plays a stereo sample in stereo on the preview bus.
+
+Fixed in core 1.8 (present since the cache was added in 0.8): when the cache
+needed an entry it took one whose sample no slot had published yet. At boot no
+long sample is published until the whole load ends, so each long sample
+loaded at boot took the previous one's entry, and only the last kept a
+waveform; the others showed NO SAMPLE on the samplers' page 2 until reloaded.
+The cache now takes a free entry first, then one whose code no pool slot
+names (`core_pool_code_used`), loaded or not.

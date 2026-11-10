@@ -44,7 +44,10 @@ class Device:
             return ok(R.be32(job)+R.be32(seq)+R.be32(j['pos'])+bytes((int(j['pos']==len(j['obj'])),))+
                       R.be32(0)+R.be32(len(chunk))+chunk)
         if kind==0x56:
-            self.jobs.pop(job);return ok(R.be32(job)+R.be32(j['pos']))
+            self.jobs.pop(job)
+            # OS 1.41: closing a read before its object is complete fails.
+            if j['pos']<len(j['obj']):return bytes((0,0,0,0,kind|128,0))+b'Reader did not complete\0'
+            return ok(R.be32(job)+R.be32(j['pos']))
         if kind==0x58:
             seq,check,length=R.u32(payload,4),R.u32(payload,8),R.u32(payload,12)
             chunk=payload[16:];assert len(chunk)==length and check==R.crc(chunk)
@@ -120,6 +123,57 @@ class Storage(unittest.TestCase):
             self.assertEqual(second['first'],H.DATA_FIRST_K+2)
             self.assertTrue(all(k>=0x600 for k,_ in self.dev.writes))
             self.assertTrue(set(self.dev.calls)<=set(range(0x54,0x5a)))
+    def test_stereo_long_sample(self):
+        # Core 1.8: a two-channel WAV is stored interleaved with flag STEREO;
+        # frames still counts samples, so every size check is unchanged.
+        with tempfile.TemporaryDirectory() as tmp:
+            wav=Path(tmp)/'wide.wav';dual=Path(tmp)/'dual.wav';back=Path(tmp)/'back.wav'
+            frames=b''.join(struct.pack('<hh',i%30000,-(i%20000)) for i in range(48000))
+            with wave.open(str(wav),'wb') as f:
+                f.setparams((2,2,48000,0,'NONE','not compressed'));f.writeframes(frames)
+            with wave.open(str(dual),'wb') as f:
+                f.setparams((2,2,48000,0,'NONE','not compressed'))
+                f.writeframes(b''.join(struct.pack('<hh',i%30000,i%30000) for i in range(48000)))
+            e=H.cmd_put(self.store,wav)
+            self.assertEqual((e['flags'],e['frames'],e['bytes']),(H.STEREO,96000,64+192000))
+            self.assertEqual((H.channels(e),H.seconds(e)),(2,1.0))
+            H.cmd_get(self.store,'wide',back)
+            with wave.open(str(back),'rb') as f:
+                self.assertEqual((f.getnchannels(),f.getnframes()),(2,48000));self.assertEqual(f.readframes(48000),frames)
+            self.assertEqual(H.cmd_fsck(self.store,True),[])
+            same=H.cmd_put(self.store,dual)        # identical channels: stored mono
+            self.assertEqual((same['flags'],same['frames']),(0,48000))
+            forced=H.cmd_put(self.store,wav,name='forced',mono=True)
+            self.assertEqual((forced['flags'],forced['frames']),(0,48000))
+            index,_=self.store.current();index.entries[0]['frames']-=1;index.entries[0]['bytes']-=2
+            self.assertIn('wide: stereo with an odd sample count',H.problems(index))
+    def test_put_progress(self):
+        # The CLI's live progress: each phase reaches 100 %; a 44.1 kHz stereo
+        # file shows its conversion per channel. Without progress, put is silent.
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            wav=Path(tmp)/'wide.wav'
+            with wave.open(str(wav),'wb') as f:
+                f.setparams((2,2,44100,0,'NONE','not compressed'))
+                f.writeframes(b''.join(struct.pack('<hh',i%3000,-(i%2000)) for i in range(100000)))
+            out=io.StringIO();self.store.progress=H.Progress(out)
+            H.cmd_put(self.store,wav)
+            lines=out.getvalue().splitlines()
+            for phase in ('Reading catalogue 1/2','Converting L to 48 kHz','Converting R to 48 kHz',
+                          'Writing sample','Verifying sample','Saving catalogue','Checking catalogue'):
+                self.assertTrue(any(l.startswith(phase+': 100.0%') for l in lines),phase)
+            self.store.progress=None;out=io.StringIO()
+            H.cmd_put(self.store,wav,name='quiet');self.assertEqual(out.getvalue(),'')
+    def test_header_probe_tolerates_only_the_partial_close(self):
+        # The capacity probe reads a window's header and closes early: OS 1.41
+        # answers "Reader did not complete", which is expected there and only there.
+        self.assertEqual(self.client.read('/samples/'+str(R.RAW_FIRST+0x600),header_only=True),R.WINDOW)
+        real=self.dev.call
+        def broken(kind,payload=b'',timeout=None):
+            if kind==0x56:return bytes((0,0,0,0,kind|128,0))+b'card error\0'
+            return real(kind,payload,timeout)
+        self.dev.call=broken
+        with self.assertRaises(RuntimeError):self.client.read('/samples/'+str(R.RAW_FIRST+0x600),header_only=True)
     def test_corrupt_not_formatted(self):
         corrupt=bytearray(R.WINDOW);corrupt[-1]=123;self.dev.windows[0x601]=bytes(corrupt)
         with self.assertRaises(RuntimeError):self.store.ensure()

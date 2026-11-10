@@ -74,7 +74,7 @@ def native_probe(cc,out):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     root=Path(__file__).resolve().parents[1]
     size=0x80000+130;body=bytearray(i&255 for i in range(size));body[:64]=bytes(64);body[:4]=b'SAMP';struct.pack_into('>I',body,8,(size-64)//2)
-    e=dict(id=1,first=0x602,blocks=2,bytes=size,frames=(size-64)//2,crc=zlib.crc32(body,0xffffffff)&0xffffffff,created=1,flags=7,name='long',folder=2)
+    e=dict(id=1,first=0x602,blocks=2,bytes=size,frames=(size-64)//2,crc=zlib.crc32(body,0xffffffff)&0xffffffff,created=1,flags=6,name='long',folder=2)  # flags without a meaning (bit 0 is stereo since core 1.8)
     idx=Index(20,0xe90,3,[e,{**e,'id':2,'first':0x604,'folder':0}],version=2,folders=[dict(id=1,parent=0,name='Drums'),dict(id=2,parent=1,name='Acoustic')],next_folder=3)
     golden=out/'folders-golden.hzfs';result=out/'folders-c-result.hzfs';golden.write_bytes(idx.pack())
     exe=out/'folders-native.exe'

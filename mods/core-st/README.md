@@ -852,6 +852,48 @@ notification helper is shared out of line; its extended controls plus final
 word are copied as one contiguous 34-byte range before notification. This
 keeps the combined core within its unchanged 64 KiB reserve and build flags.
 
+## Core 1.8.0: stereo tracks and stereo samples
+
+Stereo machines and two-channel samples (docs/MACHINE-REFERENCE.md, "Stereo
+tracks"; SAMPLE-POOL.md and HZFS.md, "Stereo samples").
+
+**The chain end.** A digital track is mono until MAIN's mixer: its render
+writes one channel and the AUDIO chain (drive, base-width, multimode, AMP)
+runs on it in place. A stereo machine needs code after AMP and before the
+track DMA, to run the chain on its second channel and send the difference to
+MAIN:
+
+- AUDIO patch window `40000ac6..40000acc` (`move.l 4004f6e0,d0`, the load of
+  the window base before the DMA) calls `audio_chain_end` (16 bytes in the
+  upper reserve). It calls the hook in word 1 of the chain-end directory, then
+  replays the load.
+- The chain-end directory at `40040f30`, between the render table and the ABI
+  directory at `40040f40`: `{454c5301, hook, 1, 0}`. The hook starts as
+  `audio_machine_silent` (an `rts`); a bank writes its own function there
+  (`<syntakt/stereo.h>`, `ST_CHAIN_DIRECTORY`). An older core has no magic, so
+  a bank leaves it alone.
+
+The hook runs in the AUDIO IRQ with D0-D1/A0-A1 free, before the DMA of the
+track buffers: what it adds counts in CPU A and delays the DMA as a heavier
+machine would. The AUDIO reserve now holds 1428 bytes of code (with the meter)
+and 236 of the upper 240. The engine is not in the core yet:
+`mods/samplers-st/stereo/` is written in the core's shape so that it can move
+here.
+
+**Stereo samples.** An HZFS entry flag, interleaved PCM, a channel table on
+AUDIO next to the descriptors, the channel count in bit 8 of COMMIT and ALIAS,
+a stereo waveform and stereo audition. Mono samples, the project record and
+the catalogue format are unchanged; a mono-only reader plays the first half
+of a stereo sample's data. Machine UI API 8 tells the UI:
+`sample_channels(slot)`, and a stereo slot's wave keeps L's and R's peaks
+apart (`machines.h`).
+
+**Fixed:** the waveform cache kept only the last long sample loaded at boot
+(SAMPLE-POOL.md).
+
+MAIN's resident reserve has 100 bytes left after 1.8.0. The bank format and
+existing banks are unchanged.
+
 ## Core 1.7.2: the base-width filter reads stock poles
 
 Moving BASE on a digital track made artifacts: random cutoffs from one step to

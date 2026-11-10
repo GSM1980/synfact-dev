@@ -59,6 +59,9 @@ static int read_mock(T,T,void *),write_mock(T,T,const void *);static T sectors_m
 #define REC_QSTR_DTOR qdrop_mock
 #define REC_NAME_CTOR name_ctor_mock
 #include "../mods/recorder-st/main.c"
+/* The samplers' STEREO module (stereo/main.c): track 0 is stereo, D = 100*i. */
+int st_stereo_track_d(u32 track,s32 *out)
+{if(track)return 0;for(u32 i=0;i<32;i++)out[i]=(s32)i*100;return 1;}
 
 static B app[1024],nodes[4][16],base_view[80],browser[80],pixels[128*64];
 static B *name_view_mock,*track_view_mock,*closed;
@@ -173,7 +176,7 @@ static void gesture(void)
     sam_state=SAM_EMPTY;sam_source=5;sam_post=0;sam_mon=0;
     assert(encoder_event(7,1) && sam_source==6);assert(encoder_event(7,-999) && !sam_source);
     assert(encoder_event(5,-1) && sam_rlen==7);assert(encoder_event(5,99) && sam_rlen==8);
-    assert(encoder_event(8,1) && sam_mon==1);assert(encoder_event(1,1) && sam_post==1);
+    assert(encoder_event(8,1) && sam_mon==1);assert(encoder_event(2,1) && sam_post==1); /* B: POST FX */
     top(base_view,sam_view);T old=sam_thr;assert(!encoder_event(6,1) && sam_thr==old);top(sam_view,sam_view);
     sam_state=SAM_ARMED;old=sam_rlen;assert(encoder_event(5,-1) && sam_rlen==old);
     assert(encoder_event(8,-1) && !sam_mon);sam_state=SAM_EMPTY;
@@ -366,6 +369,85 @@ static void storage_arbitration(void)
     assert(!sam_save_index && !sam_save_io && !sam_save_check);
     sam_state=SAM_NORMALIZING;sam_norm_pos=0;recorder_ui_tick(manager());assert(!sam_norm_pos);
 }
+
+/* STEREO: controls, capture of every kind of source, normalize, audition, save. */
+static int clip16(int x){return x>32767?32767:x< -32768?-32768:x;}
+static void stereo(void)
+{
+    struct st_hzfs fs;struct st_sample_entry e;T i,n;
+    /* A toggles STEREO; the mono sides become their pair; SRC skips them. */
+    top(base_view,base_view);sampler_open(manager());sam_state=SAM_EMPTY;sam_frames=0;
+    sam_stereo=0;sam_post=0;sam_source=0;
+    assert(encoder_event(1,1) && sam_stereo==1 && sam_source==2 && !sam_post);
+    sam_source=2;assert(encoder_event(7,1) && sam_source==5);assert(encoder_event(7,1) && sam_source==6);
+    assert(encoder_event(7,-2) && sam_source==2);assert(encoder_event(7,-1) && sam_source==2);
+    sam_stereo=0;sam_source=4;assert(encoder_event(1,1) && sam_stereo && sam_source==5);
+    assert(encoder_event(1,-1) && !sam_stereo && sam_source==5);
+    /* A stereo take is limited to 30 s (the same buffer) and keeps its mode. */
+    sam_stereo=1;sam_rlen=8;sam_start(0);assert(sam_take_stereo && sam_limit==SAM_STEREO_FRAMES);
+    sam_stereo=0;assert(sam_take_stereo);sam_clear();sam_stereo=1;
+    /* Capture: IN LR keeps each input on its own side, PRE. */
+    buses();prepare(2,0,SAM_RECORDING,0,1000,0);sam_take_stereo=1;sam_mon=0;
+    in_irq=1;sampler_base_tick();in_irq=0;assert(sam_frames==32);
+    for(i=0;i<32;i++){assert(sam_pcm[2*i]==(short)((int)i-16) && sam_pcm[2*i+1]==(short)(31-(int)i));}
+    /* MON plays each input on its own side of the preview bus. */
+    prepare(2,0,SAM_EMPTY,0,1000,0);sam_take_stereo=1;sam_frames=0;
+    in_irq=1;sampler_base_tick();in_irq=0;assert(MAIN_BUS[0]!=MAIN_BUS[1] || MAIN_BUS[2]!=MAIN_BUS[3]);
+    /* MAIN LR, PRE: each USB main slot with its own correction. */
+    prepare(5,0,SAM_RECORDING,0,1000,0);sam_take_stereo=1;
+    in_irq=1;headroom_tick();in_irq=0;assert(sam_frames==32);
+    for(i=0;i<32;i++){
+        int l=(int)i-20-((int)(2*i)-32),r=15-(int)i-((int)(2*i+1)-32);   /* sam_ret[0] = i-32 */
+        assert(sam_pcm[2*i]==(short)clip16(l) && sam_pcm[2*i+1]==(short)clip16(r));
+    }
+    /* A digital track, as heard: L with the left gain, R = L + D with the right. */
+    for(T post=0;post<2;post++){
+        prepare(6,post,SAM_RECORDING,0,1000,0);sam_take_stereo=1;
+        int g[2],gd[2],gr[2];int *trk=(int *)0x80003d50u,*del=(int *)0x8000dcd0u,*rev=(int *)0x8000ddd0u;
+        for(T b=0;b<2;b++){g[b]=sam_gain(b?0x8000e160u:0x8000e188u,b?0x8000e110u:0x8000e138u,0);
+            gd[b]=sam_gain(b?0x8000e160u:0x8000e188u,b?0x8000e110u:0x8000e138u,8);
+            gr[b]=sam_gain(b?0x8000e160u:0x8000e188u,b?0x8000e110u:0x8000e138u,9);}
+        in_irq=1;sampler_base_tick();in_irq=0;assert(sam_frames==32);
+        for(i=0;i<32;i++)for(T b=0;b<2;b++){
+            int x=(trk[i]>>16)+(b?(int)i*100:0),acc=post?((gd[b]*(del[2*i+b]>>16))>>3)+((gr[b]*(rev[2*i+b]>>16))>>3):0;
+            acc+=(g[b]*x)>>3;assert(sam_pcm[2*i+b]==(short)clip16(-(acc>>12)));
+        }
+    }
+    /* An analog track takes its ADC-bus gains; it has no D. */
+    {int *g0=(int *)0x8000e0f0u,*g1=(int *)0x8000e0d0u,*an=(int *)0x80003950u;g0[1]=-20000*65536;g1[1]=-8000*65536;
+     prepare(15,0,SAM_RECORDING,0,1000,0);sam_take_stereo=1;in_irq=1;sampler_base_tick();in_irq=0;
+     for(i=0;i<32;i++){int x=an[32+i]>>16;
+         assert(sam_pcm[2*i]==(short)clip16(-(((-20000*x)>>3)>>12)) && sam_pcm[2*i+1]==(short)clip16(-(((-8000*x)>>3)>>12)));}}
+    /* The threshold takes the louder side: L never passes 20, R (31-i) does. */
+    prepare(2,0,SAM_ARMED,0,1000,(T)20*65536);sam_take_stereo=1;sam_mon=0;
+    in_irq=1;sampler_base_tick();in_irq=0;assert(sam_state==SAM_RECORDING && sam_frames==32);
+    prepare(2,0,SAM_ARMED,0,1000,(T)40*65536);sam_take_stereo=1;sam_mon=0;
+    in_irq=1;sampler_base_tick();in_irq=0;assert(sam_state==SAM_ARMED && !sam_frames);
+    /* Normalize: one gain for both sides, L and R bins apart. */
+    n=3000;for(i=0;i<n;i++){sam_pcm[2*i]=(short)(i%2000);sam_pcm[2*i+1]=(short)-(int)(i%1000);}
+    sam_take_stereo=1;sam_frames=n;sam_state=SAM_NORMALIZING;sam_pcm_peak=1999;sam_norm_init=sam_norm_pos=0;sam_norm_shown=1;sam_enabled=1;
+    while(sam_state==SAM_NORMALIZING)normalize_fast();
+    {T gain=(29204u*65536u)/1999u;
+     for(i=0;i<n;i++){assert(sam_pcm[2*i]==(short)(((T)(int)(i%2000)*gain)>>16) && sam_pcm[2*i+1]==(short)(((T)-(int)(i%1000)*gain)>>16));}
+     assert(sam_wave_high[125]>0 && sam_wave_low_r[125]<0 && !sam_wave_low[0] && !sam_wave_high_r[0]);
+     {s32 lo,hi;sam_trim_range(0,n,&lo,&hi,1);assert(hi==0 && lo<0);sam_trim_range(0,n,&lo,&hi,0);assert(lo==0 && hi>0);}}
+    memset(pixels,0,sizeof(pixels));sam_wave_ready=1;sam_state=SAM_READY;recorder_draw(sam_view,pixels,0);
+    /* Audition: each side on its own side of the preview bus. */
+    sam_trim_valid=0;sam_trim_init();memset(MAIN_BUS,0,64*sizeof(int));sam_audition();audio();
+    assert(MAIN_BUS[2]==-(int)sam_pcm[2]*2560 && MAIN_BUS[3]==-(int)sam_pcm[3]*2560);
+    /* Save: interleaved PCM, frames counts samples, flag ST_HZ_STEREO. */
+    sam_play_length=0;sam_save_frames=10;sam_save_start=5;sam_save_channels=2;sam_saved_id=0;
+    text_set(sam_save_name,"STEREO TAKE",16);sam_save_phase=1;sam_save_step();assert(sam_save_phase==2);
+    while(sam_save_phase==2 || sam_save_phase==3)sam_save_step();
+    assert(sam_save_phase==4);
+    assert(core_hzfs_open(&fs,&storage)==1);
+    for(i=0;i<core_hzfs_count(&fs);i++){assert(core_hzfs_entry(&fs,i,&e)==1);if(e.id==sam_save_id)break;}
+    assert(i<core_hzfs_count(&fs) && (e.flags&ST_HZ_STEREO) && e.frames==20 && e.bytes==64+40);core_hzfs_close(&fs);
+    {B *body=disk+(e.first-ST_HZ_FIRST)*ST_HZ_WINDOW;assert(be32(body+8)==20);
+     for(i=0;i<20;i++)assert((short)((T)body[64+2*i]<<8|body[65+2*i])==sam_pcm[10+i]);
+     assert(~core_crc_update(0,body,e.bytes)==e.crc);}
+    sam_save_cleanup("SAVED");sam_take_stereo=0;sam_stereo=0;sampler_dispose(sam_view);
+}
 int main(void)
 {
     assert(VirtualAlloc((void *)0x80000000u,0x20000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE));
@@ -373,8 +455,8 @@ int main(void)
     struct st_machine_ui_api ui={0};struct st_smz_api api={2,&ui};
     assert(initialize(&api));ui.version=5;ui.host=&services;assert(initialize(&api));ui.version=6;assert(!initialize(&api));
     assert(recorder_module.count==7 && core_hzfs_ensure(&storage)==1);
-    gesture();capture();normalize();step_stop();editor_save();folder_save();storage_arbitration();assert(!irq_depth);
+    gesture();capture();normalize();step_stop();editor_save();folder_save();storage_arbitration();stereo();assert(!irq_depth);
     for(T i=0;i<64;i++)if(allocs[i])free_mock(allocs[i]);free(disk);VirtualFree((void *)0x80000000u,0,MEM_RELEASE);
-    puts("PASS: SOUND double tap/native release; shared key/encoder/draw/tick/mix; 72 capture differentials; 56 normalization cases; trim/zoom; step-length sequencer STOP; preview bus level; naming/assignment; real HZFS save/CRC/verify/errors; slots 1-64 protected; no IRQ allocation/IO");
+    puts("PASS: SOUND double tap/native release; shared key/encoder/draw/tick/mix; 72 capture differentials; 56 normalization cases; trim/zoom; step-length sequencer STOP; preview bus level; naming/assignment; real HZFS save/CRC/verify/errors; slots 1-64 protected; no IRQ allocation/IO; STEREO controls/capture/normalize/audition/save");
     return 0;
 }

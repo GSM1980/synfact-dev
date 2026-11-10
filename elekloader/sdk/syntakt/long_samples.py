@@ -2,7 +2,8 @@
 """Long samples in the core's HZFS v1 high-zone storage.
 
 python -m elekloader.sdk.syntakt.long_samples ls
-python -m elekloader.sdk.syntakt.long_samples put pad.wav --yes-write-device
+python -m elekloader.sdk.syntakt.long_samples put pad.wav --yes-write-device   # stereo stays stereo (core 1.8)
+python -m elekloader.sdk.syntakt.long_samples put pad.wav --mono --yes-write-device
 python -m elekloader.sdk.syntakt.long_samples get pad --out pad-back.wav
 python -m elekloader.sdk.syntakt.long_samples rm pad --yes-write-device
 python -m elekloader.sdk.syntakt.long_samples stock short.wav --slot 64 --yes-write-device
@@ -45,6 +46,8 @@ def problems(index):
             out.append(f"{e['name']}: blocks {lo:#x}..{hi:#x} outside the data area")
         if e['blocks'] != -(-e['bytes'] // WINDOW) or e['bytes'] != SAMP_HEADER + 2 * e['frames']:
             out.append(f"{e['name']}: size fields inconsistent")
+        if e.get('flags', 0) & STEREO and e['frames'] & 1:
+            out.append(f"{e['name']}: stereo with an odd sample count")
         if (e.get('folder',0),e['name']) in names or e['id'] in ids:
             out.append(f"{e['name']}: duplicate name or id")
         names.add((e.get('folder',0),e['name']))
@@ -88,8 +91,19 @@ def largest_hole(index, windows):
 
 
 # ------------------------------------------------------------------ audio
+STEREO=1  # catalogue entry flag (core 1.8): interleaved L, R; frames counts samples
+
+
 def read_wav(path):
     """-> (rate, mono samples as floats in [-1, 1)). PCM 8/16/24/32 bit, float 32, extensible."""
+    rate, channels = read_wav_channels(path)
+    if len(channels) == 1:
+        return rate, channels[0]
+    return rate, [sum(frame) / len(channels) for frame in zip(*channels)]
+
+
+def read_wav_channels(path):
+    """-> (rate, one list of floats in [-1, 1) per channel)."""
     data = Path(path).read_bytes()
     if data[:4] != b'RIFF' or data[8:12] != b'WAVE':
         raise ValueError(f'{path}: not a RIFF/WAVE file')
@@ -132,16 +146,13 @@ def read_wav(path):
         raise ValueError(f'{path}: unsupported WAV format tag {tag} / {bits} bit')
     if sys.byteorder != 'little' and isinstance(values, array.array):
         values.byteswap()
-    if channels == 1:
-        mono = [v / scale for v in values]
-    else:
-        mono = [sum(values[i:i + channels]) / (channels * scale) for i in range(0, len(values), channels)]
-    return rate, mono
+    return rate, [[v / scale for v in values[c::channels]] for c in range(channels)]
 
 
-def resample(samples, rate):
+def resample(samples, rate, progress=None):
     """4-point Hermite interpolation to 48 kHz (no anti-alias filter: downsampling from
-    above 48 kHz can alias; prepare such files at 48 kHz for best quality)."""
+    above 48 kHz can alias; prepare such files at 48 kHz for best quality).
+    progress(done, total) is called every 65536 output samples."""
     if rate == RATE or not samples:
         return samples
     step, n = rate / RATE, len(samples)
@@ -149,6 +160,8 @@ def resample(samples, rate):
     s = samples
     out = []
     for i in range(out_len):
+        if progress and not i & 0xffff:
+            progress(i, out_len)
         x = i * step
         j = int(x)
         t = x - j
@@ -159,7 +172,56 @@ def resample(samples, rate):
         c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3
         c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2)
         out.append(((c3 * t + c2) * t + c1) * t + y1)
+    if progress:
+        progress(out_len, out_len)
     return out
+
+class Progress:
+    """One status line on stderr per phase: percent, size, speed, time left.
+
+    On a terminal the line is rewritten in place (at most 10 times a second);
+    otherwise a line is printed every 5 seconds and at the end of each phase.
+    Call it as progress(phase, done, total, unit); unit 'B' is bytes."""
+    def __init__(self, stream=None):
+        self.stream = stream or sys.stderr
+        self.tty = hasattr(self.stream, 'isatty') and self.stream.isatty()
+        self.phase, self.width = None, 0
+
+    @staticmethod
+    def amount(n, unit):
+        if unit != 'B':
+            return f'{n / 1e6:.1f} M' if n >= 1e6 else f'{n / 1e3:.0f} k' if n >= 1e3 else f'{n:.0f}'
+        return f'{n / 2**20:.2f} MiB' if n >= 2**20 else f'{n / 2**10:.0f} KiB'
+
+    def __call__(self, phase, done, total, unit='B'):
+        now = time.monotonic()
+        if phase != self.phase:
+            self.end()
+            self.phase, self.start, self.last = phase, now, 0.0
+        finished = done >= total
+        if not finished and now - self.last < (0.1 if self.tty else 5.0):
+            return
+        self.last = now
+        elapsed = now - self.start
+        text = f'{phase}: {100 * done / total if total else 100:5.1f}%  {self.amount(done, unit)} / {self.amount(total, unit)}'
+        if elapsed > 0.5 and done:
+            rate = done / elapsed
+            text += f'  {self.amount(rate, unit)}/s'
+            text += f'  {(total - done) / rate:4.0f} s left' if not finished else f'  {elapsed:.0f} s'
+        if self.tty:
+            self.stream.write('\r' + text.ljust(self.width))
+            self.width = len(text)
+        else:
+            self.stream.write(text + '\n')
+        self.stream.flush()
+        if finished:
+            self.end()
+
+    def end(self):
+        if self.phase is not None and self.tty:
+            self.stream.write('\n')
+            self.stream.flush()
+        self.phase, self.width = None, 0
 
 
 def to_pcm16be(samples):
@@ -167,6 +229,16 @@ def to_pcm16be(samples):
     if sys.byteorder == 'little':
         values.byteswap()
     return values.tobytes()
+
+
+def interleave(left_be, right_be):
+    """Two PCM16BE channels of equal length -> L, R, L, R ... (core 1.8 stereo body)."""
+    if len(left_be) != len(right_be) or len(left_be) & 1:
+        raise ValueError('stereo channels differ in length')
+    out = bytearray(2 * len(left_be))
+    out[0::4], out[1::4] = left_be[0::2], left_be[1::2]
+    out[2::4], out[3::4] = right_be[0::2], right_be[1::2]
+    return bytes(out)
 
 
 def samp_body(pcm_be, name):
@@ -179,13 +251,13 @@ def samp_body(pcm_be, name):
     return bytes(header) + pcm_be, frames
 
 
-def write_wav(path, pcm_be):
+def write_wav(path, pcm_be, channels=1):
     values = array.array('h', pcm_be)
     if sys.byteorder == 'little':
         values.byteswap()
     data = values.tobytes()
-    head = (b'RIFF' + struct.pack('<I', 36 + len(data)) + b'WAVE' + b'fmt ' + struct.pack('<IHHIIHH', 16, 1, 1, RATE,
-            RATE * 2, 2, 16) + b'data' + struct.pack('<I', len(data)))
+    head = (b'RIFF' + struct.pack('<I', 36 + len(data)) + b'WAVE' + b'fmt ' + struct.pack('<IHHIIHH', 16, 1, channels, RATE,
+            RATE * 2 * channels, 2 * channels, 16) + b'data' + struct.pack('<I', len(data)))
     Path(path).write_bytes(head + data)
 
 
@@ -195,12 +267,17 @@ class Store:
     No persistent cache: every command rereads both indices. No stock slots,
     projects or /mods are used by this class. Files are published after readback.
     """
-    def __init__(self,client,log=print):
-        self.client,self.log=client,log
+    def __init__(self,client,log=print,progress=None):
+        """progress: a Progress (or any progress(phase, done, total)); None is silent."""
+        self.client,self.log,self.progress=client,log,progress
         self.windows=self.card_bytes=None
-    def window(self,k):
+    def report(self,phase,base=0,total=None):
+        """A Data RPC progress callback for one phase, offset by base bytes."""
+        if not self.progress:return None
+        return lambda done,size:self.progress(phase,base+done,total if total else size)
+    def window(self,k,phase=None,base=0,total=None):
         if not HZ_FIRST_K<=k<0x2000:raise PermissionError('not a high-zone window')
-        return self.client.read(f'/samples/{RAW_FIRST_N+k}')
+        return self.client.read(f'/samples/{RAW_FIRST_N+k}',progress=self.report(phase,base,total) if phase else None)
     def capacity(self):
         if self.windows is None:
             def size(k):return self.client.read(f'/samples/{RAW_FIRST_N+k}',header_only=True)
@@ -217,25 +294,27 @@ class Store:
             self.windows=self.card_bytes//WINDOW
             if self.windows<=DATA_FIRST_K:raise RuntimeError('no high-zone sample space')
         return self.windows
-    def read_blocks(self,first,count,length):
+    def read_blocks(self,first,count,length,phase='Reading sample'):
         self.capacity()
         if first<DATA_FIRST_K or first+count>self.windows or not 0<length<=count*WINDOW:
             raise ValueError('file read outside high-zone data')
         out=bytearray()
         for k in range(first,first+count):
-            chunk=self.window(k)
+            # Each window's object is 43 bytes larger than its data: close enough.
+            chunk=self.window(k,phase,len(out),count*WINDOW)
             if len(chunk)!=WINDOW:raise RuntimeError('short storage window')
             out.extend(chunk[:min(WINDOW,length-len(out))])
         return bytes(out)
-    def write_at(self,k,body):
+    def write_at(self,k,body,phase=None):
         self.capacity()
         if k<HZ_FIRST_K or not body or k*WINDOW+len(body)>self.windows*WINDOW:
             raise PermissionError('write outside complete high-zone windows')
-        self.client.write(f'/samples/{RAW_FIRST_N+k}',body,card_bytes=self.card_bytes)
+        self.client.write(f'/samples/{RAW_FIRST_N+k}',body,card_bytes=self.card_bytes,
+                          progress=self.report(phase) if phase else None)
     def read_index_copies(self):
         capacity=self.capacity();copies=[];raws=[]
-        for k in INDEX_K:
-            raw=self.window(k)
+        for i,k in enumerate(INDEX_K):
+            raw=self.window(k,f'Reading catalogue {i+1}/2')
             if len(raw)!=WINDOW:raise RuntimeError('short catalogue read')
             index=Index.unpack(raw)
             if index is None and raw[:4]==MAGIC:
@@ -249,8 +328,10 @@ class Store:
             raise RuntimeError('conflicting catalogues with equal sequence')
         return copies,raws
     def ensure(self):
+        """Create an empty catalogue if the zone is blank. Returns both copies as
+        read, so a caller need not read the two 512 KiB windows again."""
         copies,raws=self.read_index_copies()
-        if any(copies):return
+        if any(copies):return copies
         if any(any(b not in (0,255) for b in raw) for raw in raws):
             raise RuntimeError('unknown/corrupt catalogue: automatic formatting refused')
         index=Index(seq=1,windows=self.capacity());body=index.pack()
@@ -258,8 +339,10 @@ class Store:
             self.write_at(k,body)
             if self.window(k)[:len(body)]!=body:raise RuntimeError('initial catalogue readback differs')
         self.log('HZFS created in empty high-zone storage')
-    def current(self):
-        copies,_=self.read_index_copies();valid=[i for i in copies if i]
+        return self.read_index_copies()[0]
+    def current(self,copies=None):
+        if copies is None:copies,_=self.read_index_copies()
+        valid=[i for i in copies if i]
         if not valid:raise RuntimeError('no valid HZFS catalogue')
         return max(valid,key=lambda c:c.seq),copies
     def commit(self,index,copies):
@@ -268,15 +351,15 @@ class Store:
         target=0 if seqs[0]<=seqs[1] else 1
         index.seq=max(seqs)+1
         if problems(index):raise ValueError(f'inconsistent catalogue: {problems(index)}')
-        body=index.pack();self.write_at(INDEX_K[target],body)
-        back=self.window(INDEX_K[target])
+        body=index.pack();self.write_at(INDEX_K[target],body,'Saving catalogue')
+        back=self.window(INDEX_K[target],'Checking catalogue')
         if back[:len(body)]!=body or Index.unpack(back) is None:raise RuntimeError('catalogue commit readback differs')
 
 
 def cmd_ls(store):
     index,copies=store.current()
     store.log(f'HZFS sequence {index.seq}: {len(index.entries)} samples')
-    for e in index.entries:store.log(f"{e['id']:5}  {e['name']:<32} {e['frames']/RATE:9.3f} s  {e['bytes']/2**20:8.2f} MiB")
+    for e in index.entries:store.log(f"{e['id']:5}  {e['name']:<32} {seconds(e):9.3f} s {'st' if channels(e)==2 else '  '} {e['bytes']/2**20:8.2f} MiB")
     # Safe allocation includes extents still referenced by the other catalogue.
     spans=sorted({s for c in copies if c for s in c.used()});at=DATA_FIRST_K;free=largest=0
     for lo,hi in spans:
@@ -285,14 +368,31 @@ def cmd_ls(store):
     store.log(f'Allocatable {free*WINDOW/2**20:.1f} MiB; largest hole {largest*WINDOW/2**20:.1f} MiB')
     return index
 
-def wav_body(path,name):
+def wav_body(path,name,mono=False,progress=None):
+    """-> (SAMP body, flags). A two-channel WAV is stored stereo (interleaved
+    L, R; flag STEREO) unless its channels are identical after conversion, or
+    mono is asked for; other channel counts are mixed to mono.
+    progress(phase, done, total, unit): the conversion to 48 kHz, in samples."""
+    def converting(label):
+        if not progress:return None
+        return lambda done,total:progress(label,done,total,'samples')
     if not name or '\0' in name or len(name.encode('utf-8'))>32:raise ValueError('name must be 1..32 UTF-8 bytes')
-    rate,mono=read_wav(path)
-    return samp_body(to_pcm16be(resample(mono,rate)),name)[0]
+    rate,channels=read_wav_channels(path)
+    if len(channels)==2 and not mono:
+        left,right=(to_pcm16be(resample(c,rate,converting(f'Converting {side} to 48 kHz')))
+                    for side,c in zip('LR',channels))
+        if left!=right:return samp_body(interleave(left,right),name)[0],STEREO
+        return samp_body(left,name)[0],0
+    samples=channels[0] if len(channels)==1 else [sum(frame)/len(channels) for frame in zip(*channels)]
+    return samp_body(to_pcm16be(resample(samples,rate,converting('Converting to 48 kHz'))),name)[0],0
 
-def cmd_put(store,wav,name=None,folder=0):
-    name=name or Path(wav).stem;body=wav_body(wav,name)
-    store.ensure();index,copies=store.current()
+def cmd_put(store,wav,name=None,folder=0,mono=False):
+    name=name or Path(wav).stem
+    store.log(f'Reading {Path(wav).name}')
+    body,flags=wav_body(wav,name,mono,store.progress)
+    store.log(f"{(len(body)-SAMP_HEADER)/(2*(2 if flags&STEREO else 1))/RATE:.3f} s "
+              f"{'stereo' if flags&STEREO else 'mono'}, {len(body)/2**20:.2f} MiB to send")
+    index,copies=store.current(store.ensure())
     if len(index.entries)>=MAX_ENTRIES or index.next_id==0xffffffff or index.seq==0xffffffff:
         raise ValueError('catalogue full/exhausted')
     index.folder(folder)
@@ -300,14 +400,23 @@ def cmd_put(store,wav,name=None,folder=0):
     logical_length(index.version,len(index.entries)+1,len(index.folders))
     if any(e['name']==name and e.get('folder',0)==folder for e in index.entries):raise ValueError('sample name already exists')
     blocks=(len(body)+WINDOW-1)//WINDOW;first=allocate(blocks,copies,index.windows)
-    store.write_at(first,body)
-    if store.read_blocks(first,blocks,len(body))!=body:raise RuntimeError('sample readback differs; catalogue unchanged')
+    store.write_at(first,body,'Writing sample')
+    if store.read_blocks(first,blocks,len(body),'Verifying sample')!=body:
+        raise RuntimeError('sample readback differs; catalogue unchanged')
     e=dict(id=index.next_id,first=first,blocks=blocks,bytes=len(body),frames=u32(body,8),crc=crc(body),
-           created=int(time.time()),flags=0,name=name)
+           created=int(time.time()),flags=flags,name=name)
     if index.version==2:e['folder']=folder
     index.entries.append(e);index.next_id+=1;store.commit(index,copies)
-    store.log(f"Stored {name}: {e['frames']/RATE:.3f} s, id {e['id']}")
+    store.log(f"Stored {name}: {seconds(e):.3f} s{' stereo' if flags&STEREO else ''}, id {e['id']}")
     return e
+
+def channels(e):
+    return 2 if e.get('flags',0)&STEREO and not e['frames']&1 else 1
+
+
+def seconds(e):
+    return e['frames']/channels(e)/RATE
+
 
 def sample_read(store,e):
     body=store.read_blocks(e['first'],e['blocks'],e['bytes'])
@@ -319,7 +428,7 @@ def cmd_get(store,key,out,raw=False):
     if Path(out).exists():raise ValueError('output already exists')
     index,_=store.current();body=sample_read(store,index.find(key))
     if raw:Path(out).write_bytes(body)
-    else:write_wav(out,body[SAMP_HEADER:])
+    else:write_wav(out,body[SAMP_HEADER:],channels(index.find(key)))
     return body
 
 def cmd_rm(store,key):
@@ -346,6 +455,7 @@ def main(argv=None):
     check=sub.add_parser('fsck');check.add_argument('--deep',action='store_true')
     get=sub.add_parser('get');get.add_argument('key');get.add_argument('--out',required=True);get.add_argument('--raw',action='store_true')
     put=sub.add_parser('put');put.add_argument('wav');put.add_argument('--name');put.add_argument('--folder',type=int,default=0)
+    put.add_argument('--mono',action='store_true',help='mix a stereo WAV to mono (default: keep it stereo)')
     rm=sub.add_parser('rm');rm.add_argument('key')
     stock=sub.add_parser('stock');stock.add_argument('wav');stock.add_argument('--slot',type=int,required=True,choices=range(1,65));stock.add_argument('--name')
     for command in (put,rm,stock,sub.choices['init']):command.add_argument('--yes-write-device',action='store_true')
@@ -360,17 +470,17 @@ def main(argv=None):
     stock_body=None
     if args.cmd=='stock':
         from .data_rpc import crop_stock
-        original=wav_body(args.wav,args.name or Path(args.wav).stem);stock_body=crop_stock(original)
+        original=wav_body(args.wav,args.name or Path(args.wav).stem,mono=True)[0];stock_body=crop_stock(original)  # stock slots are mono
         print(f'Stock slot {args.slot}: {u32(stock_body,8)/RATE:.3f} s'+(' (cropped to 5 s)' if len(original)!=len(stock_body) else ''))
     transport=MidiTransport(args.port)
     try:
-        client=DataClient(transport,block=args.block);store=Store(client)
+        client=DataClient(transport,block=args.block);store=Store(client,progress=Progress())
         if args.cmd=='stock':
             path=f'/samples/{args.slot}';client.write(path,stock_body)
             if client.read(path)!=stock_body:raise RuntimeError('stock sample readback differs')
         elif args.cmd=='ls':cmd_ls(store)
         elif args.cmd=='init':store.ensure()
-        elif args.cmd=='put':cmd_put(store,args.wav,args.name,args.folder)
+        elif args.cmd=='put':cmd_put(store,args.wav,args.name,args.folder,args.mono)
         elif args.cmd=='folders-enable':enable_folders(store,args.backup,firmware_confirmed=args.confirm_firmware)
         elif args.cmd in ('mkdir','move','rmdir'):
             index,copies=store.current()

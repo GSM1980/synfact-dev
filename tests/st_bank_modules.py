@@ -12,6 +12,8 @@ def check_bank_modules(report, raw, allowed):
     modules=report['modules']
     expected=[list(names) for names in allowed]
     expected += [['sp_sampler_input_module',*names] for names in allowed]
+    # samplers-st 1.3: its stereo-track module follows the input module
+    expected += [['sp_sampler_input_module','st_stereo_module',*names] for names in allowed]
     expected += [names+['sample_manager_module'] for names in list(expected)]
     # optional modules after them, in bank order: the chorus, then modulation skip
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)

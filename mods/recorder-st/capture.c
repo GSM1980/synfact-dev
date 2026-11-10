@@ -3,7 +3,7 @@ typedef unsigned int u32;
 typedef int s32;
 typedef unsigned char u8;
 extern volatile u32 sam_clock,sam_enabled,sam_source,sam_state,sam_post;
-extern volatile u32 sam_mon,sam_peak;
+extern volatile u32 sam_mon,sam_peak,sam_stereo,sam_take_stereo;
 extern volatile u32 sam_frames,sam_take_post;
 extern u8 *sam_view,*sam_manager;
 extern u32 sam_take_source,sam_limit,sam_trigger,sam_pcm_peak;
@@ -144,6 +144,18 @@ static void __attribute__((noinline)) headroom_capture(u32 state)
     }
 }
 
+/* STEREO MAIN (MAIN L+R): both USB main slots, each with its own PRE/POST
+ * correction, every block. No mono fast path: the stereo store does it all. */
+static void __attribute__((noinline)) headroom_main_stereo(u32 mode,u32 ready,u32 state)
+{
+    const volatile s32 *usb=(const volatile s32 *)0x80004760u;
+    const s32 *ret=sam_ret[mode?1:0];s32 l[32],r[32];u32 i;
+    for(i=0;i<32;i++) {
+        l[i]=usb[20*i];r[i]=usb[20*i+1];
+        if(ready){l[i]=headroom_side(l[i],mode?ret[2*i]:-ret[2*i]);r[i]=headroom_side(r[i],mode?ret[2*i+1]:-ret[2*i+1]);}
+    }
+    sam_stereo_store(l,r,5,state);
+}
 /* MAIN PRE/POST, including armed/recording. Freeze source/mode for a take,
  * exactly as the native routine. Other sources use its original body.
  * No decimation: every frame contributes to peak and capture at 48 kHz. */
@@ -168,6 +180,12 @@ void headroom_tick(void)
     }
     take=state==1 || state==2;
     if(take){source=sam_take_source;mode=sam_take_post;}
+    if(take?sam_take_stereo:sam_stereo) {
+        if(source!=5){ui_sampler_native_tick();return;}
+        sam_clock+=32;ready=sam_ret_clock==sam_clock-32u;
+        headroom_main_stereo(mode,ready,state);headroom_returns(mode);
+        headroom_meter_phase=23;return;
+    }
     /* The standby meter has no capture/threshold consumer. Sample at 60 Hz;
      * MAIN primes the PRE/POST correction on the preceding audio block.
      * Live input monitoring, ARMED and RECORDING always run every block. */

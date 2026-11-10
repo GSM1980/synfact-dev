@@ -139,12 +139,13 @@ class DataClient:
         if kind not in range(0x54,0x5a):raise PermissionError('only Data read/write RPC is allowed')
         if self.rest:time.sleep(self.rest)
         return ok(self.transport.call(kind,payload,timeout=15),kind)
-    def read(self,path,*,header_only=False):
+    def read(self,path,*,header_only=False,progress=None):
+        """progress(done, total): object bytes after each partial, once the size is known."""
         n=1 if path in ('/mods','/mods-stage','/mod-status') else sample_slot(path)
         if n is None or not (1<=n<=64 or 0x600<=n-RAW_FIRST<0x2000):
             if path not in ('/mods','/mods-stage','/mod-status'):raise PermissionError('unsupported read destination')
         rx=self.call(0x54,path.encode('ascii')+b'\0'+be32(self.block)+b'\0');job=u32(rx,6)
-        out=bytearray();seq=empty=0;expected=None
+        out=bytearray();seq=empty=0;expected=None;partial=False
         try:
             while expected is None or len(out)<expected:
                 rx=self.call(0x55,be32(job)+be32(seq));seq+=1
@@ -152,6 +153,7 @@ class DataClient:
                 size=u32(rx,23);chunk=rx[27:]
                 if len(chunk)!=size or size>self.block:raise RuntimeError('invalid read chunk size')
                 out.extend(chunk);empty=empty+1 if not size else 0
+                if progress and expected:progress(len(out),expected)
                 if empty>64:raise RuntimeError('read made no progress')
                 if len(out)>=31 and expected is None:
                     body_len=u32(out,25)
@@ -161,12 +163,19 @@ class DataClient:
                     expected=43+body_len
                     if header_only:
                         if out[:5]!=bytes.fromhex('ac11d30302') or u32(out,21)!=n:raise ValueError('invalid probe header')
-                        return body_len
+                        partial=True;return body_len
                 if rx[18] and (expected is None or len(out)<expected):raise RuntimeError('truncated Data object')
             if len(out)!=expected:raise RuntimeError('extra Data object bytes')
             return object_unpack(bytes(out),n)
-        finally:self.call(0x56,be32(job))
-    def write(self,path,body,*,card_bytes=None):
+        finally:
+            try:self.call(0x56,be32(job))
+            except RuntimeError as error:
+                # OS 1.41 closes an intentionally partial read (a header probe)
+                # with exactly this; the prefix was validated above. Any other
+                # close failure, or this one on a full read, is still an error.
+                if not (partial and str(error)=='Reader did not complete'):raise
+    def write(self,path,body,*,card_bytes=None,progress=None):
+        """progress(done, total): object bytes acknowledged after each partial."""
         n,body=checked_body(path,body,card_bytes)
         obj=object_pack(n,body);head,footer=obj[:-12],obj[-12:]
         rx=self.call(0x57,be32(len(obj))+path.encode('ascii')+b'\0');job=u32(rx,6)
@@ -180,6 +189,7 @@ class DataClient:
                     sent+=len(chunk)
                     if u32(rx,6)!=job or u32(rx,10)!=seq or u32(rx,14)!=sent:
                         raise RuntimeError('write acknowledgment differs')
+                    if progress:progress(sent,len(obj))
                     seq+=1
         except BaseException:
             # Close an incomplete job, but never publish metadata on failure.

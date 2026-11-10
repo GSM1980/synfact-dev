@@ -21,6 +21,7 @@ const struct st_machine_wave *core_pool_wave(u32 n){(void)n;return 0;}
 void core_pool_wave_idle(u32 n,u32 b){(void)n;(void)b;}
 int core_pool_sample_name(u32 n,char *s){(void)n;(void)s;return 0;}
 const struct st_machine_cursor *core_pool_cursor(u32 t,u32 n){(void)t;(void)n;return 0;}
+u32 core_pool_sample_channels(u32 n){(void)n;return 1;}
 void *fw_malloc(u32 n){return malloc(n);}
 void fw_free(void *p){free(p);}
 void fw_reset_increments(void *v){(void)v;assert(0);}
@@ -43,7 +44,7 @@ int main(void)
     u32 action[11]={0,0,0x219,0x21c},other[11]={0,0,0x219};
     struct st_machine_action_codec codec={0x21c,0,0,0},bad={0,0,0,0};
     table[0x68/4]=table[0x6c/4]=(u32)clear_mock;*(u32 **)view=table;
-    assert(a->version==7 && a->host==&core_machine_host_api && !a->bind_input(63,enc,key_mock) && !a->bind_input(80,enc,key_mock));
+    assert(a->version==8 && a->sample_channels==core_pool_sample_channels && a->host==&core_machine_host_api && !a->bind_input(63,enc,key_mock) && !a->bind_input(80,enc,key_mock));
     assert(!a->bind_input(65,enc,key_mock)); /* retired API refuses safely */
     assert(!a->bind_codec(&bad) && a->bind_codec(&codec));
     core_machine_action_select(action);assert(core_machine_action_codec==&codec);

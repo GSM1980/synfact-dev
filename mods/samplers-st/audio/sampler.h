@@ -2,7 +2,9 @@
 #ifndef SP_SAMPLER_H
 #define SP_SAMPLER_H
 typedef unsigned int sp_u32;typedef int sp_s32;
-struct sp_sample {sp_u32 frames;const short *pcm;};
+/* channels: 2 for interleaved L, R (core 1.8); 0 or 1 is mono. frames counts
+ * frames (pairs when stereo). */
+struct sp_sample {sp_u32 frames;const short *pcm;sp_u32 channels;};
 enum {SP_ONE,SP_WERP,SP_REPITCH,SP_SLICE};
 struct sp_state {
     struct sp_sample source;
@@ -20,7 +22,7 @@ void sp_one_window(struct sp_state *,sp_u32 pitch,sp_u32 tempo,int trigger);
 void sp_werp_window(struct sp_state *,sp_u32 pitch,sp_u32 tempo,int trigger);
 void sp_repitch_window(struct sp_state *,sp_u32 pitch,sp_u32 tempo,int trigger);
 void sp_slice_window(struct sp_state *,sp_u32 pitch,sp_u32 tempo,int trigger);
-void sp_pcm(struct sp_state *,sp_s32 *out);
+void sp_pcm(struct sp_state *,sp_s32 *out,sp_s32 *right);
 void sp_update(sp_u32 kind,sp_u32 pitch,void *voice,const unsigned short *params);
 void sp_render(void *out,void *voice);
 #endif

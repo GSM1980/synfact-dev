@@ -44,7 +44,9 @@ def verify(folder,synfact=None):
         if layout['ddr'][0]<=at<layout['ddr'][1]:at=layout['run_load']+at-layout['ddr'][0]
         return main[at-0x40000400:at-0x40000400+n]
     host=s['core:core_machine_host_api'];ui=s['core:core_machine_ui_api']
-    assert struct.unpack('>I',read(ui,4))[0]==7 and struct.unpack('>I',read(ui+40,4))[0]==host
+    # UI API 8 (core 1.8) appends sample_channels after host; the prefix is unchanged.
+    assert struct.unpack('>I',read(ui,4))[0]==8 and struct.unpack('>I',read(ui+40,4))[0]==host
+    assert struct.unpack('>I',read(ui+44,4))[0]==s['core:core_pool_sample_channels']
     names=('core_hzfs_native_io','core_hzfs_open','core_hzfs_close','core_crc_update',
            'core_pool_read','core_pool_write','core_pool_ready','st_pool_live_sync','st_pool_preview_stop','core_event_view')
     assert read(host,44)==struct.pack('>11I',14,*[s['core:'+name] for name in names])   # host API 14, prefix retained

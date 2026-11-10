@@ -41,7 +41,8 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         'parameter-transport':['tests/test_st_parameters.c'],
         'sampler-audio':['tests/test_st_samplers.c',*[str(p.relative_to(ROOT)) for p in
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
-        'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c']}
+        'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c'],
+        'stereo-transport':['tests/test_st_stereo.c']}
     cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
     # Safe boot (core 1.7.1): slot storage alone, the boot orchestration, and the
     # production loader with the production storage end to end (both on the bank).
@@ -104,6 +105,13 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
             for site in (0x4000094a,0x40000b04,0x40001016):
                 i=site-base;assert new[i:i+2]==old[i:i+2]==b'\x4e\xb9'
                 operands.update(range(i+2,i+6))
+            # The chain end (core 1.8) calls the companion; a previous build
+            # has it stock (move.l 4004f6e0,d0) or as a call.
+            i=0x40000ac6-base;assert new[i:i+2]==b'\x4e\xb9'
+            if old[i:i+6]==bytes.fromhex('20394004f6e0'):operands.update(range(i,i+6))
+            else:
+                assert old[i:i+2]==b'\x4e\xb9'
+                operands.update(range(i+2,i+6))
             # The base-width filter's two low-pass lookups (core 1.7.2) call the
             # companion: jsr + nop now; a previous build has them stock or as a call.
             for site in (0x40002364,0x400023e8):
@@ -132,10 +140,23 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                     return {Path(name).name:digest for name,digest in report['object_sha256'].items()
                             if Path(name).name.startswith('audio') and Path(name).suffix=='.o'}
                 new_objects,old_objects=audio_objects(current),audio_objects(baseline)
-                assert current['machines']==baseline['machines'] and current['modules']==baseline['modules']
+                assert current['machines']==baseline['machines']
+                # samplers-st 1.3 adds its stereo engine: the STEREO module right
+                # after the input module, and one more sampler AUDIO object (the
+                # sixth, stereo/audio.c). Nothing else may appear.
+                modules,added=list(baseline['modules']),set()
+                if 'st_stereo_module' in current['modules'] and 'st_stereo_module' not in modules:
+                    modules.insert(modules.index('sp_sampler_input_module')+1,'st_stereo_module')
+                    added={'audio0-5.o'}
+                    assert 'audio0-5.o' not in old_objects
+                    for name in added:new_objects.pop(name)
+                assert current['modules']==modules
                 assert new_section!=old_section and new_objects.keys()==old_objects.keys()
                 assert new_objects['audio0-0.o']!=old_objects['audio0-0.o']
-                assert all(new_objects[name]==old_objects[name] for name in new_objects if name!='audio0-0.o')
+                # The samplers (the first bank folder, audio0-*) share sampler.h: a
+                # change to its state (core 1.8: the sample's channel count) moves
+                # every sampler object. Every other mod's AUDIO object is identical.
+                assert all(new_objects[name]==old_objects[name] for name in new_objects if not name.startswith('audio0-'))
                 checks.append({'name':'sampler AUDIO changed; other AUDIO objects identical','ok':True})
             else:
                 assert new_section==old_section

@@ -6,6 +6,8 @@
 #include <string.h>
 #include <windows.h>
 static unsigned int table[256],win[256],bell,stocks[128];
+static unsigned char chans[128];
+#define CHANNELS chans
 #define TABLE table
 #define WIN win
 #define DOORBELL bell
@@ -53,6 +55,18 @@ int main(void)
     assert(win[36]==LO+256 && win[37]==300 && win[38]==40 && win[39]==1);
     {u32 i,sum=21;for(i=0;i<32;i++)sum+=win[8+i];assert(sum==win[7]);}
     request(22,6,0,1,0,0);assert((win[6]&65535)==2);
+    /* Core 1.8, stereo: bit 8 of the slot. 4 frame pairs span 16 bytes. */
+    {u32 st=LO+0x1000,data[4]={1,2,3,4};
+     request(23,1,st,16,0,0);request(24,2,st,16,data,4);
+     request(25,3,9,4,0,0);assert((win[6]&65535)==2);          /* 4 mono frames span 8, not 16 */
+     request(26,3,9|0x100,4,0,0);assert((win[6]&65535)==1 && table[18]==4 && table[19]==st && chans[9]==2);
+     request(27,1,st+8,8,0,0);assert((win[6]&65535)==2);        /* the R half is live too */
+     request(28,5,10,4,&st,1);assert((win[6]&65535)==2);        /* a mono alias of stereo PCM */
+     request(29,5,10|0x100,4,&st,1);assert((win[6]&65535)==1 && table[20]==4 && chans[10]==2);
+     pointer=stocks[1];request(30,5,11|0x100,240000,&pointer,1);assert((win[6]&65535)==2); /* stock is mono */
+     request(31,4,9,0,0,0);assert(!table[18] && chans[9]==1);
+     request(32,4,10,0,0,0);assert(!table[20] && chans[10]==1);
+     request(33,1,st+8,8,0,0);assert((win[6]&65535)==1);}       /* retired: free again */
     assert(bell);assert(VirtualFree(ram,0,MEM_RELEASE));
-    puts("PASS: core AUDIO pool staged publication, duplicate ACK, retirement, overlap, boundaries and checksums");return 0;
+    puts("PASS: core AUDIO pool staged publication, duplicate ACK, retirement, overlap, boundaries, checksums and stereo slots");return 0;
 }

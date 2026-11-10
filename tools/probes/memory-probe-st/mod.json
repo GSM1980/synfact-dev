@@ -1,0 +1,12 @@
+{
+  "id": "memory-probe-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "Memory probe", "category": "Synth", "author": "GSM1980",
+  "description": "Test only: checks that nothing writes two candidate memory areas (the shared window's 0x5b0..0x7df and AUDIO SRAM 0x8000f398..0x8000ffff).",
+  "device": "syntakt", "os": "1.41", "sources": ["main.c"], "cflags": ["-fno-jump-tables"],
+  "smz": {
+    "machines": [{"descriptor": "memory_probe_st", "ui": "memory_probe_ui",
+                  "update": "probe_update", "render": "probe_render"}],
+    "features": ["machine-ui-v1"],
+    "audio": {"sources": ["audio.c"]}
+  }
+}

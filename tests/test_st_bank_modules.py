@@ -27,7 +27,7 @@ def fixture(modules,browser=False):
 class BankModules(unittest.TestCase):
     def test_known_legacy_and_sampler_compositions(self):
         for names in ALLOWED:
-            for prefix in ([],['sp_sampler_input_module']):
+            for prefix in ([],['sp_sampler_input_module'],['sp_sampler_input_module','st_stereo_module']):
                 for browser in (False,True):
                     report,raw=fixture(prefix+names,browser)
                     check_bank_modules(report,raw,ALLOWED)
@@ -35,7 +35,8 @@ class BankModules(unittest.TestCase):
     def test_unknown_duplicate_or_reordered_modules_are_rejected(self):
         names=['sp_sampler_input_module',*ALLOWED[0]]
         for bad in [names+['unknown'],names+['sp_sampler_input_module'],
-                    [names[1],names[0],*names[2:]],names[:-1]]:
+                    [names[1],names[0],*names[2:]],names[:-1],
+                    ['st_stereo_module',*names],[names[0],*names[1:2],'st_stereo_module',*names[2:]]]:
             report,raw=fixture(bad)
             with self.assertRaises(AssertionError):check_bank_modules(report,raw,ALLOWED)
 

@@ -37,7 +37,10 @@ DEVICE = Device(
     terminal_zero_packet=True,
     secondary={7: ('daf6451cf9587c0b628e901b7bb6b25f4e2633d448c534c0c181dd35ec783bc2',
                    383760, 0x40000400,
-                   ((0x4000094a, 0x40000950), (0x40000b04, 0x40000b0a),
+                   ((0x4000094a, 0x40000950),
+                    # chain end: after the AMP stage, before the track DMA
+                    (0x40000ac6, 0x40000acc),
+                    (0x40000b04, 0x40000b0a),
                     (0x40001016, 0x40001020),
                     # base-width filter: the two low-pass pole lookups
                     (0x40002364, 0x4000236c), (0x400023e8, 0x400023f0),

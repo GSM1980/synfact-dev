@@ -19,6 +19,16 @@ audio_machine_exit:
         tst.l 0x40040050
         rts
         .endif
+| Chain end (core 1.8), at 40000ac6: the eight tracks are through AMP and
+| the track DMA has not started. Calls the hook in the chain-end directory
+| (40040f30, word 1; audio_machine_silent until a bank installs one), then
+| replays the displaced load of the window base. D0-D1/A0-A1 are free here.
+        .globl audio_chain_end
+audio_chain_end:
+        movea.l 0x40040f34,%a0
+        jsr (%a0)
+        move.l 0x4004f6e0,%d0
+        rts
 audio_machine_flush:
         movea.l 4(%sp),%a0
         move.l 8(%sp),%d0

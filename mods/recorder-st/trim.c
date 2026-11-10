@@ -48,9 +48,11 @@ static void sam_frame_text(char *text,u32 n)
 /* Exact extrema from complete 256-frame blocks plus PCM at partial edges.
  * At most 510 PCM edge reads per column, plus the disjoint cached blocks.
  * Manually seeded/legacy fixtures retain their coarse-envelope fallback. */
-static void sam_trim_range(u32 begin,u32 end,s32 *low,s32 *high)
+/* channel: 0 (L, or the mono take) or 1 (R of a stereo take). */
+static void sam_trim_range(u32 begin,u32 end,s32 *low,s32 *high,u32 channel)
 {
-    u32 i,b,e; s32 value;
+    u32 i,b,e,c=sam_take_stereo?2u:1u,base=channel?SAM_DETAIL_HALF:0;s32 value;
+    const short *wl=channel?sam_wave_low_r:sam_wave_low,*wh=channel?sam_wave_high_r:sam_wave_high;
     *low=0;*high=0;
     if(end>sam_frames)end=sam_frames;
     if(begin>=end)return;
@@ -58,12 +60,12 @@ static void sam_trim_range(u32 begin,u32 end,s32 *low,s32 *high)
         i=begin;
         while(i<end) {
             if(!(i&(SAM_DETAIL_BLOCK-1u)) && end-i>=SAM_DETAIL_BLOCK) {
-                b=i/SAM_DETAIL_BLOCK;
+                b=base+i/SAM_DETAIL_BLOCK;
                 if(sam_detail_low[b]<*low)*low=sam_detail_low[b];
                 if(sam_detail_high[b]>*high)*high=sam_detail_high[b];
                 i+=SAM_DETAIL_BLOCK;
             } else {
-                value=sam_pcm[i++];
+                value=sam_pcm[c*i+channel];i++;
                 if(value<*low)*low=value;
                 if(value>*high)*high=value;
             }
@@ -71,12 +73,20 @@ static void sam_trim_range(u32 begin,u32 end,s32 *low,s32 *high)
         return;
     }
     if(end-begin<=128u) {
-        for(i=begin;i<end;i++){value=sam_pcm[i];if(value<*low)*low=value;if(value>*high)*high=value;}
+        for(i=begin;i<end;i++){value=sam_pcm[c*i+channel];if(value<*low)*low=value;if(value>*high)*high=value;}
     } else {
         b=begin*126u/sam_frames;e=(end-1u)*126u/sam_frames;
         if(e>125)e=125;
-        for(i=b;i<=e;i++){if(sam_wave_low[i]<*low)*low=sam_wave_low[i];if(sam_wave_high[i]>*high)*high=sam_wave_high[i];}
+        for(i=b;i<=e;i++){if(wl[i]<*low)*low=wl[i];if(wh[i]>*high)*high=wh[i];}
     }
+}
+/* Bands: a mono take one band centred on y, +-half; a stereo take L above
+ * (centre y+top) and R below (centre y-bottom), each +-small. */
+struct sam_band {s32 y,half;};
+static u32 sam_bands(s32 y,s32 half,s32 offset,s32 small,struct sam_band *band)
+{
+    if(!sam_take_stereo){band[0].y=y;band[0].half=half;return 1;}
+    band[0].y=y+offset;band[0].half=small;band[1].y=y-offset;band[1].half=small;return 2;
 }
 /* Compact owned 3x5 glyphs match four encoder captions on a 128-pixel LCD.
  * No native font object is modified or copied. Row zero is the top row. */
@@ -106,20 +116,21 @@ static void sam_small(void *ctx,s32 x,s32 y,const char *text)
 }
 /* Digitakt 1.54 FUN_400a72d2 scales the 62-column detail by the full-take
  * peak and a ten-pixel half height, matching FUN_400a8c94's overview scale. */
-static s32 sam_wave_scale(s32 value)
+static s32 sam_wave_scale(s32 value,s32 half)
 {
     u32 peak=sam_detail_frames==sam_frames?sam_display_peak:32768u;
     if(!peak)peak=1;
     if(peak>32768u)peak=32768u;
-    return value*10/(s32)peak;
+    return value*half/(s32)peak;
 }
 /* Both the overview and TRIMMED show selected audio inverted. TRIMMED maps
  * its own [start,end) range across the full width, without touching PCM. */
 static void sam_draw_selection(void *ctx)
 {
     u32 n=sam_frames,begin=sam_trimmed?sam_trim_start:0;
-    u32 span=sam_trimmed?sam_trim_end-sam_trim_start:n,i,a,b,selected,start,end;
-    s32 lo,hi;
+    u32 span=sam_trimmed?sam_trim_end-sam_trim_start:n,i,a,b,selected,start,end,k,bands;
+    s32 lo,hi;struct sam_band band[2];
+    bands=sam_bands(28,10,6,5,band);
     WAVE_FILL(ctx,0,16,127,40,1);
     start=(sam_trim_start-begin)*126u/span;
     end=(sam_trim_end-begin)*126u/span;
@@ -128,9 +139,12 @@ static void sam_draw_selection(void *ctx)
         if(b<=a)b=a+1u;
         selected=i>=start && i<end;
         WAVE_FILL(ctx,1+(s32)i,17,1+(s32)i,39,selected);
-        if(sam_trimmed)sam_trim_range(a,b,&lo,&hi);
-        else {lo=sam_wave_low[i];hi=sam_wave_high[i];}
-        WAVE_FILL(ctx,1+(s32)i,28+sam_wave_scale(lo),1+(s32)i,28+sam_wave_scale(hi),selected?0:1);
+        for(k=0;k<bands;k++) {
+            if(sam_trimmed)sam_trim_range(a,b,&lo,&hi,k);
+            else {lo=k?sam_wave_low_r[i]:sam_wave_low[i];hi=k?sam_wave_high_r[i]:sam_wave_high[i];}
+            WAVE_FILL(ctx,1+(s32)i,band[k].y+sam_wave_scale(lo,band[k].half),
+                      1+(s32)i,band[k].y+sam_wave_scale(hi,band[k].half),selected?0:1);
+        }
     }
     if(start>125)start=125;
     if(end>125)end=125;
@@ -144,7 +158,8 @@ static void sam_draw_selection(void *ctx)
 static void sam_draw_loupe(void *ctx,u32 side)
 {
     u32 n=sam_frames,span=n>>sam_zoom[side],focus=side?sam_trim_end:sam_trim_start;
-    u32 begin,i,a,b,mark; s32 x=side?65:1,lo,hi;
+    u32 begin,i,a,b,mark,k,bands; s32 x=side?65:1,lo,hi;struct sam_band band[2];
+    bands=sam_bands(53,10,5,4,band);
     if(span<62u)span=62u;
     if(span>n)span=n;
     begin=focus>span/2u?focus-span/2u:0;
@@ -153,8 +168,11 @@ static void sam_draw_loupe(void *ctx,u32 side)
     for(i=0;i<62;i++) {
         a=begin+span*i/62u;b=begin+span*(i+1u)/62u;
         if(b<=a)b=a+1u;
-        sam_trim_range(a,b,&lo,&hi);
-        WAVE_FILL(ctx,x+(s32)i,53+sam_wave_scale(lo),x+(s32)i,53+sam_wave_scale(hi),1);
+        for(k=0;k<bands;k++) {
+            sam_trim_range(a,b,&lo,&hi,k);
+            WAVE_FILL(ctx,x+(s32)i,band[k].y+sam_wave_scale(lo,band[k].half),
+                      x+(s32)i,band[k].y+sam_wave_scale(hi,band[k].half),1);
+        }
     }
     mark=(focus-begin)*61u/span;if(mark>61)mark=61;
     if(!side)WAVE_FILL(ctx,x+(s32)mark,43,x+(s32)mark,63,1);
@@ -173,9 +191,10 @@ static void sam_editor_draw(void *ctx)
         for(i=48;i<=63;i+=2)WAVE_PIXEL(ctx,63,(s32)i,1);
     } else {
         /* The upper overview locates the retained selection in the full take. */
-        for(i=0;i<126;i++) {
-            WAVE_FILL(ctx,1+(s32)i,55+((s32)sam_wave_low[i]*6>>15),
-                      1+(s32)i,55+((s32)sam_wave_high[i]*6>>15),1);
+        struct sam_band band[2];u32 k,bands=sam_bands(55,6,3,3,band);
+        for(i=0;i<126;i++)for(k=0;k<bands;k++) {
+            WAVE_FILL(ctx,1+(s32)i,band[k].y+((s32)(k?sam_wave_low_r:sam_wave_low)[i]*band[k].half>>15),
+                      1+(s32)i,band[k].y+((s32)(k?sam_wave_high_r:sam_wave_high)[i]*band[k].half>>15),1);
         }
         i=1+sam_trim_start*125u/sam_frames;WAVE_FILL(ctx,(s32)i,48,(s32)i,62,1);
         i=1+sam_trim_end*125u/sam_frames;
