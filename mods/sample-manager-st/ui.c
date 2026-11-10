@@ -144,6 +144,10 @@ static u32 ui_view_table[19] DATA = {1};
 static char ui_status[40] DATA = "YES ADD  FUNC+NO REMOVE";
 static u32 ui_combo_keys DATA = 0;
 static u32 ui_yes_down DATA = 0;
+/* Set by a FUNC+YES audition of a sample: FUNC+UP/DOWN then step one row,
+ * so DOWN, YES, DOWN, YES auditions neighbours under one FUNC hold. A FUNC
+ * press or release (key 1, not a repeat) restores the eight-row step. */
+static u32 ui_fine_step DATA = 0;
 static u32 ui_loading DATA = 0, ui_progress_done DATA = 0, ui_progress_total DATA = 0;
 static u32 ui_progress_count DATA = 0, ui_progress_percent DATA = 101;
 static char ui_progress_label[40] DATA = {0};
@@ -285,7 +289,7 @@ s32 st_pool_ui_preview(u32 code)
 static void manager_tick(void *controller)
 {
     (void)controller;
-    if(ui_view){if(ui_foreground())manager_refill();else {preview_stop();ui_yes_down=0;}}
+    if(ui_view){if(ui_foreground())manager_refill();else {preview_stop();ui_yes_down=0;ui_fine_step=0;}}
 }
 static void row_name(char *s,u32 code)
 {
@@ -509,7 +513,7 @@ void st_pool_ui_open(u8 *menu)
     /* Native idle/lifetime methods remain untouched. Streaming refill uses
      * the ordinary ev_tick subscription, like other periodic core UI work. */
     *(u32 **)(view+0x38)=ui_view_table+2;
-    ui_view=view;ui_mode=1;ui_count=0;ui_combo_keys=0;ui_yes_down=0;
+    ui_view=view;ui_mode=1;ui_count=0;ui_combo_keys=0;ui_yes_down=0;ui_fine_step=0;
     if(st_pool_read(WORKING_PROJECT,st_pool_now)!=1) st_pool_write(WORKING_PROJECT,st_pool_now);
     ui_index=hz_load(&ui_index_len);
     ui_folder=0;
@@ -540,7 +544,9 @@ u32 st_pool_ui_pre_event(void *app,const u8 *ev)
 {
     u32 key=be32(ev+12),flags=be32(ev+16),bit;
     (void)app;
-    if(!ui_foreground()) { ui_combo_keys=0;ui_yes_down=0;preview_stop();return 0; }
+    if(!ui_foreground()) { ui_combo_keys=0;ui_yes_down=0;ui_fine_step=0;preview_stop();return 0; }
+    /* FUNC itself stays native; its press and release end the fine step. */
+    if(key==1) { if(!(flags&8)) ui_fine_step=0;return 0; }
     if(key!=12 && key!=13) return 0;
     bit=key==12?1:2;
     if(flags&1) {
@@ -561,10 +567,12 @@ u32 st_pool_ui_event(const u8 *ev)
 {
     u32 key,flags,row,code=0,count,step; u8 *active;
     struct row_capture c; struct fn_capture fn;
-    if(!ui_foreground()) { ui_yes_down=0;preview_stop();return 0; }
+    if(!ui_foreground()) { ui_yes_down=0;ui_fine_step=0;preview_stop();return 0; }
     if(ui_loading) return 1;
     key=be32(ev+12);flags=be32(ev+16);
     if(key<12 || key>17) return 0;
+    /* A press without FUNC means FUNC was let go, even if its release was missed. */
+    if((flags&1) && !(flags&2)) ui_fine_step=0;
     active=*(u8 **)(ui_view+0x540);
     if(!(flags&1)) {
         if(key==12) {
@@ -579,7 +587,10 @@ u32 st_pool_ui_event(const u8 *ev)
     row=*(u32 *)(ui_view+16);
     if(ui_mode && row<ui_count) code=ui_codes[row];
     else if(!ui_mode && row<SLOTS) { st_pool_read(WORKING_PROJECT,st_pool_now);code=st_pool_now[row]; }
-    if(key==12 && (flags&2)) { st_pool_ui_preview(code);return 1; }
+    if(key==12 && (flags&2)) {
+        if(code && !(ui_mode && library_folder(code))) ui_fine_step=1;
+        st_pool_ui_preview(code);return 1;
+    }
     if(key==13 && (flags&2)) return 1;
     if(key==13) { preview_stop();return 0; }
     if(key==16 || key==17) {
@@ -589,7 +600,7 @@ u32 st_pool_ui_event(const u8 *ev)
     }
     if(key==14 || key==15) {
         count=active==ui_view?(ui_mode?ui_count:SLOTS):1;
-        row=*(u32 *)(active+16);step=(flags&2)?8:1;preview_stop();
+        row=*(u32 *)(active+16);step=(flags&2) && !ui_fine_step?8:1;preview_stop();
         if(!count) return 1;
         if(key==14) row=row>step?row-step:0;
         else row=row+step<count?row+step:count-1;

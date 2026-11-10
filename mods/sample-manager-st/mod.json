@@ -1,5 +1,5 @@
 {
-  "id": "sample-manager-st", "version": "1.1", "title": "Sample Manager", "license": "GPL-2.0-or-later",
+  "id": "sample-manager-st", "version": "1.2", "title": "Sample Manager", "license": "GPL-2.0-or-later",
   "device": "syntakt", "os": "1.41", "sources": ["main.c"],
   "smz_module": {"descriptor": "sample_manager_module"}
 }

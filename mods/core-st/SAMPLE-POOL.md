@@ -120,6 +120,10 @@ firmware function/string objects are not copied or modified.
   Removing positions **1..64** is refused with STOCK SLOT(S) PROTECTED. Batch
   removal skips these positions and removes only selected positions 65..128.
 - Hold FUNC+YES to audition the current sample; releasing YES stops audition.
+  After a FUNC+YES audition of a sample, FUNC+UP/DOWN moves one row instead
+  of eight while FUNC stays held, so DOWN, YES, DOWN, YES auditions one
+  sample after another; pressing or releasing FUNC again restores eight
+  (Sample Manager 1.2).
   A two-window ring streams PCM from the UI `ev_tick` subscription; the MAIN
   mix event consumes it. The manager's native idle method remains untouched.
   Preview has its own RAM and never replaces project/AUDIO sample descriptors.

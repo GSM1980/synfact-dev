@@ -78,6 +78,7 @@ static void fake_dtor(void *p){assert(p==fake_view);}
 static u32 fake_push(void *m,void *pair,u32 flags)
 {(void)flags;assert(m==manager && *(void **)pair==fake_view+0x38);*(u8 **)(manager+0x1c)=node;*(u8 **)(node+8)=fake_view+0x38;return 1;}
 static void key(u32 id,u32 flags){u8 ev[20]={0};put32(ev+12,id);put32(ev+16,flags);st_pool_ui_event(ev);}
+static void pre(u32 id,u32 flags){u8 ev[20]={0};put32(ev+12,id);put32(ev+16,flags);assert(!st_pool_ui_pre_event(0,ev));}
 static void close_view(void){u8 *v=ui_view;st_pool_ui_dispose(v);fake_view=0;assert(!ui_view && !preview_length && !ui_codes && !ui_selected && !ui_index);}
 int main(void)
 {
@@ -113,6 +114,21 @@ int main(void)
     assert(st_pool_ui_remove(0)==-1 && record[0]==1 && syncs==1);
     UI_THREE_FOCUS(ui_view,ui_view);UI_LIST_SELECT(ui_view,64,0);
     key(12,1);key(12,16);assert(ui_pool_selected[64]);key(17,1);key(12,1);key(12,16);assert(!record[64] && syncs==2);
+    /* FUNC+UP/DOWN steps eight rows until a FUNC+YES audition of a sample,
+     * then one row while FUNC stays held; FUNC repeats keep the fine step. */
+    UI_THREE_FOCUS(ui_view,ui_view);UI_LIST_SELECT(ui_view,0,0);
+    key(15,3);assert(*(u32 *)(ui_view+16)==8);key(15,3);assert(*(u32 *)(ui_view+16)==16);
+    key(12,3);assert(ui_fine_step && ui_yes_down);key(12,0x12);assert(!ui_yes_down);
+    key(15,3);assert(*(u32 *)(ui_view+16)==17);key(12,3);key(12,0x12);pre(1,9);
+    key(15,3);assert(*(u32 *)(ui_view+16)==18);key(14,3);assert(*(u32 *)(ui_view+16)==17);
+    pre(1,0x10);assert(!ui_fine_step);key(15,3);assert(*(u32 *)(ui_view+16)==25);
+    /* A fresh FUNC press, or a key pressed without FUNC, also ends it. */
+    key(12,3);key(12,0x12);pre(1,1);assert(!ui_fine_step);key(14,3);assert(*(u32 *)(ui_view+16)==17);
+    key(12,3);key(12,0x12);key(15,1);assert(!ui_fine_step && *(u32 *)(ui_view+16)==18);
+    key(15,3);assert(*(u32 *)(ui_view+16)==26);
+    /* An empty slot is not an audition: the step stays at eight. */
+    pre(1,0x10);UI_LIST_SELECT(ui_view,64,0);key(12,3);key(12,0x12);assert(!ui_fine_step);
+    key(14,3);assert(*(u32 *)(ui_view+16)==56);
     /* Single and batch insertion skip even empty stock rows in legacy pools. */
     record[0]=0;record[65]=0x8002;
     assert(st_pool_ui_add(0x8001)==65 && record[64]==0x8001 && !record[0] && syncs==3);

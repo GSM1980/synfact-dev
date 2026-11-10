@@ -13,6 +13,10 @@ core on bank initialization/failure. Nothing survives a failed bank bind.
 
 YES enters [folders]; the `..` row returns to the parent. Normal sample rows
 keep their selection behavior; FUNC+YES previews through the core service.
+FUNC+UP/DOWN moves eight rows; after a FUNC+YES audition of a sample it moves
+one row while FUNC stays held (hold FUNC, then DOWN, YES, DOWN, YES… to
+audition neighbours). Pressing or releasing FUNC, or any key pressed without
+FUNC, restores the eight-row step.
 Selected samples from the displayed folder can be added to positions 65–128.
 The project pool remains flat. The 64 stock samples remain protected.
 
