@@ -19,7 +19,7 @@
       "slug": "core-st",
       "id": "core",
       "title": "core",
-      "latest": "1.7.2",
+      "latest": "1.8.0",
       "path": "mods/core-st"
     },
     {
@@ -61,21 +61,21 @@
       "slug": "recorder-st",
       "id": "recorder-st",
       "title": "Audio Recorder",
-      "latest": "1.0",
+      "latest": "1.1",
       "path": "mods/recorder-st"
     },
     {
       "slug": "sample-manager-st",
       "id": "sample-manager-st",
       "title": "Sample Manager",
-      "latest": "1.0",
+      "latest": "1.1",
       "path": "mods/sample-manager-st"
     },
     {
       "slug": "samplers-st",
       "id": "samplers-st",
       "title": "SP sample machines",
-      "latest": "1.2",
+      "latest": "1.3",
       "path": "mods/samplers-st"
     },
     {

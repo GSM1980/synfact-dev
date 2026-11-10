@@ -21,6 +21,11 @@
           "sha": "5382765",
           "date": "2026-11-09",
           "subject": "Changelogs for the Syntakt core and mods, generated from git history"
+        },
+        {
+          "sha": "f9192b9",
+          "date": "2026-11-09",
+          "subject": "Changelogs: core 1.7.2"
         }
       ]
     },

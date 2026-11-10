@@ -1,8 +1,19 @@
 {
   "id": "recorder-st",
   "title": "Audio Recorder",
-  "latest": "1.0",
+  "latest": "1.1",
   "entries": [
+    {
+      "version": "1.1",
+      "date": "2026-11-10",
+      "commits": [
+        {
+          "sha": "222a29d",
+          "date": "2026-11-10",
+          "subject": "Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0)"
+        }
+      ]
+    },
     {
       "version": "1.0",
       "date": "2026-11-02",
@@ -16,6 +27,11 @@
           "sha": "5382765",
           "date": "2026-11-09",
           "subject": "Changelogs for the Syntakt core and mods, generated from git history"
+        },
+        {
+          "sha": "f9192b9",
+          "date": "2026-11-09",
+          "subject": "Changelogs: core 1.7.2"
         },
         {
           "sha": "347ef8e",

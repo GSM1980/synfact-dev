@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.7.2.
+Generated from git history by `tools/changelog.py`. Latest version: 1.8.0.
+
+## 1.8.0 (2026-11-10)
+
+- Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0) (`222a29d`, 2026-11-10)
 
 ## 1.7.2 (2026-11-09)
 
 - Core 1.7.2: the base-width filter reads stock poles (`1378804`, 2026-11-09)
+- Changelogs: core 1.7.2 (`f9192b9`, 2026-11-09)
 
 ## 1.7.1 (2026-11-09)
 

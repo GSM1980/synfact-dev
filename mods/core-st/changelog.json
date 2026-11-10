@@ -1,8 +1,19 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "1.7.2",
+  "latest": "1.8.0",
   "entries": [
+    {
+      "version": "1.8.0",
+      "date": "2026-11-10",
+      "commits": [
+        {
+          "sha": "222a29d",
+          "date": "2026-11-10",
+          "subject": "Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0)"
+        }
+      ]
+    },
     {
       "version": "1.7.2",
       "date": "2026-11-09",
@@ -11,6 +22,11 @@
           "sha": "1378804",
           "date": "2026-11-09",
           "subject": "Core 1.7.2: the base-width filter reads stock poles"
+        },
+        {
+          "sha": "f9192b9",
+          "date": "2026-11-09",
+          "subject": "Changelogs: core 1.7.2"
         }
       ]
     },

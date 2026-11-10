@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.0.
 ## 1.0 (2026-11-03)
 
 - Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)
+- Changelogs: core 1.7.2 (`f9192b9`, 2026-11-09)
 - machines-st 1.0 (`38a39d5`, 2026-11-03)
 
 ## 0.1 (2026-10-29)

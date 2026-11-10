@@ -18,6 +18,11 @@
           "subject": "Changelogs for the Syntakt core and mods, generated from git history"
         },
         {
+          "sha": "f9192b9",
+          "date": "2026-11-09",
+          "subject": "Changelogs: core 1.7.2"
+        },
+        {
           "sha": "d4ad3ae",
           "date": "2026-11-06",
           "subject": "Core 1.4: page randomize on the new pages (list item 22)"
