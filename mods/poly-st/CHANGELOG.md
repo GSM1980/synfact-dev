@@ -1,9 +1,14 @@
 # Changelog: POLY
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.4.
+Generated from git history by `tools/changelog.py`. Latest version: 1.5.
+
+## 1.5 (2026-11-11)
+
+- ARP 1.9, POLY 1.5: TRIG page popups and blue arp steps (`80f36a1`, 2026-11-11)
 
 ## 1.4 (2026-11-09)
 
+- Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
 - Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
 - Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 - ARP 1.8, FM TONE 1.1, POLY 1.4: TRIG pages, SCALE, falling RANGE, FUNC snaps (`f89c72b`, 2026-11-09)

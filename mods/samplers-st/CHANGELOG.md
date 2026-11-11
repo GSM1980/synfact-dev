@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.4.
 ## 1.4 (2026-11-11)
 
 - Samplers 1.4: lighter PCM and stereo engine, stereo only while it sounds (`3fec310`, 2026-11-11)
+- Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
 
 ## 1.3 (2026-11-10)
 

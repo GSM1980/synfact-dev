@@ -8,6 +8,11 @@
       "date": "2026-11-10",
       "commits": [
         {
+          "sha": "9c5ba25",
+          "date": "2026-11-11",
+          "subject": "Changelogs: samplers 1.4"
+        },
+        {
           "sha": "222a29d",
           "date": "2026-11-10",
           "subject": "Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0)"

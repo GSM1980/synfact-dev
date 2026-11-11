@@ -8,6 +8,11 @@
       "date": "2026-11-10",
       "commits": [
         {
+          "sha": "9c5ba25",
+          "date": "2026-11-11",
+          "subject": "Changelogs: samplers 1.4"
+        },
+        {
           "sha": "a4bd154",
           "date": "2026-11-10",
           "subject": "Sample Manager 1.2: FUNC+UP/DOWN steps one row after an audition"

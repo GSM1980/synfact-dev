@@ -11,6 +11,11 @@
           "sha": "3fec310",
           "date": "2026-11-11",
           "subject": "Samplers 1.4: lighter PCM and stereo engine, stereo only while it sounds"
+        },
+        {
+          "sha": "9c5ba25",
+          "date": "2026-11-11",
+          "subject": "Changelogs: samplers 1.4"
         }
       ]
     },

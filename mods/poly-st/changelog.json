@@ -1,12 +1,28 @@
 {
   "id": "poly-st",
   "title": "POLY",
-  "latest": "1.4",
+  "latest": "1.5",
   "entries": [
+    {
+      "version": "1.5",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "80f36a1",
+          "date": "2026-11-11",
+          "subject": "ARP 1.9, POLY 1.5: TRIG page popups and blue arp steps"
+        }
+      ]
+    },
     {
       "version": "1.4",
       "date": "2026-11-09",
       "commits": [
+        {
+          "sha": "9c5ba25",
+          "date": "2026-11-11",
+          "subject": "Changelogs: samplers 1.4"
+        },
         {
           "sha": "40e397f",
           "date": "2026-11-10",
