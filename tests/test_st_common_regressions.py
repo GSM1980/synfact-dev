@@ -42,7 +42,8 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         'sampler-audio':['tests/test_st_samplers.c',*[str(p.relative_to(ROOT)) for p in
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
         'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c'],
-        'stereo-transport':['tests/test_st_stereo.c']}
+        'stereo-transport':['tests/test_st_stereo.c'],
+        'sampler-fast':['tests/test_st_sampler_fast.c']}
     cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
     # Safe boot (core 1.7.1): slot storage alone, the boot orchestration, and the
     # production loader with the production storage end to end (both on the bank).
@@ -143,13 +144,18 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 assert current['machines']==baseline['machines']
                 # samplers-st 1.3 adds its stereo engine: the STEREO module right
                 # after the input module, and one more sampler AUDIO object (the
-                # sixth, stereo/audio.c). Nothing else may appear.
-                modules,added=list(baseline['modules']),set()
+                # sixth, stereo/audio.c); 1.4 adds the seventh, audio/voice-stereo.c.
+                # New objects may appear only in the samplers' folder (audio0-*),
+                # after the old ones. Nothing else may appear.
+                modules=list(baseline['modules'])
                 if 'st_stereo_module' in current['modules'] and 'st_stereo_module' not in modules:
                     modules.insert(modules.index('sp_sampler_input_module')+1,'st_stereo_module')
-                    added={'audio0-5.o'}
-                    assert 'audio0-5.o' not in old_objects
-                    for name in added:new_objects.pop(name)
+                    assert 'audio0-5.o' in new_objects and 'audio0-5.o' not in old_objects
+                def index(name):return int(Path(name).stem.split('-')[1])
+                added={name for name in new_objects if name not in old_objects}
+                assert all(name.startswith('audio0-') for name in added),added
+                assert not added or min(map(index,added))>max(index(n) for n in old_objects if n.startswith('audio0-'))
+                for name in added:new_objects.pop(name)
                 assert current['modules']==modules
                 assert new_section!=old_section and new_objects.keys()==old_objects.keys()
                 assert new_objects['audio0-0.o']!=old_objects['audio0-0.o']

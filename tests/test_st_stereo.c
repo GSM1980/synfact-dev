@@ -118,8 +118,21 @@ int main(void)
     send(0xffu,stage);memcpy(main_l,tracks,sizeof(tracks));receive();assert(current()==0xffu && alive);
     /* A track whose D is zero leaves the mask. */
     memcpy(right,tracks,sizeof(right));send(0xffu,stage);assert(window[ST_STEREO_MASK/4]==0);
+    /* The engine's empty block (no stereo track): MAIN mixes nothing and
+     * counts no dropped block, interrupt after interrupt. */
+    {uint32_t dropped;st_stereo_main_counters.mask=0xff;send(0,stage);receive();assert(current()==0);
+     assert(st_stereo_main_counters.mask==0);          /* the probe's M shows no stereo track */
+     dropped=st_stereo_main_counters.dropped;
+     for(t=0;t<4;t++){for(i=0;i<8*32;i++)main_l[i]=(int32_t)(i*7+t);receive();assert(current()==0);}
+     assert(st_stereo_main_counters.dropped==dropped);}
+    /* A tail's silence for the claim: under 2^16 in magnitude, the native
+     * multimode's residual (a few hundred) included; at 2^16 and beyond, sound. */
+    {int x[32];static const int quiet[]={0,1,-1,270,-270,0xffff,-0xffff};
+     static const int loud[]={0x10000,-0x10000,0x7fffffff,(int)0x80000000,0x123456};
+     for(t=0;t<sizeof(quiet)/sizeof(quiet[0]);t++){memset(x,0,sizeof(x));x[t*4]=quiet[t];assert(!st_stereo_audible(x));}
+     for(t=0;t<sizeof(loud)/sizeof(loud[0]);t++){memset(x,0,sizeof(x));x[31-t]=loud[t];assert(st_stereo_audible(x));}}
     /* No engine: a window without the tag is never read. */
     window[ST_STEREO_TAG/4]=0;send(0xffu,stage);window[ST_STEREO_TAG/4]=0;receive();assert(!tagged && current()==0);
-    puts("PASS: stereo D packing, gR x D on the right bus, L fingerprint pairing (late, kept, dropped, again), torn retries, a restart's stale block, zero D");
+    puts("PASS: stereo D packing, gR x D on the right bus, L fingerprint pairing (late, kept, dropped, again), torn retries, a restart's stale block, zero D, the empty block, the quiet threshold");
     return 0;
 }

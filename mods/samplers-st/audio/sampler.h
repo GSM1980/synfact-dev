@@ -10,7 +10,7 @@ struct sp_state {
     struct sp_sample source;
     sp_u32 kind,initialized,slot,active,play,wrapped;
     sp_u32 start,end,loop,frame,fraction,step,br;
-    sp_u32 position,segment,phase,running;
+    sp_u32 position,segment,phase,running,heard;
     sp_u32 old_start,old_end,old_loop,old_play;
     unsigned short control[8];
 };
@@ -25,4 +25,8 @@ void sp_slice_window(struct sp_state *,sp_u32 pitch,sp_u32 tempo,int trigger);
 void sp_pcm(struct sp_state *,sp_s32 *out,sp_s32 *right);
 void sp_update(sp_u32 kind,sp_u32 pitch,void *voice,const unsigned short *params);
 void sp_render(void *out,void *voice);
+sp_u32 sp_stereo_wanted(const sp_s32 *l,const sp_s32 *r,const sp_s32 *pcm_l,const sp_s32 *pcm_r,sp_u32 trig,sp_u32 *heard);
+/* voice-stereo.c: the native voice tail on L and R (target only) */
+void st_voice_filter2(sp_s32 *l,sp_s32 *r,sp_u32 *filter_l,sp_u32 *filter_r);
+void st_voice_gains2(sp_s32 *l,sp_s32 *r,sp_s32 *out_l,sp_s32 *out_r,void *voice);
 #endif

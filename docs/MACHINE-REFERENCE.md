@@ -255,16 +255,28 @@ as a difference:
    `ST_STEREO_R(t)` (`st_stereo_claim(t)`, `<syntakt/stereo.h>`). It runs the
    render filter `0x400068ea` on R with L's coefficients and R's own memory,
    and the two gain ramps (`0x400045a0`, `0x400049f4`) from the start values
-   L used.
+   L used. Since samplers-st 1.4 a stereo track does the filter on L and R in
+   one loop and both ramps of L and R in another, with the natives' own EMAC
+   operations in their order (`mods/samplers-st/audio/voice-stereo.c`; the
+   same words, checked in analog-emu).
 2. At the chain end (core 1.8, `40000ac6`, after AMP and before the track
    DMA) the engine runs the native chain on R: drive and base-width on all
    eight R buffers, the multimode and the AMP envelope (`0x40001476`, per
    track) of the claimed tracks. Only the chain writes the chain's state
    (a scan of the AUDIO image: the chain routines and the boot), so the state
    from before the L pass is the one the previous chain end left. The engine
-   saves the control state the L pass left, loads the one from before it,
-   swaps in R's signal memory, runs the chain, then swaps L's memory back and
-   reloads L's control state. Mono tracks and L are what the stock chain made.
+   exchanges the control state the L pass left with the one from before it
+   (kept from the previous chain end), swaps in R's signal memory, runs the
+   chain, then swaps L's memory back and copies L's control state back; that
+   copy is the next block's state from before its L pass. Mono tracks and L
+   are what the stock chain made. When every claimed track has OVERDRIVE off
+   (row word `0x28` <= 0) and a drive wet weight (`0x800083b0 + 4t`) of 0,
+   the native drive's output for those tracks is its dry MAC alone, and the
+   engine runs that MAC itself instead of the native drive. The multimode on
+   R skips its coefficient part: R's targets are the coefficients the L pass
+   left (`0x80008740 + 32t`), so the engine writes them to the routine's
+   target block (`0x80008900`), builds the native frame (t at 48, the type at
+   52) and enters at `0x40001ea4`, where every path of the first part joins.
 3. It sends D = R − L through the shared window, `0x5b0` to `0x7df`: 32
    16-bit mantissas per track, one shift per track and block
    (D = mantissa << (shift + 1)), the track mask, a tag and the sequence at
@@ -276,7 +288,13 @@ as a difference:
 4. MAIN adds gR × D to every bus the right gain feeds: the delay input
    (`ev_delay_in`), the reverb input (`ev_reverb_in`) and the two main buses
    (`ev_main_mix`). Left stays gL × L and right becomes gR × R; pan acts as a
-   balance.
+   balance. Since samplers-st 1.4 with EMAC: D / 2 is expanded to Q31 once a
+   block, and each bus takes four tracks a pass, `acc0 = bus`, two MSACs a
+   track (fractional, MACSR `0xa0`: the scale factor works in integer modes
+   only, RM 5.3.5), MOVCLR. The 48-bit accumulator holds the pass's sum and
+   MOVCLR saturates it, so a clipping bus saturates after each four tracks
+   (1.3: after each track). The interrupted code's MACSR, ACC0 and ACCext01
+   are saved and put back raw.
 
 Pairing D with its L. MAIN's audio interrupt reads L by DMA (`0x400a4a74`)
 and mixes it later in the same interrupt (`0x400a4fce`), and AUDIO can finish
@@ -293,11 +311,24 @@ D with it. The only block never used is the one a restart left in the window,
 until the engine has sent one of this boot. The track is not meant to fall
 back to mono: `DROP` on the test probe counts the blocks where no D matched.
 
-Which tracks are stereo: the samplers claim a track while it plays a stereo
-sample (core 1.8, `st_machine_sample_channels`; SAMPLE-POOL.md) and while the
-previous block still sounds on L or R after the chain, so a filter's tail
-stays stereo to its end. A mono sample costs nothing, a track whose D is zero
-leaves the mask, and in STOP the R pass and MAIN's work cost nothing.
+Which tracks are stereo (samplers-st 1.4, `sp_stereo_wanted`): a track with
+a stereo sample (core 1.8, `st_machine_sample_channels`; SAMPLE-POOL.md) is
+claimed in the block it is triggered in (voice + 0x38), while the previous
+block still sounds on L or R after the chain, and in a block where its PCM
+starts after a silent one. A track with a mono sample is claimed only while
+a stereo tail still sounds on R. Not "while the sample plays": in STOP a
+looping sample plays on under a closed AMP envelope, and in samplers-st 1.3
+that kept the R pass running in silence. A mono sample
+costs nothing, a track whose D stays under -96 dBFS leaves the mask, and in
+STOP, once the output is silent, the R pass and MAIN's work cost nothing.
+"Still sounds" is a sample at or above `ST_STEREO_QUIET` (2^16 in Q31,
+-96 dBFS), not a nonzero one: after silence in, the native multimode of
+types 0 and 1 settles on a residual of a few hundred (about -138 dBFS) and
+never reaches 0 (types 2 to 6 take 220 to 930 blocks), so in samplers-st
+1.3 a track that had played a stereo sample could stay stereo, its R pass
+running every block, for good. With the threshold every
+type's tail is quiet within 12 blocks of silence (analog-emu,
+`tests/test_st_stereo_natives_emu.py`).
 
 The gains are the stock kernels' own: each kernel ramps a track's gain over
 the block from the value in its state array to the target and stores the end
@@ -310,7 +341,8 @@ reverb `0x800062c0`, main bus `0x8000e160` (bus `0x8000dad0`), direct bus
 |---|---|---|
 | `0x8000f400` | 1024 bytes | R buffers, 8 × 32 Q31 |
 | `0x8000f800` | 160 bytes | R's chain memory: multimode `0x80008580` (8 words) and `0x80008920` (16), base-width `0x800088a0` (16) |
-| `0x8000f8a0`, `0x8000fb50` | 688 bytes each | the chain's control state, before and after the L pass: drive `0x800083b0` (40 words), flags and types `0x80008550` (12), multimode coefficients and mix weights `0x80008740` (88), `0x800088e0` (8), AMP `0x800049e0` (24). The one free after a chain end stages the block the DMA sends |
+| `0x8000f8a0` | 688 bytes | the chain's control state from before the L pass (after a chain end: the L pass's, for the next block): drive `0x800083b0` (40 words), flags and types `0x80008550` (12), multimode coefficients and mix weights `0x80008740` (88), `0x800088e0` (8), AMP `0x800049e0` (24) |
+| `0x8000fb50` | 688 bytes | where the engine stages the block it copies to the window (samplers-st 1.3: the second copy of the control state) |
 | `0x8000fe00` | 128 bytes | R's render-filter blocks, 4 words per track |
 | `0x8000fe80` | 128 bytes | render scratch for R |
 
@@ -320,7 +352,10 @@ the fingerprint, `0x5c4` the tag `STR2`, `0x5c8` blocks with a stereo track,
 sequence again; `0x7e0` to `0x7ef` a profile for test pages
 (`<syntakt/stereo.h>`). AUDIO writes in ascending order, so MAIN reads
 `0x7d0`, the block, then `0x5b0`: equal means one whole block. The window is
-not cleared at boot: MAIN needs the tag.
+not cleared at boot: MAIN needs the tag. With no stereo track the engine
+writes one block with an empty mask and then leaves the window alone until a
+track is stereo again; MAIN takes that block, while it is current, as
+nothing to mix.
 
 Measured on the unit (2026-11-10, test build: R is the same sample 10 ms
 behind, `mods/samplers-st/README.md`), CPU A: 8 sampler tracks 52 % mono, 99 %
@@ -339,6 +374,23 @@ state 20, drive and base-width 66, multimode 110, AMP 7, sending 80, renders
 322; MAIN reading D 38 and mixing it 43 (permille of MAIN's block); DROP 0,
 TORN 0, LATE and AGAIN 10 each over several minutes. 8 stereo samplers: CPU A
 99 %.
+
+Instruction counts (samplers-st 1.4, 2026-11-10; Unicorn for integer code,
+analog-emu's core for EMAC code; instructions, not cycles), per 32-frame
+block, against 1.3:
+
+| Part | 1.3 | 1.4 |
+|---|---|---|
+| a sampler track's PCM, mono / stereo sample | 2479 / 3456 | 679 / 969 (824 / 1129 in C) |
+| the chain end's own code, 8 stereo tracks | 13685 | 9478 |
+| the R drive, 8 stereo tracks, OVERDRIVE off | 8111 | 2080 |
+| a stereo track's voice tail (filter and ramps, L and R) | 3137 | 2581 |
+| the R multimode, a track (by type) | 3092..3130 | 2940..2949 |
+| MAIN, gR × D, one bus, 8 tracks (with D's expansion, once a block) | about 6400 | 3250 |
+
+Most of what is left is native and at its floor: the multimode's three
+per-frame EMAC loops (about 2700 a track), base-width (about 330 a track)
+and the AMP envelope (about 380 a track). Not yet measured on the unit.
 
 ### Units and limits
 

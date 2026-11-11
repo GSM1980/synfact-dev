@@ -527,7 +527,10 @@ that uses it is in `mods/samplers-st/stereo/`, written in the core's shape:
 
 - A machine that renders stereo calls `st_stereo_claim(t)` in its render and
   writes R where it points; L goes to its output as before. It runs on R the
-  same native render calls it runs on L (the samplers' `sp_render`).
+  same native render calls it runs on L (the samplers' `sp_render`). A
+  machine on the native sample voice can use `mods/samplers-st/audio/voice-stereo.c`
+  for that: the voice's filter and gain ramps on L and R in one loop each, the
+  same words as the native calls.
 - The engine runs the native chain on R and sends D = R − L; the module
   `STEREO` adds gR × D to the right buses. Pan becomes a balance.
 - The engine, its module and a claiming machine must be in the same bank (the

@@ -1,5 +1,5 @@
 {
-  "id": "samplers-st", "version": "1.3", "license": "GPL-2.0-or-later",
+  "id": "samplers-st", "version": "1.4", "license": "GPL-2.0-or-later",
   "title": "SP sample machines", "category": "Synth", "author": "GSM1980",
   "description": "Source-built ONE SHOT, WERP, REPITCH and SLICE for the generic Syntakt project sample pool.",
   "device": "syntakt", "os": "1.41", "sources": ["main.c", "ui.c", "input.c", "stereo/main.c"],
@@ -12,6 +12,6 @@
       {"descriptor": "sp_repitch", "ui": "sp_repitch_ui", "update": "sp_repitch_update", "render": "sp_repitch_render"},
       {"descriptor": "sp_slice", "ui": "sp_slice_ui", "update": "sp_slice_update", "render": "sp_slice_render"}
     ],
-    "audio": {"sources": ["audio/sampler.c", "audio/one-shot.c", "audio/werp.c", "audio/repitch.c", "audio/slice.c", "stereo/audio.c"]}
+    "audio": {"sources": ["audio/sampler.c", "audio/one-shot.c", "audio/werp.c", "audio/repitch.c", "audio/slice.c", "stereo/audio.c", "audio/voice-stereo.c"]}
   }
 }

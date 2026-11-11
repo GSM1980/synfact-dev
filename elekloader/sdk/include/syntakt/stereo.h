@@ -26,8 +26,8 @@
 #define ST_STEREO_R(t) ((int *)(0x8000f400u+128u*(t)))      /* 8 x 32 Q31 */
 #endif
 #define ST_STEREO_SIGNAL ((unsigned int *)0x8000f800u)      /* 40 words: R's chain memory */
-#define ST_STEREO_SNAP_A ((unsigned int *)0x8000f8a0u)      /* 172 words */
-#define ST_STEREO_SNAP_B ((unsigned int *)0x8000fb50u)      /* 172 words */
+#define ST_STEREO_SNAP_A ((unsigned int *)0x8000f8a0u)      /* 172 words: the control state from before the L pass */
+#define ST_STEREO_SNAP_B ((unsigned int *)0x8000fb50u)      /* 172 words: the window block's staging */
 #define ST_STEREO_FILTER(t) ((unsigned int *)(0x8000fe00u+16u*(t))) /* render filter, 4 words */
 #define ST_STEREO_SCRATCH ((int *)0x8000fe80u)              /* 32 words for a render */
 #define ST_STEREO_WORDS 172u
@@ -59,6 +59,18 @@
  * The engine is mods/samplers-st/audio/stereo.c (linked into the bank) until
  * it moves into the core. */
 int *st_stereo_claim(unsigned int track);
+/* AUDIO, for a machine deciding whether a track's tail still needs R: one of
+ * 32 Q31 samples at or above ST_STEREO_QUIET in magnitude (2^16, -96 dBFS:
+ * below one 16-bit step). Exact zero is not the test: the native multimode's
+ * types 0 and 1 settle on a residual of a few hundred (about -138 dBFS) and
+ * never reach 0, which kept a track stereo, and its R pass running, for good. */
+#define ST_STEREO_QUIET 0x10000u
+static __inline__ int st_stereo_audible(const int *x)
+{
+    unsigned int i;
+    for(i=0;i<32;i++)if((unsigned int)x[i]+(ST_STEREO_QUIET-1u)>2u*(ST_STEREO_QUIET-1u))return 1;
+    return 0;
+}
 /* Both CPUs: the fingerprint of eight tracks' 32-word L buffers (samples 0, 8,
  * 16 and 24 of each), as AUDIO sends them and MAIN receives them. */
 static __inline__ unsigned int st_stereo_print(const volatile int *tracks)

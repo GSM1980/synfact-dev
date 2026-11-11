@@ -181,6 +181,32 @@ with ColdFire MAC-with-load (`LIBUNICORN_PATH`); without one it prints
 "$PY" tests/test_st_bw_filter_emu.py --stock "$SYNTAKT_STOCK" out/core-st-X.Y.Z-name
 ```
 
+The samplers and their stereo engine (samplers-st 1.4) have three checks of
+their own. The regressions run the first, a native host test: the PCM runs of
+`sp_pcm` against the per-sample model they replace, output and cursor, block
+after block (`tests/test_st_sampler_fast.c`). The other two need the m68k
+compiler on `PATH`:
+
+```bash
+# the chain end with stand-ins for the native calls (Unicorn): the R pass's
+# state, L's state restored, D in the window, and an instruction budget
+"$PY" tests/test_st_stereo_engine_emu.py
+# the engine's replacements for native AUDIO calls (the R drive with OVERDRIVE
+# off, the stereo voice tail, the R multimode from its second part) against
+# the natives of a build's audio.bin, word for word, MAIN's EMAC gR x D
+# against a 64-bit model, and the samplers' PCM runs (their hand-written
+# loops) against the per-sample model, on analog-emu's ColdFire core
+"$PY" tests/test_st_stereo_natives_emu.py --core out/core-st-X.Y.Z-name --cfbench "$CFBENCH"
+```
+
+The second runs EMAC code, so it uses analog-emu's `cfbench`, not Unicorn:
+analog-emu models the EMAC on its physical registers, checked against the
+Programmer's Reference Manual, and its documentation reports that the patched
+Unicorn gets the EMAC's arithmetic wrong in both modes the audio engine uses.
+Unicorn counts and the integer checks above are unaffected. Each prints the
+instruction counts it measures; without its tool a test prints `SKIPPED` and
+exits 2.
+
 The core's lock-preview site (0.12.18+) has an in-repository differential
 that runs the real `40039160` of two MAIN images with the same interpreter.
 Test against the stock MAIN **and** the installed core's image

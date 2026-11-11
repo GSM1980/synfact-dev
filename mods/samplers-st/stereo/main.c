@@ -47,6 +47,18 @@ static const struct block *use;
 static u32 tagged,have,resolved,last_used,boot_sequence,alive;
 static s32 ramp_start[4][8];
 static u32 ramp_primed[4];
+#ifdef __mcoldfire__
+/* The block's D / 2 in Q31 (mantissa << shift), once per interrupt for the
+ * four buses; a silent track for padding. */
+static s32 wide[8][32];
+static const s32 silent[32];
+static void widen(const struct block *b)
+{
+    u32 t,i,e;const short *d;s32 *w;
+    for(t=0;t<8;t++)if(b->mask&(1u<<t))
+        for(d=b->d[t],w=wide[t],e=b->shift[t],i=0;i<32;i++)w[i]=(s32)d[i]<<e;
+}
+#endif
 /* Counters for test pages: interrupts, blocks mixed with D, reads caught
  * mid-write, blocks with no matching D, a block left from before this boot
  * (not mixed), blocks that needed the second read, the tracks with D, a block
@@ -101,6 +113,8 @@ static u32 current(void)
     if(resolved)return use?use->mask:0;
     resolved=1;
     if(!tagged)return 0;
+    /* The engine's empty block, still current: no stereo track. */
+    if(have && !slot[0].mask && WIN(ST_STEREO_SEQ)==slot[0].sequence){st_stereo_main_counters.mask=0;return 0;}
     a=MAIN_CLOCK;
     print=st_stereo_print(TRACK_PCM);
     if(have && WIN(ST_STEREO_SEQ)==slot[0].sequence){
@@ -123,6 +137,9 @@ static u32 current(void)
     last_used=use->sequence;
     if(use->mask)st_stereo_main_counters.received++;
     st_stereo_main_counters.mask=use->mask;
+#ifdef __mcoldfire__
+    widen(use);
+#endif
     return use->mask;
 }
 /* For other MAIN modules in the audio interrupt, after ev_render_in (the
@@ -136,6 +153,46 @@ int st_stereo_track_d(u32 t,s32 *out)
     for(i=0;i<32;i++)out[i]=e>=0?(s32)d[i]<<e:(s32)d[i]>>-e;
     return 1;
 }
+#ifdef __mcoldfire__
+/* bus[2i] -= g_k(i) x 2 x h_k(i) for four tracks k, h = D / 2 in Q31: EMAC
+ * MSAC, fractional, saturating, truncating (MACSR 0xa0), each product taken
+ * twice (the scale factor applies in integer modes only, MCF5441x RM 5.3.5;
+ * D itself does not fit 32 bits), the eight summed in ACC0 and saturated once.
+ * g ramps by step a frame, from the value it found (the stock kernels' own
+ * ramp). */
+static void mix4(s32 *bus,const s32 *const *h,const s32 *g,const s32 *step)
+{
+    const s32 *h0=h[0],*h1=h[1],*h2=h[2],*h3=h[3];
+    s32 g0=g[0],g1=g[1],g2=g[2],g3=g[3],x;u32 n=32;
+    __asm__ volatile(
+        "1:\n\tmove.l (%[b]),%[x]\n\tmove.l %[x],%%acc0\n\t"
+        "move.l (%[h0])+,%[x]\n\tmsac.l %[g0],%[x],%%acc0\n\tmsac.l %[g0],%[x],%%acc0\n\t"
+        "move.l (%[h1])+,%[x]\n\tmsac.l %[g1],%[x],%%acc0\n\tmsac.l %[g1],%[x],%%acc0\n\t"
+        "move.l (%[h2])+,%[x]\n\tmsac.l %[g2],%[x],%%acc0\n\tmsac.l %[g2],%[x],%%acc0\n\t"
+        "move.l (%[h3])+,%[x]\n\tmsac.l %[g3],%[x],%%acc0\n\tmsac.l %[g3],%[x],%%acc0\n\t"
+        "add.l (%[s]),%[g0]\n\tadd.l 4(%[s]),%[g1]\n\tadd.l 8(%[s]),%[g2]\n\tadd.l 12(%[s]),%[g3]\n\t"
+        "movclr.l %%acc0,%[x]\n\tmove.l %[x],(%[b])\n\taddq.l #8,%[b]\n\tsubq.l #1,%[n]\n\tbne.s 1b"
+        :[b]"+a"(bus),[h0]"+a"(h0),[h1]"+a"(h1),[h2]"+a"(h2),[h3]"+a"(h3),
+         [g0]"+d"(g0),[g1]"+d"(g1),[g2]"+d"(g2),[g3]"+d"(g3),[x]"=&d"(x),[n]"+d"(n)
+        :[s]"a"(step):"cc","memory");
+}
+/* The interrupted code's EMAC state: MACSR, ACC0 and ACCext01, read and
+ * written raw (integer mode, no saturation), so nothing it holds changes. */
+struct emac_state {u32 macsr,acc,ext;};
+static void emac_enter(struct emac_state *e)
+{
+    u32 macsr,acc,ext,clear;
+    __asm__ volatile("move.l %%macsr,%0\n\tmove.l #0,%%macsr\n\tmove.l %%acc0,%1\n\t"
+                     "move.l %%accext01,%2\n\tmove.l #0xa0,%%macsr\n\tmovclr.l %%acc0,%3"
+                     :"=&d"(macsr),"=&d"(acc),"=&d"(ext),"=&d"(clear)::"cc");
+    e->macsr=macsr;e->acc=acc;e->ext=ext;
+}
+static void emac_leave(const struct emac_state *e)
+{
+    __asm__ volatile("move.l #0,%%macsr\n\tmove.l %0,%%acc0\n\tmove.l %1,%%accext01\n\tmove.l %2,%%macsr"
+                     ::"d"(e->acc),"d"(e->ext),"d"(e->macsr):"cc");
+}
+#endif
 static s32 subtract(s32 y,s32 x)
 {
     u32 a=(u32)y,r=a-(u32)x;
@@ -143,20 +200,56 @@ static s32 subtract(s32 y,s32 x)
     return (s32)r;
 }
 /* bus[2i+1] -= g_i x D_i (Q31, as the kernels' MSAC), g ramping over the block.
- * A track whose gain is zero over the whole block adds nothing. */
+ * A track whose gain is zero over the whole block adds nothing. On the unit
+ * with EMAC, four tracks a pass (mix4); the host test builds the C below. */
+#ifdef __mcoldfire__
 static void add(u32 k,s32 *bus,const volatile s32 *gain)
 {
-    u32 t,i,m=current(),a=MAIN_CLOCK;s32 g,end,step,p;int e;const short *d;
+    u32 t,n=0,entered=0,m=current(),a=MAIN_CLOCK;s32 g[4],step[4],start,end;const s32 *h[4];
+    struct emac_state saved;
+    for(t=0;t<8;t++){
+        end=gain[t];start=ramp_primed[k]?ramp_start[k][t]:end;ramp_start[k][t]=end;
+        if(!(m&(1u<<t)) || (!start && !end))continue;
+        h[n]=wide[t];g[n]=start;step[n]=(s32)((u32)end-(u32)start)>>5;
+        if(++n==4){
+            if(!entered){emac_enter(&saved);entered=1;}
+            mix4(bus+1,h,g,step);n=0;
+        }
+    }
+    if(n){
+        for(;n<4;n++){h[n]=silent;g[n]=0;step[n]=0;}
+        if(!entered){emac_enter(&saved);entered=1;}
+        mix4(bus+1,h,g,step);
+    }
+    if(entered)emac_leave(&saved);
+    ramp_primed[k]=1;
+    spend(&spent_mix,a);
+}
+#else
+/* The host build (tests/test_st_stereo.c): the same sums in integer C. */
+static void add(u32 k,s32 *bus,const volatile s32 *gain)
+{
+    u32 t,i,m=current(),a=MAIN_CLOCK;s32 g,end,step,p,x,r,*b;int e;const short *d;
     for(t=0;t<8;t++){
         end=gain[t];g=ramp_primed[k]?ramp_start[k][t]:end;ramp_start[k][t]=end;
         if(!(m&(1u<<t)) || (!g && !end))continue;
         /* g x D / 2^31 = (g >> 16) x m x 2^(shift - 14); |(g>>16) x m| < 2^30,
          * so only shifts 15 and 16 can overflow, and then only near +-2. */
-        step=(end-g)>>5;d=use->d[t];e=(int)use->shift[t]-14;
+        step=(end-g)>>5;d=use->d[t];e=(int)use->shift[t]-14;b=bus+1;
+        if(e<=0){
+            /* shifts 0..14, every block that is not near full scale: the
+             * same products and saturating subtraction as subtract() */
+            for(e=-e,i=32;i;i--,g+=step,b+=2){
+                p=((s32)(short)(g>>16)*(s32)*d++)>>e;
+                x=*b;r=(s32)((u32)x-(u32)p);
+                if((x^p)&(x^r)&(s32)0x80000000u)r=x<0?(s32)0x80000000u:0x7fffffff;
+                *b=r;
+            }
+            continue;
+        }
         for(i=0;i<32;i++,g+=step){
             p=(s32)(short)(g>>16)*d[i];
-            if(e<=0)p>>=-e;
-            else if(p>(0x7fffffff>>e))p=0x7fffffff;
+            if(p>(0x7fffffff>>e))p=0x7fffffff;
             else if(p<-(0x7fffffff>>e))p=-0x7fffffff;
             else p<<=e;
             bus[2*i+1]=subtract(bus[2*i+1],p);
@@ -165,6 +258,7 @@ static void add(u32 k,s32 *bus,const volatile s32 *gain)
     ramp_primed[k]=1;
     spend(&spent_mix,a);
 }
+#endif
 static void delay_in(void){add(0,SEND_BUS,DELAY_GAIN);}
 static void reverb_in(void){add(1,SEND_BUS,REVERB_GAIN);}
 static void main_mix(void){add(2,MAIN_BUS,MAIN_GAIN);add(3,DIRECT_BUS,DIRECT_GAIN);}

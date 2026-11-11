@@ -96,6 +96,7 @@ working on that part.
 | `SYNTAKT_WORK` | a folder of emulator fixtures this repository does not include. Without it, the checks that need it print `SKIPPED` |
 | `DIGITONE_SECTIONS` | a folder of Digitone 1.44 section extracts this repository does not include |
 | `LIBUNICORN_PATH` | only a custom Unicorn build. A `pip install` does not need it |
+| `CFBENCH` | analog-emu's `cfbench` (its `target/release/cfbench`): `tests/test_st_stereo_natives_emu.py` runs EMAC code on its ColdFire core |
 
 ## 3. Check the setup
 

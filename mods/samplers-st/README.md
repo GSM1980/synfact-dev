@@ -74,6 +74,51 @@ No emulator, device transfer or flashing is part of this build workflow.
 The generic Sample Manager, filesystem, project record and PCM transfer live
 in [the core](../core-st/SAMPLE-POOL.md). They remain available without an SMZ.
 
+## 1.4: lighter PCM and stereo engine (2026-11-10)
+
+The same sound for less CPU, word for word on AUDIO (instruction counts in
+docs/MACHINE-REFERENCE.md, "Stereo tracks"):
+
+- `sp_pcm` renders the stretches of a block where the cursor needs no
+  crossfade, no wrap and no end in runs: interpolation alone, one loop per
+  case (channels, BR/OVER, direction). The per-sample model does every other
+  sample. On the unit the plain runs (no BR, no OVER; mono, or both channels
+  of a stereo sample) are hand-written loops with the same integer
+  operations. A track's PCM, mono or stereo, costs about a quarter to a
+  third of 1.3's. `tests/test_st_sampler_fast.c` compares the runs with the
+  model on random windows, loops, steps and modes on the host (the C loops),
+  and `tests/st_sampler_pcm_check.c` does the same on the target in
+  analog-emu (the hand-written ones).
+- A stereo track runs its voice tail (render filter and gain ramps) on L and
+  R in one loop each (`audio/voice-stereo.c`), with the native routines' own
+  EMAC operations.
+- The engine's chain end exchanges the control state once and copies it back
+  once (1.3: three copies), four words at a time, packs D with fewer
+  instructions, and with OVERDRIVE off on every claimed track runs the drive's
+  dry MAC itself instead of the native drive on all eight R buffers.
+- The R multimode skips its coefficient part (R's targets are L's) and
+  enters the native routine where its filter part starts.
+- A track is stereo on the signal, not while its sample plays: the block a
+  stereo sample is triggered in, while its output sounds, and the block its
+  PCM starts after silence. In STOP a loop under a closed envelope no longer
+  keeps the R pass running. A track whose D stays under -96 dBFS is mixed
+  mono.
+- A tail stays stereo while L or R is at or above -96 dBFS
+  (`ST_STEREO_QUIET`), not while it is nonzero: the native multimode's LP
+  types never reach 0 after silence, which kept a track stereo, and its R
+  pass running, after it had played a stereo sample. With no stereo track
+  the engine sends one empty block and then does nothing.
+- MAIN's gR × D runs on EMAC, four tracks a pass, with D expanded once a
+  block for the four buses: about half the instructions, and the gain's full
+  32 bits instead of 16. A clipping bus saturates after each four tracks
+  instead of after each track; nothing else in its output changes beyond
+  the products' truncation.
+
+`tests/test_st_stereo_natives_emu.py` runs the replacements of native calls
+against the natives, MAIN's mix against a 64-bit model and the PCM loops
+against the per-sample model in analog-emu; `tests/test_st_stereo_engine_emu.py` runs the
+chain end in Unicorn (docs/SYNTAKT-BUILD.md).
+
 ## 1.3: stereo tracks, transport only (2026-11-10)
 
 `stereo/` is the stereo-track engine (docs/MACHINE-REFERENCE.md, "Stereo
