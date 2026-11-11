@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.8.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.8.2.
+
+## 1.8.2 (2026-11-11)
+
+- Filter Digi Mono destinations by Sound TYPE (`7fe932b`, 2026-11-11)
 
 ## 1.8.1 (2026-11-11)
 
 - Refresh SYN layouts when Digi Mono TYPE changes (`fe671aa`, 2026-11-11)
+- Document live SYN layout fix releases (`83ff21d`, 2026-11-11)
 
 ## 1.8.0 (2026-11-10)
 

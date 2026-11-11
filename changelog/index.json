@@ -19,14 +19,14 @@
       "slug": "core-st",
       "id": "core",
       "title": "core",
-      "latest": "1.8.1",
+      "latest": "1.8.2",
       "path": "mods/core-st"
     },
     {
       "slug": "digimono-st",
       "id": "digimono-st",
       "title": "SY MONOMACHINE",
-      "latest": "0.1.1",
+      "latest": "0.1.2",
       "path": "mods/digimono-st"
     },
     {
