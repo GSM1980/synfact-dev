@@ -1,10 +1,15 @@
 # Changelog: SY MONOMACHINE
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.2.0.
+Generated from git history by `tools/changelog.py`. Latest version: 0.3.0.
+
+## 0.3.0 (2026-11-11)
+
+- Calibrate ENS intervals, waveform blend and stereo chorus with MONO2K (`f9652a6`, 2026-11-11)
 
 ## 0.2.0 (2026-11-11)
 
 - Add MONO2K SID-6581 and FM+ types to SY MONOMACHINE (`005748a`, 2026-11-11)
+- Document SY MONOMACHINE 0.2.0 release (`c3da0b1`, 2026-11-11)
 
 ## 0.1.2 (2026-11-11)
 

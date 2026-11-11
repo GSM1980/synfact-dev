@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
   "title": "SY MONOMACHINE",
-  "latest": "0.2.0",
+  "latest": "0.3.0",
   "entries": [
+    {
+      "version": "0.3.0",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "f9652a6",
+          "date": "2026-11-11",
+          "subject": "Calibrate ENS intervals, waveform blend and stereo chorus with MONO2K"
+        }
+      ]
+    },
     {
       "version": "0.2.0",
       "date": "2026-11-11",
@@ -11,6 +22,11 @@
           "sha": "005748a",
           "date": "2026-11-11",
           "subject": "Add MONO2K SID-6581 and FM+ types to SY MONOMACHINE"
+        },
+        {
+          "sha": "c3da0b1",
+          "date": "2026-11-11",
+          "subject": "Document SY MONOMACHINE 0.2.0 release"
         }
       ]
     },
