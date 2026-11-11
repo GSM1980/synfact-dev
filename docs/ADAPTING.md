@@ -301,11 +301,15 @@ one: Sounds saved with the old machine would open as the new one.
 | 67 | SP WERP | `mods/samplers-st` |
 | 68 | SP REPITCH | `mods/samplers-st` |
 | 69 | SP SLICE | `mods/samplers-st` |
+| 70 | MD MACHINEDRUM (reserved) | `mods/md-st`, pending `feat/md-machine` |
+| 71 | SY MONOMACHINE | `mods/digimono-st` |
 
-**Free: 70 to 79.** Take the lowest free type, add your machine to this
+**Free: 72 to 79.** Take the lowest free type, add your machine to this
 table in the same change, and keep it if the machine is ever renamed.
 `tests/test_units.py` checks that this table names every type the mods
 and examples use.
+Explicit `(reserved)` rows also occupy an ID while its implementation is
+on a parallel branch; remove the marker when that machine is merged.
 
 ## 4. elekloader's general paths
 

@@ -1,6 +1,43 @@
 """Exact known bank compositions, including the sampler-owned input module."""
 import struct
+import hashlib
 from pathlib import Path
+
+
+def check_bank_machines(report, raw, baseline=(66,67,68,69,65)):
+    """Require the normal machines and explicitly supported optional additions.
+
+    Verify the binary directory too: adding a synth must not allow a missing
+    sampler, duplicate type, reordered baseline or invented report-only machine.
+    """
+    expected=list(baseline)
+    digimono=[Path(p) for p in report['source_sha256']
+              if Path(p).as_posix().endswith('/mods/digimono-st/mod.json')]
+    if digimono:
+        assert len(digimono)==1
+        path=digimono[0]
+        assert hashlib.sha256(path.read_bytes()).hexdigest()==report['source_sha256'][str(path)]
+        expected.append(71)
+    assert report['machines']==expected, ('unexpected machine composition/order',report['machines'],expected)
+    image=80+4*struct.unpack_from('>I',raw,56)[0]
+    directory,count=struct.unpack_from('>II',raw,40)
+    assert count==len(expected)
+    assert [struct.unpack_from('>I',raw,image+directory+40*i)[0] for i in range(count)]==expected
+
+
+def object_for_symbol(report, symbol):
+    """Resolve a pinned input object by its definition, independent of folder order."""
+    from elekloader.sdk import elf
+    found=[]
+    for name,digest in report['object_sha256'].items():
+        path=Path(name)
+        if not path.name.startswith('main') or path.suffix!='.o':continue
+        obj=elf.Elf.load(path)
+        if any(s.name==symbol and s.shndx for s in obj.symbols):
+            assert hashlib.sha256(path.read_bytes()).hexdigest()==digest
+            found.append(obj)
+    assert len(found)==1,(symbol,len(found))
+    return found[0]
 
 
 def check_bank_modules(report, raw, allowed):

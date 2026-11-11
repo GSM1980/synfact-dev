@@ -18,6 +18,32 @@ python tests/test_units.py        # needs nothing; always run it
 python tests/test_st_fm_recipe.py --digitone Digitone_and_Digitone_Keys_OS1.44.syx   # FM TONE's recipe
 ```
 
+## Digi Mono
+
+The standalone Digi Mono port test runs all eight types through the real
+adapter/DSP, checking PCM/state against the engine, UI labels and chord names,
+TYPE transport, backend re-entry, independent tracks, pitch and AMP sleep.
+Only firmware service boundaries are doubles; it does not boot a Syntakt:
+
+```bash
+python tests/test_st_digimono.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe"
+```
+
+Its upstream source hashes are also verified. No firmware input is needed.
+
+The linked ColdFire test additionally needs Syntakt OS 1.41, a bank with its
+sibling `.work/audio.elf`, 64-bit native clang, and the EMAC-capable Unicorn
+from [SETUP.md](SETUP.md) (`LIBUNICORN_PATH`). It runs real native update and
+gain calls, compares the oscillator PCM to the host engine, checks callee-save
+registers and stack balance, and reports instruction counts (not CPU cycles):
+
+```bash
+python tests/test_st_digimono_emu.py --bank out/digimono/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" --host-cc "$LLVM_MINGW_BIN/x86_64-w64-mingw32-clang.exe"
+```
+
+This is an offline fixture, without a full boot, scheduler or FLTR/AMP/FX pass.
+
 ## The engine
 
 The engine (`elekloader/`, `js/`) comes from elekloader and still knows every

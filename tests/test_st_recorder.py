@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from elekloader.sdk import elf
 from elekloader.sdk.syntakt.audio import audit
-from st_bank_modules import check_bank_modules
+from st_bank_modules import check_bank_modules,check_bank_machines,object_for_symbol
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -17,7 +17,8 @@ def verify(folder,synfact=None):
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
         ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module'],
         ['fm_tone_module','recorder_module','lfo3_module','arp_module','poly_module','system_info_module']))
-    assert report['machines']==[66,67,68,69,65] and not report['firmware_required']
+    check_bank_machines(report,raw)
+    assert not report['firmware_required']
     for name,digest in report['source_sha256'].items():
         assert Path(name).is_relative_to(ROOT) and hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest,name
     for name in ('main.c','recorder.c','save.c','trim.c','capture.c','normalize.c','native.h','irq.s'):
@@ -34,7 +35,7 @@ def verify(folder,synfact=None):
     rows=[struct.unpack_from('>II',raw,image+subs+8*i) for i in range(n)]
     assert [x[0] for x in rows]==[2,3,0,0x101,10,8,9]
     assert all(not(fn&1) and fn<report['main_bytes'] for event,fn in rows)
-    obj=elf.Elf.load(folder/'synfact-machines.work/main2-1.o');code=obj.section('.text').data
+    obj=object_for_symbol(report,'recorder_irq_lock');code=obj.section('.text').data
     assert code==bytes.fromhex('700040c046fc27004e75202f000446c04e75') and audit(code)>0
     assert all(flag in report['cflags'] for flag in ('-O3','-mcpu=54415','-mtune=cfv4'))
     # The new resident service table refers to existing operations only.

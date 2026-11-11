@@ -949,11 +949,42 @@ def test_adapting_lists_every_machine_type_in_use():
         for m in re.finditer(r'core_machine_def \w+=(?:\{\s*|D\()(\d+),\s*(?:\d+,\s*)?"([^"]+)"', text):
             used[int(m[1])] = m[2]
     doc = open(os.path.join(root, 'docs', 'ADAPTING.md'), encoding='utf-8').read()
-    table = {int(t): name for t, name in re.findall(r'^\| (\d+) \| ([^|]+?) \|', doc, re.M)}
+    rows = {int(t): name for t, name in re.findall(r'^\| (\d+) \| ([^|]+?) \|', doc, re.M)}
+    reserved = {t for t, name in rows.items() if name.endswith(' (reserved)')}
+    table = {t: name for t, name in rows.items() if t not in reserved}
     assert used and table == used, (table, used)
-    assert all(64 <= t < 80 for t in used)
-    free = [t for t in range(64, 80) if t not in used]
+    assert not reserved.intersection(used), (reserved, used)
+    assert all(64 <= t < 80 for t in rows)
+    free = [t for t in range(64, 80) if t not in used and t not in reserved]
     assert '**Free: %d to %d.**' % (free[0], free[-1]) in doc and free == list(range(free[0], 80)), free
+
+
+def test_optional_machine_composition_keeps_exact_directory_checks():
+    import hashlib
+    import struct
+    from pathlib import Path
+    from st_bank_modules import check_bank_machines
+    manifest=Path(HERE).parent/'mods/digimono-st/mod.json'
+    def fixture(types,include):
+        raw=bytearray(80+40*len(types))
+        struct.pack_into('>II',raw,40,0,len(types))
+        for i,t in enumerate(types):struct.pack_into('>I',raw,80+40*i,t)
+        report={'machines':list(types),'source_sha256':{str(manifest):hashlib.sha256(manifest.read_bytes()).hexdigest()} if include else {}}
+        return report,raw
+    baseline=[66,67,68,69,65]
+    check_bank_machines(*fixture(baseline,False))
+    check_bank_machines(*fixture(baseline+[71],True))
+    for types,include in [(baseline,True),(baseline+[71],False),(baseline+[72],True),
+                          (baseline+[71,71],True),(baseline[1:]+[71],True),
+                          (list(reversed(baseline))+[71],True)]:
+        try:check_bank_machines(*fixture(types,include))
+        except AssertionError:pass
+        else:raise AssertionError(('accepted wrong composition',types,include))
+    report,raw=fixture(baseline+[71],True)
+    struct.pack_into('>I',raw,80+40*5,72)
+    try:check_bank_machines(report,raw)
+    except AssertionError:pass
+    else:raise AssertionError('accepted lying machine report')
 
 
 def test_an_smz_source_pins_what_it_incbins():

@@ -1,0 +1,13 @@
+{
+  "repository": "https://github.com/gdeo607/digi1_mods",
+  "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+  "path": "mods/digimono",
+  "license": "MIT",
+  "sha256": {
+    "mono.c": "eded9151a16cd14da8d76e554a2f42af16673e200d21017537eacaf39a60215f",
+    "mono.h": "6372bbad32cf541ea6d39da6be5dfa54e5b6d617bdd2330d496b15f54f688ddf",
+    "mono_tables.h": "94b2b8fbdcc519fd4a49852a73c66892be5daa678c72e9c1606d58e08127db53",
+    "sine.c": "cddd4bdad1ed729445eb409a4420056f2aa95bec8537da9022074a16855a7d7a",
+    "LICENSE": "92e45a9296e2b5476418f9628e55c49d9125d871a95b8e66a8da6d2b5da3b7cf"
+  }
+}

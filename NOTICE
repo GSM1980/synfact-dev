@@ -56,6 +56,15 @@ marked "octabam" where they are used (elekloader/devices/octatrack.py, in
 the engine this repository keeps from elekloader). No octabam code is
 included here.
 
+Digi Mono
+---------
+mods/digimono-st/upstream/ contains the unmodified Digi Mono engine from
+gdeo607/digi1_mods, pinned at commit 32fd22a1fd66fa5833b808b1c1c049a0deb82d88.
+It is MIT-licensed, copyright (c) 2026 the digi1_mods authors; its full licence
+is included there. Its sine table is from Plaits (MIT, copyright 2016 Emilie
+Gillet); the full notice is retained in upstream/sine.c. No MACRO engine or
+Monomachine firmware is included. The Syntakt adapters are GPL-2.0-or-later.
+
 Elektron
 --------
 Elektron, Digitakt, Digitone, Syntakt and Analog are trademarks of Elektron
