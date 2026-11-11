@@ -101,11 +101,62 @@ The numerical tests verify frequency/level/DC/harmonics against generated
 signals, equivalent measurement across sample rates, phase-continuous versus
 reset oscillators, WAV scaling and rejection of silence. They need no OS file.
 
-## Next rounds
+## Complex-engine suite
+
+`complex_compare.py` adds 88 explicit fixtures for SAW, PULSE, ENS, VO,
+SID-6581, FM+STAT, FM+PAR and FM+DYN. The bank/OS machine IDs and the seven
+raw SYN values are recorded in `complex_cases.py`; TUNE is matched in physical
+pitch. No control remapping hides a difference between the two machines.
+
+```powershell
+python tools/monomachine-reference/complex_compare.py --os $env:MONOMACHINE_OS `
+  --reference "$env:MONO_REFERENCE_BUILD/synfact-mnm-reference.exe" `
+  --cc "$env:LLVM_MINGW_BIN/x86_64-w64-mingw32-clang.exe" `
+  --out out/monomachine-complex
+python tests/test_monomachine_complex.py
+```
+
+The output includes per-case stereo A/B, unmodified reference/raw WAVs,
+overview/family plots, early and steady-window metrics, and an HTML report.
+The first four engines are the current Digi Mono implementation; SID and FM+
+are the current MONO2K port. Their native source hashes and the original OS/
+reference executable hashes are retained. No firmware changes in this suite.
+
+- Timbre uses normalized energy in 1/12-octave bands (20..20480 Hz), with a
+  square-root Jensen-Shannon distance between 0 and 1. It is not a percentage
+  of fidelity or a direct error in the oscillator: the reference still includes
+  its neutral track chain. Welch PSD uses up to 32768 samples per segment.
+- Channel **powers** are averaged for the spectral comparison, so antiphase
+  stereo does not disappear. Correlation and side/mid ratio are separate.
+- Gain response compares each control case's change against its own engine's
+  base case. A constant gain difference between chains cancels; frequency-
+  dependent filtering, nonlinear behaviour and modulation still affect it.
+- The steady window starts at 0.25 s and ends 0.1 s before the clip ends.
+  Early windows at 0.02..0.12, 0.2..0.35, 0.7..0.9 and 1.4..1.8 s describe
+  transitions. Fast events before 20 ms are not independently scored.
+- A -90 dBFS AC threshold suppresses unreliable quiet-window spectra. A case
+  can have an audible consonant and a silent steady window. A/B normalization
+  then uses full-clip AC RMS for both sounds, preserving the transient rather
+  than amplifying its tail or dropping it. Source WAVs are never normalized.
+- Most cases use two seconds at MIDI 48 (VO at MIDI 60); ENS chorus uses eight
+  seconds. This is not a full keyboard/parameter-grid validation. No external
+  LFOs, parameter locks, note-off, portamento or intertrack PRCH are tested.
+
+To change analysis without re-rendering the DSP, pass `--captures OLD_FOLDER`
+and a fresh `--out`. Reuse checks the OS and reference hashes, original/native
+engine source hashes, every fixture's controls/events/duration and each WAV's
+hash. Only the analysis may change. A manifest hash records the reused input.
+
+The metric tests cover gain/phase invariance, cross-rate tone comparison,
+added harmonics, antiphase stereo, DC/silence rejection, relative gain response,
+preservation of an original short transient and fixture identities/timing.
+
+## Further rounds
 
 First establish how much of the measured gain/colour comes from the neutral
 reference chain. A comparable raw reference tap or independent chain
-characterisation is needed before changing oscillator gain. Then add SAW/PULSE,
-NOISE, ENS/VO, SID and FM+ parameter sweeps, one engine and characteristic at a
-time. Preserve named fixtures and measured regressions rather than tuning a
-single patch. POLY SIN and CHORDS have no direct original-machine equivalent.
+characterisation is needed before changing oscillator gain. Extend the complex
+suite across pitches, denser control sweeps, faster transients, GND-NOIS and
+realistic gates/locks, one engine and characteristic at a time. Preserve named
+fixtures and measured regressions rather than tuning a single patch. POLY SIN
+and CHORDS have no direct original-machine equivalent.

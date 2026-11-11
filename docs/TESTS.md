@@ -25,6 +25,13 @@ The original-Monomachine calibration bench is documented in
 It is separate from the port's exactness tests: it needs the owner's Monomachine
 OS 1.32B and a built DSP reference. Its numerical analysis tests run without
 firmware using `python tests/test_monomachine_compare.py` in the research venv.
+`complex_compare.py` adds 88 cases in eight complex engines: unison/subs/PWM,
+ENS intervals/chorus, VO vowels/consonants, SID waves/RING/SYNC and all three
+FM+ families. `python tests/test_monomachine_complex.py` checks its band-power
+metrics, stereo/silence handling, gain-response calculation, transient-preserving
+A/B normalization and explicit fixtures without any firmware input. Reanalysis
+may reuse hash-verified captures; the linked DSP/native generator sources and
+every parameter/event must match.
 
 The standalone Digi Mono port test runs all twelve types through the real
 adapter/DSP, checking PCM/state against the engine, UI labels and chord names,
