@@ -23,6 +23,13 @@
       "path": "mods/core-st"
     },
     {
+      "slug": "digimono-st",
+      "id": "digimono-st",
+      "title": "SY MONOMACHINE",
+      "latest": "0.1",
+      "path": "mods/digimono-st"
+    },
+    {
       "slug": "fm-tone-st",
       "id": "fm-tone-st",
       "title": "SY FM DTONE",

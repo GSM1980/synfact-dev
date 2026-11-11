@@ -1,0 +1,19 @@
+{
+  "id": "digimono-st",
+  "title": "SY MONOMACHINE",
+  "latest": "0.1",
+  "entries": [
+    {
+      "version": "0.1",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "17eb89d",
+          "date": "2026-11-11",
+          "subject": "Add Digi Mono as one selectable Syntakt machine"
+        }
+      ]
+    }
+  ],
+  "slug": "digimono-st"
+}
