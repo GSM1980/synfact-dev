@@ -5,6 +5,7 @@
  * this is a 48 kHz synth, not a resampled PCM reader. FLTR/AMP/FX follow in OS.
  */
 #include <syntakt/machines.h>
+#include <syntakt/stereo.h>
 #include "types.h"
 
 /* Test substitutes only the firmware boundaries, never the engine. */
@@ -16,13 +17,21 @@
 #define DM_GAIN(a,v) ((void (*)(void *,void *))0x400045a0u)(a,v)
 #define DM_MIX(a,b,o,l,v) ((void (*)(void *,void *,void *,void *,void *))0x400049f4u)(a,b,o,l,v)
 #define DM_AMP_IDLE(t) (((const volatile unsigned *)0x800049e0u)[3*(t)]==0 && ((const volatile unsigned *)0x800049e0u)[3*(t)+2]==0)
+extern int *st_stereo_claim(unsigned) __attribute__((weak));
+#define DM_STEREO_CLAIM(t) (st_stereo_claim?st_stereo_claim(t):0)
+#define DM_STEREO_PREVIOUS(t) ST_STEREO_R(t)
+#endif
+#ifndef DM_STEREO_CLAIM
+#define DM_STEREO_CLAIM(t) ((void)(t),(int *)0)
+#define DM_STEREO_PREVIOUS(t) ((void)(t),(const int *)0)
 #endif
 #define DM_SIGNATURE 0x444d0101u
 #define DM_REST_BLOCKS 32u
 struct dm_track {
     struct mono_voice engine;
     struct dm_m2k_voice m2k;
-    unsigned loaded,pending,live,quiet,increment;
+    struct dm_ens_voice ens;
+    unsigned loaded,pending,live,quiet,increment,stereo_tail;
     int32_t pitch;
     uint16_t m2p[MONO_PARAMS];
     uint8_t p[MONO_PARAMS];
@@ -63,6 +72,7 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     /* TYPE is note-latched: no phase restarts in the middle of a held note. */
     if(!s->loaded || (trig && s->loaded!=s->pending+1u)) {
         mono_init(&s->engine);dm_m2k_init(&s->m2k);s->loaded=s->pending+1u;s->live=0;s->quiet=0;
+        if(s->loaded==DM_ENS+1u)dm_ens_init(&s->ens);
     }
     for(i=0;i<MONO_PARAMS;i++) {
         unsigned k=params[slots[i+1]]>>8;
@@ -76,7 +86,8 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     s->increment=mono_pitch_inc(note);
     s->pitch=note>>1; /* MONO2K: 1/64 semitone, common TUNE already applied. */
     if(trig) {
-        if(s->loaded-1u>=DM_SID)dm_m2k_trig(&s->m2k,s->loaded-1u,s->m2p);
+        if(s->loaded-1u==DM_ENS)dm_ens_trig(&s->ens);
+        else if(s->loaded-1u>=DM_SID)dm_m2k_trig(&s->m2k,s->loaded-1u,s->m2p);
         else mono_trig(&s->engine,dm_engine_type[s->loaded-1u]);
         s->live=1;s->quiet=0;
     }
@@ -100,17 +111,39 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
 
 void dm_render(void *out,void *voice)
 {
-    int32_t a[32],b[32];int16_t pcm[32];int locals[2]={0,1};
+    int32_t a[32],b[32],ra[32];int16_t pcm[32],right[32];int locals[2]={0,1};
     int t=dm_track_of(voice);unsigned i;
     struct dm_track *s;
     if(t<0) {for(i=0;i<32;i++)((int32_t *)out)[i]=0;return;}
     s=dm_tracks+t;
+    unsigned ens=s->loaded==DM_ENS+1u,want_stereo=ens && s->live && s->m2p[5] && s->m2p[6];
+    int *rout=0;
+    if(want_stereo || s->stereo_tail){
+        unsigned sounding=s->live;
+        const int *previous=DM_STEREO_PREVIOUS((unsigned)t);
+        if(previous)for(i=0;i<32 && !sounding;i++)sounding=previous[i]!=0 || ((const int *)out)[i]!=0;
+        if(sounding)rout=DM_STEREO_CLAIM((unsigned)t);
+        s->stereo_tail=rout!=0;
+    }
     if(s->loaded && s->live) {
-        if(s->loaded-1u>=DM_SID)dm_m2k_render(&s->m2k,s->loaded-1u,s->m2p,s->pitch,
+        if(ens)dm_ens_render(&s->ens,s->m2p,s->pitch,pcm,right);
+        else if(s->loaded-1u>=DM_SID)dm_m2k_render(&s->m2k,s->loaded-1u,s->m2p,s->pitch,
                                            dm_previous_pitch(s,(unsigned)t),pcm);
         else mono_render(&s->engine,dm_engine_type[s->loaded-1u],s->p,s->increment,pcm,32);
-        for(i=0;i<32;i++)a[i]=(int32_t)pcm[i]*65536; /* Q15 -> Q31 */
-    }else for(i=0;i<32;i++)a[i]=0;
+        for(i=0;i<32;i++){
+            /* A bank without the shared stereo service gets a centered mono
+             * fold-down; the complete bank keeps both independent channels. */
+            int32_t l=pcm[i],r=ens?right[i]:l;
+            a[i]=(ens && !rout?(l+r)>>1:l)*65536;
+            if(rout)ra[i]=r*65536;
+        }
+    }else for(i=0;i<32;i++){a[i]=0;if(rout)ra[i]=0;}
     for(i=0;i<32;i++)b[i]=0;
-    DM_DECLICK(voice);DM_GAIN(a,voice);DM_MIX(a,b,out,locals,voice);
+    unsigned *v=voice,ramp,start[2];
+    DM_DECLICK(voice);ramp=v[0x3d4/4];
+    DM_GAIN(a,voice);
+    if(rout){v[0x3d4/4]=ramp;DM_GAIN(ra,voice);}
+    start[0]=v[0x18/4];start[1]=v[0x1c/4];
+    DM_MIX(a,b,out,locals,voice);
+    if(rout){v[0x18/4]=start[0];v[0x1c/4]=start[1];DM_MIX(ra,b,rout,locals,voice);}
 }

@@ -89,5 +89,23 @@ class ComplexMetrics(unittest.TestCase):
         for family in FAMILIES:
             self.assertTrue(next(c for c in fixtures if c['family']==family)['name'].endswith('_base'))
 
+    def test_raw_capture_retains_both_ens_channels_and_other_types_mono(self):
+        class Driver:
+            def dm_compare_bytes(self):return 1
+            def dm_compare_init(self,state):pass
+            def dm_compare_block(self,*args):
+                for i in range(32):args[-1][i]=.25
+            def dm_compare_stereo_block(self,*args):
+                for i in range(32):args[-2][i]=.25;args[-1][i]=-.5
+        case=dict(duration_s=32/48000,params=[0]*7,events=[(0,48)],note=48,tune=64,bank_type=4)
+        stereo=bench.raw_render(Driver(),case)
+        self.assertEqual(stereo.shape,(32,2))
+        np.testing.assert_array_equal(stereo[:,0],.25)
+        np.testing.assert_array_equal(stereo[:,1],-.5)
+        case['bank_type']=3
+        mono=bench.raw_render(Driver(),case)
+        self.assertEqual(mono.shape,(32,))
+        np.testing.assert_array_equal(mono,.25)
+
 
 if __name__=='__main__':unittest.main()

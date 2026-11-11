@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Extract the four pinned MONO2K generators and regenerate their 48 kHz tables.
+"""Extract pinned MONO2K ENS/SID/FM+ generators and regenerate 48 kHz tables.
 
 No firmware input. The original source snapshots and hashes live in upstream/.
 Keep the 16-sample control interval: two engine blocks per Syntakt render.
@@ -12,7 +12,7 @@ import re
 
 HERE = Path(__file__).resolve().parent
 TABLES = ('T_SIN', 'T_INC_TOP', 'T_FMR24', 'T_FMB', 'T_FMEC', 'T_FMLP',
-          'T_FMFB', 'T_FMDV', 'T_FMDEC', 'T_FMFEN')
+          'T_FMFB', 'T_FMDV', 'T_FMDEC', 'T_FMFEN', 'T_ENS_PCH', 'T_ENS_W', 'T_ENS_G')
 
 
 def generate(rate=48000):
@@ -46,13 +46,36 @@ def generate(rate=48000):
         assert match, name
         # Anchor on a single declaration, not any earlier table.
         selected.append(match.group(0))
+    for name in ('ENS_OFF', 'ENS_CINC', 'ENS_CDEP'):
+        selected.append(re.search(r'^#define '+name+r' [^\n]+\n', tables, re.M)[0])
     banner = ('/* SPDX-License-Identifier: GPL-3.0-only\n'
               ' * Generated from pinned MONO2K by Inigo Hernandez; see upstream/provenance.json.\n'
               ' * Run python mods/digimono-st/mono2k/generate.py; do not edit. */\n')
     return banner + machines, banner + ''.join(selected)
 
 
+def generate_ens():
+    source = (HERE/'upstream/m2k_dsp.c').read_text()
+    case = source[source.index('    case M_ENS: {'):source.index('    case M_WAV: {')]
+    case = case.replace('ens_mem[ti]', 't->line').replace('eside[ti]', 'side')
+    # Each product fits signed 32 bits; their sum may not. Split at Q15 to
+    # preserve the exact signed wide sum without a ColdFire helper/overflow.
+    case = case.replace('(int32_t)(((int64_t)(s * dry) + ((y[0] + y[1]) >> 1) * wet) >> 15)',
+                        'add_sh15(s * dry, ((y[0] + y[1]) >> 1) * wet)')
+    return ('/* SPDX-License-Identifier: GPL-3.0-only\n'
+            ' * Extracted MONO2K SWAVE-ENS; generated, do not edit. */\n')+case
+
+
+def generate_ens_ui():
+    source = (HERE/'upstream/m2k_tables.h').read_text()
+    index = re.search(r'static const uint8_t T_ENS_PIDX\[.*?\n};\n', source, re.S)[0]
+    names = re.search(r'static const char \*const T_ENS_PNAME\[[^\n]+\n', source)[0]
+    return '/* SPDX-License-Identifier: GPL-3.0-only; generated MONO2K interval names. */\n'+index+names
+
+
 if __name__ == '__main__':
     machines, tables = generate()
     (HERE / 'machines.inc').write_text(machines, newline='\n')
     (HERE / 'tables.h').write_text(tables, newline='\n')
+    (HERE / 'ens.inc').write_text(generate_ens(), newline='\n')
+    (HERE / 'ens-ui.h').write_text(generate_ens_ui(), newline='\n')

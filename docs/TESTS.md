@@ -54,11 +54,14 @@ module-provider fallback and rejection of older host APIs.
 
 The runner also runs `test_st_mono2k.py`. It verifies pinned MONO2K hashes and
 deterministic extraction; the generated tables at 44.1 kHz match upstream and
-the committed ones regenerate at 48 kHz. The four new generators compare
-4,608 blocks of PCM/state against the pinned code using native 64-bit maths,
+the committed ones regenerate at 48 kHz. The five MONO2K generators compare
+6,912 blocks of PCM/state against the pinned code using native 64-bit maths,
 including fractional controls, low/high pitches and changing modulation.
 Independent checks cover wide arithmetic, 440 Hz carrier tuning at 48 kHz
-and all five SID waves. This is not original-Monomachine matching or timing.
+and all five SID waves, ENS L/R and delay/clock continuity across retriggers.
+`test_st_digimono_stereo.c` checks both output channels, single ramp advancement,
+TYPE/width changes, AMP tails and service fallback with stateful native doubles.
+This is not original-Monomachine matching or timing.
 
 `test_st_digimono_destinations_emu.py BUILD_FOLDER` executes the native list
 builder and sorter, actual Sound-proxy getter, linked core flags wrapper and
@@ -71,7 +74,12 @@ The linked ColdFire test additionally needs Syntakt OS 1.41, a bank with its
 sibling `.work/audio.elf`, 64-bit native clang, and the EMAC-capable Unicorn
 from [SETUP.md](SETUP.md) (`LIBUNICORN_PATH`). It runs real native update and
 gain calls, compares the oscillator PCM to the host engine, checks callee-save
-registers and stack balance, and reports instruction counts (not CPU cycles):
+registers and stack balance, and reports instruction counts (not CPU cycles).
+Its 2,300 blocks include a full second of stereo ENS with fractional controls,
+delay wrap and retrigger, plus 128 blocks of mono fold-down with the service
+unavailable. It also checks the real native gain/mix ramp states match between
+the two channel calls. A complete bank exercises the shared stereo service;
+a standalone bank exercises the missing weak symbol and centered fold-down:
 
 ```bash
 python tests/test_st_digimono_emu.py --bank out/digimono/synfact-machines.smz4 \

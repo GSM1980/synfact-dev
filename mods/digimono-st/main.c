@@ -6,6 +6,7 @@
 #include <syntakt/modules.h>
 #include <syntakt/host.h>
 #include "types.h"
+#include "mono2k/ens-ui.h"
 
 #ifndef DM_VALUE
 #define DM_VALUE(view,id,locked) ((st_u32 (*)(void *,st_u32,unsigned char *))0x40039160u)(view,id,locked)
@@ -104,7 +105,8 @@ static const char *dm_format(const struct st_machine_ui_api *api,const struct co
         static const char *const ratios[]={"1/64","1/32","1/16","3/32","1/8","5/32","3/16","1/4","5/16","3/8","7/16","1/2","5/8","3/4","7/8","1","1.25","1.5","1.75","2","2.5","3","3.5","4"};
         return ratios[(v*24+8)>>7];
     }
-    if((t==4 && p<3) || (t==6 && p<3)) {
+    if(t==DM_ENS && p<3)return T_ENS_PNAME[T_ENS_PIDX[v]];
+    if(t==6 && p<3) {
         int s=(int)v-63;return dm_signed(s < -36 ? -36 : s > 36 ? 36 : s);
     }
     if(t==6 && (p==3 || p==4))return p==4 && v==64?"OFF":dm_signed((int)v-64);

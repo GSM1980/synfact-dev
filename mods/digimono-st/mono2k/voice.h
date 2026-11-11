@@ -3,6 +3,15 @@
 #define DM_M2K_VOICE_H
 #include <stdint.h>
 enum { DM_SID=8, DM_FMSTAT, DM_FMPAR, DM_FMDYN };
+#define DM_ENS 4u
+struct dm_ens_voice {
+    uint32_t ph[6];
+    int32_t ms[6];
+    int16_t line[1024];
+};
+void dm_ens_init(struct dm_ens_voice *v);
+void dm_ens_trig(struct dm_ens_voice *v);
+void dm_ens_render(struct dm_ens_voice *v,const uint16_t *p,int32_t pitch,int16_t *left,int16_t *right);
 struct dm_m2k_voice {
     uint32_t ph[4], menv[3], lfsr;
     int32_t ms[6];

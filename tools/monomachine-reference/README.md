@@ -118,8 +118,9 @@ python tests/test_monomachine_complex.py
 
 The output includes per-case stereo A/B, unmodified reference/raw WAVs,
 overview/family plots, early and steady-window metrics, and an HTML report.
-The first four engines are the current Digi Mono implementation; SID and FM+
-are the current MONO2K port. Their native source hashes and the original OS/
+SAW/PULSE/VO use Digi Mono; ENS/SID/FM+ use the current MONO2K port. ENS raw
+captures retain both channels; the other seven families use mono generators.
+Their native source hashes and the original OS/
 reference executable hashes are retained. No firmware changes in this suite.
 
 - Timbre uses normalized energy in 1/12-octave bands (20..20480 Hz), with a
@@ -149,7 +150,15 @@ hash. Only the analysis may change. A manifest hash records the reused input.
 
 The metric tests cover gain/phase invariance, cross-rate tone comparison,
 added harmonics, antiphase stereo, DC/silence rejection, relative gain response,
-preservation of an original short transient and fixture identities/timing.
+preservation of an original short transient, raw stereo-channel capture and
+fixture identities/timing.
+
+The ENS 0.3 round uses the same 13 fixtures at MIDI 48 as its 0.2 baseline.
+All spectral distances improve, with PCH2=96 falling 0.604 to 0.047 and
+WAVE=127/PW=32 falling 0.749 to 0.160. Chorus width 127 gives L/R correlation
+0.782 against reference 0.785. All 75 non-ENS raw WAV hashes remain identical.
+These limited cuts do not validate the entire keyboard or every parameter
+combination; WAVE/PW colour and relative gain response still differ.
 
 ## Further rounds
 

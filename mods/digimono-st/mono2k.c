@@ -11,6 +11,9 @@
 #define M_FMS DM_FMSTAT
 #define M_FMP DM_FMPAR
 #define M_FMD DM_FMDYN
+#define M_ENS DM_ENS
+#define ENS_LEN 1024u
+#define ENS_GAIN 7119
 #define SID_A 24950
 #define SID_MIX0 1024
 #define SID_MIXA (SID_A * 15 / 32)
@@ -133,4 +136,37 @@ void dm_m2k_render(struct dm_m2k_voice *v,unsigned type,const uint16_t *p,
 {
     dm_m2k_block(v,type,p,pitch,previous_pitch,out);
     dm_m2k_block(v,type,p,pitch,previous_pitch,out+M2K_SUB);
+}
+
+static inline int32_t add_sh15(int32_t a,int32_t b)
+{return (a>>15)+(b>>15)+(((a&32767)+(b&32767))>>15);}
+
+void dm_ens_init(struct dm_ens_voice *v)
+{
+    unsigned i;
+    for(i=0;i<6;i++){v->ph[i]=0;v->ms[i]=0;}
+    for(i=0;i<ENS_LEN;i++)v->line[i]=0;
+}
+void dm_ens_trig(struct dm_ens_voice *v)
+{
+    /* The four voices restart together. The chorus clock/line keep running
+     * through a retrigger, as upstream mach_trig; native Syntakt declick follows. */
+    for(unsigned i=0;i<4;i++)v->ph[i]=0;
+}
+static void dm_ens_block(struct dm_ens_voice *t,const uint16_t *p,int32_t pitch,
+                         int16_t *o,int16_t *side)
+{
+    switch(DM_ENS){
+#include "mono2k/ens.inc"
+    }
+}
+void dm_ens_render(struct dm_ens_voice *v,const uint16_t *p,int32_t pitch,int16_t *left,int16_t *right)
+{
+    int16_t mid[32],side[32];
+    dm_ens_block(v,p,pitch,mid,side);
+    dm_ens_block(v,p,pitch,mid+M2K_SUB,side+M2K_SUB);
+    for(unsigned i=0;i<32;i++){
+        left[i]=(int16_t)sat16((int32_t)mid[i]+side[i]);
+        right[i]=(int16_t)sat16((int32_t)mid[i]-side[i]);
+    }
 }

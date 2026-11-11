@@ -95,26 +95,41 @@ int main(void)
         assert(dm_engine_type[kind]!=MONO_EXT7);
         for(unsigned trial=0;trial<12;trial++) {
             unsigned note=trial?random_word()%128:60;
-            struct mono_voice ref;struct dm_m2k_voice mref;uint8_t p[7];uint16_t p8[7];
+            struct mono_voice ref;struct dm_m2k_voice mref;struct dm_ens_voice eref;
+            int16_t eright[32];uint8_t p[7];uint16_t p8[7];
             prepare(0,kind);
             if(trial)for(unsigned i=1;i<8;i++)input[0][slots[i]]=(unsigned short)(random_word()&0xffff);
-            mono_init(&ref);dm_m2k_init(&mref);
+            mono_init(&ref);dm_m2k_init(&mref);dm_ens_init(&eref);
             for(unsigned i=0;i<7;i++) {
                 unsigned k=input[0][slots[i+1]]>>8;p[i]=(uint8_t)(k>127?127:k);
                 p8[i]=input[0][slots[i+1]]>0x7f00?0x7f00:input[0][slots[i+1]];
             }
-            if(kind<DM_SID)mono_trig(&ref,dm_engine_type[kind]);else dm_m2k_trig(&mref,kind,p8);
+            if(kind==DM_ENS)dm_ens_trig(&eref);
+            else if(kind<DM_SID)mono_trig(&ref,dm_engine_type[kind]);else dm_m2k_trig(&mref,kind,p8);
             for(unsigned b=0;b<10;b++) {
                 out[0]=123;out[33]=456;block(0,b==0,note,out+1);
-                if(kind<DM_SID)mono_render(&ref,dm_engine_type[kind],p,mono_pitch_inc((int)note*128),expected,32);
+                if(kind==DM_ENS){
+                    dm_ens_render(&eref,p8,(int)note*64,expected,eright);
+                    for(unsigned i=0;i<32;i++)expected[i]=(int16_t)(((int32_t)expected[i]+eright[i])>>1);
+                }
+                else if(kind<DM_SID)mono_render(&ref,dm_engine_type[kind],p,mono_pitch_inc((int)note*128),expected,32);
                 else dm_m2k_render(&mref,kind,p8,(int)note*64,dm_previous_pitch(&dm_tracks[0],0),expected);
                 for(unsigned i=0;i<32;i++)assert(out[i+1]==(int32_t)expected[i]*65536);
                 assert(out[0]==123 && out[33]==456);
-                if(kind<DM_SID)assert(!memcmp(&ref,&dm_tracks[0].engine,sizeof ref));
+                if(kind==DM_ENS)assert(!memcmp(&eref,&dm_tracks[0].ens,sizeof eref));
+                else if(kind<DM_SID)assert(!memcmp(&ref,&dm_tracks[0].engine,sizeof ref));
                 else assert(!memcmp(&mref,&dm_tracks[0].m2k,sizeof mref));
                 cases++;
             }
         }
+    }
+    {
+        unsigned raw=DM_ENS<<8;dm_idle(0,0,&raw,0);
+        assert(!strcmp(dm_format(0,0,1,0),"-12"));
+        assert(!strcmp(dm_format(0,0,1,61<<8),"OFF"));
+        assert(!strcmp(dm_format(0,0,2,63<<8),"OFF"));
+        assert(!strcmp(dm_format(0,0,3,103<<8),"+3:2"));
+        assert(!strcmp(dm_format(0,0,1,127<<8),"+12"));
     }
     {unsigned raw=7<<8;dm_idle(0,0,&raw,1);
      for(unsigned v=0;v<128;v++)assert(!strcmp(dm_format(0,0,1,v<<8),mono_chord_name[mono_chord_type((int)v)]));}

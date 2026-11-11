@@ -21,8 +21,22 @@ def check_digimono_audio_change(current,baseline):
     assert any(Path(name).as_posix().endswith('/mods/digimono-st/mono2k.c')
                for name in current['source_sha256'])
 
-def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False):
-    assert not (sampler_audio_changed and digimono_audio_changed)
+def check_digimono_ens_change(current,baseline):
+    """ENS 0.3: exactly the existing Digi Mono adapter and MONO2K DSP change."""
+    assert current['machines']==baseline['machines']==[66,67,68,69,65,71]
+    assert current['modules']==baseline['modules']
+    def objects(report):
+        return {Path(name).name:digest for name,digest in report['object_sha256'].items()
+                if Path(name).name.startswith('audio') and Path(name).suffix=='.o'}
+    new,old=objects(current),objects(baseline)
+    assert new.keys()==old.keys() and {'audio2-0.o','audio2-3.o'}<=old.keys()
+    assert {name for name in old if new[name]!=old[name]}=={'audio2-0.o','audio2-3.o'}
+    assert any(Path(name).as_posix().endswith('/mods/digimono-st/mono2k/ens.inc')
+               for name in current['source_sha256'])
+
+
+def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False):
+    assert sum((sampler_audio_changed,digimono_audio_changed,digimono_ens_changed))<=1
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
     def run(name,args):
@@ -149,7 +163,12 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 raw=path.read_bytes();at,n=struct.unpack_from('>II',raw,72);return raw[48+at:48+at+n]
             new_section=audio_section(out/'synfact-machines.smz4')
             old_section=audio_section(oldbank)
-            if digimono_audio_changed:
+            if digimono_ens_changed:
+                assert new_section!=old_section
+                check_digimono_ens_change(json.loads((out/'synfact-machines.smz4.json').read_text()),
+                                         json.loads((previous/'synfact-machines.smz4.json').read_text()))
+                checks.append({'name':'Digi Mono ENS adapter/DSP changed; every other AUDIO object identical','ok':True})
+            elif digimono_audio_changed:
                 assert new_section!=old_section
                 check_digimono_audio_change(json.loads((out/'synfact-machines.smz4.json').read_text()),
                                             json.loads((previous/'synfact-machines.smz4.json').read_text()))
@@ -207,6 +226,8 @@ if __name__=='__main__':
         help='sampler DSP changed: compare all other AUDIO objects byte for byte')
     p.add_argument('--digimono-audio-changed',action='store_true',
         help='Digi Mono 0.2 adds MONO2K: only its adapter and new DSP object may change')
+    p.add_argument('--digimono-ens-changed',action='store_true',
+        help='Digi Mono 0.3 updates ENS: only its adapter and existing MONO2K DSP object may change')
     a=p.parse_args()
     window=None
     if a.audio_companion_changed:
@@ -214,4 +235,4 @@ if __name__=='__main__':
         from elekloader.devices.syntakt import DEVICE
         window=DEVICE.secondary[7][3][-1]
         assert window==(0x40040860,0x40041050)
-    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed,a.digimono_ens_changed)

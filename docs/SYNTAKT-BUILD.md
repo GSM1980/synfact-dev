@@ -129,6 +129,11 @@ The folder must contain the SYX build, `lint.json` and `synfact-machines.smz4`.
 # add  --synfact "$SYNFACT_SRC"  when you have the Synfact source tree
 ```
 
+When comparing the complete Digi Mono 0.3 bank against 0.2, add
+`--digimono-ens-changed`. This requires the same machine/module lists and AUDIO
+object set: only Digi Mono's adapter and existing MONO2K DSP object may change.
+The original Digi Mono engine/sine, samplers and FM-TONE objects must match.
+
 `--unicorn-python` runs the linked core's safe-boot record writes in Unicorn
 (`tests/test_st_safe_boot_emu.py`; see SETUP.md for Unicorn). Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.
 A comparison that needs an input you did not give is printed as skipped; it is

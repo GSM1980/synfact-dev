@@ -107,6 +107,7 @@ def host_engine(cc, out):
     lib.dm_compare_init.argtypes = [ctypes.c_void_p]
     lib.dm_compare_block.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_void_p,
                                     ctypes.c_int, ctypes.c_uint, ctypes.c_void_p]
+    lib.dm_compare_stereo_block.argtypes = lib.dm_compare_block.argtypes+[ctypes.c_void_p]
     return lib, sources
 
 

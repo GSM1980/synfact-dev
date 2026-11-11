@@ -1,8 +1,8 @@
-# SY MONOMACHINE 0.2.0
+# SY MONOMACHINE 0.3.0
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
-SID-6581 and the three FM+ types come from Inigo Hernandez's
+ENS, SID-6581 and the three FM+ types come from Inigo Hernandez's
 [MONO2K](https://github.com/InigoHernandez/mono2k/tree/95d5763495d961f3ed225f5e4201328934ca4247).
 These are clean-room interpretations of the Monomachine, **not**
 the original Monomachine DSP or a claim of identical sound. MACRO is excluded.
@@ -42,14 +42,17 @@ an older core. It adds no event subscription or AUDIO work.
 | FM+PAR | TUNE | 1FRQ | 1ENV | 2FRQ | 2ENV | 3FRQ | 3ENV | TONE |
 | FM+DYN | TUNE | 1FRQ | 1FEN | 1VOL | 1VEN | 2FRQ | 2ENV | 2FB |
 
-The four new TYPE values are appended (8..11); existing 0..7 Sounds retain
-their engine and controls. They also retain their PCM output. SID/FM+ use all
+The four SID/FM+ TYPE values are appended (8..11); the original 0..7 identities
+and all stored control positions remain stable. Version 0.3 replaces ENS's
+generator; the other eleven types retain their PCM output. SID/FM+ use all
 eight SYN 1 positions and expose all seven engine controls as LFO destinations.
 SID's WAVE/MOD/MSRC/PWRS show choice names; STAT/PAR ratios show their actual
 24-step ratios. Other new engine values display 0..127.
 
 Controls use 0..127; TUNE is signed, centered at 64 (0 semitones), and retains
-fractional tuning. ENS/POLY SIN note offsets center at 63, with +/-36 semitones;
+fractional tuning. ENS PCH2/3/4 follow the Monomachine's interval table: OFF
+at 61..63, equal-tempered steps within +/-12 semitones and just 3:2, 4:3,
+5:4 and 6:5 ratios, with matching labels. POLY SIN retains +/-36 semitones;
 POLY SIN EDEP/ESPD center at 64. PW uses the engine's full range (64 = 50%),
 including on ENS/CHORDS; the Digitakt UI's half-range remap is not used.
 CHRD is the chord selector, leaving TYPE unambiguous on SYN 2.
@@ -85,16 +88,27 @@ The MIT engine files under `upstream/` are unchanged, pinned by
 does not include the MACRO engine.
 
 `mono2k/upstream/` pins MONO2K's GPL-3.0-only source and its full licence.
-`mono2k/generate.py` verifies hashes, extracts just the four generators and
+`mono2k/generate.py` verifies hashes, extracts just the five generators and
 regenerates their mathematical tables at 48 kHz. No sequencer, UI, filters,
 bus effects or original Elektron code/data is imported into the bank.
 The combined machine and its AUDIO adapter are GPL-3.0-only; MIT notices remain.
 
+- ENS uses four paired BLEP saw voices, the calibrated WAVE/PW blend, and a
+  half-rate chorus delay with two 0.2 Hz modulated taps. CHRL sets the blend;
+  CHRW separates the taps across L/R. The four voices restart on a trigger;
+  the chorus clock and delay line continue. A dedicated 2 KB line per track
+  avoids clearing chorus memory when triggering the FM engines.
+- The complete bank's existing stereo service runs R through its own native
+  drive/FLTR/AMP states and passes both channels to MAIN. Gain/declick ramps
+  advance once per block. Include `mods/samplers-st` for that shared service;
+  a standalone bank folds ENS to centered mono. No core firmware change.
+  Stereo is claimed when CHRL and CHRW are nonzero, then retained until the
+  track and filter tails are silent, including after TYPE/width changes.
 - Four independent oscillator phases, three FM envelopes and six internal
   states per digital track, in bank-owned DDR. No core hooks or new SRAM.
 - Two 16-sample control blocks per native 32-frame render; envelope timing,
   FM TONE coefficients, pitch and SID PWM speed are adjusted to 48 kHz.
-- Full Q8 engine controls preserve fractional modulation; the existing eight
+- Full Q8 ENS/SID/FM+ controls preserve fractional modulation; the other seven
   Digi Mono engines keep their original 7-bit behavior and common TUNE.
 - Native TUNE remains common (-64..+63 semitones), rather than MONO2K's +/-2
   semitone fine-tune. It is applied once before either engine.
@@ -107,7 +121,8 @@ The combined machine and its AUDIO adapter are GPL-3.0-only; MIT notices remain.
 
 - Eight independent `mono_voice` instances live in the bank's owned DDR on
   AUDIO CPU; MAIN only presents controls. No firmware patch sites or new SRAM.
-- 48 kHz, 32 mono samples per block, Q15 converted exactly to Q31. No resampler.
+- 48 kHz, 32 frames per block, Q15 converted exactly to Q31. ENS can be stereo;
+  the other types remain mono. No resampler.
 - Pitch arrives as MIDI Q16; TUNE is Q8, engine pitch is 1/128 semitone.
 - Native TwinShot update prepares declick/gain. Its PCM pointers/second reader
   are disabled. Render runs declick and the two native gain stages on our PCM;
@@ -133,15 +148,28 @@ python tests/test_st_digimono_emu.py --bank out/digimono/synfact-machines.smz4 \
 python tests/test_units.py
 ```
 
-The host runner also runs `tests/test_st_mono2k.py`: 4,608 blocks against
+The host runner also tests stereo ramp state, TYPE/width transitions and AMP
+tails, then runs `tests/test_st_mono2k.py`: 6,912 blocks against
 pinned MONO2K with native 64-bit arithmetic, deterministic extraction and
 44.1/48 kHz tables, wide multiply checks, an independent 440 Hz tuning check,
-and all five SID waveforms. This is a port comparison, not original-MNM matching.
+all five SID waveforms, ENS L/R and chorus continuity across retriggers.
+This is a port comparison, not original-MNM matching.
 Regenerate committed source with `python mods/digimono-st/mono2k/generate.py`.
 
 The emulator command needs the EMAC-capable Unicorn (`LIBUNICORN_PATH`).
 It executes the linked ColdFire bank and native gain calls, comparing PCM
-before native gains against the host engine. See `docs/TESTS.md` for scope.
+before native gains against the host engine, including both ENS channels and
+the no-service fold-down. See `docs/TESTS.md` for scope.
+
+Version 0.3's offline OS 1.32B comparison improves all 13 ENS fixtures at MIDI
+48. Spectral distance falls from 0.604 to 0.047 for PCH2=96, and 0.749 to 0.160
+for WAVE=127/PW=32. At CHRL/CHRW=127, L/R correlation is 0.782 versus 0.785 in
+the reference. This diagnostic is not a fidelity percentage: original neutral
+track output and our raw oscillator are different stages. Remaining WAVE/PW
+colour, level response and wider keyboard/gate behaviour need further rounds.
+The same run retains byte-identical raw WAVs for all 75 non-ENS fixtures.
+ENS's saved values keep their positions but intentionally sound different:
+PCH=63 now disables that added voice, and 96 selects +6 rather than +18.
 
 To combine it with the normal bank, append `mods/digimono-st` to the machine
 folders in the documented bank command. It needs no Monomachine/Digitakt OS.

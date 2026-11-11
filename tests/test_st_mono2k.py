@@ -37,6 +37,9 @@ def oracle():
 #define M_FMS DM_FMSTAT
 #define M_FMD DM_FMDYN
 #define M_FMP DM_FMPAR
+#define M_ENS DM_ENS
+#define ENS_LEN 1024u
+#define ENS_GAIN 7119
 #define SID_A 24950
 #define SID_MIX0 1024
 #define SID_MIXA (SID_A * 15 / 32)
@@ -63,6 +66,18 @@ void dm_ref_render(struct dm_m2k_voice *v,unsigned type,const uint16_t *p,int32_
     ref_block(v,type,p,pitch,out);ref_block(v,type,p,pitch,out+16);
 }
 '''
+    ens = dsp[dsp.index('    case M_ENS: {'):dsp.index('    case M_WAV: {')]
+    code += '''static void ref_ens_block(struct dm_ens_voice *t,const uint16_t *p,int32_t pitch,int16_t *o,int16_t *side){
+    int ti=0;int16_t *ens_mem[1]={t->line},*eside[1]={side};
+    switch(DM_ENS){
+''' + ens + '''    }
+}
+void dm_ref_ens_render(struct dm_ens_voice *v,const uint16_t *p,int32_t pitch,int16_t *left,int16_t *right){
+    int16_t mid[32],side[32];
+    ref_ens_block(v,p,pitch,mid,side);ref_ens_block(v,p,pitch,mid+16,side+16);
+    for(int i=0;i<32;i++){left[i]=(int16_t)sat16((int32_t)mid[i]+side[i]);right[i]=(int16_t)sat16((int32_t)mid[i]-side[i]);}
+}
+'''
     return code
 
 
@@ -78,6 +93,8 @@ def main():
     machines, tables = generator.generate()
     assert machines == (MOD / 'mono2k/machines.inc').read_text()
     assert tables == (MOD / 'mono2k/tables.h').read_text()
+    assert generator.generate_ens() == (MOD/'mono2k/ens.inc').read_text()
+    assert generator.generate_ens_ui() == (MOD/'mono2k/ens-ui.h').read_text()
     # At the upstream rate, every selected table must match the pinned output.
     original = (MOD / 'mono2k/upstream/m2k_tables.h').read_text()
     _, tables44 = generator.generate(44100)

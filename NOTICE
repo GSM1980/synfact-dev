@@ -70,7 +70,7 @@ MONO2K
 mods/digimono-st/mono2k/upstream/ contains source snapshots from MONO2K by
 Inigo Hernandez (https://github.com/InigoHernandez/mono2k), pinned at commit
 95d5763495d961f3ed225f5e4201328934ca4247, GPL-3.0-only. The full licence and
-source hashes are included there. SID-6581 and FM+STAT/PAR/DYN are extracted
+source hashes are included there. ENS, SID-6581 and FM+STAT/PAR/DYN are extracted
 from these clean-room generators, with tables regenerated for 48 kHz.
 The new DSP, extraction script and combined AUDIO adapter are GPL-3.0-only;
 the combined SY MONOMACHINE bank uses GPL-3.0-only with MIT notices retained.
