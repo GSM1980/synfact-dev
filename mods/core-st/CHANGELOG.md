@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.8.0.
+Generated from git history by `tools/changelog.py`. Latest version: 1.8.1.
+
+## 1.8.1 (2026-11-11)
+
+- Refresh SYN layouts when Digi Mono TYPE changes (`fe671aa`, 2026-11-11)
 
 ## 1.8.0 (2026-11-10)
 
 - Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0) (`222a29d`, 2026-11-10)
+- Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
 
 ## 1.7.2 (2026-11-09)
 

@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
   "title": "SY MONOMACHINE",
-  "latest": "0.1",
+  "latest": "0.1.1",
   "entries": [
+    {
+      "version": "0.1.1",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "fe671aa",
+          "date": "2026-11-11",
+          "subject": "Refresh SYN layouts when Digi Mono TYPE changes"
+        }
+      ]
+    },
     {
       "version": "0.1",
       "date": "2026-11-11",
@@ -11,6 +22,11 @@
           "sha": "17eb89d",
           "date": "2026-11-11",
           "subject": "Add Digi Mono as one selectable Syntakt machine"
+        },
+        {
+          "sha": "d6d3934",
+          "date": "2026-11-11",
+          "subject": "Document Digi Mono 0.1 release history"
         }
       ]
     }
