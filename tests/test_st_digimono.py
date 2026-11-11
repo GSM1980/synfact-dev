@@ -25,6 +25,11 @@ def main():
                     'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c',
                     '-o', str(exe)], cwd=ROOT, check=True)
     subprocess.run([str(exe)], check=True)
+    pages=(a.out/'digimono-pages.exe').resolve()
+    subprocess.run([str(a.cc),'-O2','-Wall','-Werror','-Wl,--large-address-aware',
+                    '-I','elekloader/sdk/include','tests/test_st_digimono_pages.c',
+                    '-o',str(pages)],cwd=ROOT,check=True)
+    subprocess.run([str(pages)],check=True)
 
 
 if __name__ == '__main__':

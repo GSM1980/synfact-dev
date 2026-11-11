@@ -30,6 +30,11 @@ python tests/test_st_digimono.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.ex
 ```
 
 Its upstream source hashes are also verified. No firmware input is needed.
+The runner also compiles `test_st_digimono_pages.c` with the real core registry,
+page resolver and Digi Mono UI. It checks all eight engine types, repeated TYPE
+switches, two views, every dial/edit ID and page-action layout, TUNE and LEVEL.
+This catches the old core's frozen SAW layout, which a descriptor-only UI test
+missed: the hidden E position must reappear for every seven-parameter engine.
 
 The linked ColdFire test additionally needs Syntakt OS 1.41, a bank with its
 sibling `.work/audio.elf`, 64-bit native clang, and the EMAC-capable Unicorn

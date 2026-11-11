@@ -111,7 +111,11 @@ struct st_machine_ui_api {
 struct st_machine_dial {void *model;st_u32 id,raw,a,b;void *ctx;int x,y;};
 struct st_machine_ui {
     st_u32 type,pages;
-    const st_u32 *layout; /* pages * 8 parameter indices, ffffffff = empty */
+    /* pages * 8 parameter indices, ffffffff = empty. Core 1.8.1 rereads the
+     * array on page lookup; idle may update a writable bank-owned array to
+     * hide/restore controls for the current Sound. Control IDs/storage stay
+     * fixed. Earlier cores snapshot the array when binding the bank. */
+    const st_u32 *layout;
     void (*draw)(const struct st_machine_ui_api *,const struct core_machine_def *,void *view,void *ctx,st_u32 page);
     int (*idle)(const struct st_machine_ui_api *,const struct core_machine_def *,void *view,st_u32 page);
     int (*dial)(const struct st_machine_ui_api *,const struct core_machine_def *,st_u32 index,const struct st_machine_dial *);

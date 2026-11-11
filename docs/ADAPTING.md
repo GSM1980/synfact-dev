@@ -522,6 +522,16 @@ a module that needs a provider only for query 31 registers it on 14. LFO3 1.2
 leaves the Kit setter `40013516` to core 1.4 and stores through query 24, as
 it does for the Sound; on an older core it hooks it as before.
 
+## Syntakt: live SYN slot maps (core 1.8.1)
+
+`st_machine_ui.layout` is read on each native page lookup, not cached at bank
+binding. An `idle` callback may change a writable bank-owned array to match the
+current TYPE/Sound. `0xffffffff` hides a position from drawing, navigation and
+page actions; restoring its fixed control index restores the control. Storage
+and parameter IDs do not change. Static layouts keep the same behavior. No new
+site, event, service, feature bit or ABI field is needed. Digi Mono 0.1.1 needs
+this core for its dynamic controls; see `tests/test_st_digimono_pages.c`.
+
 ## Syntakt: stereo tracks (core 1.8)
 
 A digital track is mono up to MAIN's mixer. Core 1.8 adds one AUDIO site, the

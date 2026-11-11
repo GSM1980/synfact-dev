@@ -1,5 +1,16 @@
 # Syntakt core 0.12.22
 
+## Live SYN layouts (core 1.8.1)
+
+The native page layout now reads the bank UI's current slot map on every
+lookup. Previously the core copied it only at bank binding: a machine with
+a TYPE-dependent layout could change labels but never recover an initially
+empty position or remove a dial it no longer used. Drawing, encoder routing
+and page actions now use the same current map. Digi Mono 0.1.1 uses this to
+show TUNE plus all seven engine controls where present, and hide unused ones.
+Static layouts, stored parameter IDs and the SMZ format are unchanged. This
+is UI-task work; no AUDIO path, hook site or ABI field is added.
+
 Version 0.12.19 adds host API 8 `native_query`, a pointer to the existing
 synchronous native bus. It adds no hook site or operation number. OWNERS with
 null arguments still returns the Sound owner map; `{1}` requests the LFO-state

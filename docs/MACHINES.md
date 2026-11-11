@@ -225,6 +225,14 @@ Each layout entry is a control index from 0 to 27. Use `0xffffffff` for an empty
 slot. A page may repeat a control. An index at or above the control count is
 treated as empty.
 
+Core 1.8.1 rereads the layout on each native page lookup. A machine's `idle`
+callback may update a writable bank-owned layout array and return nonzero
+to request a redraw when TYPE or the displayed Sound changes. Use the same
+fixed control indices: hiding a slot does not renumber or clear its stored
+parameter. Drawing, navigation and page actions all read the current map.
+Earlier cores snapshot the layout at bank binding and cannot show dynamic
+slot changes. See `mods/digimono-st/main.c` and its real-core page test.
+
 The example `examples/ui-machine-test-st` shows the full case. Its layout reverses
 the first eight controls on page 0, and page 3 holds controls 24 to 27 and four
 empty slots:

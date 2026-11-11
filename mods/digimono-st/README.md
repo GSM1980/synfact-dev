@@ -1,4 +1,4 @@
-# SY MONOMACHINE 0.1
+# SY MONOMACHINE 0.1.1
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
@@ -10,6 +10,12 @@ are empty. SYN 2 has TYPE; it selects a voice for the **next trigger**, includin
 a parameter-locked trigger. TUNE and the seven values remain shared across
 types: changing TYPE never resets a Sound or its locks. Init Sound is SAW.
 Save/load, locks, undo, modulation and page navigation use the existing core.
+
+**Install core 1.8.1 with this bank.** It fixes the bind-time layout snapshot:
+SAW's empty E now becomes PULSE's SUB2, ENS/CHORDS' WAVE or VO's VOIC when TYPE
+changes. Unused slots disappear completely, including their dial and edit ID.
+Core 1.8.0 leaves SAW's initial seven-position layout fixed even though labels
+change. TUNE is always A; the seven engine parameters occupy B..H when used.
 
 | TYPE | A | B | C | D | E | F | G | H |
 |---|---|---|---|---|---|---|---|---|
@@ -83,5 +89,8 @@ folders in the documented bank command. It needs no Monomachine/Digitakt OS.
 Reserve type 70 for the parallel Machinedrum branch. This first version uses
 one shared parameter set, without per-type preset memory or automatic defaults.
 Hardware listening, CPU timing and original-Monomachine matching remain owner QA.
+The owner reported CPU below 60% with eight CHORDS tracks on version 0.1;
+the patch/settings were not recorded. Version 0.1.1 changes UI/core layout
+lookup only; the AUDIO engine is unchanged.
 The browser catalog configuration lists it as an optional machine; publishing
 or regenerating the site catalog is a separate step.
