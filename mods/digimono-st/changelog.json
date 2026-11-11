@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
   "title": "SY MONOMACHINE",
-  "latest": "0.1.2",
+  "latest": "0.2.0",
   "entries": [
+    {
+      "version": "0.2.0",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "005748a",
+          "date": "2026-11-11",
+          "subject": "Add MONO2K SID-6581 and FM+ types to SY MONOMACHINE"
+        }
+      ]
+    },
     {
       "version": "0.1.2",
       "date": "2026-11-11",
@@ -11,6 +22,11 @@
           "sha": "7fe932b",
           "date": "2026-11-11",
           "subject": "Filter Digi Mono destinations by Sound TYPE"
+        },
+        {
+          "sha": "1094bde",
+          "date": "2026-11-11",
+          "subject": "Document destination filtering releases"
         }
       ]
     },
