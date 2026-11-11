@@ -5,7 +5,9 @@
 #define ST_TRIG_NEW POLY_CALL(0x40103788u,u32 *(*)(u32))
 #define ST_TRIG_DELETE POLY_CALL(0x40103794u,void (*)(void *))
 #define ST_TRIG_RESET POLY_CALL(0x400f6730u,void (*)(void *))
-#define ST_TRIG_APP POLY_CALL(0x4016e804u,u8 *(*)(void))
+#define ST_TRIG_UI POLY_CALL(0x4016de80u,u8 *(*)(void))
+#define ST_TRIG_LAYOUT POLY_CALL(0x4007b9d0u,u32 *(*)(u32))
+#define ST_TRIG_MESSAGE POLY_CALL(0x400c33d0u,void (*)(u32,const char *,...))
 #include <syntakt/trig-pages.h>
 #define UI_GET POLY_CALL(0x40039160u,u32 (*)(void *,u32,u8 *))
 #define UI_TEXT POLY_CALL(0x400f8a0cu,void (*)(void *,void *,s32,s32,u32,const char *,const char *))
@@ -69,6 +71,7 @@ void poly_ui_sync(u8 *view)
      * third page is POLY's share of the vector (syntakt/trig-pages.h);
      * ARP's pages may follow it. */
     st_trig_set(view,ST_TRIG_POLY,track<10 && pages[0]==(track<8?2u:1u));
+    if(st_trig_mask(view)&ST_TRIG_POLY)st_trig_name_first(view);   /* 1.5: "TRIG (1/n)" */
 }
 
 u32 poly_ui_third(u8 *view)

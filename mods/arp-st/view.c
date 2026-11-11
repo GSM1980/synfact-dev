@@ -271,9 +271,10 @@ static void arp_dispose(void *v)
  * TrackSelect's (401d42ec) describes its LedHandler at +78h. */
 #define ARP_VIEW_BYTES 0x50u
 #define ARP_LED_BYTES 12u
-/* Palettes as the stock trig LEDs use them: 3 a note trig, 2 unlit (mode 1
- * forces it). ARP_LED_ACTIVE is a guess that needs the hardware. */
-#define ARP_LED_ACTIVE 9u
+/* Palettes of the stock RGB table (40113c4a uploads it to the panel, 41
+ * entries of r,g,b at 4024321c): 3 red, a note trig; 2 unlit (mode 1 forces
+ * it); 14 blue (0,0,f). 1.8 took 9, green (0,f,0); 1.9 is blue (user's choice). */
+#define ARP_LED_ACTIVE 14u
 #define ARP_LED_INACTIVE 3u
 static const char arp_type_name[]="10ArpSeqView";
 static const arp_u32 arp_type[8]={0x4024947cu,(arp_u32)arp_type_name,0,2,
@@ -338,6 +339,7 @@ static void arp_trig_sync(void *raw)
        !(pages=*(const arp_u32 *const *)(trig+0x7c)))return;
     track=arp_trig_track(trig);
     st_trig_set(trig,ST_TRIG_ARP,track<ARP_TRACKS && (pages[0]==1 || pages[0]==2) && eligible(track));
+    if(st_trig_mask(trig)&ST_TRIG_ARP)st_trig_name_first(trig);
 }
 static void arp_trig_index(arp_u8 *trig,arp_u32 index)
 {
@@ -351,15 +353,19 @@ static void arp_trig_page(unsigned int page)
     if(trig && (st_trig_mask(trig)&ST_TRIG_ARP))
         arp_trig_index(trig,st_trig_first(st_trig_mask(trig),ST_TRIG_ARP)+page);
 }
+/* 1.9: the page popup the native page key shows ("Arpeggiator (4/5)",
+ * "TRIG (1/5)"), for the TRIG presses that move the page here instead. */
+static void arp_trig_popup(arp_u8 *trig){if(trig)st_trig_popup(trig);}
 /* Close the view, leaving the TRIG view on page 0 (the first TRIG page) or,
- * with before, on the page before the arp's. */
-static void arp_trig_close(int before)
+ * with before, on the page before the arp's; returns that TRIG view. */
+static arp_u8 *arp_trig_close(int before)
 {
     arp_u8 *trig=arp_trig_view(arp_main);arp_u32 mask,first;
     if(trig && ((mask=st_trig_mask(trig))&ST_TRIG_ARP) &&
        view_word(trig,0x90)>=(first=st_trig_first(mask,ST_TRIG_ARP)))
         arp_trig_index(trig,before?first-1:0);
     ARP_CLOSE(arp_view);
+    return trig;
 }
 static void arp_dirty(void)
 {
@@ -689,7 +695,7 @@ static int arp_view_key(void *app,const void *event)
     if(!arp_view && key==0x13 && (flags&1) && !(flags&10) && (trig=arp_trig_view(main?top:0)) &&
        (st_trig_mask(trig)&ST_TRIG_ARP) &&
        view_word(trig,0x90)+1==st_trig_first(st_trig_mask(trig),ST_TRIG_ARP) && arp_open(app,track)){
-        arp_trig_page(0);arp_trig_opened=1;return 1;
+        arp_trig_page(0);arp_trig_opened=1;arp_trig_popup(trig);return 1;
     }
     if(!arp_foreground())return key>=40 && key<=47 && arp_trig_page_shown(app);
     /* TRIG (13h) on the open view: the chord page, then (on its release) the
@@ -698,12 +704,12 @@ static int arp_view_key(void *app,const void *event)
         if((flags&1) && !(flags&8)){
             if(!arp_page){
                 arp_trig_page(1);arp_steps_held=0;arp_steps_edited=0;arp_enc_reset();arp_dirty();
-                arp_trig_flipped=1;
+                arp_trig_flipped=1;arp_trig_popup(arp_trig_view(arp_main));
             }else arp_trig_leaving=1;
         }
         if(!(flags&1)){
             arp_trig_flipped=arp_trig_opened=0;
-            if(arp_trig_leaving){arp_trig_leaving=0;arp_trig_close(0);}
+            if(arp_trig_leaving){arp_trig_leaving=0;arp_trig_popup(arp_trig_close(0));}
         }
         return 1;
     }

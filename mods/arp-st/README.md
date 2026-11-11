@@ -1,5 +1,28 @@
 # Digitone ARP → Syntakt: experimental source port
 
+## Page popups and blue steps (1.9)
+
+**The TRIG presses ARP takes show the page popup.** The native page key
+moves the page and shows "<title> (n/m)" in a popup (`4003c50a`: the view's
+title `40037dd0` into its UI-state object `+6Ch`). ARP moves the page itself
+on three presses: onto the arp page, onto the chord page and, on the release
+of the next one, back to the first TRIG page. Each now shows the same popup
+(`st_trig_popup`, the printf form `400c33d0`): "Arpeggiator (4/5)",
+"Arpeggiator (5/5)", "TRIG (1/5)" with POLY (3/4, 4/4, 1/4 without). NO and
+the parameter page keys close without one, as before. The first page's stock
+title "Trig Parameters" becomes "TRIG" (`st_trig_name_first`, from PAGE_SYNC),
+also when the native page key reaches it.
+
+**ARP's descriptor is found outside page actions.** `st_trig_current` read
+the view manager of the application (`4016e804`, the project); the manager is
+the UI controller's (`4016de80`, `+40h`). Until 1.9 page 3's descriptor was
+ARP's only inside page actions; the popups above read it from the key
+handler.
+
+**Active steps are blue** (palette 14, the user's choice; green, palette 9,
+until 1.8). The palette numbers index the stock RGB table (see the arp steps
+below).
+
 ## Native TRIG pages and SCALE (1.8)
 
 **The two ARP pages look like the other TRIG pages.** They draw inside the
@@ -220,9 +243,9 @@ after allocator rounding), including both families' index.
 ### The arp steps on the trig keys
 
 Outside REC, with the ARP view open, the sixteen trig keys are the arp's
-sixteen steps on every track: steps up to LEN are lit, active ones in one
-colour (palette 9) and muted ones in red (palette 3, the stock note-trig
-colour); keys past LEN are dark. A press selects the step (as LEFT/RIGHT do);
+sixteen steps on every track: steps up to LEN are lit, active ones in blue
+(palette 14; green, palette 9, until 1.8) and muted ones in red (palette 3,
+the stock note-trig colour); keys past LEN are dark. A press selects the step (as LEFT/RIGHT do);
 turning any of A..F while steps are held edits each held step's note (OFS);
 releasing a key without an encoder edit toggles that step. With REC (grid or
 live), or with FUNC, key 2 or key 12h held, the keys and their LEDs stay the
@@ -232,9 +255,11 @@ The LEDs use the stock LED frame (400094f4): the view stack (40100856) offers
 the key LEDs from the top down to each view that is a `LedHandler`, found by
 `dynamic_cast`, and the first setter of an LED wins (40008220). The view is
 therefore a View followed by a LedHandler at `+50h`, described by its own
-`__vmi_class_type_info` as TrackSelect's (401d42ec) describes its own. Palette
-9 for the active steps is a guess from the stock track keys that needs the
-instrument: change `ARP_LED_ACTIVE` in `view.c` if it is not green.
+`__vmi_class_type_info` as TrackSelect's (401d42ec) describes its own. The
+palette numbers index the stock RGB table that `40113c4a` uploads to the
+panel (41 entries of r, g, b from `4024321c`, 6-bit channels): 3 is red
+(`0f 00 00`), 9 green (`00 0f 00`), 14 blue (`00 00 0f`), 20 white.
+`ARP_LED_ACTIVE` in `view.c` is 14.
 
 Checks: `tests/test_st_arp_locks_emu.py` executes compiled storage, LFO3/ARP
 isolation, clone/codec, capacity/reuse, event capture and ARP LEN acceptance.
@@ -482,7 +507,9 @@ All outputs go under ignored `out/`; no MIDI/USB/device access.
   across edits. Checks the note-off flag boundary, not synthesis or audio.
 - `test_st_arp_view_emu.py`: linked TRIG-page opening (1.7: PAGE_SYNC, the
   tick, the page index, TRIG + YES), MODE OFF, A..F limits, steps,
-  modal priority, STOP, close/dispose/reopen and failure passthrough. Stack
+  modal priority, STOP, close/dispose/reopen and failure passthrough; 1.9:
+  the page popups on 4 and 5 pages, digital and analog (the popup `400c33d0`
+  is a double; the descriptors go through the core's PAGE_LAYOUT). Stack
   ownership, allocation, base view ctor/dtor and text rasterization are doubles;
   the native rail constructor executes. Font metrics/maps/pixels (453 and 599
   glyph bytes) and 27x27 rail image/mask compare byte-for-byte to Digitone.

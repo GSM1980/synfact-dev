@@ -32,8 +32,18 @@
 #define ST_TRIG_DELETE ((void (*)(void *))0x40103794u)
 #define ST_TRIG_RESET ((void (*)(void *))0x400f6730u)                /* the view's increments */
 #endif
-#ifndef ST_TRIG_APP
-#define ST_TRIG_APP ((unsigned char *(*)(void))0x4016e804u)          /* the application */
+/* The UI controller (4016de80, a 0xf0-byte singleton; its constructor
+ * 400095a2 builds the view manager at +40h, and the key and draw loops pass
+ * it to the views). Not the application (4016e804, the project with its
+ * patterns at +3394h): until ARP 1.9 / POLY 1.5 st_trig_current read the
+ * application's +40h, found no MainScreen and answered 0 outside page
+ * actions, so the page popup read page 3's "Euclidean" on POLY's page. */
+#ifndef ST_TRIG_UI
+#define ST_TRIG_UI ((unsigned char *(*)(void))0x4016de80u)
+#endif
+#ifndef ST_TRIG_LAYOUT
+#define ST_TRIG_LAYOUT ((unsigned int *(*)(unsigned int))0x4007b9d0u) /* a page's descriptor (the core's hook) */
+#define ST_TRIG_MESSAGE ((void (*)(unsigned int,const char *,...))0x400c33d0u) /* printf popup */
 #endif
 static __inline__ unsigned int st_trig_word(const void *view,unsigned int at)
 {return *(const unsigned int *)((const unsigned char *)view+at);}
@@ -78,17 +88,45 @@ static __inline__ unsigned int st_trig_owner(const void *view,unsigned int i)
     if(i<ST_TRIG_NATIVE_PAGES || i>=st_trig_pages(mask))return 0;
     return (mask&ST_TRIG_POLY) && i==ST_TRIG_NATIVE_PAGES?ST_TRIG_POLY:ST_TRIG_ARP;
 }
-/* The TRIG view of the MainScreen the application shows (UI task only): the
- * highest opaque view of the stack (manager app+40h, node +1Ch, view +8). */
+/* The TRIG view of the MainScreen the UI shows (UI task only): the highest
+ * opaque view of the stack (manager ui+40h, node +1Ch, view +8). */
 static __inline__ unsigned char *st_trig_current(void)
 {
-    unsigned char *app=ST_TRIG_APP(),*m,*n,*main,*trig;
-    if(!app)return 0;
-    m=app+0x40;n=*(unsigned char **)(m+0x1c);
+    unsigned char *ui=ST_TRIG_UI(),*m,*n,*main,*trig;
+    if(!ui)return 0;
+    m=ui+0x40;n=*(unsigned char **)(m+0x1c);
     if(!n || n==m+0x14 || !(main=*(unsigned char **)(n+8)) || st_trig_word(main,0)!=0x401c81fcu)return 0;
     trig=*(unsigned char **)(main+0xc0);
     if(!trig || st_trig_word(trig,0)!=ST_TRIG_VIEW || st_trig_word(trig,0x88)!=0x13u)return 0;
     return trig;
+}
+/* The page popup as the native page key shows it (4003c50a: the next page,
+ * then the view's title 40037dd0 in its popup +6Ch): "<title> (n/m)", the
+ * title read from the shown page's descriptor through the core's hook, so an
+ * added page reads its module's. For a module that moves the page itself. */
+static __inline__ void st_trig_popup(const void *view)
+{
+    const unsigned int *pages=(const unsigned int *)st_trig_word(view,0x7c),*d;
+    unsigned int i=st_trig_word(view,0x90),n=st_trig_count(view);
+    if(!pages || i>=n || !st_trig_word(view,0x6c) || !(d=ST_TRIG_LAYOUT(pages[i])) || !d[1])return;
+    ST_TRIG_MESSAGE(st_trig_word(view,0x6c),"%s (%d/%d)",(const char *)d[1],(int)i+1,(int)n);
+}
+/* The first TRIG page's title (list item 37, user's choice): "TRIG", not the
+ * stock "Trig Parameters", on audio tracks (page ID 2 digital, 1 analog;
+ * MIDI's 26 stays stock). The core asks PAGE_LAYOUT only for page 3, so the
+ * stock descriptor itself (4007b9d0's table) takes a leaked static title;
+ * the stock string is left as it is. A module that adds pages calls it from
+ * its PAGE_SYNC; with POLY and ARP the second finds it done. */
+static __inline__ void st_trig_name_first(const void *view)
+{
+    static const struct st_trig_title name=ST_TRIG_TITLE("TRIG");
+    const unsigned int *pages=(const unsigned int *)st_trig_word(view,0x7c);
+    unsigned int *d;const char *t;
+    if(!pages || st_trig_count(view)<ST_TRIG_NATIVE_PAGES || (pages[0]!=1 && pages[0]!=2) ||
+       !(d=ST_TRIG_LAYOUT(pages[0])))return;
+    t=(const char *)d[1];
+    if(t==name.text || (t && t[0]=='T' && t[1]=='R' && t[2]=='I' && t[3]=='G' && !t[4]))return;
+    d[1]=(unsigned int)name.text;
 }
 /* The first index of one module's pages under mask. */
 static __inline__ unsigned int st_trig_first(unsigned int mask,unsigned int module)

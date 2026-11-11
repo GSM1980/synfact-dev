@@ -14,6 +14,7 @@ APP,MAIN,MODEL,NODE,EV,ROOT,BMP,VECTOR=0x49011000,0x49012000,0x49012400,0x490125
 TOPNODE=NODE+0x10
 PARAM,PROXY,PVT,INNER,IVT=0x49018000,0x49018100,0x49018200,0x49018300,0x49018400
 PAGES=0x49018500 # the TRIG view's page vector (syntakt/trig-pages.h), capacity 8
+POPUP=0x49018600 # the TRIG view's UI-state object (+6Ch: the popup, 400c33d0's first argument)
 GET_SOUND,NOTIFY=RET+0x200,RET+0x204
 # The encoder natives as the native pages call them (1.2): 400f66a2 with ticks x1 (x8
 # pressed), 400f68d2 with the choices table 443da178 for every control (the values table
@@ -38,6 +39,7 @@ class ViewMachine(Machine):
         self.w(INNER,IVT);self.w(IVT+0x28,GET_SOUND);self.w(IVT+0x10,NOTIFY)
         self.u.mem_write(GET_SOUND,b'\x4e\x75');self.u.mem_write(NOTIFY,b'\x4e\x75');self.notified=0
         self.w(0x444df618,VECTOR);self.w(0x444df61c,VECTOR+96*28)
+        self.popups=[]
     # The view manager at APP+40h: +1Ch the highest opaque view's node, the
     # sentinel at +14h whose previous node (+4) is the top of the stack. An
     # opaque view on top is both; since 1.8 the ARP view is not opaque, so it
@@ -64,6 +66,13 @@ class ViewMachine(Machine):
         return x.decode('ascii')
     def code(self,u,pc,n,ctx):
         if not self.ready:return super().code(u,pc,n,ctx)
+        # The UI controller (4016de80): its view manager is APP+40h here. ARP
+        # 1.9 reads the TRIG view the MainScreen shows from it (st_trig_current).
+        if pc==0x4016de80:self.ret(APP);return
+        # 1.9: the page popup (400c33d0, printf form) on the TRIG view's object.
+        if pc==0x400c33d0:
+            obj,fmt,title,page,count=self.args(5);assert self.string(fmt)=='%s (%d/%d)'
+            self.popups.append((obj,'%s (%d/%d)'%(self.string(title),page,count)));self.ret();return
         if pc==self.alloc:
             assert self.args(1)==(16+0x50+12,);self.allocs+=1;self.ret(0 if self.oom else ROOT);return
         if pc==0x4001ff74:assert self.args(1)==(MODEL,);self.ret(self.track);return
@@ -169,7 +178,9 @@ class LockViewMachine(ViewMachine):
     def code(self,u,pc,n,ctx):
         if self.ready:
             if pc==0x4016ede0:self.ret(LEDMGR);return
-            if pc==0x4016e804:self.ret(APP);return # application, for 400c34d6
+            # The application (patterns at +3394h), for 400c34d6. Not the UI
+            # controller: page_descriptors moves it away to prove it.
+            if pc==0x4016e804:self.ret(getattr(self,'application',APP));return
             if pc==0x40008220:
                 mgr,led,mode,palette=self.args(4);assert mgr==LEDMGR
                 self.leds.setdefault(led,(mode,palette));self.ret();return
@@ -235,7 +246,7 @@ def step_editing(core,bank):
     assert handler==view+0x50
     def leds():
         m.leds={};m.call(m.word(m.word(handler)+8),handler,0,0);return m.leds
-    assert leds()=={k:(2,9) for k in range(1,17)}
+    assert leds()=={k:(2,14) for k in range(1,17)}
     # A held step key selects that step; any encoder edits its note (OFS);
     # its release after an edit leaves it enabled.
     assert m.key(27,1,200)==1 and m.word(m.sym['arp_selected'])==3
@@ -247,7 +258,7 @@ def step_editing(core,bank):
     assert m.read(p+8,2)==b'\xfe\xfe' and enabled()==0xfff7
     # Past LEN the keys are dark and a tap changes nothing.
     m.encoder(6,-12);assert m.read(p+4,1)==b'\x03'
-    assert leds()=={1:(2,9),2:(2,9),3:(2,9),4:(2,3),**{k:(1,2) for k in range(5,17)}}
+    assert leds()=={1:(2,14),2:(2,14),3:(2,14),4:(2,3),**{k:(1,2) for k in range(5,17)}}
     m.key(30,1,208);m.key(30,16,209);assert enabled()==0xfff7
     # REC (grid or live) leaves the keys and LEDs to the sequencer.
     for flag in (0x168,0x16a):
@@ -317,6 +328,7 @@ def page_descriptors(core,bank):
     IDs, so the native editor cannot reach Euclidean's controls from there;
     encoders on an ARP page stay ARP's even without the ARP view on top."""
     m=LockViewMachine(core,bank);args,result=W+0x9a0,W+0x9b0;m.w(args,3)
+    m.application=W+0x1c00   # 1.9: st_trig_current asks the UI controller, not the application
     def layout(index,page=3):
         m.w(PARAM+0x90,index);m.w(args,page);m.w(result,0)
         return m.word(result) if m.call('arp_native',11,args,result) else None
@@ -328,6 +340,7 @@ def page_descriptors(core,bank):
         assert [m.word(d+8+4*i) for i in range(8)]==[0]*8 and m.word(d)==m.word(stock) and m.word(d+40)==m.word(stock+40)
     m.pages([2,3,3,3,3]);assert layout(2) is None and layout(3) and layout(4)  # POLY's page is POLY's
     m.pages([2,3,3,3]);m.top(MAIN+0x800);assert layout(2) is None;m.top(MAIN)  # another view on top
+    del m.application
     # The ARP view open, not opaque: it is the stack's top and keeps the keys
     # and encoders while the MainScreen stays the highest opaque view.
     assert m.open()==1 and m.word(APP+0x40+0x18)==TOPNODE and m.word(NODE+8)==MAIN
@@ -506,8 +519,37 @@ def kit_sound_mirror(core,bank):
     m.dispose()
     return 'ARP view reads restored Kit settings; edits update UI mirror and Kit Sound'
 
+def page_popups(core,bank):
+    """1.9: the TRIG presses ARP takes show the page popup the native page key
+    shows (4003c50a): "Arpeggiator (n/m)" on both ARP pages (ARP's descriptor
+    through the core's PAGE_LAYOUT), "TRIG (1/m)" back on the first page (its
+    stock descriptor retitled by PAGE_SYNC). Other closes show none."""
+    out=[]
+    for ids in ([2,3,3,3],[2,3,3,3,3],[1,3,3,3]):
+        m=ViewMachine(core,bank);m.pages(ids);m.w(PARAM+0x6c,POPUP);n=len(ids);first=n-2
+        stock=0x41b9f3c8+44*ids[0]
+        m.w(W+0x9a0,PARAM);m.call('arp_native',9,W+0x9a0,W+0x9b0);title=m.word(stock+4)   # PAGE_SYNC
+        assert m.string(title)=='TRIG' and m.word(title-4)==0xffffffff and m.word(title-12)==4
+        assert m.word(0x41b9f3c8+44*3+4)==0          # page 3's stock descriptor untouched
+        m.w(PARAM+0x90,first-1);assert m.key(0x13,1,100)==1 and m.index()==first
+        assert m.popups==[(POPUP,'Arpeggiator (%d/%d)'%(first+1,n))],m.popups
+        assert m.key(0x13,16,110)==1 and len(m.popups)==1
+        assert m.key(0x13,1,120)==1 and m.index()==first+1
+        assert m.popups[-1]==(POPUP,'Arpeggiator (%d/%d)'%(n,n)) and len(m.popups)==2
+        assert m.key(0x13,16,130)==1 and len(m.popups)==2
+        assert m.key(0x13,1,140)==1 and len(m.popups)==2      # leaving: on the release
+        assert m.key(0x13,16,150)==1 and m.closed==1 and m.index()==0
+        assert m.popups[-1]==(POPUP,'TRIG (1/%d)'%n) and len(m.popups)==3
+        out.append('%d pages: %s'%(n,', '.join(t for _,t in m.popups)))
+        # NO and a parameter page key close without a popup.
+        for key in (13,0x15):
+            q=LockViewMachine(core,bank);q.pages(ids);q.w(PARAM+0x6c,POPUP);q.w(PARAM+0x90,first-1)
+            assert q.key(0x13,1,100)==1 and q.key(0x13,16,110)==1 and len(q.popups)==1
+            q.key(key,1,200);assert q.closed==1 and q.index()==0 and len(q.popups)==1
+    return out
+
 def verify(core,bank,out):
-    lock_editing(core,bank);descriptors=page_descriptors(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank);mirror=kit_sound_mirror(core,bank)
+    lock_editing(core,bank);descriptors=page_descriptors(core,bank);popups=page_popups(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank);mirror=kit_sound_mirror(core,bank)
     m=ViewMachine(core,bank);initial=m.pool_counts()
     m.w(PARAM+0x90,0);assert not m.key(0x13,1,0) and not m.key(0x13,16,10) and not m.word(m.sym['arp_view'])
     m.w(PARAM+0x90,1);assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
@@ -610,7 +652,7 @@ def verify(core,bank,out):
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
     binding=native_key_binding(core,bank);page_handoff=parameter_page_handoff(core,bank)
-    result=dict(ok=True,page_descriptors=descriptors,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,kit_sound_mirror=mirror,drawn_in_trig_view=True,
+    result=dict(ok=True,page_descriptors=descriptors,page_popups=popups,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,kit_sound_mirror=mirror,drawn_in_trig_view=True,
         lifecycle=['TRIG on the last native TRIG page opens with MODE OFF','PAGE_SYNC adds two pages on eligible audio tracks',
                    'tick opens a page reached otherwise','encoders A..F clamp','selected step/mute','modal priority',
                    'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',

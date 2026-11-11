@@ -108,10 +108,15 @@ static T indicator_pages;
 static void page_mock(void *v,void *ctx,T a,T b,T c){(void)v;(void)ctx;(void)b;(void)c;indicator_pages=a;}
 static void blit_mock(void *ctx,void *bmp,int x,int y,T flag){(void)ctx;(void)bmp;(void)x;(void)y;(void)flag;}
 static void rec_position(T clock,T track,B *out){(void)clock;assert(track<12);memset(out,0,4);}
-/* The application, its view manager and the MainScreen showing the TRIG view
- * (syntakt/trig-pages.h st_trig_current): manager +40h, opaque node +1Ch. */
+/* The UI controller (4016de80), its view manager and the MainScreen showing
+ * the TRIG view (syntakt/trig-pages.h st_trig_current): manager +40h, opaque
+ * node +1Ch. The application (4016e804) is not asked (POLY 1.5). */
 static B app_fixture[0x100],node_fixture[16],main_fixture[0x100];
 static void *app_mock(void){return app_fixture;}
+/* The stock descriptors of the first TRIG pages (IDs 1 analog, 2 digital),
+ * as 4007b9d0 returns them: POLY's sync titles them "TRIG" (POLY 1.5). */
+static T first_descriptors[3][11];
+static T *first_layout_mock(T id){assert(id==1 || id==2);return first_descriptors[id];}
 static B *rec_model_mock(T track){assert(track==(T)PATTERN+(rec_track+1)*0x70);return rec_model;}
 static void *poly_test_function(T address)
 {
@@ -125,7 +130,7 @@ static void *poly_test_function(T address)
     case 0x40070362:return toggle_mock;case 0x4003a1c2:return page_mock;case 0x400f8dac:return blit_mock;
     case 0x4008da6e:return rec_position;
     case 0x40115f78:return memcpy;
-    case 0x4016e804:return app_mock;
+    case 0x4016de80:return app_mock;case 0x4007b9d0:return first_layout_mock;
     default:fprintf(stderr,"unexpected native function %08x\n",address);abort();
     }
 }
@@ -415,6 +420,7 @@ static void ui(void)
         *(T *)main_fixture=0x401c81fcu;*(B **)(main_fixture+0xc0)=view;*(T *)(view+0x88)=0x13;
         native_layout[0]=0x1111;native_layout[1]=0x2222;native_layout[10]=0x3333;
         d=(const T *)poly_ui_layout(3);assert(d && d[0]==0x1111 && d[2+4]==0x15 && d[10]==10);
+        title=(const char *)first_descriptors[2][1];assert(title && !strcmp(title,"TRIG") && ((const int *)title)[-1]==-1);
         title=(const char *)d[1];assert(!strcmp(title,"Polyphonic mode"));
         assert(((const T *)title)[-3]==15 && ((const int *)title)[-1]==-1);
         assert(!poly_ui_layout(25));

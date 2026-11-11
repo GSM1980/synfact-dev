@@ -14,6 +14,14 @@ limited to the TRIG ParameterView.
 
 ## Operation
 
+1.5: the page popup on POLY's page reads "Polyphonic mode (3/n)", and the
+first TRIG page's "TRIG (1/n)". `st_trig_current` read the view manager of
+the application (`4016e804`); the manager is the UI controller's
+(`4016de80`, `+40h`), so outside page actions (the TRIG key's page change
+and its popup) POLY never found its page and the popup read page 3's
+"Euclidean (3/n)". The first page's stock title "Trig Parameters" becomes
+"TRIG" while POLY's page is there (`st_trig_name_first`).
+
 1.4: the header reads "Polyphonic mode (3/n)": page 3's descriptor is POLY's
 (title and IDs) also outside page actions, while the MainScreen's TRIG view
 shows POLY's page (`syntakt/trig-pages.h`, `st_trig_current`); before, it read

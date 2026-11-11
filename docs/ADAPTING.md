@@ -426,9 +426,19 @@ Each added page is page ID 3, whose descriptor (`4007b9d0`, 44 bytes: a word,
 the header title as a COW `std::string`, nine control IDs) the core asks for
 through PAGE_LAYOUT. While the MainScreen's TRIG view (`st_trig_current`)
 shows its page, a module answers with its own (`st_trig_descriptor`, a
-static `ST_TRIG_TITLE`): the header then reads its title ("Polyphonic mode",
-"Arpeggiator") and the native editor its control IDs, never page 3's
-(Euclidean's). There is no other state: the vector's size (2, 3, 4 or 5) says which are
+static `ST_TRIG_TITLE`): the header and the page popup then read its title
+("Polyphonic mode (3/5)", "Arpeggiator (4/5)") and the native editor its
+control IDs, never page 3's (Euclidean's). `st_trig_current` finds the
+MainScreen through the UI controller's view manager (`4016de80`, `+40h`),
+not the application's (`4016e804`); with the application, before ARP 1.9 /
+POLY 1.5, it answered 0 outside page actions and the popup read "Euclidean".
+A module that moves the page itself (ARP on TRIG) shows the popup the native
+page key shows with `st_trig_popup(view)` ("<title> (n/m)" through `400c33d0`
+in the view's `+6Ch`). The first TRIG page reads "TRIG (1/n)": the core asks
+PAGE_LAYOUT only for page 3, so `st_trig_name_first(view)`, from a module's
+PAGE_SYNC while its pages are there, gives the stock descriptor of page ID 2
+(digital) or 1 (analog) a leaked static "TRIG" instead of "Trig Parameters";
+MIDI's page 26 stays stock. There is no other state: the vector's size (2, 3, 4 or 5) says which are
 there, and `st_trig_set(view, module, want)` changes only that module's
 part, keeping the page shown (or going to 0 when it went away). Either order,
 either module alone. The added entries are page ID 3, so the native view
@@ -436,7 +446,8 @@ beneath is always a valid TRIG page; the module draws or opens its own view
 over it. A new module that adds TRIG pages takes the next bit in the header,
 after ARP. The core could own this vector later
 ([CORE-CONTRIBUTING.md](CORE-CONTRIBUTING.md)); its resident RAM is full today.
-`tests/test_st_trig_pages.c` covers every transition.
+`tests/test_st_trig_pages.c` covers every transition, the TRIG view found
+through the UI controller, the popup and the first page's title.
 
 ## Syntakt: mixer events, the FX codec and several providers (core 1.2)
 
