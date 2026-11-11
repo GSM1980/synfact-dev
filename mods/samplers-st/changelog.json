@@ -1,8 +1,19 @@
 {
   "id": "samplers-st",
   "title": "SP sample machines",
-  "latest": "1.3",
+  "latest": "1.4",
   "entries": [
+    {
+      "version": "1.4",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "3fec310",
+          "date": "2026-11-11",
+          "subject": "Samplers 1.4: lighter PCM and stereo engine, stereo only while it sounds"
+        }
+      ]
+    },
     {
       "version": "1.3",
       "date": "2026-11-10",
@@ -16,6 +27,11 @@
           "sha": "40e397f",
           "date": "2026-11-10",
           "subject": "Changelogs: core 1.8.0"
+        },
+        {
+          "sha": "6bc6bb7",
+          "date": "2026-11-10",
+          "subject": "Changelogs: Sample Manager 1.2"
         }
       ]
     },

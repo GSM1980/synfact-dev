@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.2.3.
 ## 1.2.3 (2026-11-09)
 
 - Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
+- Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 - Optimize modulation skip by track and Sound publication (`a442be8`, 2026-11-09)
 - Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)
 - Changelogs: core 1.7.2 (`f9192b9`, 2026-11-09)

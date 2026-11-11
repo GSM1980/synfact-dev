@@ -1,11 +1,16 @@
 # Changelog: SP sample machines
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.3.
+Generated from git history by `tools/changelog.py`. Latest version: 1.4.
+
+## 1.4 (2026-11-11)
+
+- Samplers 1.4: lighter PCM and stereo engine, stereo only while it sounds (`3fec310`, 2026-11-11)
 
 ## 1.3 (2026-11-10)
 
 - Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0) (`222a29d`, 2026-11-10)
 - Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
+- Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 
 ## 1.2 (2026-11-06)
 

@@ -13,6 +13,11 @@
           "subject": "Changelogs: core 1.8.0"
         },
         {
+          "sha": "6bc6bb7",
+          "date": "2026-11-10",
+          "subject": "Changelogs: Sample Manager 1.2"
+        },
+        {
           "sha": "f89c72b",
           "date": "2026-11-09",
           "subject": "ARP 1.8, FM TONE 1.1, POLY 1.4: TRIG pages, SCALE, falling RANGE, FUNC snaps"

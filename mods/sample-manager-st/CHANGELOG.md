@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.2.
 ## 1.2 (2026-11-10)
 
 - Sample Manager 1.2: FUNC+UP/DOWN steps one row after an audition (`a4bd154`, 2026-11-10)
+- Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 
 ## 1.1 (2026-11-10)
 

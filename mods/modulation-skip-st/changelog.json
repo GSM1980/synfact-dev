@@ -13,6 +13,11 @@
           "subject": "Changelogs: core 1.8.0"
         },
         {
+          "sha": "6bc6bb7",
+          "date": "2026-11-10",
+          "subject": "Changelogs: Sample Manager 1.2"
+        },
+        {
           "sha": "a442be8",
           "date": "2026-11-09",
           "subject": "Optimize modulation skip by track and Sound publication"
