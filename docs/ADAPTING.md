@@ -522,6 +522,18 @@ a module that needs a provider only for query 31 registers it on 14. LFO3 1.2
 leaves the Kit setter `40013516` to core 1.4 and stores through query 24, as
 it does for the Sound; on an older core it hooks it as before.
 
+## Syntakt: destination visibility per model (core 1.8.2)
+
+Host API 15 adds query `ST_PARAMETER_UI_DEST_FLAGS` (32). `args[0]` is the
+engine ID; `result` is the borrowed model whose native destination list is
+being enumerated, not an output buffer. A provider returns nonzero with a
+capability mask in `*value`, or zero there to hide the entry. Read TYPE through
+that model's getter; do not use the last visible SYN page's global state.
+Only the native builder `4001471c` flags call (return `400147a0`, A5=model)
+uses this query; runtime flags remain query 21. A declined filter falls back
+to the original flags/provider behavior. No new field, serialized feature,
+patch site or event is added. Digi Mono's init-only module requires API 15.
+
 ## Syntakt: live SYN slot maps (core 1.8.1)
 
 `st_machine_ui.layout` is read on each native page lookup, not cached at bank

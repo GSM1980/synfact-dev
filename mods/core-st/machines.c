@@ -138,6 +138,10 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     const struct core_machine_def *m=0;const struct core_machine_param *p;
     u32 id=args[0],index=0,i,*layout,*copy;
     if(!core_machine_active)return 0;
+    if(q==ST_UI_DEST_FLAGS){
+        if(core_parameter_provider(q,args,result,value))return 1;
+        q=ST_FLAGS; /* A declined UI filter uses ordinary flags/providers. */
+    }
     if(q==ST_AVAILABLE && id>=64 && id<80){
         core_machine_availability_seen|=1u<<(id-64);core_machine_last_track=args[1];
     }

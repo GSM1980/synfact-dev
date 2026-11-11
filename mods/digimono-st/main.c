@@ -3,6 +3,8 @@
  * Labels and layout follow the currently displayed Sound, as MD's UI does.
  */
 #include <syntakt/machines.h>
+#include <syntakt/modules.h>
+#include <syntakt/host.h>
 #include "types.h"
 
 #ifndef DM_VALUE
@@ -27,12 +29,10 @@ static const struct core_machine_param dm_controls[9] = {
 };
 const struct core_machine_def dm_monomachine={71,9,"SY MONOMACHINE","MONO","SYN",dm_controls,ST_MACHINE_NO_INIT,44,10,16};
 
-static int dm_idle(const struct st_machine_ui_api *api,const struct core_machine_def *m,void *view,st_u32 page)
+static int dm_select_type(st_u32 t)
 {
-    unsigned char locked = 0;
-    st_u32 t = dm_clamp_type(DM_VALUE(view,DM_ENGINE+DM_TYPE_CONTROL,&locked)&65535u), i,j;
+    st_u32 i,j;
     int changed = t != dm_shown;
-    (void)api; (void)m; (void)page;
     dm_shown = t;
     for(i=0;i<8;i++) {
         const char *s=dm_labels[t][i];
@@ -43,6 +43,35 @@ static int dm_idle(const struct st_machine_ui_api *api,const struct core_machine
     }
     return changed;
 }
+static int dm_idle(const struct st_machine_ui_api *api,const struct core_machine_def *m,void *view,st_u32 page)
+{
+    unsigned char locked=0;
+    (void)api;(void)m;(void)page;
+    return dm_select_type(dm_clamp_type(DM_VALUE(view,DM_ENGINE+DM_TYPE_CONTROL,&locked)&65535u));
+}
+/* The list's own Sound model supplies TYPE, even without opening SYN first.
+ * UI query 32 only: do not hide runtime flags or change saved destinations. */
+static int dm_destination_query(st_u32 q,st_u32 *args,void *model,st_u32 *value)
+{
+    st_u32 index,t,*vt;
+    if(q!=ST_PARAMETER_UI_DEST_FLAGS || args[0]<DM_ENGINE ||
+       (index=args[0]-DM_ENGINE)>DM_TYPE_CONTROL || !model)return 0;
+    vt=*(st_u32 **)model;
+    t=dm_clamp_type(((st_u32 (*)(void *,st_u32))vt[0x28/4])(model,DM_ENGINE+DM_TYPE_CONTROL)&65535u);
+    dm_select_type(t);
+    *value=index==DM_TYPE_CONTROL || dm_labels[t][index][0]?0xe00u:0;
+    return 1;
+}
+static int dm_destination_init(const struct st_smz_api *api)
+{
+    if(!api || api->version<1 || !api->ui || api->ui->version<5 ||
+       !api->ui->host || api->ui->host->version<15)return 1;
+    api->ui->host->parameter_provider(dm_destination_query);
+    return 0;
+}
+const struct st_smz_module dm_destination_module={
+    "MONO DESTINATIONS",dm_destination_init,ST_MACHINE_NO_CALLBACK,0
+};
 /* Labels in LFO destinations are the same live strings as on SYN. */
 static char dm_text[20];
 static char *dm_number(char *p,int n)

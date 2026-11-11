@@ -168,6 +168,9 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     # path core 1.7 crashed on at its first trial boot. Needs Unicorn.
     if unicorn_python:run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
     else:skipped.append('safe-boot emulation: supply --unicorn-python (and LIBUNICORN_PATH)')
+    if 'dm_destination_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
+        if unicorn_python:run('Digi Mono native destination lists (Unicorn)',[unicorn_python,'-B','tests/test_st_digimono_destinations_emu.py',out])
+        else:skipped.append('Digi Mono native destination lists: supply --unicorn-python')
     assert json.loads((out/'lint.json').read_text())['ok']
     checks.append({'name':'lint','ok':True})
     (out/'validation.json').write_text(json.dumps({'ok':True,'checks':checks,'skipped':skipped,

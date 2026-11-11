@@ -7,6 +7,7 @@
 #define ELEKLOADER_ST_HOST_H
 #include "storage.h"
 #include "sample-pool.h"
+#define ST_PARAMETER_UI_DEST_FLAGS 32u
 struct st_machine_host_api {
     unsigned int version;
     const struct st_storage_io *storage;
@@ -80,7 +81,16 @@ struct st_machine_host_api {
      * it uniformly over its range (query 13 for a module's ID) and stores it
      * through the page's model (24 for a module's ID). Before 13 there is one
      * provider slot: a provider only for 31 registers on 14. Register in
-     * the module's init. */
+     * the module's init.
+     * Host API 15 (core 1.8.2): query ST_PARAMETER_UI_DEST_FLAGS (32), only
+     * while the native destination builder enumerates a registered machine.
+     * args[0] is the engine ID; result is the borrowed model/proxy whose
+     * destinations are being listed (NOT a result buffer). Return nonzero
+     * with *value=0 to hide it, or a capability mask such as 0xe00 to keep it.
+     * Read that model's TYPE through its native getter, not global UI state.
+     * No writes, heap or IO. This never changes runtime flags (query 21),
+     * parameter IDs, saved routing or Sound values. Unclaimed/module IDs
+     * retain their ordinary query-21 provider lookup. */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
     /* API 8 native_query and the ARP branch's native_dispatch are aliases
      * for the same existing bus at offset 84. Both prefixes stay compatible.
@@ -101,6 +111,7 @@ struct st_machine_host_api {
     const unsigned char *const *bank_info;
     /* Host API 13 (core 1.2) adds no field: chained parameter providers, FX
      * codec notifications and queries 28..30 (parameter_provider above).
-     * Host API 14 (core 1.4) adds no field: queries 24 (Kit) and 31. */
+     * Host API 14 (core 1.4) adds no field: queries 24 (Kit) and 31.
+     * Host API 15 (core 1.8.2) adds no field: UI-only destination query 32. */
 };
 #endif

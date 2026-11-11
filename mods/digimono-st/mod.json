@@ -1,5 +1,5 @@
 {
-  "id": "digimono-st", "version": "0.1.1", "device": "syntakt", "os": "1.41",
+  "id": "digimono-st", "version": "0.1.2", "device": "syntakt", "os": "1.41",
   "title": "SY MONOMACHINE", "category": "Synth",
   "author": "gdeo607 (Digi Mono), Synfact port", "license": "GPL-2.0-or-later AND MIT",
   "description": "One Monomachine-style machine: TYPE selects SIN, NOISE, SAW, PULSE, ENS, VO, POLY SIN or CHORDS. Eight SYN controls including TUNE; no MACRO. Clean-room Digi Mono engine on AUDIO CPU, not original Monomachine firmware.",
@@ -7,6 +7,7 @@
   "requires": [],
   "resources": {"names": ["machine:71"]},
   "smz": {
+    "modules": ["dm_destination_module"],
     "features": ["machine-ui-v1"],
     "machines": [{"descriptor": "dm_monomachine", "ui": "dm_ui", "update": "dm_update", "render": "dm_render"}],
     "audio": {"sources": ["audio.c", "engine.c", "sine.c"]}

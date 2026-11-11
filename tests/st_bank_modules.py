@@ -51,6 +51,9 @@ def check_bank_modules(report, raw, allowed):
     expected += [['sp_sampler_input_module',*names] for names in allowed]
     # samplers-st 1.3: its stereo-track module follows the input module
     expected += [['sp_sampler_input_module','st_stereo_module',*names] for names in allowed]
+    # Digi Mono 0.1.2: its UI-only destination provider follows FM's module.
+    expected += [names[:names.index('fm_tone_module')+1]+['dm_destination_module']+
+                 names[names.index('fm_tone_module')+1:] for names in list(expected) if 'fm_tone_module' in names]
     expected += [names+['sample_manager_module'] for names in list(expected)]
     # optional modules after them, in bank order: the chorus, then modulation skip
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
@@ -59,6 +62,14 @@ def check_bank_modules(report, raw, allowed):
     assert modules in expected, ('unexpected module composition/order',modules)
     directory,count=struct.unpack_from('>II',raw,32)
     assert count==len(modules), 'module directory/report count differs'
+    if 'dm_destination_module' in modules:
+        assert any(Path(name).as_posix().endswith('/mods/digimono-st/main.c')
+                   for name in report['source_sha256']), 'Digi Mono provider source not pinned'
+        image=80+4*struct.unpack_from('>I',raw,56)[0]
+        at=image+directory+16*modules.index('dm_destination_module')
+        name,init,subs,n=struct.unpack_from('>4I',raw,at)
+        assert raw[image+name:raw.index(0,image+name)]==b'MONO DESTINATIONS'
+        assert init<report['main_bytes'] and not init&1 and subs==0xffffffff and n==0
     if 'sp_sampler_input_module' not in modules:return
     assert any(Path(name).as_posix().endswith('/mods/samplers-st/input.c')
                for name in report['source_sha256']), 'sampler input source not pinned'

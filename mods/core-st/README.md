@@ -1,5 +1,15 @@
 # Syntakt core 0.12.22
 
+## Model-specific destination lists (core 1.8.2)
+
+Host API 15 adds parameter-provider query 32 without extending the API record.
+Only the native destination builder's flags call (return address `400147a0`
+in OS 1.41, borrowed model in A5) uses this query. A bank may filter a target
+using that model's values. Declined queries retain the normal flags/provider
+lookup. Every other flags caller, including playback/locked-destination
+validation, still uses query 21. Existing stock fast paths are unchanged; no
+new patch site is added. Digi Mono 0.1.2 uses it to remove blank targets per TYPE.
+
 ## Live SYN layouts (core 1.8.1)
 
 The native page layout now reads the bank UI's current slot map on every

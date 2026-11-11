@@ -35,6 +35,16 @@ page resolver and Digi Mono UI. It checks all eight engine types, repeated TYPE
 switches, two views, every dial/edit ID and page-action layout, TUNE and LEVEL.
 This catches the old core's frozen SAW layout, which a descriptor-only UI test
 missed: the hidden E position must reappear for every seven-parameter engine.
+It also alternates destination queries for two different Sound models without
+opening SYN, checks every TYPE's visibility, unchanged runtime flags/storage,
+module-provider fallback and rejection of older host APIs.
+
+`test_st_digimono_destinations_emu.py BUILD_FOLDER` executes the native list
+builder and sorter, actual Sound-proxy getter, linked core flags wrapper and
+linked bank's destination module. Only the boot objects, empty map header and
+heap are fixtures. It checks TYPE changes with the three LFO masks, unique
+targets, unchanged common destinations, Sound bytes and runtime flags. It needs
+a built core/bank folder and EMAC-capable Unicorn, without external fixtures.
 
 The linked ColdFire test additionally needs Syntakt OS 1.41, a bank with its
 sibling `.work/audio.elf`, 64-bit native clang, and the EMAC-capable Unicorn
