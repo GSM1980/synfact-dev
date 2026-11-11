@@ -76,6 +76,17 @@ The new DSP, extraction script and combined AUDIO adapter are GPL-3.0-only;
 the combined SY MONOMACHINE bank uses GPL-3.0-only with MIT notices retained.
 No original Monomachine firmware is included or needed.
 
+Monomachine reference bench
+--------------------------
+tools/monomachine-reference/ builds an offline driver against Monomodule
+(https://github.com/shnolk/monomodule, copyright Shnolk, AGPL-3.0), downloaded
+separately at its recorded revision. reference.cpp/reference.cmake and compat.h
+are AGPL-3.0-only; the Python tools and host adapter are GPL-3.0-only. The
+included MinGW patch adjusts the Windows calling convention in the separately
+downloaded GPLv3 DSP56300 emulator; it does not change DSP opcode semantics.
+Upstream dependency notices are retained in their checkouts. No Monomachine OS,
+extracted firmware, reference recording or generated JIT code is included here.
+
 Elektron
 --------
 Elektron, Digitakt, Digitone, Syntakt and Analog are trademarks of Elektron

@@ -1,0 +1,12 @@
+diff --git a/source/dsp56kEmu/jitregtypes.h b/source/dsp56kEmu/jitregtypes.h
+--- a/source/dsp56kEmu/jitregtypes.h
++++ b/source/dsp56kEmu/jitregtypes.h
+@@ -42 +42 @@
+-#ifdef _MSC_VER
++#ifdef _WIN32
+diff --git a/source/dsp56kEmu/jitstackhelper.cpp b/source/dsp56kEmu/jitstackhelper.cpp
+--- a/source/dsp56kEmu/jitstackhelper.cpp
++++ b/source/dsp56kEmu/jitstackhelper.cpp
+@@ -25 +25 @@
+-#ifdef _MSC_VER
++#ifdef _WIN32

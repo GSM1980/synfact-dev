@@ -20,6 +20,12 @@ python tests/test_st_fm_recipe.py --digitone Digitone_and_Digitone_Keys_OS1.44.s
 
 ## Digi Mono
 
+The original-Monomachine calibration bench is documented in
+[`tools/monomachine-reference`](../tools/monomachine-reference/README.md).
+It is separate from the port's exactness tests: it needs the owner's Monomachine
+OS 1.32B and a built DSP reference. Its numerical analysis tests run without
+firmware using `python tests/test_monomachine_compare.py` in the research venv.
+
 The standalone Digi Mono port test runs all twelve types through the real
 adapter/DSP, checking PCM/state against the engine, UI labels and chord names,
 TYPE transport, backend re-entry, independent tracks, pitch and AMP sleep.

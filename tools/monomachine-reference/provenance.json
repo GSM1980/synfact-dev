@@ -1,0 +1,12 @@
+{
+  "reference": {
+    "repository": "https://github.com/shnolk/monomodule",
+    "commit": "23e541021b92d1a5978f36c0a552ac443376df1a",
+    "license": "AGPL-3.0-only",
+    "dsp56300_commit": "c051afad31612c2d2c7a81a7ab23e1c5ac9e61af",
+    "patch": "ext/patches/0001-dsp56300-mnm.patch",
+    "local_platform_patch": "mingw.patch: select Win64 ABI registers/shadow space on MinGW as on MSVC; no DSP opcode changes"
+  },
+  "firmware": "User-supplied Monomachine OS 1.32B; never copied into the source tree",
+  "scope": "Initial GND-SIN comparison: original neutral track-chain output versus raw bank generator. Not a whole-Syntakt or physical-Monomachine validation."
+}
