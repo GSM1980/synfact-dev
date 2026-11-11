@@ -8,7 +8,21 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 
-def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None):
+def check_digimono_audio_change(current,baseline):
+    """Normal bank: change only Digi Mono's adapter, adding its MONO2K object."""
+    assert current['machines']==baseline['machines']==[66,67,68,69,65,71]
+    assert current['modules']==baseline['modules']
+    def objects(report):
+        return {Path(name).name:digest for name,digest in report['object_sha256'].items()
+                if Path(name).name.startswith('audio') and Path(name).suffix=='.o'}
+    new,old=objects(current),objects(baseline)
+    assert new.keys()-old.keys()=={'audio2-3.o'} and not old.keys()-new.keys()
+    assert {name for name in old if new[name]!=old[name]}=={'audio2-0.o'}
+    assert any(Path(name).as_posix().endswith('/mods/digimono-st/mono2k.c')
+               for name in current['source_sha256'])
+
+def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False):
+    assert not (sampler_audio_changed and digimono_audio_changed)
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
     def run(name,args):
@@ -135,7 +149,12 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 raw=path.read_bytes();at,n=struct.unpack_from('>II',raw,72);return raw[48+at:48+at+n]
             new_section=audio_section(out/'synfact-machines.smz4')
             old_section=audio_section(oldbank)
-            if sampler_audio_changed:
+            if digimono_audio_changed:
+                assert new_section!=old_section
+                check_digimono_audio_change(json.loads((out/'synfact-machines.smz4.json').read_text()),
+                                            json.loads((previous/'synfact-machines.smz4.json').read_text()))
+                checks.append({'name':'Digi Mono adapter/MONO2K added; every other AUDIO object identical','ok':True})
+            elif sampler_audio_changed:
                 current=json.loads((out/'synfact-machines.smz4.json').read_text())
                 baseline=json.loads((previous/'synfact-machines.smz4.json').read_text())
                 def audio_objects(report):
@@ -186,6 +205,8 @@ if __name__=='__main__':
         help='the core AUDIO companion intentionally changed: compare outside its declared window only')
     p.add_argument('--sampler-audio-changed',action='store_true',
         help='sampler DSP changed: compare all other AUDIO objects byte for byte')
+    p.add_argument('--digimono-audio-changed',action='store_true',
+        help='Digi Mono 0.2 adds MONO2K: only its adapter and new DSP object may change')
     a=p.parse_args()
     window=None
     if a.audio_companion_changed:
@@ -193,4 +214,4 @@ if __name__=='__main__':
         from elekloader.devices.syntakt import DEVICE
         window=DEVICE.secondary[7][3][-1]
         assert window==(0x40040860,0x40041050)
-    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed)

@@ -95,19 +95,24 @@ int main(void)
         assert(dm_engine_type[kind]!=MONO_EXT7);
         for(unsigned trial=0;trial<12;trial++) {
             unsigned note=trial?random_word()%128:60;
-            struct mono_voice ref;uint8_t p[7];
+            struct mono_voice ref;struct dm_m2k_voice mref;uint8_t p[7];uint16_t p8[7];
             prepare(0,kind);
             if(trial)for(unsigned i=1;i<8;i++)input[0][slots[i]]=(unsigned short)(random_word()&0xffff);
-            mono_init(&ref);mono_trig(&ref,dm_engine_type[kind]);
+            mono_init(&ref);dm_m2k_init(&mref);
             for(unsigned i=0;i<7;i++) {
                 unsigned k=input[0][slots[i+1]]>>8;p[i]=(uint8_t)(k>127?127:k);
+                p8[i]=input[0][slots[i+1]]>0x7f00?0x7f00:input[0][slots[i+1]];
             }
+            if(kind<DM_SID)mono_trig(&ref,dm_engine_type[kind]);else dm_m2k_trig(&mref,kind,p8);
             for(unsigned b=0;b<10;b++) {
                 out[0]=123;out[33]=456;block(0,b==0,note,out+1);
-                mono_render(&ref,dm_engine_type[kind],p,mono_pitch_inc((int)note*128),expected,32);
+                if(kind<DM_SID)mono_render(&ref,dm_engine_type[kind],p,mono_pitch_inc((int)note*128),expected,32);
+                else dm_m2k_render(&mref,kind,p8,(int)note*64,dm_previous_pitch(&dm_tracks[0],0),expected);
                 for(unsigned i=0;i<32;i++)assert(out[i+1]==(int32_t)expected[i]*65536);
                 assert(out[0]==123 && out[33]==456);
-                assert(!memcmp(&ref,&dm_tracks[0].engine,sizeof ref));cases++;
+                if(kind<DM_SID)assert(!memcmp(&ref,&dm_tracks[0].engine,sizeof ref));
+                else assert(!memcmp(&mref,&dm_tracks[0].m2k,sizeof mref));
+                cases++;
             }
         }
     }
@@ -128,6 +133,27 @@ int main(void)
     {struct dm_track saved=dm_tracks[1];
      ext[0][0]=5<<8;block(0,1,60,out);ext[0][0]=0;block(0,1,60,out);
      assert(!memcmp(&saved,&dm_tracks[1],sizeof saved));}
+    /* Every new backend enters/leaves through both legacy and new TYPEs. */
+    for(unsigned step=0;step<DM_TYPES;step++)for(unsigned t=0;t<8;t++){
+        unsigned kind=(step+t)%DM_TYPES;
+        for(unsigned i=0;i<8;i++)input[t][slots[i]]=patches[kind][i]<<8;
+        ext[t][0]=kind<<8;block(t,1,48+t,out);
+        assert(dm_tracks[t].loaded==kind+1);
+    }
+    /* SID PRCH receives the previous digital track's pitch, wrapping 1->8. */
+    for(unsigned target=0;target<2;target++){
+        unsigned prev=target?0:7;
+        prepare(prev,0);block(prev,1,72,other);
+        prepare(target,DM_SID);input[target][slots[5]]=64<<8;input[target][slots[6]]=127<<8;
+        struct dm_m2k_voice ref;uint16_t p8[7];
+        for(unsigned i=0;i<7;i++)p8[i]=input[target][slots[i+1]];
+        dm_m2k_init(&ref);dm_m2k_trig(&ref,DM_SID,p8);
+        dm_m2k_render(&ref,DM_SID,p8,60*64,72*64,expected);
+        block(target,1,60,out);
+        for(unsigned i=0;i<32;i++)assert(out[i]==(int32_t)expected[i]*65536);
+        fixture[prev][0x6f8/4]=0;
+        assert(dm_previous_pitch(&dm_tracks[target],target)==48*64+((p8[6]*24)>>8));
+    }
     prepare(0,0);input[0][slots[0]]=0x4c00;block(0,1,60,out);
     assert(dm_tracks[0].increment==mono_pitch_inc(72*128));
     input[0][slots[0]]=0x3400;block(0,0,60,out);assert(dm_tracks[0].increment==mono_pitch_inc(48*128));
@@ -138,6 +164,6 @@ int main(void)
     memset(out,1,128);dm_update(60<<16,(unsigned char *)fixture+4,input[0]);
     dm_render(out,(unsigned char *)fixture+4);silent(out);
     assert(dm_eco==0 && native_calls*3==chain_calls);
-    printf("PASS: %u exact adapter/DSP blocks, 8 types/tracks, UI/chords, TYPE transport, reset, pitch, AMP sleep and native call boundaries\n",cases);
+    printf("PASS: %u exact adapter/DSP blocks, 12 types/8 tracks, UI/chords, TYPE transport, reset, pitch, SID PRCH, AMP sleep and native call boundaries\n",cases);
     return 0;
 }

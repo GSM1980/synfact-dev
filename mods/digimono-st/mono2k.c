@@ -1,0 +1,136 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * SID/FM+ DSP adapted from MONO2K by Inigo Hernandez, pinned in mono2k/upstream.
+ * Only the oscillator/its internal envelopes run here; native Syntakt AMP,
+ * FLTR, modulation and effects remain downstream. 48 kHz, 2 x 16 samples.
+ */
+#include "mono2k/voice.h"
+#include "mono2k/tables.h"
+#define M2K_SUB 16
+#define P_SYN 0
+#define M_SID DM_SID
+#define M_FMS DM_FMSTAT
+#define M_FMP DM_FMPAR
+#define M_FMD DM_FMDYN
+#define SID_A 24950
+#define SID_MIX0 1024
+#define SID_MIXA (SID_A * 15 / 32)
+#define P8(t,id) ((int32_t)p[id])
+#define P7(t,id) (P8(t,id)>>8)
+/* Common Syntakt TUNE is already included in pitch, in 1/64 semitones. */
+#define PB8(t,id) 0
+/* ColdFire has no 32x32->64 integer multiply instruction. Split products into
+ * 16-bit limbs, with explicit carries; no libgcc or FPU dependency. */
+static inline uint64_t wide_mul(uint32_t a,uint32_t b)
+{
+    uint32_t a0=a&65535u,a1=a>>16,b0=b&65535u,b1=b>>16;
+    uint32_t x=a0*b0,y=a1*b0+(x>>16),z=a0*b1+(y&65535u);
+    uint32_t lo=(z<<16)|(x&65535u),hi=a1*b1+(y>>16)+(z>>16);
+    return ((uint64_t)hi<<32)|lo;
+}
+static inline int64_t signed_mul(int32_t a,int32_t b)
+{
+    uint64_t w=wide_mul((uint32_t)a,(uint32_t)b);
+    uint32_t hi=(uint32_t)(w>>32);
+    if(a<0)hi-=(uint32_t)b;
+    if(b<0)hi-=(uint32_t)a;
+    return (int64_t)(((uint64_t)hi<<32)|(uint32_t)w);
+}
+static inline int64_t mul_sh(int32_t a,int32_t b,int sh) {return signed_mul(a,b)>>sh;}
+static inline uint32_t mulu_hi(uint32_t a,uint32_t b,int sh) {return (uint32_t)(wide_mul(a,b)>>sh);}
+static inline int64_t mul64_sh(int64_t a,int32_t b,int sh)
+{
+    uint64_t w=wide_mul((uint32_t)a,(uint32_t)b);
+    uint32_t hi=(uint32_t)(w>>32)+(uint32_t)((uint64_t)a>>32)*(uint32_t)b;
+    return (int64_t)(((uint64_t)hi<<32)|(uint32_t)w)>>sh;
+}
+/* Hot TONE products: gain 0..32768 and Q23 signal. Both terms fit signed
+ * 32 bits. Splitting the signal retains every bit of the original >>15. */
+static inline int32_t gain_q15(int32_t x,int32_t gain)
+{return (x>>15)*gain+(((x&32767)*gain)>>15);}
+/* Phase modulation wants only the low 32 bits of (x*depth)>>8. Depth is
+ * 0..293810 in STAT/PAR, so the low-byte product fits a word. The large
+ * term deliberately wraps unsigned, just like the original phase sum. */
+static inline uint32_t phase_depth(int32_t x,uint32_t depth)
+{return (uint32_t)(x>>8)*depth+(((uint32_t)x&255u)*depth>>8);}
+static inline uint64_t mul2_q15(int32_t s,int32_t a,int32_t b)
+{return (uint64_t)(uint32_t)gain_q15(b,s)<<32 | (uint32_t)gain_q15(a,s);}
+static inline int32_t sat16(int32_t x) {return x>32767?32767:x< -32767? -32767:x;}
+static inline int32_t sinp(uint32_t ph)
+{
+    uint32_t i=ph>>22,f=(ph>>6)&65535u;
+    int32_t a=T_SIN[i],b=T_SIN[i+1];
+    return a+(((b-a)*(int32_t)f)>>16);
+}
+static inline uint32_t inc_of(int32_t pq6)
+{
+    if(pq6<0)pq6=0;
+    if(pq6>140*64)pq6=140*64;
+    int32_t oct=pq6/768,r=pq6-oct*768,sh=10-oct;
+    if(sh>=0)return T_INC_TOP[r]>>sh;
+    uint32_t v=T_INC_TOP[r];
+    return v>(0x7fffffffu>>(-sh-1))?0x7fffffffu:v<<-sh;
+}
+static uint32_t tq_u32(const uint32_t *table,int32_t q8)
+{
+    uint32_t a=table[q8>>8],f=(uint32_t)q8&255u;
+    if(!f)return a;
+    uint32_t b=table[(q8>>8)+1];
+    return b>=a?a+mulu_hi(b-a,f,8):a-mulu_hi(a-b,f,8);
+}
+static inline int32_t tq_u16(const uint16_t *table,int32_t q8)
+{
+    int32_t a=table[q8>>8],f=q8&255;
+    return f?a+(((int32_t)table[(q8>>8)+1]-a)*f>>8):a;
+}
+static inline int32_t blep_saw(uint32_t ph,uint32_t inc,uint32_t inv)
+{
+    int32_t s=(int32_t)(ph>>16)-32768;
+    if(ph<inc){
+        uint32_t t=(ph*inv)>>16;
+        int32_t v=2*(int32_t)t-(int32_t)((t*t)>>16)-65536;
+        s-=v>>1;
+    }else if(~ph<inc){
+        uint32_t u=(~ph*inv)>>16,w=65536-u;
+        s-=(int32_t)((w*w)>>16)>>1;
+    }
+    return s;
+}
+static inline uint32_t fmd_at(int32_t v8)
+{
+    int32_t i=v8>>8;
+    if(i>=256)return T_FMDV[256];
+    return T_FMDV[i]+(((T_FMDV[i+1]-T_FMDV[i])*(uint32_t)(v8&255))>>8);
+}
+static inline int fr24(int v) {return (v*24+8)>>7;}
+/* Preserve PWAD's sweep speed in seconds at 48 kHz (upstream: 44.1 kHz).
+ * Other PK uses are dimensionless pitch offsets and are unchanged. */
+#define PK(t,id,k) ((id)==1 && (k)==64 ? (P8(t,id)*64*441+61440)/122880 : (P8(t,id)*(k))>>8)
+
+void dm_m2k_init(struct dm_m2k_voice *v)
+{
+    unsigned i;
+    for(i=0;i<4;i++)v->ph[i]=0;
+    for(i=0;i<6;i++)v->ms[i]=0;
+    for(i=0;i<3;i++)v->menv[i]=1u<<30;
+    v->lfsr=0x7ffff8u;
+}
+void dm_m2k_trig(struct dm_m2k_voice *v,unsigned type,const uint16_t *p)
+{
+    if(type==DM_SID){if(p[2]>=64u*256u)v->ms[4]=0;return;}
+    dm_m2k_init(v);
+    v->ph[0]=1u<<31;
+}
+static void dm_m2k_block(struct dm_m2k_voice *t,unsigned type,const uint16_t *p,
+                         int32_t pitch,int32_t previous_pitch,int16_t *o)
+{
+    switch(type){
+#include "mono2k/machines.inc"
+    default:for(unsigned i=0;i<M2K_SUB;i++)o[i]=0;break;
+    }
+}
+void dm_m2k_render(struct dm_m2k_voice *v,unsigned type,const uint16_t *p,
+                   int32_t pitch,int32_t previous_pitch,int16_t *out)
+{
+    dm_m2k_block(v,type,p,pitch,previous_pitch,out);
+    dm_m2k_block(v,type,p,pitch,previous_pitch,out+M2K_SUB);
+}

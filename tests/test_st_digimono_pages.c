@@ -48,7 +48,7 @@ static void init_view(u8 *view)
 }
 static void check_view(u8 *view,unsigned kind)
 {
-    static const unsigned counts[8]={1,4,7,8,8,8,6,8};
+    static const unsigned counts[DM_TYPES]={1,4,7,8,8,8,6,8,8,8,8,8};
     unsigned seen=0,i;u32 old,args[2],value;
     *(u32 *)(view+0x100)=kind<<8;
     /* TYPE is changed on SYN 2, then return to SYN 1 on the same view. */
@@ -95,8 +95,8 @@ static void check_destinations(void)
     host.version=15;assert(!dm_destination_init(&api));
     core_parameter_provider_set(module_flags);
     vt[0x28/4]=(u32)model_get;
-    for(unsigned round=0;round<3;round++)for(unsigned t=0;t<8;t++){
-        unsigned other=7-t,reads;
+    for(unsigned round=0;round<3;round++)for(unsigned t=0;t<DM_TYPES;t++){
+        unsigned other=DM_TYPES-1-t,reads;
         model[0].type=t<<8;model[1].type=other<<8;
         for(unsigned m=0;m<2;m++){
             unsigned type=m?other:t;
@@ -126,8 +126,8 @@ int main(void)
     /* Bind starts at SAW (E empty), then repeatedly restore all eight slots.
      * Different view/Sound selections exercise the shared mutable UI state. */
     for(unsigned round=0;round<3;round++){
-        for(unsigned kind=0;kind<8;kind++)check_view(views[0],kind);
-        for(unsigned kind=8;kind--;)check_view(views[1],kind);
+        for(unsigned kind=0;kind<DM_TYPES;kind++)check_view(views[0],kind);
+        for(unsigned kind=DM_TYPES;kind--;)check_view(views[1],kind);
     }
     check_view(views[0],3);assert(core_machine_nav(views[0],4)==DM_ENGINE+4); /* SUB2 */
     check_view(views[0],4);assert(core_machine_nav(views[0],4)==DM_ENGINE+4); /* WAVE */
@@ -137,6 +137,6 @@ int main(void)
     check_view(views[0],3);assert(core_machine_nav(views[0],1)==DM_ENGINE+1);
     check_destinations();
     fw_free(*(void **)(views[0]+0x7c));fw_free(*(void **)(views[1]+0x7c));
-    puts("PASS: real core/Digi Mono pages and destinations: 8 types/two models, no SYN dependency, hidden UI targets, stable runtime flags/storage, module fallback, API gating and native LEVEL");
+    puts("PASS: real core/Digi Mono pages and destinations: 12 types/two models, no SYN dependency, hidden UI targets, stable runtime flags/storage, module fallback, API gating and native LEVEL");
     return 0;
 }

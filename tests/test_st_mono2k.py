@@ -1,0 +1,97 @@
+"""Check the 48 kHz port against pinned MONO2K using native 64-bit arithmetic.
+
+This validates extraction, sample-rate tables, arithmetic, pitch and controls;
+it is not a comparison against Elektron's original DSP or a CPU benchmark.
+"""
+import argparse
+import importlib.util
+from pathlib import Path
+import re
+import subprocess
+
+ROOT = Path(__file__).resolve().parents[1]
+MOD = ROOT / 'mods/digimono-st'
+
+
+def function(source, name):
+    match = re.search(r'^static[^\n]+\b' + name + r'\([^\n]*\)\s*(?:/\*[^\n]*\*/\s*)?\n?\{', source, re.M)
+    assert match, name
+    start = match.end() - 1
+    depth = 1
+    for end in range(start + 1, len(source)):
+        depth += (source[end] == '{') - (source[end] == '}')
+        if not depth:
+            return source[match.start():end+1] + '\n'
+    raise AssertionError(name)
+
+
+def oracle():
+    upstream = MOD / 'mono2k/upstream'
+    core = (upstream / 'm2k_core.c').read_text().replace('MUL_FN ', 'static inline ')
+    dsp = (upstream / 'm2k_dsp.c').read_text()
+    code = '''#include "mono2k/voice.h"
+#include "mono2k/tables.h"
+#define M2K_SUB 16
+#define P_SYN 0
+#define M_SID DM_SID
+#define M_FMS DM_FMSTAT
+#define M_FMD DM_FMDYN
+#define M_FMP DM_FMPAR
+#define SID_A 24950
+#define SID_MIX0 1024
+#define SID_MIXA (SID_A * 15 / 32)
+#define P8(t,id) ((int32_t)p[id])
+#define P7(t,id) (P8(t,id)>>8)
+#define PB8(t,id) 0
+#define PK(t,id,k) ((id)==1 && (k)==64 ? (P8(t,id)*64*441+61440)/122880 : (P8(t,id)*(k))>>8)
+'''
+    for name in ('sat16', 'sinp', 'inc_of', 'mul_sh', 'mulu_hi', 'mul64_sh', 'mul2_q15'):
+        code += function(core, name)
+    for name in ('blep_saw', 'fmd_at', 'fr24', 'tq_u32_mid', 'tq_u32', 'tq_u16'):
+        code += function(dsp, name)
+    cases = dsp[dsp.index('    case M_SID: {'):dsp.index('    case M_SAW: {')]
+    # Original previous-track lookup is supplied by the Syntakt adapter.
+    code += '''static struct {int32_t pitch;} trk[8];
+#define M2K_TRACKS6 8
+static void ref_block(struct dm_m2k_voice *t,unsigned type,const uint16_t *p,int32_t pitch,int16_t *o){
+    int ti=1;
+    switch(type){
+''' + cases + '''    }
+}
+void dm_ref_render(struct dm_m2k_voice *v,unsigned type,const uint16_t *p,int32_t pitch,int32_t previous,int16_t *out){
+    trk[0].pitch=previous;
+    ref_block(v,type,p,pitch,out);ref_block(v,type,p,pitch,out+16);
+}
+'''
+    return code
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--cc', type=Path, required=True)
+    p.add_argument('--out', type=Path, default=Path('out/mono2k-tests'))
+    a = p.parse_args()
+    a.out.mkdir(parents=True, exist_ok=True)
+    spec = importlib.util.spec_from_file_location('mono2k_tables', MOD / 'mono2k/generate.py')
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    machines, tables = generator.generate()
+    assert machines == (MOD / 'mono2k/machines.inc').read_text()
+    assert tables == (MOD / 'mono2k/tables.h').read_text()
+    # At the upstream rate, every selected table must match the pinned output.
+    original = (MOD / 'mono2k/upstream/m2k_tables.h').read_text()
+    _, tables44 = generator.generate(44100)
+    for name in generator.TABLES:
+        pattern = r'static const [^\n]+\b' + name + r'\[.*?\n};\n'
+        assert re.search(pattern, tables44, re.S)[0] == re.search(pattern, original, re.S)[0], name
+    reference = (a.out / 'mono2k-reference.c').resolve()
+    reference.write_text(oracle())
+    exe = (a.out / 'mono2k.exe').resolve()
+    subprocess.run([str(a.cc), '-O2', '-Wall', '-Werror', '-I', str(MOD),
+                    'tests/test_st_mono2k.c', str(reference), '-o', str(exe)], cwd=ROOT, check=True)
+    subprocess.run([str(exe)], check=True)
+    print('PASS: pinned MONO2K hashes, deterministic extraction, original 44.1 kHz tables and regenerated 48 kHz tables', flush=True)
+
+
+if __name__ == '__main__':
+    main()

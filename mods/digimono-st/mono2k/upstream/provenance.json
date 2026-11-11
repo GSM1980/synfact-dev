@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/InigoHernandez/mono2k",
+  "commit": "95d5763495d961f3ed225f5e4201328934ca4247",
+  "license": "GPL-3.0-only",
+  "files": {
+    "m2k_dsp.c": "firmware/src/m2k_dsp.c",
+    "m2k_core.c": "firmware/src/m2k_core.c",
+    "m2k_tables.h": "firmware/gen/m2k_tables.h",
+    "gen_tables.py": "tools/gen_tables.py",
+    "LICENSE": "LICENSE"
+  },
+  "sha256": {
+    "m2k_dsp.c": "dfb0f8189a5d730084b361b43c07887ba05f80ef3e33beb52d9cae1025f05dd3",
+    "m2k_core.c": "6b3058a6c5120236763e055b02c8e3be017d463c6f4974ba3b392bca53148e25",
+    "m2k_tables.h": "06dc8a6244b288a89004a22c8bb918c5d672aa4da90d2648f0203330c2145be2",
+    "gen_tables.py": "571c591eac411462d683723ea5115b73651abecd7fca699f31060e86ba7a244d",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  }
+}

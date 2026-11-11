@@ -31,7 +31,7 @@ bank that can change without reinstalling the firmware:
 |---|---|
 | [SP sample machines](mods/samplers-st) | ONE SHOT, WERP, REPITCH and SLICE |
 | [SY FM DTONE](mods/fm-tone-st) | an FM machine (FM TONE until 2026-11-02) |
-| [SY MONOMACHINE](mods/digimono-st) | eight Digi Mono synth types in one machine, selected by TYPE |
+| [SY MONOMACHINE](mods/digimono-st) | twelve Digi Mono/MONO2K synth types in one machine, selected by TYPE |
 | [Audio Recorder](mods/recorder-st) | record, trim, normalize and save samples |
 | [Third LFO](mods/lfo3-st) | a third LFO on every track |
 | [Arpeggiator](mods/arp-st) | a Digitone-style arpeggiator on the audio tracks |

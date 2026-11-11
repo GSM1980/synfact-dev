@@ -92,6 +92,18 @@ static const char *dm_format(const struct st_machine_ui_api *api,const struct co
     if(index==0)return 0; /* native TUNE, including its fractional pitch */
     if(index>7 || !dm_labels[t][index][0])return "";
     if(v>127)v=127;
+    if(t==DM_SID){
+        static const char *const waves[]={"TRI","SAW","PULS","MIX","NOIS"};
+        static const char *const mods[]={"OFF","RING","SYNC","R+S"};
+        if(p==2)return v>=64?"ON":"OFF";
+        if(p==3)return waves[(v*5)>>7];
+        if(p==4)return mods[v>>5];
+        if(p==5)return v>=64?"PRCH":"MFRQ";
+    }
+    if((t==DM_FMSTAT && (p==0 || p==4)) || (t==DM_FMPAR && (p==0 || p==2 || p==4))){
+        static const char *const ratios[]={"1/64","1/32","1/16","3/32","1/8","5/32","3/16","1/4","5/16","3/8","7/16","1/2","5/8","3/4","7/8","1","1.25","1.5","1.75","2","2.5","3","3.5","4"};
+        return ratios[(v*24+8)>>7];
+    }
     if((t==4 && p<3) || (t==6 && p<3)) {
         int s=(int)v-63;return dm_signed(s < -36 ? -36 : s > 36 ? 36 : s);
     }

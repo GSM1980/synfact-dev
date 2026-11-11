@@ -1,8 +1,10 @@
-# SY MONOMACHINE 0.1.2
+# SY MONOMACHINE 0.2.0
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
-This is Digi Mono's clean-room interpretation of the Monomachine, **not**
+SID-6581 and the three FM+ types come from Inigo Hernandez's
+[MONO2K](https://github.com/InigoHernandez/mono2k/tree/95d5763495d961f3ed225f5e4201328934ca4247).
+These are clean-room interpretations of the Monomachine, **not**
 the original Monomachine DSP or a claim of identical sound. MACRO is excluded.
 
 SYN 1 has eight positions: TUNE and seven engine parameters. Unused positions
@@ -35,6 +37,16 @@ an older core. It adds no event subscription or AUDIO work.
 | VO | TUNE | VOC1 | VOC2 | V-SW | VOIC | CONS | CLEN | CVOL |
 | POLY SIN | TUNE | NOT1 | NOT2 | NOT3 | EDEP | ESPD | | |
 | CHORDS | TUNE | CHRD | INV | SPRD | WAVE | PW | CHRL | CHRW |
+| SID-6581 | TUNE | PW | PWAD | PWRS | WAVE | MOD | MSRC | MFRQ |
+| FM+STAT | TUNE | 1FRQ | 1FIN | 1ENV | 1FB | 2FRQ | 2VOL | TONE |
+| FM+PAR | TUNE | 1FRQ | 1ENV | 2FRQ | 2ENV | 3FRQ | 3ENV | TONE |
+| FM+DYN | TUNE | 1FRQ | 1FEN | 1VOL | 1VEN | 2FRQ | 2ENV | 2FB |
+
+The four new TYPE values are appended (8..11); existing 0..7 Sounds retain
+their engine and controls. They also retain their PCM output. SID/FM+ use all
+eight SYN 1 positions and expose all seven engine controls as LFO destinations.
+SID's WAVE/MOD/MSRC/PWRS show choice names; STAT/PAR ratios show their actual
+24-step ratios. Other new engine values display 0..127.
 
 Controls use 0..127; TUNE is signed, centered at 64 (0 semitones), and retains
 fractional tuning. ENS/POLY SIN note offsets center at 63, with +/-36 semitones;
@@ -52,13 +64,46 @@ Useful starting patches (A..H in the table above, `-` means unused):
 | VO | 64 | 43 | 113 | 64 | 0 | 0 | 40 | 100 |
 | POLY SIN | 64 | 63 | 63 | 63 | 64 | 64 | - | - |
 | CHORDS | 64 | 0 | 0 | 0 | 16 | 64 | 0 | 127 |
+| SID-6581 | 64 | 0 | 0 | 127 | 0 | 0 | 0 | 64 |
+| FM+STAT | 64 | 61 | 64 | 80 | 32 | 82 | 64 | 64 |
+| FM+PAR | 64 | 61 | 64 | 82 | 64 | 104 | 80 | 64 |
+| FM+DYN | 64 | 64 | 64 | 64 | 0 | 74 | 80 | 32 |
+
+SID's PW/PWAD/PWRS affect the pulse sweep; PW=64 silences the pulse. With
+MOD=RING the generator uses two triangles, so WAVE/PW do not alter that mode.
+MSRC=PRCH uses the previous digital SY MONOMACHINE track's last pitch, with
+T1 wrapping to T8. When that track runs a different machine, it falls back to
+MFRQ: there is no public AUDIO pitch service for other machine backends.
+Native AMP continues to control the note's amplitude; FM+'s ENV/FEN/VEN are
+the generator's internal modulation envelopes, not duplicate AMP controls.
 
 ## Backend
 
 The MIT engine files under `upstream/` are unchanged, pinned by
 `upstream/provenance.json`. Thin wrappers namespace their public symbols.
 `sine.c` contains an MIT-licensed Plaits sine table (Emilie Gillet); its use
-does not include the MACRO engine. The Syntakt adapter is GPL-2.0-or-later.
+does not include the MACRO engine.
+
+`mono2k/upstream/` pins MONO2K's GPL-3.0-only source and its full licence.
+`mono2k/generate.py` verifies hashes, extracts just the four generators and
+regenerates their mathematical tables at 48 kHz. No sequencer, UI, filters,
+bus effects or original Elektron code/data is imported into the bank.
+The combined machine and its AUDIO adapter are GPL-3.0-only; MIT notices remain.
+
+- Four independent oscillator phases, three FM envelopes and six internal
+  states per digital track, in bank-owned DDR. No core hooks or new SRAM.
+- Two 16-sample control blocks per native 32-frame render; envelope timing,
+  FM TONE coefficients, pitch and SID PWM speed are adjusted to 48 kHz.
+- Full Q8 engine controls preserve fractional modulation; the existing eight
+  Digi Mono engines keep their original 7-bit behavior and common TUNE.
+- Native TUNE remains common (-64..+63 semitones), rather than MONO2K's +/-2
+  semitone fine-tune. It is applied once before either engine.
+- Portable 16-bit-limb multiplication replaces wide products on ColdFire,
+  preserving signed/unsigned results without libgcc, FPU or EMAC side effects.
+  Hot TONE/phase-depth products split at their fixed-point boundary and use
+  two 32-bit multiplies, retaining the original PCM exactly.
+- Known upstream fidelity gaps remain: high FM feedback, deep FM+DYN cuts,
+  and SID MIX spectra. Hardware CPU and listening tests remain owner QA.
 
 - Eight independent `mono_voice` instances live in the bank's owned DDR on
   AUDIO CPU; MAIN only presents controls. No firmware patch sites or new SRAM.
@@ -88,6 +133,12 @@ python tests/test_st_digimono_emu.py --bank out/digimono/synfact-machines.smz4 \
 python tests/test_units.py
 ```
 
+The host runner also runs `tests/test_st_mono2k.py`: 4,608 blocks against
+pinned MONO2K with native 64-bit arithmetic, deterministic extraction and
+44.1/48 kHz tables, wide multiply checks, an independent 440 Hz tuning check,
+and all five SID waveforms. This is a port comparison, not original-MNM matching.
+Regenerate committed source with `python mods/digimono-st/mono2k/generate.py`.
+
 The emulator command needs the EMAC-capable Unicorn (`LIBUNICORN_PATH`).
 It executes the linked ColdFire bank and native gain calls, comparing PCM
 before native gains against the host engine. See `docs/TESTS.md` for scope.
@@ -98,7 +149,8 @@ Reserve type 70 for the parallel Machinedrum branch. This first version uses
 one shared parameter set, without per-type preset memory or automatic defaults.
 Hardware listening, CPU timing and original-Monomachine matching remain owner QA.
 The owner reported CPU below 60% with eight CHORDS tracks on version 0.1;
-the patch/settings were not recorded. Version 0.1.1 changes UI/core layout
+the patch/settings were not recorded. This does not benchmark the new SID/FM+
+types. Version 0.1.1 changes UI/core layout
 lookup only; the AUDIO engine is unchanged.
 The browser catalog configuration lists it as an optional machine; publishing
 or regenerating the site catalog is a separate step.

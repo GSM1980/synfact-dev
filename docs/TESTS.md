@@ -20,7 +20,7 @@ python tests/test_st_fm_recipe.py --digitone Digitone_and_Digitone_Keys_OS1.44.s
 
 ## Digi Mono
 
-The standalone Digi Mono port test runs all eight types through the real
+The standalone Digi Mono port test runs all twelve types through the real
 adapter/DSP, checking PCM/state against the engine, UI labels and chord names,
 TYPE transport, backend re-entry, independent tracks, pitch and AMP sleep.
 Only firmware service boundaries are doubles; it does not boot a Syntakt:
@@ -31,13 +31,21 @@ python tests/test_st_digimono.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.ex
 
 Its upstream source hashes are also verified. No firmware input is needed.
 The runner also compiles `test_st_digimono_pages.c` with the real core registry,
-page resolver and Digi Mono UI. It checks all eight engine types, repeated TYPE
+page resolver and Digi Mono UI. It checks all twelve engine types, repeated TYPE
 switches, two views, every dial/edit ID and page-action layout, TUNE and LEVEL.
 This catches the old core's frozen SAW layout, which a descriptor-only UI test
 missed: the hidden E position must reappear for every seven-parameter engine.
 It also alternates destination queries for two different Sound models without
 opening SYN, checks every TYPE's visibility, unchanged runtime flags/storage,
 module-provider fallback and rejection of older host APIs.
+
+The runner also runs `test_st_mono2k.py`. It verifies pinned MONO2K hashes and
+deterministic extraction; the generated tables at 44.1 kHz match upstream and
+the committed ones regenerate at 48 kHz. The four new generators compare
+4,608 blocks of PCM/state against the pinned code using native 64-bit maths,
+including fractional controls, low/high pitches and changing modulation.
+Independent checks cover wide arithmetic, 440 Hz carrier tuning at 48 kHz
+and all five SID waves. This is not original-Monomachine matching or timing.
 
 `test_st_digimono_destinations_emu.py BUILD_FOLDER` executes the native list
 builder and sorter, actual Sound-proxy getter, linked core flags wrapper and

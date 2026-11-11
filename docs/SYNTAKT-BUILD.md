@@ -134,6 +134,12 @@ The folder must contain the SYX build, `lint.json` and `synfact-machines.smz4`.
 A comparison that needs an input you did not give is printed as skipped; it is
 not a pass. `SYNFACT_SRC`, when you use it, is read only.
 
+For the Digi Mono 0.1.2 to 0.2.0 bank upgrade, add
+`--digimono-audio-changed`: the normal six-machine bank must keep its machine
+directory and modules, change only Digi Mono's adapter object, and add its
+MONO2K object. Every sampler, FM TONE and legacy Digi Mono engine/sine object
+must remain byte-identical. This does not permit any core AUDIO change.
+
 ### Generated LFO3 lock sources
 
 `mods/lfo3-st/locks/*` are generated from the pinned Synfact sources (read

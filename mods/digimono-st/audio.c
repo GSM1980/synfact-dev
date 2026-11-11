@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-3.0-only
  * AUDIO CPU: eight independent DDR voices, 48 kHz / 32 frames, no UI work.
  * Native update prepares declick/gains, then our oscillator replaces the PCM.
  * The stock render filter (TwinShot anti-imaging) is deliberately omitted:
@@ -21,7 +21,10 @@
 #define DM_REST_BLOCKS 32u
 struct dm_track {
     struct mono_voice engine;
+    struct dm_m2k_voice m2k;
     unsigned loaded,pending,live,quiet,increment;
+    int32_t pitch;
+    uint16_t m2p[MONO_PARAMS];
     uint8_t p[MONO_PARAMS];
 };
 static struct dm_track dm_tracks[8];
@@ -30,6 +33,15 @@ static int dm_track_of(const void *voice)
 {
     uintptr_t offset=(uintptr_t)voice-DM_TRACK_BASE;
     return offset<8u*0x708u && offset%0x708u==0 ? (int)(offset/0x708u) : -1;
+}
+static int32_t dm_previous_pitch(const struct dm_track *s,unsigned track)
+{
+    unsigned prev=track?track-1:7;
+    const unsigned *voice=(const unsigned *)(DM_TRACK_BASE+prev*0x708u);
+    if(voice[0x6f8/4]==DM_SIGNATURE && dm_tracks[prev].loaded)return dm_tracks[prev].pitch;
+    /* No public pitch service for other backends: use SID's MFRQ until the
+     * preceding track runs SY MONOMACHINE. Never reuse a stale backend note. */
+    return 48*64+((s->m2p[6]*24)>>8);
 }
 
 void dm_update(unsigned pitch,void *voice,const unsigned short *params)
@@ -43,26 +55,30 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     if(t<0)return;
     s=dm_tracks+t;trig=v[0x38/4]!=0;
     if(v[0x6f8/4]!=DM_SIGNATURE || !s->loaded) {
-        mono_init(&s->engine);s->loaded=0;s->pending=DM_DEFAULT_TYPE;
+        mono_init(&s->engine);dm_m2k_init(&s->m2k);s->loaded=0;s->pending=DM_DEFAULT_TYPE;
         s->live=0;s->quiet=0;
     }
     ext=DM_EXTENDED(params);
     if(ext)s->pending=dm_clamp_type(ext[0]);
     /* TYPE is note-latched: no phase restarts in the middle of a held note. */
     if(!s->loaded || (trig && s->loaded!=s->pending+1u)) {
-        mono_init(&s->engine);s->loaded=s->pending+1u;s->live=0;s->quiet=0;
+        mono_init(&s->engine);dm_m2k_init(&s->m2k);s->loaded=s->pending+1u;s->live=0;s->quiet=0;
     }
     for(i=0;i<MONO_PARAMS;i++) {
         unsigned k=params[slots[i+1]]>>8;
         s->p[i]=(uint8_t)(k>127?127:k);
+        s->m2p[i]=params[slots[i+1]]>0x7f00?0x7f00:params[slots[i+1]];
     }
     tune=(int)params[slots[0]]-0x4000; /* signed Q8 semitones */
     if(tune < -0x4000)tune=-0x4000;
     if(tune > 0x3f00)tune=0x3f00;
     note=((int32_t)pitch>>9)+(tune>>1); /* Q16 -> 1/128 semitone */
     s->increment=mono_pitch_inc(note);
+    s->pitch=note>>1; /* MONO2K: 1/64 semitone, common TUNE already applied. */
     if(trig) {
-        mono_trig(&s->engine,dm_engine_type[s->loaded-1u]);s->live=1;s->quiet=0;
+        if(s->loaded-1u>=DM_SID)dm_m2k_trig(&s->m2k,s->loaded-1u,s->m2p);
+        else mono_trig(&s->engine,dm_engine_type[s->loaded-1u]);
+        s->live=1;s->quiet=0;
     }
     /* No Digitakt overload shedding: eco remains zero on Syntakt's AUDIO CPU.
      * Sleep only after native AMP has finished; the next trig wakes the voice. */
@@ -90,7 +106,9 @@ void dm_render(void *out,void *voice)
     if(t<0) {for(i=0;i<32;i++)((int32_t *)out)[i]=0;return;}
     s=dm_tracks+t;
     if(s->loaded && s->live) {
-        mono_render(&s->engine,dm_engine_type[s->loaded-1u],s->p,s->increment,pcm,32);
+        if(s->loaded-1u>=DM_SID)dm_m2k_render(&s->m2k,s->loaded-1u,s->m2p,s->pitch,
+                                           dm_previous_pitch(s,(unsigned)t),pcm);
+        else mono_render(&s->engine,dm_engine_type[s->loaded-1u],s->p,s->increment,pcm,32);
         for(i=0;i<32;i++)a[i]=(int32_t)pcm[i]*65536; /* Q15 -> Q31 */
     }else for(i=0;i<32;i++)a[i]=0;
     for(i=0;i<32;i++)b[i]=0;

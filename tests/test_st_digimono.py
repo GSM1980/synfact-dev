@@ -22,7 +22,7 @@ def main():
     exe = (a.out / 'digimono.exe').resolve()
     subprocess.run([str(a.cc), '-O2', '-Wall', '-Werror', '-I', 'elekloader/sdk/include',
                     '-I', 'mods/digimono-st', 'tests/test_st_digimono.c',
-                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c',
+                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c',
                     '-o', str(exe)], cwd=ROOT, check=True)
     subprocess.run([str(exe)], check=True)
     pages=(a.out/'digimono-pages.exe').resolve()
@@ -30,6 +30,8 @@ def main():
                     '-I','elekloader/sdk/include','tests/test_st_digimono_pages.c',
                     '-o',str(pages)],cwd=ROOT,check=True)
     subprocess.run([str(pages)],check=True)
+    subprocess.run(['python','tests/test_st_mono2k.py','--cc',str(a.cc),'--out',str(a.out/'mono2k')],
+                   cwd=ROOT,check=True)
 
 
 if __name__ == '__main__':

@@ -987,6 +987,29 @@ def test_optional_machine_composition_keeps_exact_directory_checks():
     else:raise AssertionError('accepted lying machine report')
 
 
+def test_digimono_audio_change_keeps_every_other_engine_identical():
+    from copy import deepcopy
+    from test_st_common_regressions import check_digimono_audio_change
+    old={'machines':[66,67,68,69,65,71],'modules':['a','dm_destination_module'],
+         'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(3)}}
+    new=deepcopy(old)
+    new['object_sha256']['audio2-0.o']='changed adapter'
+    new['object_sha256']['audio2-3.o']='new mono2k'
+    new['source_sha256']['/mods/digimono-st/mono2k.c']='source'
+    check_digimono_audio_change(new,old)
+    bad=[]
+    for name in ('audio0-0.o','audio1-1.o','audio2-1.o','audio2-2.o','audio9-0.o'):
+        report=deepcopy(new);report['object_sha256'][name]='unexpected';bad.append(report)
+    report=deepcopy(new);del report['object_sha256']['audio0-1.o'];bad.append(report)
+    report=deepcopy(new);report['modules'].reverse();bad.append(report)
+    report=deepcopy(new);report['machines'][-1]=72;bad.append(report)
+    report=deepcopy(new);report['source_sha256'].clear();bad.append(report)
+    for report in bad:
+        try:check_digimono_audio_change(report,old)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unrelated AUDIO change')
+
+
 def test_an_smz_source_pins_what_it_incbins():
     from elekloader.sdk.syntakt.smz import source_inputs
     with tempfile.TemporaryDirectory() as tmp:
