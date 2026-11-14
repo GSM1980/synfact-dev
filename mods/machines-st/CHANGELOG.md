@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.0.
 ## 1.0 (2026-11-03)
 
 - Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
+- Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)
 - Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
 - Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 - Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)

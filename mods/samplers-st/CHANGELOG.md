@@ -1,11 +1,16 @@
 # Changelog: SP sample machines
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.4.
+Generated from git history by `tools/changelog.py`. Latest version: 1.5.
+
+## 1.5 (2026-11-14)
+
+- Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
 
 ## 1.4 (2026-11-11)
 
 - Samplers 1.4: lighter PCM and stereo engine, stereo only while it sounds (`3fec310`, 2026-11-11)
 - Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
+- Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)
 
 ## 1.3 (2026-11-10)
 

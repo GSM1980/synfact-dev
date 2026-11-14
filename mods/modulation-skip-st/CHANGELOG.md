@@ -1,10 +1,15 @@
 # Changelog: Skip unchanged modulation per track
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.2.3.
+Generated from git history by `tools/changelog.py`. Latest version: 1.2.4.
+
+## 1.2.4 (2026-11-14)
+
+- Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
 
 ## 1.2.3 (2026-11-09)
 
 - Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
+- Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)
 - Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
 - Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 - Optimize modulation skip by track and Sound publication (`a442be8`, 2026-11-09)

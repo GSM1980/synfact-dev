@@ -13,6 +13,11 @@
           "subject": "Changelogs: samplers 1.4"
         },
         {
+          "sha": "ccd74b7",
+          "date": "2026-11-11",
+          "subject": "Changelogs: ARP 1.9, POLY 1.5"
+        },
+        {
           "sha": "a4bd154",
           "date": "2026-11-10",
           "subject": "Sample Manager 1.2: FUNC+UP/DOWN steps one row after an audition"

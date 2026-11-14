@@ -1,8 +1,19 @@
 {
   "id": "poly-st",
   "title": "POLY",
-  "latest": "1.5",
+  "latest": "1.6",
   "entries": [
+    {
+      "version": "1.6",
+      "date": "2026-11-14",
+      "commits": [
+        {
+          "sha": "b747754",
+          "date": "2026-11-14",
+          "subject": "Optimize MAIN paths across core and optional mods"
+        }
+      ]
+    },
     {
       "version": "1.5",
       "date": "2026-11-11",
@@ -11,6 +22,16 @@
           "sha": "80f36a1",
           "date": "2026-11-11",
           "subject": "ARP 1.9, POLY 1.5: TRIG page popups and blue arp steps"
+        },
+        {
+          "sha": "ccd74b7",
+          "date": "2026-11-11",
+          "subject": "Changelogs: ARP 1.9, POLY 1.5"
+        },
+        {
+          "sha": "e4af43a",
+          "date": "2026-11-11",
+          "subject": "Update POLY UI provenance hash"
         }
       ]
     },

@@ -1,10 +1,15 @@
 # Changelog: ARP experiment
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.9.
+Generated from git history by `tools/changelog.py`. Latest version: 1.10.
+
+## 1.10 (2026-11-14)
+
+- Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
 
 ## 1.9 (2026-11-11)
 
 - ARP 1.9, POLY 1.5: TRIG page popups and blue arp steps (`80f36a1`, 2026-11-11)
+- Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)
 
 ## 1.8 (2026-11-09)
 

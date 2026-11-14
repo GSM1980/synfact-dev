@@ -1,8 +1,19 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "1.8.0",
+  "latest": "1.8.1",
   "entries": [
+    {
+      "version": "1.8.1",
+      "date": "2026-11-14",
+      "commits": [
+        {
+          "sha": "b747754",
+          "date": "2026-11-14",
+          "subject": "Optimize MAIN paths across core and optional mods"
+        }
+      ]
+    },
     {
       "version": "1.8.0",
       "date": "2026-11-10",
@@ -11,6 +22,11 @@
           "sha": "9c5ba25",
           "date": "2026-11-11",
           "subject": "Changelogs: samplers 1.4"
+        },
+        {
+          "sha": "ccd74b7",
+          "date": "2026-11-11",
+          "subject": "Changelogs: ARP 1.9, POLY 1.5"
         },
         {
           "sha": "222a29d",

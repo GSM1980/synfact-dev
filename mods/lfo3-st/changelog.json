@@ -1,8 +1,19 @@
 {
   "id": "lfo3-st",
   "title": "Third LFO",
-  "latest": "1.2",
+  "latest": "1.3",
   "entries": [
+    {
+      "version": "1.3",
+      "date": "2026-11-14",
+      "commits": [
+        {
+          "sha": "b747754",
+          "date": "2026-11-14",
+          "subject": "Optimize MAIN paths across core and optional mods"
+        }
+      ]
+    },
     {
       "version": "1.2",
       "date": "2026-11-06",
@@ -11,6 +22,11 @@
           "sha": "9c5ba25",
           "date": "2026-11-11",
           "subject": "Changelogs: samplers 1.4"
+        },
+        {
+          "sha": "ccd74b7",
+          "date": "2026-11-11",
+          "subject": "Changelogs: ARP 1.9, POLY 1.5"
         },
         {
           "sha": "40e397f",
