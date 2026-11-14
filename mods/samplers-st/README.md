@@ -1,4 +1,20 @@
-# SP sample machines 1.3
+# SP sample machines 1.5
+
+Version 1.5 includes all MAIN stereo optimizations below. Their 1.4.x numbers
+were development iterations, consolidated into one release step from 1.4.
+See [the release mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+
+1.4.7 specializes MAIN's four fixed stereo bus calls, removing generic
+argument/stack/index work without an additional activity check. The exact
+gain history, integer/EMAC math and AUDIO are unchanged. The current-bank
+differential covers DDR, SRAM, fallback, Chorus and occupied windows; every
+measured stable/dynamic case uses fewer instructions. See
+[idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md).
+
+1.4.6 keeps four stereo buses' exact gain history with an inline fixed MOVEM
+copy. Empty masks and active mixes avoid a helper call/frame. First stereo
+ramps, SRAM ownership, AUDIO and machine behavior remain unchanged. See
+[idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md).
 
 Four source-built sample machines for Syntakt and its explicit AUDIO companion.
 Banks 0.9 and later require the existing UI API 7 and module API 3 for guarded native-view
@@ -409,3 +425,62 @@ against synthetic native matrices. App/model ownership getters and event
 queues are fixtures; this is not a complete boot or physical validation.
 Source contracts/layouts and AUDIO remain unchanged; the full bank retains
 SP, FM TONE, Recorder, LFO3, POLY and System info.
+
+## 1.4.2: MAIN optimizations on the current 1.4 engine
+
+Ports the MAIN-only work onto current main, keeping 1.4's AUDIO PCM runs,
+stereo voice tail, lighter right chain and quiet-track release. Keeps the
+full 32-bit fractional EMAC mix, four tracks per pass and the same saturation
+order. The older integer scalar/ramp kernels are superseded by this mixer.
+
+MAIN skips profiling in normal banks, rejects in-flight publications before
+copying, walks active masks, uses MOVEM copies, and skips the fingerprint for
+a current empty block. All eight native gain endpoints are retained even
+when a track is mono. Without Chorus it can move its state, copies, resolver
+and mix kernel into the existing conditional MAIN SRAM windows; otherwise it
+uses DDR. See [the port and validation](../../docs/STEREO-MAIN-CURRENT.md).
+
+## 1.4.3: fewer MAIN operations for sparse sends
+
+Keeps 1.4.2 and all current-main AUDIO improvements. Partial groups use
+one-, two- or three-track fractional EMAC loops; stable gains omit per-frame
+increments. Parallel sample loads and a cached resolved mask reduce more
+MAIN instructions. Full 32-bit gains, product order and group saturation
+are unchanged. The larger 486-byte mixer still fits the same optional MAIN
+SRAM window. AUDIO remains byte-identical to the deployed sampler 1.4 bank.
+
+## 1.4.4: assembly expansion and fewer mixer branches
+
+Keeps 1.4.3. MAIN expands active tracks' signed mantissas using a hand-written
+eight-sample assembly loop with grouped stores, and the fractional EMAC
+loops process two frames per iteration. The block layout is checked at
+compile time. Exact results, EMAC state, inactive buffers and SRAM fallback
+are checked in analog-emu. AUDIO and core remain unchanged. Both routines
+fit the same conditional SRAM windows; see the port's validation notes.
+
+## 1.4.5: fewer reloads preparing MAIN gains
+
+Keeps 1.4.4, capturing the module-owned previous-gain pointer and primed flag
+once per bus callback. No new cache or per-block comparison is added.
+Complete-block instruction counts improve in the tested stable, modulated
+gain and changing-mask cases. Assembly, SRAM layout, AUDIO and core remain
+unchanged. See the validation notes for the measured scope and limits.
+
+## 1.4.8: smaller MAIN callbacks when stereo is absent
+
+Empty callbacks retain all four buses' gain history without entering the
+large active EMAC workers' register/stack frames. MAIN/DIRECT share their
+resolved mask. Active workers copy the eight-word gain row with two MOVEMs;
+empty copies only borrow d0/d1. No extra per-track cache/check or SRAM claim.
+Late/torn publications, first activation ramps, Chorus/fallback and AUDIO
+stay unchanged. See [idle MAIN measurements](../../docs/IDLE-MAIN-PERFORMANCE.md).
+
+## 1.4.9: commit MAIN gain history once per block
+
+Delay/reverb no longer copy their gain rows separately. After MAIN/DIRECT
+correction, commit all four native end-gain rows and first-block flags
+together. The empty path's 104-byte assembly span fits exactly in the same
+conditional SRAM window; the active worker inlines the MOVEM copy in its
+existing saved frame. Bounds, Chorus/occupied-window refusal and integrity
+fallback remain. No type/activity scan, extra per-track check or AUDIO change.
+Exact transitions and complete-block budgets are checked against 1.4.8.

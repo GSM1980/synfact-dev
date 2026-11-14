@@ -54,7 +54,11 @@ static __attribute__((noinline)) void publish_block(u32 trigs)
     const u16 *working,*mirror;
     /* The native boot sender owns the whole 0x800..0xfff page until AUDIO
      * has acknowledged it: nothing in either bank survives that. */
-    if(!core_machine_active || !*(const volatile u32 *)0x43bdc824u){
+    /* The stock type range has bit 6 clear. Two aligned SRAM reads reject
+     * an all-stock digital bank before owner queries and the eight-track
+     * cadence scan. Other high types may take the full path harmlessly. */
+    if(!core_machine_active || !*(const volatile u32 *)0x43bdc824u ||
+       !((*(const volatile u32 *)0x80002f50u|*(const volatile u32 *)0x80002f54u)&0x40404040u)){
         stale[0]=stale[1]=~0u;published=0;active=routed=cadence=0;*tail=0;return;}
     /* Every block: the profiler's D/C boundary and POLY's owner table. */
     owners=(const unsigned char *)core_native(ST_NATIVE_OWNERS,0);

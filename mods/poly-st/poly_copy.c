@@ -10,11 +10,15 @@ static void poly_copy_mark(u32 owner)
     for(t=owner+1;t<8;t++)if(poly_owner_map[t]==owner)poly_copy_pending|=1u<<t;
 }
 
+#ifdef __mcoldfire__
+extern void poly_copy_record(volatile u8 *,const volatile u8 *);
+#else
 static void poly_copy_record(volatile u8 *d,const volatile u8 *s)
 {
     u32 i;
     for(i=0;i<0x123u;i++)d[i]=s[i];
 }
+#endif
 
 static void poly_copy_group(u32 track,u32 owner)
 {

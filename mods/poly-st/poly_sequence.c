@@ -18,15 +18,25 @@ extern void native_publish_sound(const volatile u8 *,u32);
  * event per track at 444e2438+t*50h (time 444e2848+t*4); the native start
  * routines 4008b1ac/4008b008 copy and enqueue those directly, bypassing the
  * 4008cfc4 chord expansion. SLAVE statics are filled from their master. */
-#define PREP_EVENT(t) ((volatile u32 *)(0x444e2438u+(t)*0x50u))
-#define PREP_TIME(t) (*(volatile s32 *)(0x444e2848u+(t)*4u))
+/* Keep fixed firmware addresses separate from relocatable bank symbols when
+ * GCC strength-reduces the loops. The barrier emits no instruction; it stops
+ * a RAM-address difference becoming an invalid bank-relative relocation. */
+static __inline__ u32 poly_native_address(u32 address)
+{
+#ifdef __mcoldfire__
+    __asm__("":"+d"(address));
+#endif
+    return address;
+}
+#define PREP_EVENT(t) ((volatile u32 *)(poly_native_address(0x444e2438u)+(t)*0x50u))
+#define PREP_TIME(t) (*(volatile s32 *)(poly_native_address(0x444e2848u)+(t)*4u))
 static u8 prep_step[12] DATA={0};
 static u32 prep_generation[12] DATA={0};
 
 /* Interval lane of one chord voice: step value, default when inherited. */
-static s32 poly_chord_note(const volatile u8 *sequence,u32 track,u32 step,u32 voice,volatile u32 root)
+static s32 poly_chord_note(const volatile u8 *sequence,u32 track,u32 step,u32 voice,u32 root)
 {
-    volatile u32 raw=255;
+    u32 raw=255;
     s32 note;
     if(step<64)raw=sequence[track*0x499u+0x2c0u+voice*0x40u+step];
     if(raw==255)raw=sequence[track*0x499u+0x3c5u+voice];
@@ -38,10 +48,9 @@ static s32 poly_chord_note(const volatile u8 *sequence,u32 track,u32 step,u32 vo
 
 /* Delay the native start adds when a track starts inside its own step. */
 /* Native signed bytes, widened without MVS (not in the audited forms). */
-static s32 signed_byte(volatile u32 value)
+static s32 signed_byte(u32 value)
 {
-    value&=255u;
-    return value>127u?(s32)value-256:(s32)value;
+    return (s32)(signed char)value;
 }
 
 static s32 prep_delay(const volatile u8 *sequence,u32 track)
@@ -54,11 +63,16 @@ static s32 prep_delay(const volatile u8 *sequence,u32 track)
     return (speed-rem)*900000;
 }
 
+/* Flat statics are four-byte aligned and 80 bytes apart. The helper changes
+ * no native event ownership/refcounts; it copies exactly those twenty words. */
+#ifdef __mcoldfire__
+extern void poly_copy_static_event(volatile u32 *,const volatile u32 *);
+_Static_assert(0x444e2438u%4u==0 && 0x50u%4u==0,"POLY static event alignment");
+#endif
 /* Copy the prepared master trig to one SLAVE static, same start instant. */
 static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
 {
     volatile u32 *source=PREP_EVENT(master),*target=PREP_EVENT(master+voice);
-    volatile u32 i;
     s32 note;
     target[1]=0;
     if(!source[1] || source[2]!=master)return 0;
@@ -66,7 +80,11 @@ static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
     if(note<0)return 0;
     time+=prep_delay(sequence,master)-prep_delay(sequence,master+voice);
     if(time<0)return 0;
-    for(i=0;i<20;i++)target[i]=source[i];
+#ifdef __mcoldfire__
+    poly_copy_static_event(target,source);
+#else
+    {u32 i;for(i=0;i<20;i++)target[i]=source[i];}
+#endif
     poly_voice_target(target,master,voice);target[6]=(u32)note;
     PREP_TIME(master+voice)=time;
     return 1;
@@ -88,7 +106,7 @@ static void prep_fill_group(const volatile u8 *sequence,u32 master,s32 time)
 static void prep_rebuild(const volatile u8 *sequence,u32 track)
 {
     u32 kit=*(volatile u32 *)0x43bd743cu,step;
-    volatile u32 midi_bit;
+    u32 midi_bit;
     s32 time=0;
     volatile u32 *event=PREP_EVENT(track);
     if(!kit || *(volatile u32 *)(0x43bd73c8u+track*4u)==1)return;
@@ -117,7 +135,7 @@ extern void poly_native_interest(void);
 u32 poly_commit(u32 sequence,const volatile u8 *states)
 {
     u8 owners[12],old_roots[12],new_roots[12],affected[12];
-    volatile u32 i,changed=0,on;
+    u32 i,changed=0,on;
     u32 old;
     volatile u32 *bucket;
     u32 *event;

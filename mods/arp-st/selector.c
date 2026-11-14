@@ -4,6 +4,17 @@
  * No donor instruction bytes are distributed. See README.md for scope.
  */
 #include "arp.h"
+/* Offsets used only by the authored target selector, not firmware layouts. */
+_Static_assert(sizeof(struct arp_selector)==180,"ARP selector layout");
+_Static_assert(__builtin_offsetof(struct arp_selector,generation)==148,"ARP selector generation");
+_Static_assert(__builtin_offsetof(struct arp_selector,step)==152,"ARP selector step");
+_Static_assert(__builtin_offsetof(struct arp_selector,word)==156,"ARP selector word");
+_Static_assert(__builtin_offsetof(struct arp_selector,ascending)==160,"ARP selector direction");
+_Static_assert(__builtin_offsetof(struct arp_selector,last)==164,"ARP selector last");
+_Static_assert(__builtin_offsetof(struct arp_selector,cursor)==168,"ARP selector cursor");
+_Static_assert(__builtin_offsetof(struct arp_selector,octave)==172,"ARP selector octave");
+_Static_assert(__builtin_offsetof(struct arp_selector,remaining)==176,"ARP selector remaining");
+_Static_assert(__builtin_offsetof(struct arp_settings,offset)==8,"ARP offsets layout");
 void arp_reset(struct arp_selector *s,arp_u32 generation)
 {
     unsigned int i;
@@ -35,6 +46,7 @@ int arp_release(struct arp_selector *s,unsigned int note)
     for(;i+1<s->count;i++)s->order[i]=s->order[i+1];
     s->count--;return 1;
 }
+#ifndef __mcoldfire__
 static void next_octave(struct arp_selector *s,const struct arp_settings *p)
 {
     if(p->range<=3){if(++s->octave>p->range)s->octave=0;}
@@ -96,3 +108,4 @@ int arp_next(struct arp_selector *s,const struct arp_settings *p,arp_u32 generat
     s->last=note;
     return note+12*s->octave+p->offset[s->step];
 }
+#endif

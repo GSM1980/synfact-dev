@@ -1,4 +1,12 @@
-# Syntakt core 0.12.22
+# Syntakt core 1.8.1
+
+Current MAIN optimization release: **core 1.8.1**, with an assembly native-service
+wrapper and grouped track-send capture. Native routes, profiling semantics and
+the complete optimized bank are retained; AUDIO is byte-identical to 1.8.0.
+Development labels in the records below are mapped to this single release in
+[the consolidated version table](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+See [core MAIN performance](../../docs/CORE-MAIN-PERFORMANCE.md) for complete-call
+counts, compatibility, startup checks and hardware measurement limits.
 
 Version 0.12.19 adds host API 8 `native_query`, a pointer to the existing
 synchronous native bus. It adds no hook site or operation number. OWNERS with
@@ -851,6 +859,18 @@ name. API 10's `native_dispatch` is an alias in the same 4-byte slot at offset
 notification helper is shared out of line; its extended controls plus final
 word are copied as one contiguous 34-byte range before notification. This
 keeps the combined core within its unchanged 64 KiB reserve and build flags.
+
+## Core 1.8.1.1: resident startup correction
+
+1.8.1 is withdrawn: its module binder was moved into appended `.boot`, which
+native startup clears, causing V04 at 40347BC2. 1.8.1.1 restores the original
+resident 1.8.0 binder/dispatcher and withdraws route bitsets. All-stock machine
+transport retains its two-read early exit. The builder and target startup
+regression now check residency and execute binding after appended storage is
+cleared. There are 68 bytes free in the unchanged 64 KiB reserve. AUDIO,
+host API and bank format stay unchanged. See
+[idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md) for counts,
+transition checks and hardware A/B limits.
 
 ## Core 1.8.0: stereo tracks and stereo samples
 

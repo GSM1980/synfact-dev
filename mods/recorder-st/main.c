@@ -98,7 +98,13 @@ static int recorder_key(void *brain,void *event)
 static int recorder_encoder(void *brain,void *event)
 {(void)brain;return sam_foreground() && sam_tail_is_recorder()?sampler_encoder(sam_view+4,event):0;}
 static void recorder_audio(void)
-{headroom_tick();sampler_playback_mix();}
+{
+    /* The closed-view path keeps exactly the capture clock/phase, without
+     * building the capture and audition workers' register/stack frames. */
+    if(!sam_enabled){sam_clock+=32;headroom_meter_phase=23;}
+    else headroom_tick();
+    if(sam_play_length)sampler_playback_mix();
+}
 /* Serialize the bounded save job with native high-zone Data uploads using
  * the existing FS events. The tiny check/publication is atomic across tasks;
  * no IRQ exclusion surrounds storage, allocation or normalization. */

@@ -562,3 +562,52 @@ stereo slot, `channels == 2` with R's bins `lo_r`/`hi_r` in its wave; read
 them only when `api->version >= 8`. The samplers tag stereo rows `ST` in the
 sample list and draw L above R on SYN page 2; the Sample Manager writes `ST `
 before a stereo sample's name.
+
+## Syntakt core 1.8.1.1: resident startup and stock transport exit
+
+The 1.8.1 route-bitset prototype is withdrawn after its nonresident module
+binder failed during hardware startup. 1.8.1.1 restores the original 1.8.0
+resident binder/native dispatcher. Startup entries must remain in resident
+RAM after native BSS clearing; the builder and target startup test enforce it.
+
+All-stock digital track types now take the existing empty machine-transport
+path after two aligned SRAM reads. Live native types are read each block, so
+switching to an added machine requires no cache invalidation. The one-time
+module binder remains resident with all runtime state. AUDIO and bank formats
+are unchanged.
+See [idle MAIN performance](IDLE-MAIN-PERFORMANCE.md) for complete-path counts,
+compatibility, regression coverage and hardware comparison limits.
+
+## Syntakt core 1.8.1.2: resident native callback routes
+
+The existing interest bytes now encode ordered subscribers, so an operation
+does not enter unrelated callbacks. The assembly adapters still only test
+zero/nonzero. TYPE track bytes 18/19, PAGE view restrictions, callback order,
+consume behavior, old profiler bounds, host APIs and bank format remain.
+Unknown subscribers retain all operations; long routes fail open to the
+original list traversal. Routes snapshot before callbacks and publish
+atomically with the list. No new allocation or SRAM reservation is needed.
+
+Both route preparation and dispatch are handwritten resident assembly;
+application-time startup entries also remain resident after native clearing.
+The 64 KiB reserve and compiler profile are unchanged. New route/ABI tests
+execute the target code and are part of common regressions when Unicorn is
+provided. See [idle MAIN performance](IDLE-MAIN-PERFORMANCE.md) for measured
+hot-path reductions and the one-time configuration cost.
+
+## Syntakt core 1.8.1.3: native-service wrapper and track-send capture
+
+The public native service keeps its operation numbers, arguments, result,
+stock replay and optional 36-word profiler layout. Its target wrapper is
+resident assembly: no-interest calls tail-call the existing original service;
+interested calls still enter the unchanged ordered dispatcher. The profiler
+uses its entry pointer snapshot even if a callback changes the registration,
+and operations 18 and above never index the legacy buffer. Invalid operations
+still take the original entry timer sample when profiling is enabled.
+
+Track-send capture groups its three existing stores in a MOVEM, preserving
+the old scratch pointer, row contents, subscriber order and live EMAC state.
+There is no new hook, ABI, SDK field, allocation, SRAM reservation or cadence.
+All runtime code remains resident in the same 64 KiB reserve; AUDIO and the
+MSKIP 1.4 complete bank are byte-identical to their previous delivery.
+See [core MAIN performance](CORE-MAIN-PERFORMANCE.md) for validation and limits.

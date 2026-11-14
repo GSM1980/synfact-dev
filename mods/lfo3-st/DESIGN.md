@@ -1,5 +1,128 @@
 # LFO3 port to elekloader (working design, 2026-10-28)
 
+The consolidated release is **LFO3 1.3**, one step from main's 1.2. Numbers
+1.4 through 1.7 below identify development measurements, not public releases.
+See [the version mapping and inactive-engine policy](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+
+## Disable the inactive native route (1.7, 2026-11-13)
+
+The owner's same-layout diagnostics measured V (LFO3 only) at 84% and W
+(same initialization/global hooks, native subscription disabled) at 82%.
+The production module now removes only its LFO operation interest when no
+prepared/locked DEP/DEST row can produce output. Page sync/navigation/layout
+interest remains enabled. It uses the existing host API/core interest byte;
+there is no new per-block check or alteration to the renderer's algorithm.
+
+`lfo3_output_rows` is one DDR word, updated by `prepare_track` after base
+parameter publication and by active DEP/DEST-lock apply/clear. Its read/
+modify/write and the first/last-row route update share a bounded IRQ-masked
+section; there is no allocation or mutex inside it. Other subscribers' bits
+remain owned by the core. A locked destination that might fail metadata
+validation is conservatively enabled; the existing overlay still resolves
+it before rendering. ARP-only locks cannot enable LFO3. Exact neutral DEP
+4000 and DEST outside 1..70 remain suspended under the accepted 1.6 policy.
+
+Parameter edits, Sound/Kit publication/republish, both queued and static
+PLAY-start locks reactivate the next eligible block. Removing a lock derives
+eligibility from the base bank again. Pool/bank reset recomputes all rows
+once; CRC fallback also invalidates the old overlay before re-evaluating
+the reset bank with its active locks. SRAM bank/kernel sizes stay 944/822.
+Generated event edits live in `shared_locks.event_hot_paths` for regeneration.
+
+The real-core transition test covers 855 cases, task/IRQ contexts, fine depth,
+FX, invalid destinations, editor refresh, task republish, nested publication,
+CRC fallback with/without locks and another POLY subscriber. A dropped-update
+negative control must fail. At an explicit DSP-body boundary, inactive native
+entry drops 137 -> 6 instructions, while active entry remains 137. Eighty
+analog-emu matrices keep exact renderer/state/EMAC results and counts.
+
+Bookkeeping moves to events: changed base publication adds about 61–66
+instructions without a route change in the measured fixture; first/last
+transitions add 834/826. Charging both transitions still wins after sixteen
+idle blocks even with the renderer excluded (2,691 -> 2,255 instructions).
+The separate event-copy differential keeps its no-increase gate for the
+172 calls without an output update; 16 DEP/DEST updates have an explicit
+128-instruction additional budget with no host/router, measured max 92.
+The actual host route cost is separately measured by the integration test.
+These are instructions, not hardware CPU points or call-frequency claims.
+
+## Shared event bookkeeping (1.6.1, 2026-11-13)
+
+Conversion resolves the row's owner and track in one traversal, replacing
+up to thirteen complete `lfo3_owned_lookup` calls. The lowest track still
+wins; equal-track ties keep live/owned-list/legacy-temporary precedence.
+TRACK clipboard objects remain excluded. Static PLAY-start lock blocks,
+unsigned candidate subtraction, null contexts and legacy-only mode retain
+their previous behavior. There is no new cache, allocation, IRQ exclusion,
+SRAM reservation or writer-side activity manager.
+
+Apply and ARP output copies expose their fixed halfword assignments to the
+compiler. They still copy every payload word, including with mask zero,
+and preserve access order for overlapping/halfword-aligned output. Busy
+publication wrappers and LFO3 1.6's suspension policy are unchanged.
+`gen_locks.py` applies these changes through `shared_locks.event_hot_paths`;
+regeneration from the pinned donor reproduces both generated C files.
+
+An independent old-bank differential checks 1,512 owner/row cases and 188
+event cases (real sparse lanes, owned patterns, static first-step locks,
+active masks, invalid locks and overlapping ARP copies). All event cases
+retain exact bytes/returns and do not increase instructions. Native event
+bodies and allocator/mutex remain explicit boundaries. Empty conversion
+is 121 -> 109 instructions at track 1 and 1,573 -> 196 at FX; application
+126 -> 104; ARP read 67 -> 53. These are per call, not physical CPU points.
+
+## Suspend engines without output (1.6, 2026-11-12)
+
+The owner explicitly selected suspension of every engine without output,
+accepting changed phase, fades, triggers and RANDOM sequences. The renderer
+now skips the whole engine for exact neutral DEP `4000`, or a destination
+outside native slots 1..70 (including zero and `7f` NONE). It reads the
+effective parameter bank after the existing p-lock overlay, so locks can
+activate or suspend an engine in the same block. Fine DEP `4001` remains active.
+Skipped engines retain state and make no RNG or working-buffer writes.
+Their triggers are ignored. RNG is shared, so active RANDOM timelines can
+also change when another engine stops drawing numbers.
+
+The guard is inside the existing SRAM renderer, not a separate manager.
+The old exact-default running path is removed. A register holds trigger bits
+and the loop sentinel; another holds scaled depth until destination output.
+The state waveform uses the existing state pointer, removing its redundant
+pointer/increment. MODE stays in one register and non-RANDOM helpers preserve
+their saved argument in a register rather than two stack accesses.
+The kernel shrinks from 1,072 to 822 bytes in the same 1,152-byte window;
+the bank stays 944 bytes. SRAM refusal/CRC fallback and Chorus windows remain
+unchanged, and the same guard works in DDR.
+
+The full callback including its guard falls from 878 to 196 instructions
+with all engines inactive. Steady TRI cases: 1 active 986 to 355, 4 active
+1,312 to 834, all 13 active 2,288 to 2,269. All 80 measured DDR/SRAM rows
+pass the no-count-increase gate for callback, selector and renderer. These
+are emulator instruction counts, not physical cycles or MAIN meter points.
+See [LFO3 MAIN performance](../../docs/LFO3-MAIN-PERFORMANCE.md) for the
+separate suspension oracle and exact behavior contract.
+
+## Exact-default TRI fold (1.5, 2026-11-12)
+
+The default path folds TRI with integer instructions instead of pushing the
+phase and calling its native helper. All oscillator/working/RNG/EMAC bytes
+match the former path in cfbench; phase still advances on all thirteen engines.
+The complete default callback falls from 930 to 878 instructions, with no new
+guard or cached state. See [idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md).
+
+## MAIN measurement, lock preparation and renderer (1.4, 2026-11-12)
+
+The current bank's callback, engine, parameter selector, publication and
+setter paths now have a reproducible measurement baseline. The first change
+unrolls the eight lock-field assignments into constant bit tests/offsets,
+without adding a cache or changing engine state (1.3). Version 1.4 shares
+the default tempo increment, packs exact default comparisons using explicitly
+aligned private banks, calls the same native TRI helper directly and simplifies
+the loop branch. All phase/fade/RNG/EMAC state is preserved. Default callback
+cost falls from 1,087 to 930 instructions; code occupies 1,062 of the same
+1,152 SRAM bytes and data remains 944 bytes. See
+[LFO3 MAIN performance](../../docs/LFO3-MAIN-PERFORMANCE.md) for the measured
+scope, correctness checks, reproduction and hardware validation procedure.
+
 Reference: Synfact `src/features/lfo3` (option B, universal side storage) and
 `src/research-runtime/lfo3-coherence-20261021/*_proto`. Synfact applied ~50 SAFE
 patches from its file. Here the core owns some of those sites, so LFO3 is an
@@ -117,7 +240,8 @@ all LFO3 work. Physical performance remains to be measured.
 1. **1a engine (done, emulator):** `render.s` (Synfact throughput kernel, PIC)
    from MAIN SRAM, state/RNG/params bank in SRAM, run from the core LFO
    operation (core 0.12.14 passes `{working,tempo,trigs}`). Bit-exact to the
-   native LFO1 on the same words; ~1,026 instructions/block idle.
+   native LFO algorithm on the same words. The original renderer used about
+   1,026 instructions/block idle; current callback counts are recorded above.
 2. **1b page:** third page on the LFO key, eight controls, wave drawing,
    destination picker; values per track in RAM (not saved yet).
 3. **2 storage:** Sound/Kit/project/new-project/copy (Synfact shadows +

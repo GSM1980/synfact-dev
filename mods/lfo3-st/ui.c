@@ -17,6 +17,7 @@ typedef struct {u16 v[8];} rec_t;
 struct lfo3_bank {u8 state[13][40];u32 rng[2];u16 params[13][8];u16 overlay[13][8];};
 extern struct lfo3_bank *lfo3_bank;
 extern volatile u32 lfo3_params_dirty;   /* locks_runtime.c; written under frame.busy */
+extern void lfo3_output_track(u32);
 /* Records: shadow.c (Synfact shadow layer, persisted with kits/projects). */
 typedef struct {u32 addr,size,tag,seq,count;rec_t r[13];} side_t;
 extern rec_t kit_shadow[128][13],pool_shadow[128];
@@ -113,6 +114,7 @@ static void prepare_track(u32 t)
     if(!(flags&0x200))r.v[3]=0x7f00;
     for(i=0;i<8;i++)lfo3_bank->params[t][i]=r.v[i];
     lfo3_params_dirty|=1u<<t;                      /* the lock overlay copies this row again */
+    lfo3_output_track(t);
 }
 void lfo3_dest_forget(u32);
 /* Synfact throughput_publication: the destination is resolved again only

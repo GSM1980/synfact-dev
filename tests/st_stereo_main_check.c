@@ -100,3 +100,74 @@ u32 debug_mix(u32 g,u32 h,u32 b)
     one[0]=(s32)h;bb[1]=(s32)b;hp[0]=one;hp[1]=hp[2]=hp[3]=silent;gg[0]=(s32)g;
     emac_enter(&e);mix4(bb+1,hp,gg,st);emac_leave(&e);return (u32)bb[1];
 }
+
+/* The expansion kernel has a separate exact oracle, including inactive
+ * tracks and canaries around its complete output buffer. */
+u32 check_widen(u32 cases,u32 start)
+{
+    static s32 guarded[258];u32 k,t,i,bad=0,mode,acc,ext,m2,a2,e2;
+    seed=start;
+    for(k=0;k<cases;k++){
+        fake.mask=k&255u;
+        for(t=0;t<8;t++){
+            fake.shift[t]=(unsigned char)((k+t)%17u);
+            for(i=0;i<32;i++)fake.d[t][i]=(short)rng();
+        }
+        for(i=0;i<258;i++)guarded[i]=(s32)0x5a5aa5a5u;
+        mode=(k&3u)*0x20u;acc=rng();ext=rng();set_state(mode,acc,ext);
+        widen_kernel(&fake,guarded+1);get_state(&m2,&a2,&e2);
+        if(mode!=m2 || acc!=a2 || ext!=e2)bad++;
+        for(t=0;t<8;t++)for(i=0;i<32;i++){
+            u32 want=(fake.mask&(1u<<t))?(u32)(s32)fake.d[t][i]<<fake.shift[t]:0x5a5aa5a5u;
+            if((u32)guarded[1+t*32+i]!=want)bad++;
+        }
+        if((u32)guarded[0]!=0x5a5aa5a5u || (u32)guarded[257]!=0x5a5aa5a5u)bad++;
+    }
+    return bad;
+}
+
+/* Placement is exercised with real executable SRAM in cfbench, not a host
+ * memory stand-in. Modes: absent, Chorus, occupied state, occupied code. */
+u32 check_placement(u32 mode)
+{
+    static unsigned char directory[80];
+    static const unsigned char *published;
+    static struct st_machine_host_api host;
+    volatile u32 *p;u32 i,bad=0;
+    st_stereo_state=&stereo_ddr;use=0;
+    copy32=st_stereo_copy32;copy64=st_stereo_copy64;
+    mix4_kernel=st_stereo_mix4;resolve_kernel=st_stereo_resolve;widen_kernel=st_stereo_widen;
+    remember_kernel=st_stereo_remember;
+    placement_done=placement_ticks=st_stereo_sram=0;
+    for(p=(volatile u32 *)ST_SRAM_CHORUS;p<(volatile u32 *)ST_SRAM_TAIL0_END;p++)*p=0;
+    for(p=(volatile u32 *)ST_SRAM_CHORUS_CODE;p<(volatile u32 *)ST_SRAM_CHORUS_CODE_END;p++)*p=0;
+    for(i=0;i<sizeof(directory);i++)directory[i]=0;
+    published=0;host.bank_info=&published;stereo_host=&host;
+    placement_tick(0);if(placement_done || st_stereo_sram)bad++;
+    directory[0]='x';
+    if(mode==1){static const char chorus[]="chorus-st";for(i=0;i<sizeof(chorus);i++)directory[i]=chorus[i];}
+    if(mode==2)*(volatile u32 *)ST_SRAM_CHORUS=0x12345678;
+    if(mode==3)*(volatile u32 *)ST_SRAM_CHORUS_CODE=0x12345678;
+    published=directory;
+    placement_tick(0);
+    if(st_stereo_sram!=(mode==0 || mode==4))bad++;
+    if(mode==0 || mode==4){
+        if((u32)st_stereo_state!=ST_SRAM_CHORUS || (u32)mix4_kernel!=ST_SRAM_CHORUS_CODE)bad++;
+        bad+=check_mix(400,0x5eed);bad+=check_widen(400,0xdead);
+        /* Check the resolver runs from SRAM too: untagged is a safe exit. */
+        resolved=0;tagged=0;if(current()!=0 || !resolved)bad++;
+        /* A genuine internal slot pointer must survive fallback. */
+        slot[0].sequence=0x12345678;use=&slot[0];
+        if(mode==4)*(volatile unsigned char *)(void *)remember_kernel^=1;
+        else *(volatile unsigned char *)ST_SRAM_CHORUS_CODE^=1;
+        for(i=0;i<60;i++)placement_tick(0);
+        if(st_stereo_sram || st_stereo_state!=&stereo_ddr || use!=&slot[0] || slot[0].sequence!=0x12345678)bad++;
+        if(remember_kernel!=st_stereo_remember)bad++;
+        bad+=check_mix(400,0xfeed);bad+=check_widen(400,0xbeef);
+    }else{
+        if((mode==2 && *(volatile u32 *)ST_SRAM_CHORUS!=0x12345678) ||
+           (mode==3 && *(volatile u32 *)ST_SRAM_CHORUS_CODE!=0x12345678))bad++;
+        bad+=check_mix(400,0x5eed);bad+=check_widen(400,0xdead);
+    }
+    return bad;
+}

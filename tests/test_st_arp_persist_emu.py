@@ -21,8 +21,18 @@ class Persistence(Machine):
         super().__init__(core,bank);self.call_sr=0x2000;self.call_budget=20000000
         self.u.mem_map(C1,0x800000)
         e=elf.Elf.load(bank.parent/(bank.stem+'.work')/'main.elf')
-        index=next(i for i,s in enumerate(e.symbols) if s.name=='lfo3_tick')
-        host=next(s for s in e.symbols[index:] if s.name=='host')
+        # Local-symbol order changes when GCC reorders functions. Identify
+        # LFO3 main.c by its unique bank, not "the next host after tick"
+        # (which can select Recorder/Sample Manager's unrelated local host).
+        group={};main=None
+        for s in e.symbols:
+            if s.type==elf.STT_FILE:
+                if 'ddr_bank' in group:main=group;break
+                group={}
+            elif s.name:group[s.name]=s
+        if main is None and 'ddr_bank' in group:main=group
+        assert main and 'host' in main
+        host=main['host']
         self.w(BANK+host.value,self.word(self.sym['arp_host']))
         for name,value in [('image_container',C1),('kits_base',LIVE),('pool_base',POOL)]:self.w(self.sym[name],value)
         self.call('lfo3_records_init')

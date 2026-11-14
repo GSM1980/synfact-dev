@@ -65,7 +65,18 @@ static u32 zero_dest[TRACKS][ENTRIES];static u16 zero_pre[TRACKS][ENTRIES];
 static u8 used[TRACKS],zero_used[TRACKS],active_groups[TRACKS],sparse_safe[TRACKS];
 static u8 active_seen[TRACK_WORDS],zero_seen[TRACK_WORDS],epoch;
 static u8 active_ids[TRACKS],zero_ids[TRACKS],active_count,zero_count;
+/* Derived only when matrix membership changes, in the same row/entry order.
+ * The frequent all-track projection needs no per-row indexing or mask test. */
+static u32 zero_all[TRACKS*ENTRIES] __attribute__((aligned(16)));
+static u32 zero_all_count,sparse_track_mask;
+static u16 zero_offset[TRACKS] __attribute__((aligned(4)));
 static u32 valid_mask,unsafe_mask,active_track_mask,zero_track_mask,total_used,raw_ready,count,check_mask,capture_mask;
+#ifndef SKIP_HOST
+u32 modulation_skip_decide(u32);
+extern u32 modulation_skip_zero_decide(u32),modulation_skip_stock_decide(u32);
+/* Publication chooses the entry. Active matrices pay no zero-path guards. */
+static u32 (*volatile modulation_skip_decider)(u32) __attribute__((used,aligned(4)))=modulation_skip_decide;
+#endif
 volatile u32 modulation_skip_run_mask;
 volatile u32 modulation_skip_blocks,modulation_skip_hits,modulation_skip_skips;
 volatile u32 modulation_skip_partial_runs,modulation_skip_errors;
@@ -73,8 +84,8 @@ static u32 source(u32 t,u32 g)
 {return g==5u?SKIP_R32(source_base[g]+4u*t):SKIP_R16(source_base[g]+2u*t);}
 /* Keep the stock RAM address independent of the relocatable cache pointer.
  * GCC otherwise folds their difference into an invalid bank relocation. */
-static __attribute__((noinline)) u32 raw_word(u32 t,u32 k)
-{return SKIP_R32(RAW(t)+4u*k);}
+static __inline__ u32 raw_address(u32 t)
+{u32 at=RAW(t);__asm__ volatile("":"+r"(at));return at;}
 static void build_track(u32 t)
 {
     u32 g,k,e,i,at,bit=1u<<t;
@@ -118,11 +129,11 @@ static void build_track(u32 t)
  * every 64th block still scans all 312 to catch any unobserved writer. */
 static __attribute__((noinline)) u32 refresh_machine(u32 scan)
 {
-    u32 t,k,v,any,changed=0,bit;
+    u32 t,k,v,any,changed=0,bit,at;
     for(t=0;t<TRACKS;t++){
-        bit=1u<<t;if(!(scan&bit))continue;any=0;
+        bit=1u<<t;if(!(scan&bit))continue;any=0;at=raw_address(t);
         for(k=0;k<ENTRIES;k++){
-            v=raw_word(t,k);any|=v;
+            v=SKIP_R32(at+4u*k);any|=v;
             if(!raw_ready || raw_shadow[t][k]!=v){raw_shadow[t][k]=v;changed|=bit;}
         }
         if(changed&bit){
@@ -134,12 +145,19 @@ static __attribute__((noinline)) u32 refresh_machine(u32 scan)
         }
     }
     if(changed){
-        active_track_mask=zero_track_mask=total_used=0;active_count=zero_count=0;
+        active_track_mask=zero_track_mask=total_used=0;active_count=zero_count=0;zero_all_count=0;sparse_track_mask=0;
         for(t=0;t<TRACKS;t++){
             if(active_groups[t]){active_track_mask|=1u<<t;active_ids[active_count++]=(u8)t;}
             if(zero_used[t]){zero_track_mask|=1u<<t;zero_ids[zero_count++]=(u8)t;}
+            if(sparse_safe[t])sparse_track_mask|=1u<<t;
             total_used+=(u32)used[t]+(u32)zero_used[t];
+            zero_offset[t]=(u16)zero_all_count;
+            for(k=0;k<zero_used[t];k++)zero_all[zero_all_count++]=zero_dest[t][k];
         }
+#ifndef SKIP_HOST
+        modulation_skip_decider=unsafe_mask || total_used>DEST_LIMIT?modulation_skip_stock_decide:
+            active_track_mask?modulation_skip_decide:modulation_skip_zero_decide;
+#endif
     }
     raw_ready=1;valid_mask&=~changed;
     return changed;
@@ -162,9 +180,50 @@ static u32 zero_result(u32 v)
 {return v<0x8000u?v:v<0xc000u?0x7fffu:0u;}
 static void capture_zero(u32 mask)
 {u32 j,t,i;for(j=0;j<zero_count;j++){t=zero_ids[j];if(mask&(1u<<t))for(i=0;i<zero_used[t];i++)zero_pre[t][i]=SKIP_R16(zero_dest[t][i]);}}
+static __inline__ void project_list(const u32 *addresses,u32 n)
+{
+#ifndef SKIP_HOST
+    extern void modulation_skip_project_all(const u32 *,u32);
+    modulation_skip_project_all(addresses,n);
+#else
+    u32 i,v;
+    for(i=0;i<n;i++){
+        v=SKIP_R16(addresses[i]);if(v>=0x8000u)SKIP_W16(addresses[i],zero_result(v));
+    }
+#endif
+}
 static void project_zero(u32 mask)
-{u32 j,t,i,v;for(j=0;j<zero_count;j++){t=zero_ids[j];if(mask&(1u<<t))for(i=0;i<zero_used[t];i++){
-    v=SKIP_R16(zero_dest[t][i]);if(v>=0x8000u)SKIP_W16(zero_dest[t][i],zero_result(v));}}}
+{
+    u32 bits,t;
+    if(mask==ALL_TRACKS){project_list(zero_all,zero_all_count);return;}
+    for(bits=mask&zero_track_mask;bits;bits&=bits-1u){
+        t=31u-(u32)__builtin_clz(bits&-bits);
+        project_list(zero_all+zero_offset[t],zero_used[t]);
+    }
+}
+/* Dirty rows are captured; clean rows are restored. Each active/zero list
+ * is walked once instead of twice. Accepted destinations stay within their
+ * own row, and active/zero-only sets are disjoint, so the two row classes
+ * cannot observe each other's writes. Source-group/native order is unchanged. */
+static void prepare_partial(u32 dirty)
+{
+    u32 j,t,i,n;const u32 *at;
+    for(j=0;j<active_count;j++){
+        t=active_ids[j];at=dest[t];n=used[t];
+        if(dirty&(1u<<t)){
+            for(i=0;i<n;i++)pre[t][i]=SKIP_R16(at[i]);
+        }else{
+            for(i=0;i<n;i++)SKIP_W16(at[i],post[t][i]);
+        }
+    }
+    for(j=0;j<zero_count;j++){
+        t=zero_ids[j];n=zero_used[t];
+        if(dirty&(1u<<t)){
+            at=zero_dest[t];
+            for(i=0;i<n;i++)zero_pre[t][i]=SKIP_R16(at[i]);
+        }else project_list(zero_all+zero_offset[t],n);
+    }
+}
 static u32 dirty_inputs(void)
 {
     u32 j,t,g,i,mask=ALL_TRACKS&~valid_mask;
@@ -180,18 +239,18 @@ static u32 dirty_inputs(void)
     return mask;
 }
 static u32 many(u32 mask)
-{u32 n=0;while(mask){mask&=mask-1u;n++;}return n>=PARTIAL_LIMIT;}
+{
+    /* dirty_inputs() only publishes the 13 track bits. At least twelve
+     * dirty tracks means at most one missing bit, including the full mask. */
+    u32 missing=ALL_TRACKS&~mask;
+    _Static_assert(PARTIAL_LIMIT==TRACKS-1u,"dense-mask shortcut contract");
+    return !(missing&(missing-1u));
+}
 /* Stock 40097aac processes one four-entry source group. When exactly one of
  * the first five groups is active and no external zero group touches its
  * destinations, the other groups are independent zero-only projections. */
 static u32 sparse_ok(u32 mask)
-{
-    u32 t;
-    for(t=0;t<TRACKS;t++)if(mask&(1u<<t)){
-        if(!sparse_safe[t])return 0;
-    }
-    return 1;
-}
+{return !(mask&ALL_TRACKS&~sparse_track_mask);}
 #ifndef SKIP_HOST
 static void native_group(u32 row,s32 value,u32 entries)
 {((void (*)(u32,s32,u32))0x40097aacu)(row,value,entries);}
@@ -202,10 +261,11 @@ static void native_group(u32 row,s32 value,u32 entries)
 #endif
 void modulation_skip_sparse(u32 working)
 {
-    u32 t,g,groups,mask=modulation_skip_run_mask;(void)working;
-    for(t=0;t<TRACKS;t++)if(mask&(1u<<t)){
-        groups=active_groups[t];
-        for(g=0;g<5u;g++)if(groups&(1u<<g))break;
+    u32 t,g,bits,mask=modulation_skip_run_mask;(void)working;
+    /* The decision admits this path only for sparse_track_mask members. */
+    for(bits=mask&ALL_TRACKS;bits;bits&=bits-1u){
+        t=31u-(u32)__builtin_clz(bits&-bits);
+        g=31u-(u32)__builtin_clz((u32)active_groups[t]);
         native_group(TRACK(t),(s16)source(t,g),RAW(t)+16u*g);
     }
     project_zero(mask);
@@ -244,7 +304,7 @@ u32 modulation_skip_decide(u32 working)
     }
     if(modulation_skip_mode==ON && !periodic && !many(dirty)){
         modulation_skip_run_mask=dirty;
-        capture_pre(dirty);capture_zero(dirty);replay(ALL_TRACKS&~dirty);project_zero(ALL_TRACKS&~dirty);
+        prepare_partial(dirty);
         capture_mask=dirty;check_mask=0;
         modulation_skip_skips++;modulation_skip_partial_runs++;
         return sparse_ok(dirty)?RUN_SPARSE:RUN_FILTERED;
@@ -273,19 +333,103 @@ void modulation_skip_after(u32 working)
 #ifndef SKIP_HOST
 __asm__(
 "        .text\n"
+"        .balign 16\n"
+"| Leaf entry for the validated all-zero case. Every exceptional condition\n"
+"| rejoins the unchanged general decision before modifying any state.\n"
+"        .globl modulation_skip_dispatch\n"
+"modulation_skip_dispatch:\n"
+"        movea.l modulation_skip_decider,%a0\n"
+"        jmp (%a0)\n"
+"        .globl modulation_skip_zero_decide\n"
+"modulation_skip_zero_decide:\n"
+"        move.l modulation_skip_mode,%d0\n"
+"        cmpi.l #2,%d0\n"
+"        beq.s 0f\n"
+"        subq.l #1,%d0\n"
+"        beq.w 9f\n"
+"        moveq #0,%d0\n"
+"        rts\n"
+"0:\n"
+"        move.l total_used,%d0\n"
+"        cmpi.l #100,%d0\n"
+"        bhi.w 8f\n"
+"        tst.l unsafe_mask\n"
+"        bne.w 8f\n"
+"        tst.l active_track_mask\n"
+"        bne.w 9f\n"
+"        move.l 4(%sp),%d0\n"
+"        cmpi.l #0x80006348,%d0\n"
+"        bne.w 9f\n"
+"        tst.l raw_ready\n"
+"        beq.w 9f\n"
+"        move.l valid_mask,%d0\n"
+"        cmpi.l #0x1fff,%d0\n"
+"        bne.w 9f\n"
+"        move.l modulation_skip_machine_writes,%d0\n"
+"        cmp.l machine_seen,%d0\n"
+"        bne.w 9f\n"
+"        move.l ticks_irq,%d0\n"
+"        addq.l #1,%d0\n"
+"        move.l %d0,%d1\n"
+"        andi.l #63,%d1\n"
+"        beq.w 9f\n"
+"        move.l count,%d1\n"
+"        addq.l #1,%d1\n"
+"        movea.l %d1,%a0\n"
+"        andi.l #63,%d1\n"
+"        beq.w 9f\n"
+"        move.l %d0,ticks_irq\n"
+"        move.l %a0,count\n"
+"        addq.l #1,modulation_skip_blocks\n"
+"        move.l zero_all_count,-(%sp)\n"
+"        pea zero_all\n"
+"        jsr modulation_skip_project_all\n"
+"        addq.l #8,%sp\n"
+"        addq.l #1,modulation_skip_hits\n"
+"        addq.l #1,modulation_skip_skips\n"
+"        moveq #1,%d0\n"
+"        rts\n"
+"| Dense/unsafe matrices still refresh/check on the exact original blocks.\n"
+"| A quiet intervening block only invalidates the cache and runs stock.\n"
+"        .globl modulation_skip_stock_decide\n"
+"8:\n"
+"modulation_skip_stock_decide:\n"
+"        move.l modulation_skip_mode,%d0\n"
+"        subq.l #2,%d0\n"
+"        bne.w 9f\n"
+"        move.l 4(%sp),%d0\n"
+"        cmpi.l #0x80006348,%d0\n"
+"        bne.w 9f\n"
+"        tst.l raw_ready\n"
+"        beq.w 9f\n"
+"        move.l modulation_skip_machine_writes,%d0\n"
+"        cmp.l machine_seen,%d0\n"
+"        bne.w 9f\n"
+"        move.l ticks_irq,%d0\n"
+"        addq.l #1,%d0\n"
+"        move.l %d0,%d1\n"
+"        andi.l #63,%d1\n"
+"        beq.w 9f\n"
+"        move.l %d0,ticks_irq\n"
+"        addq.l #1,modulation_skip_blocks\n"
+"        clr.l valid_mask\n"
+"        moveq #0,%d0\n"
+"        rts\n"
+"9:      jmp modulation_skip_decide\n"
 "        .globl modulation_skip_entry\n"
 "modulation_skip_entry:\n"
 "        move.l 64(%sp),-(%sp)\n"
-"        jsr modulation_skip_decide\n"
+"        movea.l modulation_skip_decider,%a0\n"
+"        jsr (%a0)\n"
 "        addq.l #4,%sp\n"
-"        tst.l %d0\n"
-"        bne.s 1f\n"
+"        subq.l #1,%d0\n"
+"        beq.s 3f\n"
+"        bcc.s 1f\n"
+"        moveq #0,%d0\n"
 "        movea.l 64(%sp),%a2\n"
 "        move.l %a2,%d3\n"
 "        jmp 0x40097b0a\n"
-"1:      subq.l #1,%d0\n"
-"        beq.s 3f\n"
-"        cmpi.l #3,%d0\n"
+"1:      cmpi.l #3,%d0\n"
 "        beq.s 5f\n"
 "        cmpi.l #2,%d0\n"
 "        beq.s 4f\n"

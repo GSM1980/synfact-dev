@@ -16,7 +16,7 @@
 static const struct st_machine_host_api *arp_host DATA=0;
 static struct arp_runtime arp_voice[ARP_TRACKS] DATA={{0}};
 #define ARP_DEFAULT {0,9,1,30,15,0,0xffff,{0}}
-static struct arp_settings arp_parameters[ARP_TRACKS] DATA={ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,
+static struct arp_settings arp_parameters[ARP_TRACKS] DATA __attribute__((aligned(4)))={ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,
     ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT,ARP_DEFAULT};
 static arp_u32 arp_track DATA=0,arp_running DATA=0;
 static arp_u32 arp_generation[ARP_TRACKS] DATA={1,1,1,1,1,1,1,1,1,1,1,1},arp_sequence[ARP_TRACKS] DATA={0},arp_kit[ARP_TRACKS] DATA={0};
@@ -132,14 +132,19 @@ static int arp_sound_configure(arp_u32 track,const struct arp_settings *p,arp_u3
     arp_u32 command[6]={ARP_COMMAND,ARP_CONFIG,track,(arp_u32)p,sound,0};
     ARP_IMMEDIATE(command);return (int)command[5];
 }
+typedef arp_u32 arp_settings_word __attribute__((may_alias));
 static void restore_sound(unsigned int track,arp_u32 sound)
 {
-    const struct arp_settings *p;unsigned int i;int different=0;
+    const struct arp_settings *p;const arp_settings_word *src,*dst;int different;
     if(arp_lab_override[track])return;
     p=arp_sound_settings(sound);
-    for(i=0;i<sizeof(*p);i++)if(((const unsigned char *)p)[i]!=((const unsigned char *)&arp_parameters[track])[i]){different=1;break;}
+    /* Both persistent banks/defaults and this published array are aligned.
+     * Compare the complete 24-byte settings with six words, no byte loop. */
+    src=(const arp_settings_word *)p;dst=(const arp_settings_word *)&arp_parameters[track];
+    different=src[0]!=dst[0] || src[1]!=dst[1] || src[2]!=dst[2] ||
+              src[3]!=dst[3] || src[4]!=dst[4] || src[5]!=dst[5];
     if(arp_bound_sound[track]!=sound || (different && (p->mode!=arp_parameters[track].mode || p->speed!=arp_parameters[track].speed)))stop_locked(track);
-    if(different)for(i=0;i<sizeof(*p);i++)((volatile unsigned char *)&arp_parameters[track])[i]=((const unsigned char *)p)[i];
+    if(different)arp_parameters[track]=*p;
     arp_bound_sound[track]=sound;
 }
 /* Task-side object changes must also reach a held root: loading an OFF Sound
@@ -162,6 +167,17 @@ static void changed_sound(const arp_u32 *a)
 }
 static void stop_command(void)
 {arp_u32 c[6]={ARP_COMMAND,ARP_STOP,0,0,0,0};ARP_IMMEDIATE(c);}
+/* pending is nonzero inside the running-track loop. ISA_C bit reversal puts
+ * its lowest set bit first, so FF1 returns the track directly. */
+static __inline__ unsigned int arp_first_track(arp_u32 pending)
+{
+#ifdef __mcoldfire__
+    __asm__("bitrev %0\n\tff1 %0":"+d"(pending)::"cc");
+    return pending;
+#else
+    return 31-__builtin_clz(pending&-pending);
+#endif
+}
 static void arp_frame(void)
 {
     arp_u32 begin,tempo,sequence,kit,pending=arp_running;unsigned int track;
@@ -169,24 +185,28 @@ static void arp_frame(void)
     sequence=*(const volatile arp_u32 *)0x43bd7430u;kit=*(const volatile arp_u32 *)0x43bd743cu;
     begin=*(const volatile arp_u32 *)0x800046ecu;tempo=*(const volatile arp_u32 *)0x402d7010u;
     while(pending){
-        track=31-__builtin_clz(pending&-pending);pending&=pending-1;
+        struct arp_runtime *r;
+        track=arp_first_track(pending);pending&=pending-1;
+        r=&arp_voice[track];
         if(sequence!=arp_sequence[track] || kit!=arp_kit[track] || tempo<3600 || tempo>36000 ||
            (!arp_live[track] && *(const volatile arp_u32 *)0x43bd73bcu!=1)) {stop_locked(track);continue;}
-        if(arp_live[track] && arp_keyboard_sync(&arp_voice[track].selector,held_notes(track))<=0){stop_locked(track);continue;}
-        if((int)(arp_voice[track].clock.next-(begin+2*tempo))<0 && !eligible(track)){stop_locked(track);continue;}
+        if(arp_live[track] && arp_keyboard_sync(&r->selector,held_notes(track))<=0){stop_locked(track);continue;}
+        if((int)(r->clock.next-(begin+2*tempo))<0 && !eligible(track)){stop_locked(track);continue;}
         {
-            struct arp_settings effective;struct arp_clock desired;
-            arp_effective(track,&effective);
-            arp_clock_arm(&desired,begin,effective.speed,arp_generation[track]);
-            if(arp_voice[track].clock.period!=desired.period){
+            struct arp_settings scratch;arp_u32 period;
+            const struct arp_settings *effective=arp_effective_read(track,&scratch);
+            /* The running generation is nonzero (start/stop enforce it).
+             * Only the desired period is needed; do not arm a scratch clock. */
+            period=arp_clock_period(effective->speed);
+            if(r->clock.period!=period){
                 /* A new rate keeps the phase of the last emitted beat. */
-                struct arp_clock *c=&arp_voice[track].clock;
-                c->next=c->next-c->period+desired.period;c->period=desired.period;
+                struct arp_clock *c=&r->clock;
+                c->next=c->next-c->period+period;c->period=period;
                 if((int)(c->next-begin)<0)c->next=begin;
             }
-            arp_runtime_frame(&arp_voice[track],&effective,begin,begin+2*tempo,arp_generation[track]);
+            arp_runtime_frame(r,effective,begin,begin+2*tempo,arp_generation[track]);
         }
-        if(!arp_voice[track].source)arp_running&=~(1u<<track);
+        if(!r->source)arp_running&=~(1u<<track);
     }
 }
 static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
@@ -297,8 +317,8 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
         return 0;
     }
     arp_root_capture(track,e[17],0);
-    arp_effective(track,&effective);
-    if(!effective.mode)return 0;
+    p=arp_effective_read(track,&effective);
+    if(!p->mode)return 0;
     if(arp_live[track]){*result=1;return 1;}
     /* Stopped/held-step preview is not a running sequence root. Held keyboard
      * input has its own IMMEDIATE lifecycle above. */
@@ -314,12 +334,12 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
     if(arp_voice[track].source)stop_quiet(track);
     {
         int chord[3];unsigned int notes=chord_take(track,e,chord);
-        i=arp_runtime_start(&arp_voice[track],&effective,e,a[2],arp_generation[track],notes?chord:0,notes);
+        i=arp_runtime_start(&arp_voice[track],p,e,a[2],arp_generation[track],notes?chord:0,notes);
     }
     if(!i)return 0;
     arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
     arp_running|=1u<<track;before=arp_voice[track].dropped;
-    arp_runtime_frame(&arp_voice[track],&effective,a[2],a[3],arp_generation[track]);
+    arp_runtime_frame(&arp_voice[track],p,a[2],a[3],arp_generation[track]);
     /* Pool pressure on the very first output retains the original note. */
     if(arp_voice[track].dropped!=before){stop_locked(track);return 0;}
     *result=1;return 1;

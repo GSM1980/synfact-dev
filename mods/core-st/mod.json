@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -49,7 +49,8 @@
     "fx-send.s",
     "fx-codec.s",
     "machine-randomize.c",
-    "machine-randomize.s"
+    "machine-randomize.s",
+    "native-routes.s"
   ],
   "defsym": {
     "DRAWALL": "0x401007ce",

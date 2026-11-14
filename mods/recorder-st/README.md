@@ -1,4 +1,7 @@
-# Audio Recorder for Syntakt (1.1)
+# Audio Recorder for Syntakt (1.2)
+
+Version 1.2 consolidates the MAIN idle callback work tested as development
+1.1.1. See [the release mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
 
 Source port of Synfact's recorder, UI, trim, save job, optimized capture and
 normalizer. Requires Syntakt OS 1.41 and **core 0.12.0 / UI API 6** with its
@@ -116,6 +119,15 @@ The CLI checks readback; restart to activate the bank. No device transfer is
 performed by a build or test.
 
 ## Validation
+
+Version 1.1.1 keeps disabled-view clock/phase maintenance in the small audio
+callback, avoiding the capture worker's saved register frame. It enters the
+audition worker only for a nonzero playback length; closing the view still
+allows audition. Capture, input monitoring and normalization are unchanged.
+The linked differential in `tests/test_st_idle_audio_paths_emu.py` checks 142
+transitions against the preceding bank, including wraparound, audition while
+closed and synchronous view closure. Instruction counts are not hardware CPU
+percentages; see [the MAIN measurements](../../docs/IDLE-MAIN-PERFORMANCE.md).
 
 `tests/test_st_recorder.c` executes the production C with explicit native UI/IO
 doubles and the real core HZFS/CRC code on a 32-bit host. It covers double-tap

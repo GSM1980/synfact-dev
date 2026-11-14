@@ -1,5 +1,74 @@
 # Digitone ARP → Syntakt: experimental source port
 
+The consolidated MAIN optimization release is **ARP 1.10**. Sections labelled
+1.10 through 1.13 below record local development iterations, all included in
+this single release step from 1.9. See [the mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+
+## Lower idle Sound/event cost (1.13)
+
+Sound settings use six aligned word comparisons and direct published settings
+without supported root locks. MODE p-lock activation precedes the OFF exit.
+Clock, selector, lock and persistence behavior stay unchanged. The core 1.8.1
+callback-routing prototype is withdrawn; 1.8.1.1 keeps the original dispatcher.
+See
+[idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md).
+
+## Authored selector assembly and track scan (1.12)
+
+The target `arp_next` selector now uses authored integer assembly, while the
+portable C implementation remains for host builds. TRUE/UP/DOWN/CYCL,
+ascending/falling ranges, rests, offsets and complete selector state retain
+the previous behavior. Four fixed UP/DOWN bitmap stages avoid loop overhead
+with sparse chords. ColdFire ISA_C `BITREV` plus `FF1` finds the lowest set
+bit directly, both in the selector and in the running-track scan; track
+processing order is preserved. No EMAC, SRAM or persistent cache is added.
+
+The selector shrinks from 1,808 to 562 bytes. Against 1.11, the eight-track
+callback goes from 1,047 to 1,023 instructions without emission and from
+4,054 to 3,926 in the shown emission block. Full state and ABI match over
+42,604 linked selector calls with no count increases, and the original
+Digitone oracle retains its 11,520 output comparisons. Whole callbacks cover
+changing held notes/locks/tempo, noncontiguous tracks and stop/reconfiguration
+transitions. Hardware MAIN/cache effects remain unmeasured. See
+[ARP MAIN performance](../../docs/ARP-MAIN-PERFORMANCE.md) for evidence.
+
+## MAIN keyboard assembly and folded clock poll (1.11)
+
+`hot.s` returns unchanged held-note sets with sixteen instructions and no
+stack frame (previously 48 instructions and a 248-byte C work frame). Changed
+sets still use the checked C traversal; it reads the old bitmap directly from
+the selector until committing the new one, avoiding a redundant stack copy.
+The runtime folds its clock poll into the caller and uses eight constant-offset
+event-reuse checks. Native clocks, notes, gates, pool ownership and state match.
+
+Against 1.10, the eight-track live callback goes from 1,415 to 1,047 instructions
+without emissions and from 4,582 to 4,054 in the shown emission block. Forty-five
+callback scenarios (330 blocks), 414 clock cases and 193 direct keyboard cases
+have no instruction increases. Code grows moderately; cache timing and physical
+MAIN savings remain to be measured. No EMAC or additional SRAM is used; existing
+sampler/LFO3 placement, core and AUDIO stay intact. See the performance document
+below for evidence and the SRAM/EMAC review.
+
+## MAIN clock and settings cost (1.10)
+
+The per-block callback reads an exact eighteen-entry musical-period table
+instead of dividing `86400000` by the selected denominator and arming a
+temporary clock just to read its period. Clock starts use the same table;
+speed limits, generation validation and phase-preserving speed changes remain.
+
+With no supported root p-locks, the callback reads the published settings
+directly under native exclusion. With locks it builds the same private copy
+and applies the same value validation. There is no persistent parameter cache,
+new synchronization or SRAM allocation. The no-running-ARP exit is unchanged.
+
+In the linked eight-track live fixture, a no-emission callback falls from
+1,798 to 1,415 instructions; an emission callback from 4,965 to 4,582.
+These are instruction counts with explicit native synthesis boundaries,
+not cycles or total MAIN percentages. Core/AUDIO, samplers 1.4.5 and LFO3
+1.4 are unchanged. Hardware validation is pending. See
+[ARP MAIN performance](../../docs/ARP-MAIN-PERFORMANCE.md) for scope,
+whole-state/event comparisons, changing locks/tempo and reproduction.
+
 ## Page popups and blue steps (1.9)
 
 **The TRIG presses ARP takes show the page popup.** The native page key

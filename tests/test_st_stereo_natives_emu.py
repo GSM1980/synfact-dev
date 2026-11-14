@@ -57,7 +57,14 @@ def build(work, audio, source):
                       '*(.bss*) *(COMMON) . = ALIGN(4); } /DISCARD/ : { *(.comment) *(.note*) *(.gnu.attributes) } }\n'
                       % HARNESS)
     exe = work / 'check.elf'
-    subprocess.run([prefix + 'ld', '-T', str(script), '-o', str(exe), str(obj)], check=True)
+    objects=[str(obj)]
+    if Path(source).name=='st_stereo_main_check.c':
+        for name in ('resolve-begin.s','main-resolve.c','resolve-end.s','main-kernels.s'):
+            src=ROOT/'mods/samplers-st/stereo'/name; target=work/(name+'.o')
+            args=([prefix+'gcc',*DEVICE.toolchain['cflags'],'-fno-jump-tables','-I',str(ROOT/'elekloader/sdk/include'),'-c']
+                  if src.suffix=='.c' else [prefix+'as',*DEVICE.toolchain['asflags']])
+            subprocess.run([*args,str(src),'-o',str(target)],check=True);objects.append(str(target))
+    subprocess.run([prefix + 'ld', '-T', str(script), '-o', str(exe), *objects], check=True)
     raw = work / 'check.bin'
     subprocess.run([prefix + 'objcopy', '-O', 'binary', '-j', '.image', str(exe), str(raw)], check=True)
     e = elf.Elf.load(exe)
@@ -113,6 +120,15 @@ def main():
         print('main mix: %d cases, %d frames off the model, %d EMAC states or ramps not kept; '
               'one bus, 8 tracks with D: %s instructions' % (CASES, bad, emac, cost[0][1]))
         failed |= bad != 0 or emac != 0
+        result=cfbench(a.cfbench,image,'%x:%x,%x'%(syms['check_widen'],4096,0x5eed))
+        bad=int(result[0][0],16)
+        print('MAIN expansion: 4096 blocks, %d differing words/state/canaries'%bad)
+        failed |= bad!=0
+        for placement in range(5):
+            result=cfbench(a.cfbench,image,'%x:%x'%(syms['check_placement'],placement))
+            bad=int(result[0][0],16)
+            print('MAIN SRAM placement %d: %d errors'%(placement,bad))
+            failed |= bad!=0
         # the samplers' PCM runs, hand-written loops included, against the
         # per-sample model, both built for the target
         image, syms = build(Path(tmp), audio, 'tests/st_sampler_pcm_check.c')

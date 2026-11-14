@@ -5,6 +5,7 @@
 #include <syntakt/native.h>
 typedef unsigned int u32;
 extern int core_event_native(u32,const u32 *,u32 *);
+extern u32 core_native(u32,const u32 *);
 extern unsigned char core_native_interest[];
 extern u32 core_stock_trig(u32,u32,u32,u32,u32,u32);
 extern u32 core_stock_header_load(u32,u32);
@@ -32,8 +33,15 @@ __attribute__((noinline)) u32 core_native_original(u32 op,const u32 *a)
 #ifndef CORE_NATIVE_TIMER
 #define CORE_NATIVE_TIMER() (*(const volatile u32 *)0xfc07000cu)
 #endif
-static u32 *native_profile;
+static u32 *volatile native_profile;
 void core_native_profile(u32 *buffer){native_profile=buffer;}
+#ifdef __mcoldfire__
+_Static_assert(ST_NATIVE_OPERATION_LIMIT==22 && ST_NATIVE_OPERATION_COUNT==18,
+               "resident native service operation/profiler layout");
+/* Private alias for the resident wrapper. Volatile keeps setter stores visible
+ * to assembly, including when a callback replaces the profile buffer. */
+__asm__(".globl core_native_profile_buffer\n.set core_native_profile_buffer,native_profile\n");
+#else
 __attribute__((noinline)) u32 core_native(u32 op,const u32 *a)
 {
     u32 *p=native_profile,start=0,result=0;
@@ -43,6 +51,7 @@ __attribute__((noinline)) u32 core_native(u32 op,const u32 *a)
     if(p && op<ST_NATIVE_OPERATION_COUNT){p[op]+=CORE_NATIVE_TIMER()-start;p[ST_NATIVE_OPERATION_COUNT+op]++;}
     return result;
 }
+#endif
 /* Host API 6: PAGE_SYNC/PAGE_NAV for another view class than the one their
  * subscribers declared (modules.c, 0 = every view) replay stock directly. */
 extern u32 core_native_page_view;

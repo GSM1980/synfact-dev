@@ -1,5 +1,37 @@
 # Issues 07 and 16: safe core/SMZ4 startup and installation
 
+## Withdrawn development core 1.8.1: nonresident binder (2026-11-12)
+
+This historical prototype is not the consolidated release core 1.8.1. The
+release contains the validated resident implementation developed as 1.8.1.3;
+see [the release mapping](MAIN-OPTIMIZATION-RELEASE.md).
+
+Loading the new core/bank and restarting produced V04 at **40347BC2**.
+That exactly matches 1.8.1's `core_modules_bind`; the shown return 46006410
+is immediately after its call from `core_machine_load`. I moved the binder
+to appended `.boot` to make room for native-route bitsets. This storage is
+destroyed by native BSS startup after the early resident copy; it is not
+application executable storage. The previous statement that it remained
+callable after boot was incorrect.
+
+Opcode audits and the host binder test passed because they did not model
+native clearing. Target event fixtures directly seeded lists, bypassing the
+actual binder. `test_st_module_startup_emu.py` now reproduces the exception
+at the exact address by clearing appended storage after resident copying.
+With the corrected core it executes the real binder/input reset/list builder/
+publisher for empty/full/rejected/out-of-memory cases, checking lists, order,
+publication and saved ABI. Heap and initializers remain explicit boundaries;
+it is not a complete device boot. It is included in common regressions.
+
+1.8.1.1 restores the original resident 1.8.0 binder/dispatcher and withdraws
+route bitsets. It keeps the stock transport exit and the byte-identical
+samplers 1.4.6/LFO3 1.5/ARP 1.13/POLY 1.6 bank. The builder and linked layout
+test reject nonresident startup entries. AUDIO and the other OS sections stay
+identical to the working 1.8.0 reference. Hardware retry remains pending.
+
+The failed candidate may already be TRYING; recovery must not assume the
+next boot retries that bank. Re-send the bank and verify displayed versions.
+
 ## Scope
 
 Issue 07 asks for core/SMZ4 compatibility when the core is updated. Issue 16 asks for a restart notice, a compatibility check against the installed SYX before accepting an SMZ4, and protection against an update that makes the instrument fail to boot. The intended failure mode to avoid is a soft brick or repeatable exception during application startup. The stock bootloader is unchanged and FUNC+POWER recovery already exists, but needing a separate recovery SYX and multiple transfers is too costly for an ordinary incompatible bank.

@@ -29,3 +29,10 @@ static void arp_effective(unsigned int track,struct arp_settings *p)
 {
     *p=arp_parameters[track];arp_locks_apply(p,arp_root_lock[track].mask,arp_root_lock[track].v);
 }
+/* The render callback only reads settings under native exclusion. With no
+ * supported root locks, use the published base directly; no copy or cache. */
+static const struct arp_settings *arp_effective_read(unsigned int track,struct arp_settings *scratch)
+{
+    if(!(arp_root_lock[track].mask&15u))return &arp_parameters[track];
+    arp_effective(track,scratch);return scratch;
+}

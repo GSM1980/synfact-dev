@@ -1,6 +1,6 @@
 """Differential against untouched Digitone 1.44 selection; no instrument IO.
 
-Compile authored C using the Syntakt profile, run it on a CFV4E emulator, and
+Compile authored C/assembly using the Syntakt profile, run it on a CFV4E emulator, and
 compare with the donor across modes, order, bit boundaries, rests and offsets.
 This is deliberately not a full-firmware/clock/UI integration test.
 """
@@ -74,6 +74,11 @@ def build(out,toolchain):
         obj=out/(name+'.o');objects.append(obj)
         subprocess.run([str(toolchain/'gcc.exe'),*DEVICE.toolchain['cflags'],'-fno-jump-tables',
                         '-c',str(ROOT/'mods/arp-st'/str(name+'.c')),'-o',str(obj)],env=env,check=True)
+    # Production selector entry is authored assembly on ColdFire; host C stays
+    # available as an independent implementation. Keep the native oracle checks.
+    obj=out/'selector-asm.o';objects.append(obj)
+    subprocess.run([str(toolchain/'as.exe'),*DEVICE.toolchain['asflags'],
+                    str(ROOT/'mods/arp-st/selector.s'),'-o',str(obj)],env=env,check=True)
     script=out/'lab.ld';script.write_text('SECTIONS { . = 0x47000000; .image : { *(.text*) *(.rodata*) *(.data*) *(.bss*) } }')
     image=out/'selector.elf'
     subprocess.run([str(toolchain/'ld.exe'),'-T',str(script),'-o',str(image),*map(str,objects)],env=env,check=True)
@@ -139,7 +144,7 @@ def verify(donor_path,out,toolchain):
     result=dict(ok=True,donor_main_sha256=DONOR_SHA,donor_selector=[hex(ENTRY),hex(END)],
                 configurations=len(configs),compared_calls=calls,tracks=12,negative_controls=1,
                 donor_instructions=[min(native_cost),max(native_cost)],source_instructions=[min(source_cost),max(source_cost)],
-                clock=clocks(lab),audit=lab.audit,source_sha256={n:hashlib.sha256((ROOT/'mods/arp-st'/n).read_bytes()).hexdigest() for n in ['arp.h','selector.c','input.c','ui.h','ui.c','clock.h','clock.c']},
+                clock=clocks(lab),audit=lab.audit,source_sha256={n:hashlib.sha256((ROOT/'mods/arp-st'/n).read_bytes()).hexdigest() for n in ['arp.h','selector.c','selector.s','input.c','ui.h','ui.c','clock.h','clock.c']},
                 limits=['Selector and clock only; no native scheduling, note events, persistence or UI execution.',
                         'Instruction counts are emulator instructions, not cycles or physical CPU percentages.',
                         'Held-note mutation has source invariants but no complete donor lifecycle differential.'],device_access=False)

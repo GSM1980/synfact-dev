@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Third LFO, engine stage. Thirteen engines (12 tracks + FX) run the Synfact
+ * Third LFO, engine stage. Thirteen engines (12 tracks + FX) can run the Synfact
  * LFO3 kernel (render.s, native OS 1.41 algorithm, own state and RNG) before
  * the two native LFOs, from the core's LFO operation, so LFO3 may modulate
  * LFO1/LFO2 parameters in the same frame. Non-consuming: POLY or the native
@@ -26,15 +26,23 @@ typedef void (*render_t)(u8 *,u32,u32,const u16 *,u8 *,u32 *);
 extern void lfo3_render(u8 *,u32,u32,const u16 *,u8 *,u32 *);
 extern const u8 lfo3_render_end[];
 extern void lfo3_sync(void);
+extern void lfo3_output_reset(void);
 /* Parameter record per engine: SPD, MULT, FADE, DEST (slot<<8, 7f00 = none),
  * WAVE, SPH/SLEW, MODE, DEP, in native LFO units. */
 struct lfo3_bank {u8 state[TRACKS][40];u32 rng[2];u16 params[TRACKS][8];u16 overlay[TRACKS][8];};
+/* The private renderer receives only these two aligned banks. Keep their
+ * record alignment explicit without adding per-block checks. */
+_Static_assert(__builtin_offsetof(struct lfo3_bank,params)%4==0,"LFO3 params alignment");
+_Static_assert(__builtin_offsetof(struct lfo3_bank,overlay)%4==0,"LFO3 overlay alignment");
+_Static_assert(sizeof(((struct lfo3_bank *)0)->params[0])%4==0,"LFO3 record stride");
+_Static_assert(ST_SRAM_LFO3_BANK%4==0,"LFO3 SRAM bank alignment");
 static const u16 defaults[8]={0x7000,0x300,0x4000,0x7f00,0,0,0,0x4000};
 static const u32 tails[2][2]={{ST_SRAM_TAIL0,ST_SRAM_CHORUS},{ST_SRAM_TAIL1,ST_SRAM_CHORUS_CODE}};
 #define SRAM_CODE ST_SRAM_LFO3_CODE
 #define SRAM_BANK ST_SRAM_LFO3_BANK
 static const struct st_machine_host_api *host;
-static struct lfo3_bank ddr_bank;
+static struct lfo3_bank ddr_bank __attribute__((aligned(4)));
+_Static_assert(__alignof__(ddr_bank)>=4,"LFO3 DDR bank alignment");
 struct lfo3_bank *lfo3_bank;
 static render_t render;
 static u32 code_bytes,code_crc,ticks,in_sram,refused;
@@ -53,6 +61,7 @@ static void bank_reset(struct lfo3_bank *b)
 static void use_ddr(void)
 {
     bank_reset(&ddr_bank);lfo3_bank=&ddr_bank;render=lfo3_render;in_sram=0;
+    lfo3_output_reset();
 }
 /* Returns 0 with the kernel and bank in SRAM, else the refusal reason. */
 static u32 install(void)
@@ -67,6 +76,7 @@ static u32 install(void)
     lfo3_sync();
     lfo3_bank=(struct lfo3_bank *)SRAM_BANK;bank_reset(lfo3_bank);
     render=(render_t)SRAM_CODE;in_sram=1;
+    lfo3_output_reset();
     return 0;
 }
 /* ---- UI hooks installed on stock code (preimages checked, all or none) ---- */
@@ -276,6 +286,15 @@ static int lfo3_native(u32 op,const u32 *a,u32 *result)
     }
     return hooks_installed?lfo3_page_native(op,a,result):0;
 }
+/* Called only at initialization or the first/last potentially audible row
+ * transition, under IRQ exclusion. Keep page operations independently alive.
+ * There is no new per-block guard: core's existing operation byte skips LFO3. */
+void lfo3_output_interest(u32 live)
+{
+    if(host)host->native_interest((void (*)(void))lfo3_native,
+        (live?(1u<<ST_NATIVE_LFO):0u)|
+        (hooks_installed?(1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_NAV)|(1u<<ST_NATIVE_PAGE_LAYOUT):0u));
+}
 static void lfo3_tick(void *controller)
 {
     ticks++;
@@ -304,8 +323,7 @@ static int initialize(const struct st_smz_api *api)
     lfo3_records_init();
     hooks_installed=lfo3_locks_setup() && !install_hooks();     /* task context, before any hook */
     if(hooks_installed)host->parameter_provider(lfo3_parameter_query);
-    host->native_interest((void (*)(void))lfo3_native,
-        (1u<<ST_NATIVE_LFO)|(hooks_installed?(1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_NAV)|(1u<<ST_NATIVE_PAGE_LAYOUT):0));
+    lfo3_output_interest(0);
     return 0;
 }
 static const struct st_smz_subscription subscriptions[]={

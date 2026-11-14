@@ -2,10 +2,25 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {compact} from '../src/codec/compact.ts'
 import {depackSection} from '../src/codec/elz.ts'
-import {buildSyntakt} from '../src/syntakt-build.ts'
+import {buildSyntakt, assertSyntaktRuntimeResident} from '../src/syntakt-build.ts'
 import {sha} from '../src/bytes.ts'
 import {readFileSync} from 'node:fs'
 import {join} from 'node:path'
+
+test('Syntakt runtime startup entries survive native clearing and stay within resident bounds', () => {
+  const ddr=[0x46000000,0x46010000]
+  const names=['core_modules_bind','core_machine_load','core_native_initialize']
+  const valid=new Map(names.map((name,i)=>[`core:${name}`,ddr[0]+4*i]))
+  assert.doesNotThrow(()=>assertSyntaktRuntimeResident(valid,ddr))
+  for(const name of names) {
+    for(const address of [ddr[0],ddr[1]-1])
+      assert.doesNotThrow(()=>assertSyntaktRuntimeResident(new Map(valid).set(`core:${name}`,address),ddr))
+    for(const address of [0,ddr[0]-1,ddr[1],0x40347bc2,NaN,Infinity])
+      assert.throws(()=>assertSyntaktRuntimeResident(new Map(valid).set(`core:${name}`,address),ddr),/outside resident core RAM/)
+    const missing=new Map(valid);missing.delete(`core:${name}`)
+    assert.throws(()=>assertSyntaktRuntimeResident(missing,ddr),/outside resident core RAM/)
+  }
+})
 
 test('compact streams round-trip different data and compression levels', () => {
   let seed=123456789

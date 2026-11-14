@@ -7,6 +7,7 @@ import argparse,json,subprocess,sys
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
 
 def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None):
     out=folder.resolve();checks=[];log=out/'regressions.log'
@@ -170,7 +171,42 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     else:skipped.append('AUDIO comparison: supply --previous-build')
     # The linked core's own safe-boot record writes, executed (core 1.7.1): the
     # path core 1.7 crashed on at its first trial boot. Needs Unicorn.
-    if unicorn_python:run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
+    if unicorn_python:
+        run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
+        run('module startup after native clearing (Unicorn)',[unicorn_python,'-B','tests/test_st_module_startup_emu.py',
+            '--core',out,'--bank',out/'synfact-machines.smz4','--out',out/'module-startup.json'])
+        if 'core:core_native_route_fill' in json.loads((out/'verification.json').read_text())['symbols']:
+            run('resident native routes and ABI (Unicorn)',[unicorn_python,'-B','tests/test_st_native_routes_emu.py',
+                '--core',out,'--out',out/'native-routes.json'])
+        if 'core:core_native_profile_buffer' in json.loads((out/'verification.json').read_text())['symbols']:
+            baseline=previous if previous and 'core:core_native_list' in json.loads(
+                (previous/'verification.json').read_text())['symbols'] else out
+            if baseline==out:skipped.append('native service/mixer performance A/B: supply compatible --previous-build')
+            for script,label,output in (
+                    ('test_st_native_service_emu.py','native service results/profiling/ABI','native-service.json'),
+                    ('test_st_core_mixer_emu.py','linked mixer stock state/cost','core-mixer.json')):
+                run(label+' (Unicorn)',[unicorn_python,'-B','tests/'+script,
+                    '--before',baseline,'--after',out,'--out',out/output])
+        if 'modulation_skip_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
+            run('real LFO3/MSKIP installation and modulation (Unicorn)',[unicorn_python,'-B','tests/test_st_patchers_emu.py',
+                '--core',out,'--bank',out/'synfact-machines.smz4','--out',out/'patchers.json'])
+        from elekloader.sdk import elf
+        bank_elf=out/'synfact-machines.work/main.elf'
+        bank_symbols={s.name for s in elf.Elf.load(bank_elf).symbols}
+        if 'lfo3_owned_row_lookup' in bank_symbols:
+            reference=previous/'synfact-machines.smz4' if previous else None
+            if reference and reference.exists() and 'lfo3_module' in json.loads(
+                    Path(str(reference)+'.json').read_text())['modules']:
+                run('LFO3/ARP event ownership and exact copies (Unicorn)',[
+                    unicorn_python,'-B','tests/test_st_lfo3_events_emu.py','--core',out,
+                    '--before',reference,'--after',out/'synfact-machines.smz4',
+                    '--out',out/'lfo3-events.json'])
+                if 'lfo3_output_rows' in bank_symbols:
+                    run('LFO3 output activity and native route transitions (Unicorn)',[
+                        unicorn_python,'-B','tests/test_st_lfo3_activity_emu.py','--core',out,
+                        '--before',reference,'--after',out/'synfact-machines.smz4',
+                        '--out',out/'lfo3-activity.json'])
+            else:skipped.append('LFO3 event differential: supply --previous-build with LFO3 bank/work')
     else:skipped.append('safe-boot emulation: supply --unicorn-python (and LIBUNICORN_PATH)')
     assert json.loads((out/'lint.json').read_text())['ok']
     checks.append({'name':'lint','ok':True})

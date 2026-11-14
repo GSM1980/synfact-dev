@@ -1,4 +1,4 @@
-# POLY for Syntakt
+# POLY for Syntakt (1.6)
 
 Source port of Synfact POLY for digital and compatible analog tracks, with compact scalar
 publication. Playback uses native per-track modulation/LFO engines. Requires Syntakt OS 1.41,
@@ -13,6 +13,12 @@ digital tracks. With host API 6 (core 0.12.13+) its page notifications are
 limited to the TRIG ParameterView.
 
 ## Operation
+
+1.6: MAIN sync, shared publication, setup Sound copies, prepared statics and
+keyboard-origin scanning use bounded integer fast paths. Voice allocation,
+PLAY behavior, native queue, synthesis, AUDIO and core remain unchanged.
+See [MAIN measurements](../../docs/POLY-MAIN-PERFORMANCE.md) for the retained
+changes, rejected queue experiments, regression coverage and hardware limits.
 
 1.5: the page popup on POLY's page reads "Polyphonic mode (3/n)", and the
 first TRIG page's "TRIG (1/n)". `st_trig_current` read the view manager of

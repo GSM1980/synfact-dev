@@ -5,12 +5,21 @@ and change with the code, so a commit's docs match its code.
 
 ## Building and testing
 
+- **[Consolidated MAIN optimization release](MAIN-OPTIMIZATION-RELEASE.md)**:
+  released versions, development-label mapping and retained behavior.
+
 - **[Setting up a workstation](SETUP.md)**: every tool, where to get it, how
   to install it, the environment variables, and the steps to a pull request.
   Start here.
 - **[Syntakt builds](SYNTAKT-BUILD.md)**: the flags and the exact commands for
   the core SYX, the SMZ4 bank, the regressions and the emulator checks.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
+- **[Unused-module MAIN work](IDLE-MAIN-PERFORMANCE.md)**: idle dispatch,
+  stock transport, LFO3/ARP/stereo improvements and hardware comparison limits.
+- **[Modulation Skip MAIN](MODULATION-SKIP-MAIN-PERFORMANCE.md)**: decision,
+  saturation and scan optimization with exact stock/output/cadence comparisons.
+- **[Core MAIN](CORE-MAIN-PERFORMANCE.md)**: native-service dispatch and mixer
+  capture, complete-call counts, legacy profiling and cross-core checks.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
 - **[Safe core/SMZ4 startup proposal](SAFE-BOOT-SMZ4-07-16.md)**: compatibility

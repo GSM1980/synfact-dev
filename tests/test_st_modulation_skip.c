@@ -83,6 +83,12 @@ int main(void)
     unsigned int i,t,b,f;static unsigned char a[0x1000],r[0x1000];
     struct st_machine_ui_api ui;struct st_smz_api api;unsigned char ctrl[64]={0};
     memset(&ui,0,sizeof ui);ui.version=7;api.version=1;api.ui=&ui;
+    /* Exhaust the actual 13-bit input domain against an independent count. */
+    for(i=0;i<=ALL_TRACKS;i++){
+        unsigned int bits=i,n=0;
+        while(bits){n+=bits&1u;bits>>=1;}
+        assert(many(i)==(n>=PARTIAL_LIMIT));
+    }
     for(i=0;i<0x800;i++)base_value[i]=(unsigned short)(i*7);
     for(t=0;t<13;t++)for(i=0;i<24;i++)w32(RAW(t)+4*i,i%4?0:((i+t)<<16)|((i*5+t)%0x47));
     for(t=0;t<13;t++){w16(0x80004670u+2*t,3+t);for(i=1;i<5;i++)w16(source_base[i]+2*t,i+t);w32(source_base[5]+4*t,(i+t)<<8);}

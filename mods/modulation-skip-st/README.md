@@ -1,5 +1,9 @@
 # Skip native modulation per track
 
+The consolidated release is **1.2.4**, one step from main's 1.2.3. Sections
+labelled 1.3 and 1.4 below are development iterations included together in
+this release. See [the mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+
 The MAIN audio IRQ calls stock modulation `40097afc` for every track on every
 block. Its full body takes 6,614 instructions in the ColdFire emulator and
 previously measured about 5.7 MAIN CPU points on the device. This module keeps
@@ -32,8 +36,9 @@ valid track hint. Only changed track lists are rebuilt. An unobserved matrix
 writer disables the optimization. A full native run periodically checks cached
 active outputs and the zero-depth projection; any mismatch turns the module OFF
 for the session.
-The stock RAM reader stays in a separate function so GCC cannot combine its
-absolute address with a relocatable cache pointer. The bank builder checks
+The stock RAM row address crosses an opaque compiler barrier once per row,
+so GCC cannot combine its absolute address with a relocatable cache pointer.
+The bank builder checks
 that every runtime relocation targets its own MAIN image, as the core parser
 requires.
 
@@ -95,3 +100,70 @@ guarantees. The first block builds the track lists and is more expensive;
 subsequent blocks use the cached lists. On 2026-11-09 the user reported that
 1.2.3 greatly improved FLTR FREQ responsiveness in AVE2 during PLAY. This is
 a physical usability observation, not a measured CPU-cycle comparison.
+
+## 1.3: lower decision, projection and matrix-refresh overhead
+
+The stock kernel, 64-block audits, modes, thresholds, zero-depth saturation,
+source order, writer hints and failure behavior stay unchanged. Optimizations:
+
+- A contiguous derived zero-only address list and row offsets are rebuilt only
+  when matrix membership changes, preserving track/entry order. The common
+  all-track projection uses one bounded assembly loop; partial projections
+  visit only selected rows. In-range words are read but never rewritten.
+- The RAM address barrier is applied once per row instead of calling a helper
+  for each of its 24 words. First/full/hinted scan sizes remain 312/312/24.
+- A leaf assembly dispatcher handles validated zero-only blocks and steady
+  dense/unsafe stock fallback without the general decision's large frame.
+  Matrix publication selects its entry pointer; ordinary active matrices
+  directly enter the general decision instead of paying the zero-path guards.
+  The trampoline's equivalent return-code branches offset the indirect call.
+  Every writer, periodic check, unready/invalid state and VERIFY case rejoins
+  the general path before changing state. OFF/refusal immediately runs stock.
+- The 12-of-13 dirty-track threshold uses the number of missing bits. Sparse
+  eligibility is aggregated at matrix publication instead of rescanning rows
+  on each decision. Dirty masks remain restricted to the same 13 track bits.
+- The hot address list and assembly entries are aligned. No SRAM is borrowed
+  and no EMAC arithmetic is introduced or changed; the added cache lives in DDR.
+
+`tools/bench_st_modulation_skip.py` compares complete linked calls, SRAM,
+decisions and counters with 1.2.3 over zero/active/changing/FX/overlap/dense/
+unsafe/publication/error cases. It includes exact 64-block boundaries, unsigned
+counter wraps, invalid pointers/modes and cache invalidation cases. Counts
+include every new dispatcher check, cache rebuild and periodic scan.
+
+`tests/test_st_modulation_skip_cfbench.py` exhausts all 65,536 unsigned
+16-bit values on analog-emu, checking exact projection, untouched neighbors,
+empty/duplicate lists and preserved ABI/physical EMAC state. A missing
+projection must fail. The host test additionally exhausts all 8,192 dirty masks.
+
+The native stock fixture now invalidates the writer's old translation when
+installing the patch, matching the real install's cache sync. Previously a
+later native publish could bypass the hook: this also reproduces with 1.2.3.
+The real publication must still produce exactly two writer counts and a single
+dirty row. Its scan test observes the exact 24 source addresses during refresh,
+separately from any native source-group reads, with instrumentation installed
+in freshly translated blocks. No original SRAM/heap, failure or mode assertion
+is removed.
+
+See [the MAIN performance record](../../docs/MODULATION-SKIP-MAIN-PERFORMANCE.md)
+for the delivered bank's results and limits. Instruction counts are not
+physical cycles or whole-MAIN CPU percentages.
+
+## 1.4: less work preparing partial blocks
+
+Partial blocks walk the active destination lists once, capturing dirty rows
+and restoring clean rows during that traversal. The zero-only lists similarly
+combine dirty capture and clean projection. Validated destinations stay inside
+their own track row, and zero-only destinations cannot alias active ones;
+unsafe and overlapping source groups retain their original fallback/order.
+
+Sparse execution visits the selected track bits in ascending order instead of
+testing all thirteen tracks. ColdFire bit-search instructions locate the track
+and its single active source group, replacing the group-search loop. No extra
+cache, SRAM allocation, EMAC use or per-block guard is needed. Full checks,
+writer scans, thresholds and the complete stock kernel are unchanged.
+
+The native oracle additionally mixes clean and dirty active rows with changing
+zero-only words across all saturation ranges. It changes all six source groups,
+forces overlap fallback, disables/re-enables the matrix, and crosses a periodic
+audit boundary. Every result is compared with the full native stock call.

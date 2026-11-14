@@ -13,6 +13,7 @@ typedef struct {u32 patterns;volatile u32 busy;} pattern_context_t;
 events_t *lfo3_events_context __attribute__((section(".data")))=0;
 extern pattern_context_t *lfo3_pattern_context;
 extern void *lfo3_owned_lookup(u32);
+extern void *lfo3_owned_row_lookup(u32,u32 *);
 extern u32 lfo3_locks_apply(const void *,u32,u32,u16 *);
 extern u32 lfo3_events_native_apply(u32,u32,u32);
 extern u32 lfo3_events_native_restore(u32,u32,u32);
@@ -22,6 +23,7 @@ extern u32 lfo3_events_native_convert(u32,u32,u32,u32,u32,u32);
 extern u32 lfo3_events_native_pool_init(u32);
 
 extern u32 lfo3_active_locks;
+extern void lfo3_output_track(u32),lfo3_output_reset(void);
 extern void lfo3_publication_begin(void),lfo3_publication_end(u32,u32,u32,u32);
 u32 lfo3_events_context_bytes(void) {return sizeof(events_t);}
 static locks_t start_locks[13];
@@ -30,6 +32,7 @@ void lfo3_events_init(events_t *c,u32 native_slots)
     u32 i,j;c->stride=20+8*native_slots;lfo3_active_locks=0;
     for(i=0;i<64;i++) {c->queued[i].mask=0;for(j=0;j<16;j++) c->queued[i].record.v[j]=0;}
     for(i=0;i<13;i++) {start_locks[i].mask=0;c->active[i].mask=0;for(j=0;j<16;j++) c->active[i].record.v[j]=0;}
+    lfo3_output_reset();
 }
 /* The first step's events as PLAY starts (4008c0b0) are static and take
  * each track's static lock block (444e3884 + 4 * track), outside the pool of
@@ -61,9 +64,9 @@ u32 lfo3_events_convert(u32 lock,u32 matrix,u32 sound,u32 first,u32 step,u32 fla
     u32 t,result=lfo3_events_native_convert(lock,matrix,sound,first,step,flags);locks_t *q=queued(lock);
     if(!q) return result;
     q->mask=0;
-    for(t=0;t<13;t++) {
-        u32 base=matrix-t*0x2447u;void *s=lfo3_owned_lookup(base);
-        if(s) {q->mask=lfo3_locks_apply(s,t,step,&q->record.v[0]);break;}
+    {
+        void *s=lfo3_owned_row_lookup(matrix,&t);
+        if(s) q->mask=lfo3_locks_apply(s,t,step,&q->record.v[0]);
     }
     return result;
 }
@@ -75,18 +78,42 @@ u32 lfo3_events_pool_init(u32 slots)
 }
 u32 lfo3_events_apply_body(u32 track,u32 lock,u32 working)
 {
-    u32 i,result=lfo3_events_native_apply(track,lock,working);events_t *c=lfo3_events_context;locks_t *q=queued(lock);
+    u32 previous,result=lfo3_events_native_apply(track,lock,working);events_t *c=lfo3_events_context;locks_t *q=queued(lock);
     if(c && track<13) {
+        previous=c->active[track].mask;
         c->active[track].mask=q ? q->mask : 0;
-        if(c->active[track].mask) lfo3_active_locks|=1u<<track;
-        else lfo3_active_locks&=~(1u<<track);
-        if(q) for(i=0;i<16;i++) c->active[track].record.v[i]=q->record.v[i];
+        if(previous!=c->active[track].mask) {
+            if(c->active[track].mask) lfo3_active_locks|=1u<<track;
+            else lfo3_active_locks&=~(1u<<track);
+        }
+        if(q) {
+            c->active[track].record.v[0]=q->record.v[0];
+            c->active[track].record.v[1]=q->record.v[1];
+            c->active[track].record.v[2]=q->record.v[2];
+            c->active[track].record.v[3]=q->record.v[3];
+            c->active[track].record.v[4]=q->record.v[4];
+            c->active[track].record.v[5]=q->record.v[5];
+            c->active[track].record.v[6]=q->record.v[6];
+            c->active[track].record.v[7]=q->record.v[7];
+            c->active[track].record.v[8]=q->record.v[8];
+            c->active[track].record.v[9]=q->record.v[9];
+            c->active[track].record.v[10]=q->record.v[10];
+            c->active[track].record.v[11]=q->record.v[11];
+            c->active[track].record.v[12]=q->record.v[12];
+            c->active[track].record.v[13]=q->record.v[13];
+            c->active[track].record.v[14]=q->record.v[14];
+            c->active[track].record.v[15]=q->record.v[15];
+        }
+        if((previous|c->active[track].mask)&0x88u)lfo3_output_track(track);
     }
     return result;
 }
 void lfo3_events_clear_active(u32 track)
 {if(lfo3_events_context && track<13) {
-        lfo3_events_context->active[track].mask=0;lfo3_active_locks&=~(1u<<track);}}
+        u32 previous=lfo3_events_context->active[track].mask;
+        if(!previous)return;
+        lfo3_events_context->active[track].mask=0;lfo3_active_locks&=~(1u<<track);
+        if(previous&0x88u)lfo3_output_track(track);}}
 u32 lfo3_events_restore_body(u32 track,u32 working,u32 sound)
 {lfo3_events_clear_active(track);return lfo3_events_native_restore(track,working,sound);}
 u32 lfo3_events_clear_body(u32 track)
@@ -106,11 +133,18 @@ u32 lfo3_events_fx_restore(u32 working,u32 fx){u32 result;lfo3_publication_begin
 
 u32 synfact_extra_locks(u32 track,u32 lock,u16 *out)
 {
-    locks_t *q;u32 i,mask;
+    locks_t *q;u32 mask;
     if(track>=12 || !out || !lfo3_events_context)return 0;
     q=lock==0xffffffffu ? &lfo3_events_context->active[track] : queued(lock);
     if(!q)return 0;
     mask=q->mask>>8;
-    for(i=0;i!=8;i++)out[i]=q->record.v[8+i];
+    out[0]=q->record.v[8];
+    out[1]=q->record.v[9];
+    out[2]=q->record.v[10];
+    out[3]=q->record.v[11];
+    out[4]=q->record.v[12];
+    out[5]=q->record.v[13];
+    out[6]=q->record.v[14];
+    out[7]=q->record.v[15];
     return mask;
 }

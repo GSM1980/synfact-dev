@@ -23,9 +23,8 @@ core_track_send_table:
         jmp 0x4008f3a8
 1:      lea core_track_sends,%a1                 | A1 is rewritten at 4008f3a8
         lea (%a1,%d2.l*4),%a1                   | D2 = 4 x track: 16-byte rows
-        move.l %d0,(%a1)+
-        move.l %d1,(%a1)+
-        move.l %a3,(%a1)
+        movem.l %d0-%d1/%a3,(%a1)
+        addq.l #8,%a1                         | preserve the old scratch pointer
         cmpi.l #11,%d3
         bne.s 4f
         lea -16(%sp),%sp

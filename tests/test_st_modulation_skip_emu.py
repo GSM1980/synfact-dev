@@ -28,7 +28,8 @@ if WORK is None or not (WORK / 'sp-one-shot').is_dir():
     sys.exit(0)
 sys.dont_write_bytecode = True
 sys.path[:0] = [str(WORK / 'sp-one-shot'), str(Path(__file__).resolve().parents[1])]
-from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_UNMAPPED   # noqa: E402
+from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_UNMAPPED, UC_HOOK_MEM_READ   # noqa: E402
+from unicorn.m68k_const import UC_M68K_REG_A7                # noqa: E402
 from elekloader.sdk import elf                            # noqa: E402
 from lfo_fixture import LfoRegistry                       # noqa: E402
 from frame_fixture import WORKING                         # noqa: E402
@@ -82,6 +83,11 @@ def fixture(rnd_seed, image=None, symbols=None, mode=OFF, dense=False):
         entry = symbols['modulation_skip_entry']
         m.uc.mem_write(0x40097b04, struct.pack('>HI', 0x4ef9, entry))
         m.uc.mem_write(0x400a30c4, struct.pack('>HI', 0x4ef9, symbols['modulation_skip_machine_entry']))
+        # Fixture setup already executed the stock writer. Explicitly retire
+        # its translated block, as the real install's cache sync does. Without
+        # this, later native publish() can silently bypass the patched writer.
+        m.uc.ctl_remove_cache(0x400a30c4,0x400a30cc)
+        m.uc.ctl_remove_cache(0x40097b04,0x40097b0a)
         m.write32(symbols['modulation_skip_mode'], mode)
     m.stock_body = [0]
     m.uc.hook_add(UC_HOOK_CODE, lambda uc, at, size, u: m.stock_body.__setitem__(0, m.stock_body[0] + 1),
@@ -176,22 +182,91 @@ def single_group_filter_edits(bank,seed):
     return dict(groups=5,blocks=21,sparse_runs=fast,overlap_fallback=True)
 
 
+def mixed_partial_rows(bank,seed):
+    """Dirty captures and clean replays/projections must commute across rows.
+
+    Change individual sources while other active rows replay; edit zero-only
+    destinations through every saturation range. Republish each source group,
+    then force group-5/overlap fallback, deactivate and reactivate the matrix.
+    The independent oracle is the complete native stock call, not a cache model.
+    """
+    image,symbols=load(bank)
+    ref,dut=fixture(seed),fixture(seed,image,symbols,ON)
+    tracks=(0,2,7,12)
+    sources=(0x80004670,0x80004746,0x8000472c,0x80004712,0x800046f8,0x800046b8)
+    values=(0x4000,0x7fff,0x8000,0xbfff,0xc000,0xffff)
+    seen=set();blocks=0
+    for phase,group in enumerate((0,1,2,3,4,5,'overlap','off',2)):
+        for m in (ref,dut):
+            for t in range(13):
+                for k in range(24):m.write32(RAW_MIRROR+124*t+4*k,0)
+                m.write32(RAW_MIRROR+124*t+4,29)  # independent zero-only word
+                if t in tracks and group!='off':
+                    g=2 if group=='overlap' else max(1,group) if t==12 else group
+                    m.write32(RAW_MIRROR+124*t+16*g,0x0f00001c)
+                    if group=='overlap':m.write32(RAW_MIRROR+124*t+16,28)
+        for t in range(13):bump(dut,symbols,2,t)
+        for b in range(8):
+            for m in (ref,dut):
+                m.call(0x40097952,MIRROR)
+                for t in range(13):
+                    # Explicit working inputs isolate a single dirty source;
+                    # changing mirror RES can also alter converted FREQ.
+                    m.uc.mem_write(WORKING+28+142*t+56,
+                                   struct.pack('>2H',0x3000,values[(blocks+t)%6]))
+                if group!='off':
+                    t=tracks[b%len(tracks)]
+                    g=2 if group=='overlap' else max(1,group) if t==12 else group
+                    value=0x1800+phase*67+b*131
+                    if g==5:m.write32(sources[g]+4*t,value<<8)
+                    else:m.uc.mem_write(sources[g]+2*t,struct.pack('>H',value))
+            before=counter(dut,symbols,'partial_runs')
+            ref.call(0x40097afc,WORKING);dut.call(0x40097afc,WORKING)
+            assert bytes(ref.uc.mem_read(*SRAM))==bytes(dut.uc.mem_read(*SRAM)),(phase,b,'mixed SRAM')
+            assert bytes(ref.uc.mem_read(*HEAP))==bytes(dut.uc.mem_read(*HEAP)),(phase,b,'mixed heap')
+            if counter(dut,symbols,'partial_runs')!=before:
+                mask=counter(dut,symbols,'run_mask')
+                assert mask and mask&sum(1<<t for t in tracks), (phase,b,mask)
+                if b and group!='off':
+                    assert mask==1<<tracks[b%len(tracks)],(phase,b,'mixed dirty row',mask)
+                seen.add(group)
+            blocks+=1
+    assert seen=={0,1,2,3,4,5,'overlap','off'} and counter(dut,symbols,'errors')==0,seen
+    return dict(mixed_blocks=blocks,partial_source_groups=6,overlap=True,deactivate_reactivate=True)
+
+
 def writer_track_hint(bank,seed):
     """The real Sound writer names one row; only its 24 words are rescanned."""
     image,symbols=load(bank)
     dut=fixture(seed,image,symbols,ON)
     dut.call(0x40097952,MIRROR);dut.call(0x40097afc,WORKING)
-    # This writer was executed by fixture setup before the patch was applied.
-    dut.uc.ctl_remove_cache(0x400a30c4,0x400a30cc)
-    dut.call(0x400a30c4,MIRROR,2)
+    # Exercise publication through the native model, including the writer
+    # translation that fixture setup warmed before installing the hook.
+    dut.publish(2)
     flags=bytes(dut.uc.mem_read(symbols['modulation_skip_machine_dirty'],13))
     assert flags==b'\0\0\1'+b'\0'*10 and counter(dut,symbols,'machine_writes')==2,flags
-    reads=[0]
-    dut.uc.hook_add(UC_HOOK_CODE,lambda uc,at,size,u:reads.__setitem__(0,reads[0]+1),
-                    begin=symbols['raw_word'],end=symbols['raw_word'])
-    dut.call(0x40097952,MIRROR);dut.call(0x40097afc,WORKING)
-    assert reads[0]==24 and counter(dut,symbols,'errors')==0,reads
-    return dict(published_track=2,matrix_words_read=reads[0])
+    reads=[]
+    dut.call(0x40097952,MIRROR)
+    first=WORKING+0x754+0x7c*2
+    scan=dict(active=False,ret=0)
+    def scan_context(uc,pc,size,user):
+        if pc==symbols['refresh_machine']:
+            scan['active']=True
+            scan['ret']=struct.unpack('>I',bytes(uc.mem_read(uc.reg_read(UC_M68K_REG_A7),4)))[0]
+        elif scan['active'] and pc==scan['ret']:scan['active']=False
+    dut.uc.hook_add(UC_HOOK_CODE,scan_context)
+    def read_matrix(uc,access,at,size,value,user):
+        # Count the refresh's reads; a subsequently selected native source
+        # group may legitimately read its entries again for calculation.
+        if not scan['active']:return
+        assert size==4 and first<=at<first+96 and (at-first)%4==0
+        reads.append(at)
+    dut.uc.hook_add(UC_HOOK_MEM_READ,read_matrix,begin=WORKING+0x754,end=WORKING+0x754+0x7c*12+95)
+    # The custom backend may retain translations made before instrumentation.
+    dut.uc.ctl_remove_cache(BASE,BASE+len(image))
+    dut.call(0x40097afc,WORKING)
+    assert reads==[first+4*k for k in range(24)] and not scan['active'] and counter(dut,symbols,'errors')==0,reads
+    return dict(published_track=2,matrix_words_read=len(reads))
 
 
 def dense_fallback(bank,seed):
@@ -288,6 +363,7 @@ def main():
         print(run(a.bank, mode, a.blocks if mode == ON else a.blocks // 4, a.seed))
     print(zero_depth_filter_edits(a.bank,a.seed))
     print(single_group_filter_edits(a.bank,a.seed))
+    print(mixed_partial_rows(a.bank,a.seed))
     print(writer_track_hint(a.bank,a.seed))
     print(dense_fallback(a.bank,a.seed))
     print(kernel_mask_sweep(a.bank,a.seed))

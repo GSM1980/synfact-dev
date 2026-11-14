@@ -7,6 +7,8 @@ from elekloader.isa import coldfire as cf
 def verify(folder):
     report=json.loads((folder/'verification.json').read_text());symbols=report['symbols']
     raw=(folder/'main.bin').read_bytes();layout=report['link']
+    for name in ('core_modules_bind','core_machine_load','core_native_initialize'):
+        assert layout['ddr'][0]<=symbols['core:'+name]<layout['ddr'][1], ('nonresident startup entry',name)
     def address(name):return symbols['core:'+name]
     def read(at,n):
         if layout['ddr'][0]<=at<layout['ddr'][1]:at=layout['run_load']+at-layout['ddr'][0]

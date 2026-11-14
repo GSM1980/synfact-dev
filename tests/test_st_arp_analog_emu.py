@@ -117,6 +117,10 @@ def verify(core,bank,previous,out):
     # Analogs respect the same owner map and MIDI-mode refusal as digitals.
     m=AnalogMachine(core,bank);m.w(LIST+4,OWNER);m.w(LIST+8,0)
     m.call(m.cs['core:core_native_interest_set'],OWNER,1<<15)
+    # This fixture has replaced the core-owned list directly. Publish its
+    # routes explicitly, as the real atomic module binder does. Reasserting
+    # an unchanged callback mask alone is not a list-publication operation.
+    m.call(m.cs['core:core_native_initialize'])
     m.u.mem_write(OWNERMAP,bytes([*range(9),8,10,11]))
     assert not m.configure(track=8) and not m.configure(track=9)
     m.u.mem_write(OWNERMAP,bytes(range(12)));m.u.mem_write(KIT+0x1550,b'\x08\x00')

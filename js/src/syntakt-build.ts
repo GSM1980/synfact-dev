@@ -10,6 +10,16 @@ import {buildAudio} from './syntakt-audio.ts'
 
 export type SyntaktFetcher = (file: string) => Promise<Uint8Array>
 
+// Application startup follows native BSS clearing. Appended boot/load storage
+// no longer contains executable code then; match the desktop builder's guard.
+export function assertSyntaktRuntimeResident(symbols: ReadonlyMap<string, number>, ddr: readonly number[]) {
+  for (const name of ['core_modules_bind','core_machine_load','core_native_initialize']) {
+    const address=symbols.get(`core:${name}`)
+    if (address===undefined || !Number.isInteger(address) || address<ddr[0] || address>=ddr[1])
+      throw new Error(`runtime startup entry ${name} is outside resident core RAM`)
+  }
+}
+
 export async function buildSyntakt(stockBytes: Uint8Array, manifestBytes: Uint8Array, manifestSha256: string,
   fetchFile: SyntaktFetcher, progress: (line: string) => void = () => {}) {
   if (!/^[0-9a-f]{64}$/.test(manifestSha256) || sha(manifestBytes) !== manifestSha256)
@@ -36,6 +46,7 @@ export async function buildSyntakt(stockBytes: Uint8Array, manifestBytes: Uint8A
     throw new Error('Incorrect Syntakt core artifacts')
   progress('Linking Syntakt MAIN')
   const linked=link(mods as Mod2[], stock.section(3)), layout=linked.layout
+  assertSyntaktRuntimeResident(linked.map,layout.ddr)
   if (sha(linked.image)!==m.mainSha256) throw new Error('Syntakt MAIN does not match reference')
   // Match the explicit builder's check of every native event-table operand.
   for(const name of ['tick','draw','key','enc','settings','render_in','render_out','fs_route','fs_write','fs_written','main_mix']){

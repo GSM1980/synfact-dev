@@ -34,7 +34,9 @@ static arp_u32 writer_mutex[4] DATA={0};
 static void enter(void){((void (*)(void *))0x40001980u)(writer_mutex);}
 static void leave(void){((void (*)(void *))0x40001aa2u)(writer_mutex);}
 arp_u32 arp_persist_denied DATA=0;
-static const struct arp_settings defaults={0,9,1,30,15,0,0xffff,{0}};
+static const struct arp_settings defaults __attribute__((aligned(4)))={0,9,1,30,15,0,0xffff,{0}};
+_Static_assert(sizeof(struct arp_settings)==24,"ARP settings word comparison");
+_Static_assert(__builtin_offsetof(struct cell,p)%4==0 && sizeof(struct cell)%4==0,"ARP bank alignment");
 static void copy_settings(struct arp_settings *d,const struct arp_settings *s)
 {unsigned int i;for(i=0;i<sizeof(*s);i++)((volatile unsigned char *)d)[i]=((const unsigned char *)s)[i];}
 static arp_u32 hash(const unsigned char *p,unsigned int n)

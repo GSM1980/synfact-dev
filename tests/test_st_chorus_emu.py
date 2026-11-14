@@ -204,6 +204,7 @@ def stub_case(code, symbols, kind, subscribers, rnd):
             assert call[1] == TABLE and struct.unpack('>I', bytes(c.uc.mem_read(TABLE + 192, 4)))[0] == mute
     else:
         assert len(calls) == len(subscribers)
+    return dict(instructions_including_emac_fixture=c.count,track=values[3],subscribers=len(subscribers))
 
 
 def test_stubs(folder, rnd):
