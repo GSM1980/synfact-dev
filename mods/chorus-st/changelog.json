@@ -1,12 +1,28 @@
 {
   "id": "chorus-st",
   "title": "Chorus",
-  "latest": "1.1",
+  "latest": "1.2",
   "entries": [
+    {
+      "version": "1.2",
+      "date": "2026-11-15",
+      "commits": [
+        {
+          "sha": "5deb0eb",
+          "date": "2026-11-15",
+          "subject": "Chorus 1.2: the per-block path in assembly, a third cheaper, the same buses as 1.1"
+        }
+      ]
+    },
     {
       "version": "1.1",
       "date": "2026-11-06",
       "commits": [
+        {
+          "sha": "fcbc288",
+          "date": "2026-11-14",
+          "subject": "Changelogs: consolidated MAIN optimization releases"
+        },
         {
           "sha": "9c5ba25",
           "date": "2026-11-11",

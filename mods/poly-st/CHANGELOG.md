@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.6.
 ## 1.6 (2026-11-14)
 
 - Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
+- Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
 
 ## 1.5 (2026-11-11)
 

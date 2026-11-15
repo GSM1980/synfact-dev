@@ -4,6 +4,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.1.
 
 ## 1.1 (2026-11-09)
 
+- Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
 - Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
 - Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)
 - Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)

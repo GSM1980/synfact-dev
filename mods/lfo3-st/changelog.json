@@ -11,6 +11,11 @@
           "sha": "b747754",
           "date": "2026-11-14",
           "subject": "Optimize MAIN paths across core and optional mods"
+        },
+        {
+          "sha": "fcbc288",
+          "date": "2026-11-14",
+          "subject": "Changelogs: consolidated MAIN optimization releases"
         }
       ]
     },
