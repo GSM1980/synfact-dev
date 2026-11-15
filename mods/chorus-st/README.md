@@ -23,46 +23,99 @@ unit, so the overload was the cause.
 | V56 | POLY voices mixed in EMAC groups of four, no 12-track rebuild on sparse ramps, cached settings, precomputed widgets |
 | 0.1 | V56 on core 1.2's events, controls on the core's providers |
 | 0.2 | mono send, one saturation per sample, modulation once a block, kernels, state and per-block C code in MAIN SRAM |
+| 1.2 | the per-block path in hand-written assembly, the wet fused with VOL's return: about a third fewer instructions, bit for bit the same buses as 1.1 |
 
-Measured in the emulator (instructions per 32-frame block: sends, DSP and
-the VOL return; the core's stub not counted): 206 idle, 3,232 with one
-send, 3,634 with four, 4,714 with twelve (0.1: 322, 4,194, 5,165, 7,753);
-the per-block C code in SRAM adds about 20 for its calls through `chorus_e`.
-Code fetched from DDR per active block: 0.2 KB (with that code in DDR, as
-chorus test d: 1.9 KB; 0.1 first build: 5.4 KB). Bank data in DDR with DEL,
-REV and VOL returning: 1.6 KB (test d: 0.96 KB), so 1.9 KB of DDR in all
-against test d's 2.9 KB. These are emulator counts, not CPU percentages.
+## 1.2: the same chorus, a third cheaper
+
+The DSP, its coefficients, the modulation, the mono send, the ramps, the
+sleep and the stored settings are 1.1's: the delay, reverb and FX-track
+buses equal 1.1's **bit for bit**, checked on analog-emu's ColdFire core
+(whose EMAC is the reference) over 1,200-block runs of changing settings,
+sends, mutes, silences, full-scale signals and depth jumps, with both SRAM
+windows free, either one occupied, or both (everything from DDR), and in
+Unicorn by `tests/test_st_chorus_emu.py --reference`. What changed is how
+the work is done:
+
+- **All of the per-block path is assembly** (`hot.s`, `kernels.s`), on one
+  state block (`state.inc`; `chorus.h` checks every offset). 1.1's `hot.c`
+  was 1,788 bytes of `-Os` C reloading the state between products.
+- **The delay** no longer recomputes each tap's index and weights from its
+  position every sample (shifts, masks, a subtraction): the fraction and
+  `1 - frac` step by the tap's step, and a carry out of the fraction moves
+  the read pointer. The same weights on the same samples, for taps moving
+  less than a sample a sample, which the modulation never reaches (a depth
+  jump from 0 to full moves about 0.2); faster taps take 1.1's loop, kept
+  unchanged. The ring keeps a mirror of its first 48 entries, so no read
+  needs a mask. 815 instructions a block become 428.
+- **The returns** start the EMAC at the bus value: one truncated product,
+  one saturation (1.1's product then saturating add: the same result), four
+  samples per pass with MOVEM.
+- **VOL alone** (DEL and REV at 0, VOL not moving: the default) is returned
+  at `ev_main_mix` by the reconstructor itself, each output straight into
+  the FX bus: the 256-byte wet is neither written nor read. With nothing
+  returning at all, the reconstructor does not run.
+- **The mix** keeps up to four tracks in registers for the whole block and
+  enters their code at the first live slot; more tracks go four at a time
+  through records rebuilt only when a gain, send or mute changes (1.1 rebuilt
+  its list every block).
+- **The decimator and the reconstructor** compute two outputs a pass, sharing
+  their loads (the decimator keeps 1.1's two passes of eight: its partial
+  sums round as before). Their coefficients are immediates
+  (`tools/gen_kernels.py` writes `coeffs.inc` from `design.json`).
+- **The settings** are compared word by word (eight words, as 1.1) and
+  decoded only on a change; the return targets and the HPF coefficient are
+  computed then, not every block.
+- Rare paths (gain ramps, more than one record's mix rebuild, waking, tails,
+  depth jumps, the settings decode) stay in the bank's DDR.
+
+Per 32-frame block (`tools/bench_st_chorus.py`, instructions; the core's
+event stubs not counted), 1.1 -> 1.2:
+
+| case | 1.1 | 1.2 | |
+|---|---:|---:|---:|
+| no send, asleep | 238 | 146 | -39% |
+| one send, VOL | 3,255 | 2,184 | -33% |
+| four sends, VOL | 3,654 | 2,361 | -35% |
+| twelve sends, VOL | 4,722 | 3,054 | -35% |
+| three sends, DEL+REV+VOL | 4,457 | 3,051 | -32% |
+| twelve sends, DEL+REV+VOL | 5,658 | 3,803 | -33% |
+| three sends, returns moving | 5,235 | 4,037 | -23% |
+| twelve sends raised, silent (asleep) | 1,476 | 1,109 | -25% |
+
+Distinct 16-byte lines of the bank image touched per block with one send and
+VOL: code 14 -> 5, data 73 -> 55 (the wet is not touched). These are
+emulator counts, not cycles or CPU percentages; the unit decides.
+
+MAIN SRAM (`<syntakt/sram.h>`, the same two windows as 1.1, nothing new):
+the first holds the state block (468 bytes) and `hot.s`'s code (1,640
+bytes: sends, the per-block control, modulation, decimator, HPF, returns;
+4 bytes free of 2,112), the second `kernels.s`'s span (874 bytes: mix,
+delay, reconstructor; 10 free of 884). The block's buffers stay in the
+bank's DDR, as 1.1's. The entries read the state's address from
+`chorus_ch`, so the code runs on the SRAM state or, when its window is not
+free at init, on the DDR one; the kernels reach the state in A6, and each
+other through the state's kernel table. Each window must be all zero at
+init, else its part stays in DDR; a tick check moves a copy back to DDR if it
+ever changes.
 
 ## What changed from V56
 
 - The audio runs on core 1.2's mixer events (`ev_track_send`, `ev_delay_in`,
   `ev_reverb_in`) and `ev_main_mix`, not on sites of its own
   ([ADAPTING.md](../../docs/ADAPTING.md), core 1.2).
-- MAIN SRAM, which never misses in cache (`<syntakt/sram.h>`): in the window
-  after LFO3's kernel, the hot state (208 bytes) and after it the per-block C
-  code (`hot.c`, 1,788 bytes: sends, modulation, returns); in the window
-  after LFO3's bank, the five kernels every active block runs (mix,
-  decimator, delay, reconstructor, returns: 882 bytes). The block's buffers
-  stay in the bank's DDR: written before they are read in each block, they
-  cost less there than the code would. Each window must be all zero at init,
-  else that part stays in DDR; a tick check moves the code back to DDR if an
-  SRAM copy ever changes. `mod.json` links `hot.c` between `hot_begin.s` and
-  `hot_end.s`; the emulator test checks that no PC-relative reference leaves
-  that span. V56 had its state at `80007340`, where LFO3 now runs.
-- The decimator, delay and reconstructor are rolled loops and the DSP's
-  modulation is not unrolled: the same arithmetic in the same order, in
-  less code. On the unit, MAIN pays for code and data fetched from DDR in
+- MAIN SRAM, which never misses in cache: the state and the per-block code
+  (1.2 above). On the unit, MAIN pays for code and data fetched from DDR in
   every audio block more than for instructions: the first port (all in DDR,
   unrolled) took MAIN from 88% to 100% with one send, and its sound broke up
   from the overload. Per block it touched 5.4 KB of code and 2.1 KB of data
-  in DDR; now 0.2 KB and 1.6 KB, for 4% more instructions.
+  in DDR. V56 had its state at `80007340`, where LFO3 now runs.
 - The settings' codec runs on the core's FX record notifications (queries
   28/29), which LFO3 shares.
 - The modulation shape (32 entries) and the HPF coefficients are the
   Digitone's. This repository holds a recipe (`digitone.json`), and
   `tools/import_digitone.py` rebuilds them from your own Digitone OS 1.44 file,
-  as for SY FM DTONE. The kernels are ours: `tools/gen_kernels.py` writes
-  `kernels.s` from `design.json`.
+  as for SY FM DTONE. The filters are ours: `tools/gen_kernels.py` writes
+  `coeffs.inc` from `design.json`.
 
 - The send is mono: one EMAC pass sums every track into four accumulators
   and saturates once per sample (V56 saturated track by track to keep the
@@ -73,15 +126,16 @@ against test d's 2.9 KB. These are emulator counts, not CPU percentages.
   linearly over the block, and the pole's step is c^4 with its input weighted
   1+c+c^2+c^3, so its gain and settling match V56's.
 
-`tests/test_st_chorus_emu.py` checks the core's stubs, each kernel against a
-numeric oracle, and the whole chain against V56 (compiled from its pinned
-sources) fed the same signal on both sides: level 0.00 dB, correlation 1.000,
-delay trajectory within 0.11 samples, and both sides equal at WDTH 0. It
-also checks that `hot.c`'s span keeps every PC-relative reference inside
-itself (and, in a full bank, that LFO3's kernel still fits its window), and
-with `--reference <bank>`, that the bank's buses match another bank's bit for
-bit over 1,200 blocks of changing settings, sends, mutes and silences (how
-the per-block code's move to SRAM was checked against chorus test d).
+`tests/test_st_chorus_emu.py` checks the core's stubs; each kernel against a
+numeric oracle (the delay also against 1.1's loop, with small and large
+steps; the fused return against the wet's); the whole chain against V56
+(compiled from its pinned sources) fed the same signal on both sides: level
+0.00 dB, correlation 1.000, delay trajectory within 0.11 samples, and both
+sides equal at WDTH 0; that both SRAM spans keep every PC-relative reference
+inside themselves and fit their windows (and, in a full bank, that LFO3's
+kernel still fits its window); and with `--reference <bank>`, that the
+bank's buses match another bank's bit for bit over 1,200 blocks of changing
+settings, sends, mutes and silences.
 
 ## The controls
 
@@ -122,3 +176,11 @@ python mods/chorus-st/tools/import_digitone.py <Digitone OS 1.44 .syx>
 Then add `--module mods/chorus-st` to the bank, before
 `--module mods/modulation-skip-st` ([SYNTAKT-BUILD.md](../../docs/SYNTAKT-BUILD.md)).
 It needs core 1.2.
+
+After changing `design.json`, run `python mods/chorus-st/tools/gen_kernels.py`
+(it rewrites `coeffs.inc`). The cost per block, and the buses against
+another bank's (both banks with their sibling `.work/` folders):
+
+```bash
+python tools/bench_st_chorus.py --bank <bank.smz4> --reference <other bank.smz4>
+```

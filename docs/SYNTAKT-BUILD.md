@@ -344,7 +344,10 @@ against Synfact's V56 compiled from its pinned sources. V56 is a build in the
 
 Add `--reference <other bank>` when a change must not alter the chorus's
 sound (code moved, not arithmetic): its buses must equal that bank's bit for
-bit (test E). Both banks need their sibling `.work/main.elf`.
+bit (test E). Both banks need their sibling `.work/main.elf`. The chorus's
+cost per block (instructions and DDR lines, per event and scenario) against
+another bank, whose buses it must also equal:
+`"$PY" -B tools/bench_st_chorus.py --bank <bank> --reference <other bank>`.
 
 The chorus's controls on the delivered core image (labels, formats, values,
 codec, page 25, REVERB's pages, AMP's branch, the dials), same environment:
