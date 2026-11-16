@@ -4,6 +4,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.0.
 
 ## 1.0 (2026-11-03)
 
+- Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
 - Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
 - Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
 - Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)

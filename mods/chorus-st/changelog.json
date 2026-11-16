@@ -11,6 +11,11 @@
           "sha": "5deb0eb",
           "date": "2026-11-15",
           "subject": "Chorus 1.2: the per-block path in assembly, a third cheaper, the same buses as 1.1"
+        },
+        {
+          "sha": "d322360",
+          "date": "2026-11-15",
+          "subject": "Changelogs: Chorus 1.2"
         }
       ]
     },

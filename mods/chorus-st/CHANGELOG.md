@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.2.
 ## 1.2 (2026-11-15)
 
 - Chorus 1.2: the per-block path in assembly, a third cheaper, the same buses as 1.1 (`5deb0eb`, 2026-11-15)
+- Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
 
 ## 1.1 (2026-11-06)
 

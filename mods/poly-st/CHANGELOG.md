@@ -4,6 +4,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.6.
 
 ## 1.6 (2026-11-14)
 
+- Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
 - Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
 - Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
 

@@ -1,0 +1,19 @@
+{
+  "id": "playhead-st",
+  "title": "Playhead: step order per track (reverse, pendulum, random, walk)",
+  "latest": "1.0",
+  "entries": [
+    {
+      "version": "1.0",
+      "date": "2026-11-16",
+      "commits": [
+        {
+          "sha": "9dd0e4d",
+          "date": "2026-11-16",
+          "subject": "Playhead 1.0: step order per track (reverse, pendulum, random, walk)"
+        }
+      ]
+    }
+  ],
+  "slug": "playhead-st"
+}

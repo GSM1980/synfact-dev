@@ -8,6 +8,11 @@
       "date": "2026-11-03",
       "commits": [
         {
+          "sha": "d322360",
+          "date": "2026-11-15",
+          "subject": "Changelogs: Chorus 1.2"
+        },
+        {
           "sha": "fcbc288",
           "date": "2026-11-14",
           "subject": "Changelogs: consolidated MAIN optimization releases"

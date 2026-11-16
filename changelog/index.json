@@ -51,6 +51,13 @@
       "path": "mods/modulation-skip-st"
     },
     {
+      "slug": "playhead-st",
+      "id": "playhead-st",
+      "title": "Playhead: step order per track (reverse, pendulum, random, walk)",
+      "latest": "1.0",
+      "path": "mods/playhead-st"
+    },
+    {
       "slug": "poly-st",
       "id": "poly-st",
       "title": "POLY",
