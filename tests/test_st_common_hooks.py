@@ -106,8 +106,9 @@ def verify(folder):
     assert cleanup['op']=='bytes' and cleanup['stock']=='4a0367082f0b4ebafbaa588f420017400022'
     assert cleanup['new']=='4200174000224a0367082f0b4ebafba4588f'
     assert read(0x40100f2c,18)==bytes.fromhex(cleanup['new'])
-    assert len(manifest['sites'])==107 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
-    assert len({s['addr'] for s in manifest['sites']})==107
+    assert len(manifest['sites'])==108 and len(manifest['collections'])==16   # cleanup fix and stopped-preview mixer call
+    assert len({s['addr'] for s in manifest['sites']})==108
+    assert read(0x400a4fce,6)==jump('core_audio_idle_mix',0x4eb9)
     # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
     # `storage`, files.c `io`) has read, write and sectors, each a code address.
     # Core 1.7's boot table had a null write: the first trial boot jumped to 0.

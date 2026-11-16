@@ -204,6 +204,10 @@ core_native_machine_select:
 
         .globl core_native_modulation,core_native_lfo
 core_native_modulation:
+        tst.l core_audio_idle_active
+        beq.s .Lidle_mod_normal
+        rts
+.Lidle_mod_normal:
         tst.b core_native_interest+16
         beq.s 3f
         clr.l -(%sp)
@@ -219,6 +223,10 @@ core_native_modulation:
         jmp 0x40097b04
 | LFO subscribers receive the native call's {working, tempo, trigs} (0.12.14).
 core_native_lfo:
+        tst.l core_audio_idle_active
+        beq.s .Lidle_lfo_normal
+        rts
+.Lidle_lfo_normal:
         tst.b core_native_interest+17
         beq.s 4f
         pea 4(%sp)

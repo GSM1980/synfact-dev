@@ -18,6 +18,12 @@ static u32 fail_alloc,fail_init,published,initialized;static const u32 *ticks;
 static u32 order[3],order_count;
 static u32 input_resets;
 void core_machine_input_reset(void){input_resets++;}
+static u32 test_seq=2;
+#define CORE_IDLE_SEQ_STATE test_seq
+#include "../mods/core-st/audio-idle.c"
+static int test_idle_ready(void){return 1;}
+static void test_idle_preview(u32 a,u32 b,void *c){(void)a;(void)b;(void)c;}
+static const struct st_audio_idle_owner test_idle_owner={test_idle_ready,test_idle_preview};
 void *fw_malloc(u32 n){return fail_alloc?0:VirtualAlloc((void *)0x47000000u,n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
 void core_event_publish(const u32 *p)
@@ -25,17 +31,22 @@ void core_event_publish(const u32 *p)
  {u32 k;for(k=4;p[k];k+=2)*(u32 *)p[k]=p[k+1];assert(k==4+2*((ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
  *(const u32 **)p[2]=ticks;published++;}
 static void extra(void *c){(void)c;}
-static int init(const struct st_smz_api *api){assert(api->version==1 && api->ui->version==1);initialized++;return fail_init;}
+static int init(const struct st_smz_api *api){assert(api->version==1 && api->ui->version==1);initialized++;
+ assert(!core_audio_idle_owner);core_audio_idle_owner=&test_idle_owner;return fail_init;}
 static int lfo_init(const struct st_smz_api *api){(void)api;order[order_count++]=1;return 0;}
 static int skip_init(const struct st_smz_api *api){(void)api;order[order_count++]=2;return 0;}
 static int normal_init(const struct st_smz_api *api){(void)api;order[order_count++]=3;return fail_init;}
 #include "../mods/core-st/modules.c"
 int main(void)
 {
+    assert(patching_module("LFO3") && patching_module("MODULATION SKIP"));
+    {const char *names[]={"","L","LFO","LFO3 extra","lfo3","MODULATION SKI","MODULATION SKIP extra","OTHER"};
+     for(u32 i=0;i<sizeof(names)/sizeof(names[0]);i++)assert(!patching_module(names[i]));}
     const struct st_smz_subscription s={ST_EV_TICK,(void (*)(void))extra};
     const struct st_smz_module mod={"TEST",init,&s,1};
     fail_alloc=1;assert(!core_modules_bind(&mod,1) && !initialized && !published);fail_alloc=0;
-    fail_init=1;assert(!core_modules_bind(&mod,1) && initialized==1 && !published && input_resets==3);fail_init=0;
+    fail_init=1;assert(!core_modules_bind(&mod,1) && initialized==1 && !published && input_resets==3);
+    assert(!core_audio_idle_begin() && !core_audio_idle_owner);fail_init=0;
     {
         const struct st_smz_module group[]={
             {"LFO3",lfo_init,0,0},{"MODULATION SKIP",skip_init,0,0},{"TEST",normal_init,&s,1}};

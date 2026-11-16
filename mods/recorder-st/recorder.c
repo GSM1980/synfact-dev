@@ -417,8 +417,9 @@ static void recorder_ui_tick(void *controller)
     sam_enabled=sam_foreground();
     if(sam_enabled)sam_name_view=0;
     if(!sam_enabled)sampler_suspend();
-    /* A take that filled its steps stops a playing sequencer before the
-     * normalization; YES/STOP or a closed view end it without stopping. */
+    recorder_hold_take();
+    /* The owned completed take keeps transport stopped, including reopening.
+     * Retire the original step-limit request after capture has ended. */
     if(sam_seq_stop && sam_state!=SAM_ARMED && sam_state!=SAM_RECORDING) {
         sam_seq_stop=0;
         if(sam_enabled && sam_frames && sam_frames>=sam_limit && REC_SEQ_STATE==1u)REC_SEQ_STOP();
@@ -651,7 +652,7 @@ void sampler_open(u8 *manager)
     sampler_suspend();sam_keys_down=0;sam_no_clear=0;sam_prepare();
     pair[0]=view;pair[1]=root;
     UI_PUSH(manager,pair,0);UI_DROP(pair+1);
-    sam_enabled=sam_foreground();sam_report[0]++;sam_redraw();
+    sam_enabled=sam_foreground();recorder_hold_take();sam_report[0]++;sam_redraw();
 }
 static u8 *sam_top(void *app)
 {
@@ -664,6 +665,15 @@ static u8 *sam_top(void *app)
 u32 sampler_pre_event(void *app,const u8 *ev)
 {
     u32 key=be32(ev+12),flags=be32(ev+16),now=sam_clock;
+    /* PLAY is unavailable for the whole post-take preview session, including
+     * its naming/assignment modals. Consume
+     * both edges; a release after closing must not leak an orphan edge. */
+    if(key==10 && (recorder_idle_play_consumed || recorder_idle_ready())) {
+        recorder_idle_play_consumed=flags&1u;return 1;
+    }
+    if(key==11 && recorder_stop_consumed) {
+        recorder_stop_consumed=flags&1u;return 1;
+    }
     if(key==12)sam_yes_down=flags&1; /* CHORUS_INTEGRATED: track popup waits for YES up */
     /* CHORUS_INTEGRATED: TrackSelect (stack tail) owns every key while it is shown. */
     if(sam_assign_phase==SAM_ASSIGN_SHOWN && !sam_tail_is_recorder())return 0;
@@ -710,7 +720,18 @@ u32 sampler_pre_event(void *app,const u8 *ev)
     }
     if(flags&1){sam_sound_pending=0;sam_sound_browser=0;}
     if(sam_foreground() && key==11) {
-        if(flags&1)sampler_suspend();
+        if(flags&1) {
+            u32 capturing=sam_state==SAM_ARMED || sam_state==SAM_RECORDING;
+            sampler_suspend();
+            if(capturing && sam_frames && sam_state==SAM_NORMALIZING) {
+                /* Own capture STOP. Opaque recorder routing must
+                 * not decide whether native transport actually stops. Call its
+                 * operation once in UI context, independent of frame limit,
+                 * then consume repeat/release so it cannot run twice. */
+                REC_SEQ_STOP();sam_seq_stop=0;recorder_stop_consumed=1;
+                return 1;
+            }
+        }
         return (flags&2)?1:0; /* plain STOP still stops native transport */
     }
     if(sam_foreground() && (sam_save_phase || sam_assign_phase || key==12 || key==13)) {

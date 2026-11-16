@@ -93,6 +93,26 @@ the stock tempo split): each mode's pixels inverted, two columns left of
 the metronome and centred on rows 56..62, for three tempos, nothing else, and nothing for FORWARD, another view's
 layer or a MainScreen not on top.
 
+### Recorder MAIN LR stereo capture
+
+`tests/test_st_recorder_capture_cfbench.py --reference-bank BANK_1_2 --bank BANK_1_3
+--cfbench CFBENCH --out OUTPUT_DIR` executes real callbacks and assembly kernels
+in analog-emu. It compares PCM, meter/take peaks, state/clock and correction
+banks; checks complete physical EMAC preservation, PCM-kernel ABI, PRE/POST,
+zero/nonzero gain transitions, 47-frame tails, ARMED/threshold transitions,
+2,048 randomized mono/stereo blocks and 512 integer-oracle kernel vectors. Negative controls
+must detect corrupted PCM/correction. Callback instruction counts exclude setup
+and are not physical CPU percentages. No instrument is accessed.
+
+The common regressions include the post-take owner/UI tests: reopening a
+retained take from PLAY issues STOP, retains PCM/trim and reenters reduced audio;
+PLAY remains consumed and FUNC+NO restores full processing.
+Recorder 1.4 adds 108 early manual STOP cases across all nine lengths,
+mono/stereo, transport states and STOP/FUNC+STOP. They check reduced-mode
+eligibility before the next UI tick, unchanged PCM/length, one native STOP
+only, repeat/release handling and normalization/PLAY gating.
+See [RECORDER-CAPTURE-CPU.md](RECORDER-CAPTURE-CPU.md).
+
 ## The engine
 
 The engine (`elekloader/`, `js/`) comes from elekloader and still knows every

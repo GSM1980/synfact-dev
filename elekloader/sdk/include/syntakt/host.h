@@ -7,6 +7,13 @@
 #define ELEKLOADER_ST_HOST_H
 #include "storage.h"
 #include "sample-pool.h"
+/* Init-only MAIN mixer replacement for a stopped-transport preview session.
+ * ready() returns 0 or 1. mix has native OS 1.41 mixer C ABI (three words),
+ * preserves callee saves and owns bus clearing, preview clock and output. */
+struct st_audio_idle_owner {
+    int (*ready)(void);
+    void (*mix)(unsigned int,unsigned int,void *);
+};
 struct st_machine_host_api {
     unsigned int version;
     const struct st_storage_io *storage;
@@ -102,5 +109,11 @@ struct st_machine_host_api {
     /* Host API 13 (core 1.2) adds no field: chained parameter providers, FX
      * codec notifications and queries 28..30 (parameter_provider above).
      * Host API 14 (core 1.4) adds no field: queries 24 (Kit) and 31. */
+    /* Host API 15: one init-only owner slot. Refuse a nonempty slot, then
+     * publish a retained immutable descriptor with both callbacks nonnull.
+     * Failed bank init clears the slot. ready() is MAIN render-in context;
+     * mix() replaces the native mixer call only while stopped and ready.
+     * Both are bounded, no heap/IO; mix may use the native EMAC/output ABI. */
+    const struct st_audio_idle_owner *volatile *audio_idle;
 };
 #endif

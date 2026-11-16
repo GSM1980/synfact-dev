@@ -69,3 +69,6 @@ and change with the code, so a commit's docs match its code.
   checks, the linker and the build, with no dependencies and no Python. For
   the same stock file and mods it writes the same files as the Python, byte
   for byte. It is GPL-3.0-or-later.
+
+- **[Recorder post-take audio pause](RECORDER-AUDIO-PAUSE.md)**: reduced audio, preview and manual STOP/reentry.
+- **[Recorder capture CPU](RECORDER-CAPTURE-CPU.md)**: stereo capture assembly, integer EMAC and measured mono/stereo callbacks.

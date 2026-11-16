@@ -5,13 +5,14 @@
 #include <syntakt/native.h>
 #include <syntakt/host.h>
 #include <stddef.h>
-/* Host API 12 appends core_info (92) and bank_info (96); earlier offsets are unchanged. */
-typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==100 &&
+/* API 12 core_info/bank_info retain 92/96; API 15 appends audio_idle at 100. */
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==104 &&
     offsetof(struct st_machine_host_api,native_query)==84 &&
     offsetof(struct st_machine_host_api,native_dispatch)==84 &&
     offsetof(struct st_machine_host_api,pool)==88 &&
     offsetof(struct st_machine_host_api,core_info)==92 &&
-    offsetof(struct st_machine_host_api,bank_info)==96 ? 1 : -1];
+    offsetof(struct st_machine_host_api,bank_info)==96 &&
+    offsetof(struct st_machine_host_api,audio_idle)==100 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
@@ -36,6 +37,7 @@ void core_event_publish(const u32 *a)
     assert(native_calls==2);native_calls=0;publications++;
 }
 void core_machine_input_reset(void){}
+void core_audio_idle_reset(void){}
 #include "../mods/core-st/modules.c"
 u32 core_stock_trig(u32 a,u32 b,u32 c,u32 d,u32 e,u32 f){replays++;return a+b+c+d+e+f;}
 u32 core_stock_header_load(u32 a,u32 b){replays++;return a^b;}

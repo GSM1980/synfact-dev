@@ -66,6 +66,8 @@ core_render_in:
         move.l %d0,core_clock+12
         move.l core_clock+8,%d0
         move.l %d0,core_clock+20
+        jsr core_audio_idle_begin
+        bne.s 4f
         move.l %a2,-(%sp)
         .globl core_render_in_table
 core_render_in_table:
@@ -76,6 +78,7 @@ core_render_in_table:
         jsr (%a0)
         bra.s 1b
 2:      movea.l (%sp)+,%a2
+4:
         movem.l (%sp),%d0-%d1/%a0-%a1
         lea 16(%sp),%sp
         link %a6,#-164

@@ -10,6 +10,10 @@ typedef st_u32 u32;typedef int s32;typedef unsigned short u16;typedef unsigned c
 static const struct st_machine_host_api *host;
 static u32 recorder_last_paint;
 static void normalize_fast(void);
+static int recorder_idle_ready(void);
+static void recorder_hold_take(void);
+static u32 recorder_idle_play_consumed;
+static u32 recorder_stop_consumed;
 static void recorder_prime(void),recorder_resume(void),recorder_draw_bridge(u8 *,void *);
 static u32 recorder_save_acquire(void);static void recorder_save_release(void);
 static volatile u32 recorder_transfer_active,recorder_save_lease;
@@ -74,14 +78,33 @@ static void preview_mix_side(u32 at,s32 x)
     bus[at]=(s32)r;
 }
 #include "recorder.c"
-/* The optimized MAIN specialization uses the unchanged general source for
- * external inputs and individual tracks. Both are native integer C. */
+/* MAIN uses the specialized integer/EMAC kernels; external inputs and
+ * individual tracks retain the general integer C path. */
 void ui_sampler_native_tick(void){sampler_base_tick();}
 #include "capture.c"
 #include "normalize.c"
+/* A live recorder or its own naming overlay owns the completed take. An
+ * unrelated opaque view releases preview mode; the nonopaque track picker
+ * retains the recorder as foreground. Never retain a freed view in the core. */
+static int recorder_idle_ready(void)
+{
+    u8 *node,*top;
+    u32 state=sam_state;
+    if(state!=SAM_NORMALIZING && state!=SAM_READY)return 0;
+    if(!sam_view || sam_view[0x30] || !sam_manager || !sam_frames)return 0;
+    if(sam_foreground())return 1;
+    node=*(u8 **)(sam_manager+0x1c);
+    top=node && node!=sam_manager+0x14?*(u8 **)(node+8):0;
+    return sam_name_view && top==sam_name_view && !sam_name_view[0x30];
+}
+/* UI context only. Reopening a retained take owns a preview-only session,
+ * even if the user restarted the pattern while the recorder was closed. */
+static void recorder_hold_take(void)
+{if(recorder_idle_ready() && REC_SEQ_STATE==1u)REC_SEQ_STOP();}
 static void recorder_prime(void)
 {
     u32 sr=recorder_irq_lock();
+    headroom_return_zero[0]=headroom_return_zero[1]=0;
     if(sam_source>=3 && sam_source<6)sam_returns();
     recorder_irq_unlock(sr);headroom_meter_phase=23;
 }
@@ -97,7 +120,7 @@ static int recorder_key(void *brain,void *event)
 }
 static int recorder_encoder(void *brain,void *event)
 {(void)brain;return sam_foreground() && sam_tail_is_recorder()?sampler_encoder(sam_view+4,event):0;}
-static void recorder_audio(void)
+void recorder_audio(void)
 {
     /* The closed-view path keeps exactly the capture clock/phase, without
      * building the capture and audition workers' register/stack frames. */
@@ -105,6 +128,8 @@ static void recorder_audio(void)
     else headroom_tick();
     if(sam_play_length)sampler_playback_mix();
 }
+extern void recorder_idle_mix(u32,u32,void *);
+static const struct st_audio_idle_owner recorder_idle_owner={recorder_idle_ready,recorder_idle_mix};
 /* Serialize the bounded save job with native high-zone Data uploads using
  * the existing FS events. The tiny check/publication is atomic across tasks;
  * no IRQ exclusion surrounds storage, allocation or normalization. */
@@ -138,8 +163,10 @@ static void recorder_fs_written(const void *capture,const u8 *header,const u8 *s
 }
 static int initialize(const struct st_smz_api *api)
 {
-    if(!api || !api->ui || api->ui->version<6 || !api->ui->host || api->ui->host->version<2)return 1;
-    host=api->ui->host;return 0;
+    if(!api || !api->ui || api->ui->version<6 || !api->ui->host ||
+       api->ui->host->version<15 || !api->ui->host->audio_idle || *api->ui->host->audio_idle)return 1;
+    host=api->ui->host;
+    *host->audio_idle=&recorder_idle_owner;return 0;
 }
 static const struct st_smz_subscription subscriptions[]={
     {ST_EV_KEY,(void (*)(void))recorder_key},

@@ -59,6 +59,11 @@ static int read_mock(T,T,void *),write_mock(T,T,const void *);static T sectors_m
 #define REC_QSTR_DTOR qdrop_mock
 #define REC_NAME_CTOR name_ctor_mock
 #include "../mods/recorder-st/main.c"
+#define CORE_IDLE_SEQ_STATE seq_state
+#include "../mods/core-st/audio-idle.c"
+/* Native output tail/EMAC is checked on cfbench, not this host double. */
+void recorder_idle_mix(T a,T b,void *c)
+{(void)a;(void)b;(void)c;for(T i=0;i<384;i++)((volatile int *)0x8000dad0u)[i]=0;recorder_audio();}
 /* The samplers' STEREO module (stereo/main.c): track 0 is stereo, D = 100*i. */
 int st_stereo_track_d(u32 track,s32 *out)
 {if(track)return 0;for(u32 i=0;i<32;i++)out[i]=(s32)i*100;return 1;}
@@ -102,13 +107,14 @@ static int ready_mock(void){return 1;}
 static int apply_mock(const u16 *before)
 {apply_calls++;if(pool_fail){memcpy(record,before,sizeof(record));return -1;}return 1;}
 static void stop_mock(void){preview_stops++;}
-static void seq_stop_mock(void){assert(!in_irq && !irq_depth && seq_state==1);seq_state=2;seq_stops++;}
+static void seq_stop_mock(void){assert(!in_irq && !irq_depth && seq_state<=2);seq_state=2;seq_stops++;}
 extern T core_crc_update(T,const B *,T);
 static int view_event_mock(T event,void *v,void *b,T id)
 {assert(event==ST_EV_DRAW);recorder_draw(v,b,id);return 0;}
 static const struct st_storage_io storage={read_mock,write_mock,sectors_mock,alloc_mock,free_mock};
-static const struct st_machine_host_api services={2,&storage,core_hzfs_open,core_hzfs_close,
-    core_crc_update,pool_read_mock,pool_write_mock,ready_mock,apply_mock,stop_mock,view_event_mock};
+static const struct st_machine_host_api services={15,&storage,core_hzfs_open,core_hzfs_close,
+    core_crc_update,pool_read_mock,pool_write_mock,ready_mock,apply_mock,stop_mock,view_event_mock,
+    .audio_idle=&core_audio_idle_owner};
 T recorder_irq_lock(void){assert(!in_irq && !irq_depth);irq_depth=1;return 0x2000;}
 void recorder_irq_unlock(T sr){assert(irq_depth==1 && sr==0x2000);irq_depth=0;}
 static T push_mock(void *m,void *pair,T flag)
@@ -200,6 +206,7 @@ static void buses(void)
 }
 static void prepare(T source,T post,T state,T frames,T limit,T threshold)
 {
+    headroom_return_zero[0]=headroom_return_zero[1]=0;
     sam_clock=4096;sam_ret_clock=4096;sam_enabled=1;sam_source=sam_take_source=source;
     sam_post=sam_take_post=post;sam_state=state;sam_frames=frames;sam_limit=limit;
     sam_peak=0;sam_last_source=18;sam_trigger=threshold;sam_pcm_peak=0;sam_mon=1;
@@ -262,8 +269,8 @@ static void normalize(void)
     for(T i=0;i<SAM_MAX_FRAMES;i++)assert(sam_pcm[i]==(short)(((T)(i&1?-16000:16000)*gain)>>16));
     assert(sam_detail_frames==SAM_MAX_FRAMES && sam_trim_end==SAM_MAX_FRAMES);
 }
-/* A take that fills its steps stops a playing sequencer once, before the
- * normalization; manual ends, unlimited takes and a stopped sequencer do not. */
+/* Completed takes stop/hold transport for reduced mode, including manual
+ * ends and an external restart. A stopped sequencer is never stopped twice. */
 static void step_stop(void)
 {
     top(sam_view,sam_view);sam_clear();sam_rlen=2;tempo_value=14400;seq_state=1;seq_stops=0;
@@ -271,13 +278,13 @@ static void step_stop(void)
     recorder_ui_tick(manager());assert(!seq_stops && sam_seq_stop);
     sam_frames=sam_limit;sam_state=SAM_NORMALIZING;recorder_ui_tick(manager());
     assert(seq_stops==1 && seq_state==2 && !sam_seq_stop);
-    seq_state=1;recorder_ui_tick(manager());assert(seq_stops==1);
+    seq_state=1;recorder_ui_tick(manager());assert(seq_stops==2 && seq_state==2);
     sam_clear();sam_start(0);sam_frames=100;assert(key_event(12,1) && key_event(12,16));
-    assert(sam_state==SAM_NORMALIZING);recorder_ui_tick(manager());assert(seq_stops==1 && !sam_seq_stop);
+    assert(sam_state==SAM_NORMALIZING);recorder_ui_tick(manager());assert(seq_stops==2 && !sam_seq_stop);
     sam_clear();sam_rlen=8;sam_start(0);assert(!sam_seq_stop);
-    sam_frames=sam_limit;sam_state=SAM_NORMALIZING;recorder_ui_tick(manager());assert(seq_stops==1);
+    sam_frames=sam_limit;sam_state=SAM_NORMALIZING;recorder_ui_tick(manager());assert(seq_stops==2);
     sam_clear();sam_rlen=2;seq_state=2;sam_start(0);
-    sam_frames=sam_limit;sam_state=SAM_NORMALIZING;recorder_ui_tick(manager());assert(seq_stops==1);
+    sam_frames=sam_limit;sam_state=SAM_NORMALIZING;recorder_ui_tick(manager());assert(seq_stops==2);
     /* Audition on the preview bus keeps the previous digital level: x5/4. */
     sam_state=SAM_READY;sam_frames=32;sam_trim_valid=0;sam_pcm[0]=1000;
     memset(MAIN_BUS,0,64*sizeof(int));sam_audition();audio();assert(MAIN_BUS[0]==-1000*2560 && MAIN_BUS[1]==-1000*2560);

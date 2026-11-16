@@ -105,6 +105,26 @@ sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
 
+### Syntakt core 1.9: stopped-transport preview owner
+
+Host API 15 appends `audio_idle` at offset 100, preserving the earlier
+100-byte prefix. This is a pointer to one core-owned owner slot. Register a
+retained immutable `st_audio_idle_owner` during module initialization only,
+after refusing a nonempty slot; both callbacks must be nonnull. Failed bank
+initialization clears the slot. No new event ID or SMZ format is introduced.
+
+At MAIN render-in, `ready()` returns 0 or 1 without allocation, IO or EMAC.
+With native transport stopped (state 2), 1 selects reduced processing for the
+whole block. The core skips render-in observers and modulation/LFO bodies,
+and redirects the mixer call at `400a4fce` to the owner's `mix(a,b,record)`.
+The owner must preserve native OS 1.41 mixer ABI/callee saves, clear unused
+buses, advance its preview clock and deliver valid output. The recorder's
+`idle.s` retains the native output tail at `4008fb38`; it does not skip native
+IRQ/DMA/CPU2 control transport. Normal mixer fallback is `4008f1ca` unchanged.
+Render-out accounting/observers still run. An absent owner, readiness 0 or
+external transport START restores normal processing. Recorder 1.2 requires
+this service and consumes PLAY key edges while its completed take is open.
+
 ### Syntakt core 1.1: the mod list in System info
 
 The SETTINGS row SYSTEM INFO opens a list: METERS ON/OFF, then the core and every

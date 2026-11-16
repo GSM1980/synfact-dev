@@ -15,6 +15,7 @@ const struct st_machine_ui_api core_machine_ui_api={7};
 void *fw_malloc(u32 n){(void)n;assert(0);return 0;}
 void fw_free(void *p){(void)p;assert(0);}
 void core_machine_input_reset(void){}
+void core_audio_idle_reset(void){}
 void core_event_publish(const u32 *p)
 {
     u32 k;for(k=0;p[k];k+=2)*(u32 *)p[k]=p[k+1];                     /* interest + page view words */

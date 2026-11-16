@@ -1,4 +1,7 @@
-# Syntakt core 1.8.2
+# Syntakt core 1.9.0
+
+1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for
+normalization/editing, retaining the 1.8.2 native view cleanup and MAIN routes.
 
 1.8.2 preserves deferred view closes raised by synchronous UI composition
 during native cleanup. It moves the existing request-clear before visibility
@@ -168,6 +171,14 @@ python tests/test_st_common_regressions.py out/core-st-<ver> --cc "$LLVM_MINGW_B
 ```
 
 ## Core services
+
+Core **1.9.0 / host API 15** adds an init-only `audio_idle` owner slot for a
+stopped-transport preview session. The recorder 1.2 uses it after capture:
+render-in observers and native modulation/LFO bodies are skipped, and one
+core-owned call site redirects the native mixer to the bank's preview-only
+replacement. DMA, control frames, CPU2/sample-pool services, native output and
+render-out accounting continue. The previous host ABI prefix is retained.
+See [the implementation and validation](../../docs/RECORDER-AUDIO-PAUSE.md).
 
 | Event | Handler | Context |
 |---|---|---|

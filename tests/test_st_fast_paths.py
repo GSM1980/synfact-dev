@@ -60,7 +60,12 @@ def verify(folder):
     for name,replay in [('publish','49f9800046884285'),('immediate','2479444de4344a8a'),
                         ('sound_set','4e56ffd848d704fc'),('machine_select','4fefffd848d77c7c'),
                         ('modulation','4fefffc448d77cfc'),('lfo','4fefffc048d77cfc')]:
-        at=address('core_native_'+name);interest(at,ops[name])
+        at=address('core_native_'+name)
+        if name in ('modulation','lfo'):
+            assert read(at,6)==struct.pack('>HI',0x4ab9,address('core_audio_idle_active'))
+            assert branch(at+6,0x67)==at+10 and read(at+8,2)==bytes.fromhex('4e75')
+            at+=10
+        interest(at,ops[name])
         target=branch(at+6,0x67)
         if name=='sound_set':   # 0.12.15: the reserved LFO3 ID check precedes the replay
             assert read(target,4)==bytes.fromhex('202f0008') and read(target+4,6)==struct.pack('>HI',0x0480,0x3f9)
@@ -76,7 +81,7 @@ def verify(folder):
     branch(0x40100f34,0x67,0x40100f3e)
     _,cleanup_call=next(cf.disassemble_lengths(read(0x40100f38,4),0x40100f38,0x40100f38,0x40100f3c))
     assert cleanup_call.flow==cf.F_JSR and cleanup_call.target==0x40100ade
-    assert len(manifest['sites'])==107 and len(manifest['collections'])==16   # Current hook and mixer event tables.
+    assert len(manifest['sites'])==108 and len(manifest['collections'])==16   # cleanup fix and preview-only mixer gate.
     assert report['resident_ram']['free']>=0 and '-O3' in report['cflags']
     print('PASS: 23 no-bank/stock-ID lookup exits and 12 per-operation interest native replays; hidden pointers/stack untouched on fast exits; all hooks, extended paths and APIs retained')
 

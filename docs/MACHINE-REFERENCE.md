@@ -511,6 +511,22 @@ DOWN = 15, LEFT = 16, RIGHT = 17. The MainScreen's header (`0x40032b0e..0x40032b
 right-aligned to x 125 in the font `0x443da1f0`, and the metronome at x 117 −
 the tempo's width, rows 55..62 (`0x400f8dac`, y 55 or 56). The active track is `0x4001ff74(app + 0x30)`, app = `0x4016e804()`.
 
+### MAIN mixer preview ABI (OS 1.41, core 1.9)
+
+Verified against the supplied OS 1.41 and analog-emu's ColdFire interpreter:
+the mixer call at `400a4fce` calls `4008f1ca` with three C stack words. The
+third (`A6+16` after LINK) is the mixer record retained in A2. Native mixer
+frame size is 556 bytes; D2-D7/A2-A5 occupy its bottom 40 bytes. Continuation
+`4008fb38` initializes the remaining output locals, combines ADC `8000ded0`
+with preview `8000dfd0`, and runs native USB/codec output before restoring
+MACSR 20h, callee saves, A6 and SP at `4008fea4..4008feb8`. The codec TX ring
+base is `80000000 + (4553f6dc << 10)` in this path. The reduced recorder mixer
+clears six 256-byte buses starting at `8000dad0`, invokes its clock/preview
+callback, initializes MACSR A0h and ACC0..3, then enters that continuation.
+The cfbench test compares the codec frame against the complete original
+mixer and checks USB MAIN against an independent numeric oracle. These are
+controlled interpreter fixtures, not physical audio or DMA timing tests.
+
 ## 10. Not recorded in this repository
 
 - The names of the menu categories 1 to 14, other than 5, 10 and 11.

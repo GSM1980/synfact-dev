@@ -9,6 +9,7 @@ typedef st_u32 u32;
 extern void *fw_malloc(u32);extern void fw_free(void *);
 extern const struct st_machine_ui_api core_machine_ui_api;
 extern void core_machine_input_reset(void);
+extern void core_audio_idle_reset(void);
 extern void core_event_publish(const u32 *);
 #define VIEW_ENTRY 0x80000000u
 #define EVENT(name) extern const u32 ev_##name[];extern const unsigned char core_##name##_table[];
@@ -117,21 +118,24 @@ u32 core_module_count,core_module_subscriptions;
  * preimages are checked by machine-boot.c before any initializer runs, and
  * they initialize after every module that may reject for an API/resource
  * reason. Subscription order below stays in the bank's original order. */
-static int module_name_is(const char *name,const char *wanted)
-{
-    u32 i=0;while(name[i] && name[i]==wanted[i])i++;
-    return !name[i] && !wanted[i];
-}
+/* Initialization only: the two names have different initial bytes. Select
+ * one candidate, then compare the complete string in a shared pointer loop;
+ * avoid duplicating the comparison in the resident initializer. */
 static int patching_module(const char *name)
-{return module_name_is(name,"LFO3") || module_name_is(name,"MODULATION SKIP");}
+{
+    const char *wanted=*name=='L'?"LFO3":"MODULATION SKIP";
+    while(*name && *name==*wanted){name++;wanted++;}
+    return *name==*wanted;
+}
 /* Reuse the published collection, selecting only subscribers that requested
  * its native-view context. No module scan, input registry or retained view. */
 int core_event_view(u32 event,void *view,void *data,u32 id)
 {
-    const u32 *p=events[event].list;u32 fn;int taken;
-    while((fn=*p++))if(fn&VIEW_ENTRY){
-        if(event==ST_EV_KEY && !!(fn&1)!=(id==1))continue;
-        if(event==ST_EV_ENC || (event==ST_EV_KEY && id==1)){
+    const u32 *p=events[event].list;u32 fn,mask=VIEW_ENTRY,wanted=VIEW_ENTRY;int taken;
+    int consuming=event==ST_EV_ENC || (event==ST_EV_KEY && id==1);
+    if(event==ST_EV_KEY){mask|=1u;wanted|=id==1;}
+    while((fn=*p++))if((fn&mask)==wanted){
+        if(consuming){
             taken=((int (*)(void *,void *,u32))(fn&~(VIEW_ENTRY|1u)))(view,data,id);
             if(taken)return taken;
         }else ((void (*)(void *,void *,u32))(fn&~VIEW_ENTRY))(view,data,id);
@@ -143,6 +147,7 @@ int core_modules_bind(const struct st_smz_module *mods,u32 count)
     u32 i,j,k,e,phase,old[ST_EV_COUNT],add[ST_EV_COUNT],used=0,total=0,patches[4*ST_EV_COUNT+2*NATIVE_WORDS+3],n=0;
     u32 *memory,*dst,*lists[ST_EV_COUNT];struct st_smz_api api={1,&core_machine_ui_api};
     core_machine_input_reset();
+    core_audio_idle_reset();
     for(e=0;e<ST_EV_COUNT;e++){old[e]=add[e]=0;while(events[e].list[old[e]])old[e]++;}
     for(i=0;i<count;i++)for(j=0;j<mods[i].count;j++)add[ST_EV_INDEX(mods[i].subscriptions[j].event)]++;
     for(e=0;e<ST_EV_COUNT;e++)if(add[e])total+=old[e]+add[e]+1;
@@ -159,7 +164,7 @@ int core_modules_bind(const struct st_smz_module *mods,u32 count)
             if(e&ST_EV_PRE || e==ST_EV_NATIVE)api.version=3;
         }
         if((u32)mods[i].init!=0xffffffffu && mods[i].init(&api)){
-            core_machine_input_reset();if(memory)fw_free(memory);return 0;}
+            core_machine_input_reset();core_audio_idle_reset();if(memory)fw_free(memory);return 0;}
     }
     for(e=0;e<ST_EV_COUNT;e++)if(add[e]){
         dst=memory+used;if(events[e].operand){patches[n++]=(u32)events[e].operand;patches[n++]=(u32)dst;}
