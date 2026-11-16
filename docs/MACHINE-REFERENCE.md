@@ -421,7 +421,47 @@ MAIN mix, the mixer FX events, and the native transaction collection (event 11,
 `native.h`). A subscription can also name a view (`ST_EV_VIEW`) or request the
 pre-native KEY phase (`ST_EV_PRE`).
 
-## 9. Not recorded in this repository
+## 9. The sequencer's step per track (MAIN)
+
+The sequencer runs in a forced interrupt (`0x4008c924`, every 900000 units of
+the native clock: 24 a quarter note). For each of the 13 tracks (12 audio,
+12 = FX) it keeps bytes at `0x43bd73fc + t` (the step it plays next),
+`0x43bd7416 + t` (the step before), `0x43bd7409 + t` (ticks into the step) and
+`0x43bd753c + t` (steps counted toward the track's bar). On tick 0 of a step it
+prepares that step's trig (`0x4008b882`, the core's TRIG operation) and
+enqueues it a step ahead with its micro timing. When the step's ticks are over
+it advances the step at `0x4008d0e4..0x4008d120`: last = step, step + 1, and 0
+at the length. The length is the track's (track record `+969`, a word) when
+the pattern's byte `+0x21379` is set, else the pattern's (`+0x21374`); a track
+record is `pattern + 0x499 * t`. Starting or changing patterns sets step =
+position mod length (`0x4008cb7c`). The UI's copies are `0x444e2370 + t` (last)
+and `0x444e237d + t` (step), copied every tick at `0x4008d1a8`; live
+recording reads `0x444e2370` (`0x4008da6e`). The step is set from the
+pattern's position in several places (starts, resyncs, pattern hand-overs at
+`0x4008ac3a`, `0x4008b39e`, resets at `0x4008b69e`, `0x4008c78e`,
+`0x4008cd62`, `0x4008d338`, and `0x4008d88a`); it is used by the trig
+preparation (`0x4008cf00`, `0x4008cf14`, and `0x4008c204` for a pattern
+started mid-way), the UI copy and the accessor `0x4008b734(t)` (last[t] for
+t 0..12, the pattern's step `0x43bd73c4` above), which the trig LEDs'
+playhead reads (`0x400c20ee`). playhead-st changes it at those uses
+(`mods/playhead-st/seq-direction.s`). The sequencer's pattern pointers name
+their kits: `0x43bd7430` (playing) with `0x43bd743c`, `0x43bd7438` (next)
+with `0x43bd7444`; the live kits are `0x41ad5134 + k × 0x1618`, k < 128. An
+encoded kit slot (0x1600 bytes) uses [0, 0x14d2) natively, LFO3
+[0x14e0, 0x15d0) and playhead-st [0x15e0, 0x15f8). A native edit of a kit
+ends in `KitActive::kitChanged` (`0x40172250`, vtable `0x401c33f4` +0x5c; the
+object is in the project, `0x40a38b18 + 0x378d8`, kits at its +0x10), which
+re-encodes the kit into its mirror slots (job "KitActive::updateSingleMirror",
+`0x4001082e`): what survives a power cycle without a project save.
+
+Key IDs used here beyond `mods/core-st/README.md`'s: TRK = 2 (MainScreen's key
+switch at `0x40033f0a`, case 2, pushes the TrackSelectionView), UP = 14,
+DOWN = 15, LEFT = 16, RIGHT = 17. The MainScreen's header (`0x40032b0e..0x40032b72`) draws the tempo
+(`0x402d7010`, BPM × 120; `0x4013273e(tempo, 120, 1, 1)` splits it) as `%d.%d`
+right-aligned to x 125 in the font `0x443da1f0`, and the metronome at x 117 −
+the tempo's width, rows 55..62 (`0x400f8dac`, y 55 or 56). The active track is `0x4001ff74(app + 0x30)`, app = `0x4016e804()`.
+
+## 10. Not recorded in this repository
 
 - The names of the menu categories 1 to 14, other than 5, 10 and 11.
 - The names of the stock routines the audio code calls. Only addresses and the

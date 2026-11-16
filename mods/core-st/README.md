@@ -185,7 +185,8 @@ Machine lookups, SYN pages, Sound/lock mapping and parameter transport are gener
 core source; their descriptors and specific MAIN/AUDIO code come only from SMZ4.
 
 The key ID is a 32-bit word at `event+12`, flags at `event+16`. YES=0Ch,
-NO=0Dh, FUNC=1, PAGE=18, trigs=24..39, encoder pushes=40..47, LEVEL push=48.
+NO=0Dh, FUNC=1, TRK=2, UP=14, DOWN=15, LEFT=16, RIGHT=17, PAGE=18,
+trigs=24..39, encoder pushes=40..47, LEVEL push=48.
 Hardware reports press=1, repeat=9, release=10h. Encoder turn IDs are 1..8
 and LEVEL=9, with a signed delta at `event+16`.
 

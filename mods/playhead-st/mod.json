@@ -1,0 +1,5 @@
+{
+  "id":"playhead-st","version":"1.0","title":"Playhead: step order per track (reverse, pendulum, random, walk)",
+  "device":"syntakt","os":"1.41","license":"GPL-2.0-or-later",
+  "sources":["main.c","seq-direction.c","seq-direction.s","persist.c"],"smz_module":{"descriptor":"playhead_module"}
+}
