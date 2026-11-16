@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.8.2.
+Generated from git history by `tools/changelog.py`. Latest version: 1.9.0.
+
+## 1.9.0 (2026-11-16)
+
+- Recorder 1.4 and core 1.9: reduced post-take audio and faster MAIN capture (`085868a`, 2026-11-16)
 
 ## 1.8.2 (2026-11-16)
 
 - Fix TRIG/ARP mute navigation and reentrant native view cleanup (`5ff821a`, 2026-11-16)
+- Generate ARP 1.10.4 and core 1.8.2 changelogs (`84ec2db`, 2026-11-16)
 
 ## 1.8.1 (2026-11-14)
 
