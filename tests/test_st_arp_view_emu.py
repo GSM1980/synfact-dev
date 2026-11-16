@@ -44,7 +44,11 @@ class ViewMachine(Machine):
     # sentinel at +14h whose previous node (+4) is the top of the stack. An
     # opaque view on top is both; since 1.8 the ARP view is not opaque, so it
     # is the top while +1Ch stays the MainScreen (the 1.8 device bug read +1Ch).
-    def top(self,v):self.w(APP+0x40+0x1c,NODE);self.w(NODE+8,v);self.w(APP+0x40+0x18,NODE)
+    def top(self,v):
+        self.w(APP+0x40+0x1c,NODE);self.w(NODE+8,v);self.w(APP+0x40+0x18,NODE)
+        # MainScreen's parameter view is a separate transparent stack child:
+        # native 4003384a publishes/replaces it via manager 401015b8.
+        if v==MAIN:self.stack_top(PARAM)
     def stack_top(self,v):self.w(TOPNODE+8,v);self.w(APP+0x40+0x18,TOPNODE)
     def pages(self,ids):
         for i,n in enumerate(ids):self.w(PAGES+4*i,n)
@@ -106,7 +110,7 @@ class ViewMachine(Machine):
         if pc==0x400ffd02:
             assert self.args(1)==(ROOT+16,);self.closed+=1
             # Native close removes the view from the foreground stack.
-            self.w(ROOT+16+0x30,1);self.top(MAIN);self.ret();return
+            self.u.mem_write(ROOT+16+0x30,b'\x01');self.top(MAIN);self.ret();return
         if pc==0x400ffc5e:self.dirty+=1;self.ret();return
         # 1.8: the pages draw in the TRIG view (PARAM) with the native page
         # fonts (labels 443da230, values 443da210), primitives, the stock
@@ -312,7 +316,7 @@ def parameter_page_handoff(core,bank):
             # The first page press removes ARP and reaches the native manager;
             # release and another press remain available for native gestures.
             assert m.global_key(page_key,1,300)==0
-            assert m.closed==1 and m.word(ROOT+16+0x30)==1 and m.index()==0
+            assert m.closed==1 and m.read(ROOT+16+0x30,1)==b'\x01' and m.index()==0
             assert m.word(NODE+8)==MAIN and m.manager_calls==before+1
             assert m.global_key(page_key,16,310)==0
             assert m.global_key(page_key,1,320)==0

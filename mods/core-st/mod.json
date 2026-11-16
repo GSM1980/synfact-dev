@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -68,6 +68,12 @@
     "ST_CONTEXT_EVENTS": "1"
   },
   "sites": [
+    {
+      "addr": "0x40100f2c",
+      "stock": "4a0367082f0b4ebafbaa588f420017400022",
+      "op": "bytes",
+      "new": "4200174000224a0367082f0b4ebafba4588f"
+    },
     {
       "addr": "0x4007c272",
       "stock": "0c82000001f955c041f94022d59c7100c48070344c0028002f302830",

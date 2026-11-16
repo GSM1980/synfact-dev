@@ -8,6 +8,58 @@ Firmware files never go in this repository.
 
 ## Syntakt
 
+`tests/test_st_view_cleanup_emu.py --before old-core/main.bin
+--after new-core/main.bin --bank bank.smz4 --out report.json` executes native
+close and full deferred cleanup with synchronous visibility/compose/tick.
+The same bank with the old core must lose a nested close request and leave
+a closed ARP node blocking re-entry; a new cleanup request recovers it. The
+new core must preserve the request and return screen/blue keyboard without
+a modifier key. It checks digital/analog, POLY, retained owners and removal
+of mute while staying on ARP, including a complete-call instruction equality.
+
+`tests/test_st_arp_reentrant_view_emu.py --core main.bin --bank candidate.smz4
+--before old-1.10.3.smz4 --out report.json` executes native push/visibility,
+synchronous compose and the actual core tick, including real base View
+construction/destruction. The timed auto-popup model is idle and LCD work
+after the tick is a boundary. Normal entry must select the page before the
+nested tick, then pass both pages, wrap/reopen, both fallback subpages and
+the existing native mute/retained-owner suites through this same flow.
+Delivered 1.10.3 must reproduce its blank normal opening. No device access.
+
+`tests/test_st_arp_retained_view_emu.py --core main.bin --bank candidate.smz4
+--before old-1.10.2.smz4 --out report.json` reproduces mute/TRIG wrap with a
+native shared owner retaining a closed view beyond stack removal. The new
+session must paint blue through the actual LED-frame gate/walk without
+releasing the old owner or pressing a modifier; delayed destruction must
+preserve new settings and held keys. Native manager key traversal, shared
+copy/refcounts and removal execute linked code. Model/panel IO, unrelated
+LED handlers and base construction are boundaries. No device access.
+
+TRIG/ARP focus regression: `tests/test_st_arp_mute_emu.py` checks native
+page forwarding under mute, focus/step-release ownership and before/after
+MAIN instruction counts. Give `--core main.bin --bank candidate.smz4
+--before baseline.smz4 --out report.json`; the baseline for ARP 1.10.1 is an
+unmodified bank from the same current-main revision.
+
+`tests/test_st_arp_native_stack_emu.py --core main.bin --bank candidate.smz4
+--out report.json` runs native MainScreen publication, shared ownership,
+manager insertion and draw traversal with the contextual core DRAW bus.
+It checks both ARP pages, blue LEDs and step taps, fallback opening and
+mute-first creation beneath native mute, on digital/analog tracks with/without
+POLY. It validates both list directions and native mute removal, restoring
+the ARP keyboard without another allocation. `--mute-before` requires the
+1.10.1 delivery to reproduce its mute-first blank screen.
+Optional repeated `--before` inputs are the earlier blank 1.9.1/1.9.2
+deliveries, which must reproduce the inactive ARP state. Both suites need
+the linked bank `.work/main.elf`, matching core verification report and the
+ColdFire-capable Unicorn library. No device access occurs.
+
+The LFO3 activity fixture models the skipped Chorus initializer's real
+PAGE_LAYOUT-only native interest. Otherwise a normal bank's uninitialized
+Chorus callback defaults to every operation and fabricates an LFO subscriber;
+this reproduces on unmodified main too. The original inactive-route, live
+activation and missed-update negative checks remain required.
+
 The Syntakt's suites (`tests/test_st_*`, `tests/test_core_st_*`,
 `tests/test_syntakt_secondary.py`) and the regressions that run them all on a
 build folder are in [SYNTAKT-BUILD.md](SYNTAKT-BUILD.md): the commands, the

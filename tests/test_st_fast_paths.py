@@ -70,7 +70,13 @@ def verify(folder):
     at=address('core_native_note_accept');interest(at,20)
     target=branch(at+6,0x67)
     assert read(target,12)==bytes.fromhex('202a002472014ef9400a4244')
-    assert len(manifest['sites'])==106 and len(manifest['collections'])==16   # Current hook and mixer event tables.
+    # One additional inline UI cleanup site in 1.8.2; all hot paths above
+    # remain pinned. Its relocated branch/call target the original routines.
+    assert read(0x40100f2c,6)==bytes.fromhex('420017400022')
+    branch(0x40100f34,0x67,0x40100f3e)
+    _,cleanup_call=next(cf.disassemble_lengths(read(0x40100f38,4),0x40100f38,0x40100f38,0x40100f3c))
+    assert cleanup_call.flow==cf.F_JSR and cleanup_call.target==0x40100ade
+    assert len(manifest['sites'])==107 and len(manifest['collections'])==16   # Current hook and mixer event tables.
     assert report['resident_ram']['free']>=0 and '-O3' in report['cflags']
     print('PASS: 23 no-bank/stock-ID lookup exits and 12 per-operation interest native replays; hidden pointers/stack untouched on fast exits; all hooks, extended paths and APIs retained')
 

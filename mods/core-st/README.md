@@ -1,6 +1,14 @@
-# Syntakt core 1.8.1
+# Syntakt core 1.8.2
 
-Current MAIN optimization release: **core 1.8.1**, with an assembly native-service
+1.8.2 preserves deferred view closes raised by synchronous UI composition
+during native cleanup. It moves the existing request-clear before visibility
+recomputation in the same 18-byte instruction window. No resident space,
+new callback, polling or instruction is added; native close/removal and shared
+ownership stay unchanged. [Patch and native regression](VIEW-CLEANUP.md).
+This fixes mute → ARP → first TRIG → close mute → ARP with bank 1.10.4.
+The correction is in the core SYX; replacing the bank alone does not apply it.
+
+Retained MAIN optimization release: **core 1.8.1**, with an assembly native-service
 wrapper and grouped track-send capture. Native routes, profiling semantics and
 the complete optimized bank are retained; AUDIO is byte-identical to 1.8.0.
 Development labels in the records below are mapped to this single release in

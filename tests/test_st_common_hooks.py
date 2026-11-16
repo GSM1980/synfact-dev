@@ -101,8 +101,13 @@ def verify(folder):
     for at,name in ((0x400146bc,'core_machine_parameter_list'),(0x40044972,'core_machine_syn_randomize'),
                     (0x400a61fa,'core_machine_kit_owner'),(0x40013516,'core_native_kit_set')):
         assert read(at,6)==jump(name),name
-    assert len(manifest['sites'])==106 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
-    assert len({s['addr'] for s in manifest['sites']})==106
+    # 1.8.2: keep new deferred closes raised by synchronous UI composition.
+    cleanup=next(s for s in manifest['sites'] if int(s['addr'],16)==0x40100f2c)
+    assert cleanup['op']=='bytes' and cleanup['stock']=='4a0367082f0b4ebafbaa588f420017400022'
+    assert cleanup['new']=='4200174000224a0367082f0b4ebafba4588f'
+    assert read(0x40100f2c,18)==bytes.fromhex(cleanup['new'])
+    assert len(manifest['sites'])==107 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
+    assert len({s['addr'] for s in manifest['sites']})==107
     # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
     # `storage`, files.c `io`) has read, write and sectors, each a code address.
     # Core 1.7's boot table had a null write: the first trial boot jumped to 0.
@@ -112,6 +117,6 @@ def verify(folder):
         assert words[0]==address('fw_mmc_read') and words[1]==address('fw_mmc_write'),(name,[hex(w) for w in words])
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize; eMMC accessor tables complete; 106 sites, 16 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize, deferred UI cleanup; eMMC accessor tables complete; 107 sites, 16 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])

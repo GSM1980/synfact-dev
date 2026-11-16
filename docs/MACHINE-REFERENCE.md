@@ -421,6 +421,56 @@ MAIN mix, the mixer FX events, and the native transaction collection (event 11,
 `native.h`). A subscription can also name a view (`ST_EV_VIEW`) or request the
 pre-native KEY phase (`ST_EV_PRE`).
 
+### Native MainScreen stack (OS 1.41)
+
+MainScreen show `40033b74` publishes persistent children through `400ffd62`
+and manager push `40100bc2`; the parameter switch uses `401015b8`. Publication
+order is `+228h`, current parameter `+c0h`, `+e8h`, `+218h`, `+f0h`, `+220h`.
+The current parameter is therefore not normally the stack tail. Permanent
+mute is the separate transient child at `+230h`.
+
+Native list unlink `401bb31c(node)` and insert-before
+`401bb2f6(node, position)` only change links, not shared ownership. The
+manager's mutex is at `+4h`; its native guard constructor
+`4016e76a(guard, mutex)` stores the pointer and a held byte in an 8-byte
+guard, released by `4016e790(guard)`. Native manager removal
+`40100d20(manager, shared_pair)` detaches/removes that view while retaining
+other nodes. ARP 1.10.2's native-stack regression executes these routines
+when creating below mute and then removing mute; no list primitives are
+mocked. Highest opaque remains MainScreen because both overlays are
+transparent.
+
+The manager (UI controller `+40h`) has a list sentinel at `+14h`, tail link at
+`+18h`, and highest opaque node at `+1ch`; a node holds its view at `+8h`.
+Native draw traversal is `401007ce`. View manager pointer is `+2ch`, and its
+closed flag at `+30h` is a byte. Provenance and executable checks:
+[TRIG/ARP investigation](TRIG-ARP-MUTE-INVESTIGATION.md) and
+`tests/test_st_arp_native_stack_emu.py`.
+
+Manager push `40100bc2` calls visibility recomputation `40100ade` before
+the new view's attach callback. Visibility calls `4000a0e6`, which composes
+the UI synchronously and reaches the patched `core_tick` call at `4000a220`.
+State published before push must therefore be valid for a reentrant tick.
+`tests/test_st_arp_reentrant_view_emu.py` executes this chain; LCD work after
+the tick (`4000a22c` onward) is its explicit composition boundary.
+
+Native close `400ffd02(view)` marks the closed byte and requests deferred
+manager cleanup (`+22h`); it does not destroy the view. A native shared owner
+can outlive removal, delaying the view destructor. The ARP retained-view
+regression executes `4017cdee` shared-pair copy and `4016dde8` release to
+exercise that lifetime. Screen redraw (`400ffc5e`) and LED invalidation
+(`400ffc96`) are separate flags; the native LED frame is `400094f4`, with
+manager gate `401007ae` and reverse LED walk `40100856`.
+
+Deferred cleanup `40100ea4` removes closed nodes then calls visibility;
+visibility can re-enter core tick and close a view already visited by the
+walk. Stock `40100f2c..40100f3e` clears manager `+22h` after that callback,
+losing the new request. Core 1.8.2 clears it before visibility, preserving
+new closes without changing the 18-byte window's instruction count.
+`tests/test_st_view_cleanup_emu.py` executes the full native cleanup and its
+reentrant tick; direct shared-pair removal is not an equivalent test of this
+deferred path. [Patch details](../mods/core-st/VIEW-CLEANUP.md).
+
 ## 9. The sequencer's step per track (MAIN)
 
 The sequencer runs in a forced interrupt (`0x4008c924`, every 900000 units of

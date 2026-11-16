@@ -44,6 +44,14 @@ class Activity(Patchers):
         self.event_boundaries={self.bs['lfo3_events_native_'+name] for name in ('apply','clear','restore','fx_restore')}
         self.u.hook_add(UC_HOOK_MEM_WRITE,self.write_hook)
         self.run('full')
+        if 'chorus_native' in self.bs:
+            # Chorus initialization is a boundary in Patchers. Its real UI
+            # initializer (chorus-st/ui.c) restricts this callback to PAGE_LAYOUT;
+            # leaving the mock's default all-operations interest would fabricate
+            # a LFO subscriber and fail even on an unmodified normal main bank.
+            self.call('core_native_interest_set',self.bs['chorus_native'],1<<11)
+            route=bytes(self.u.mem_read(self.sym['core:core_native_interest'],24))
+            assert route[11]&0x88 and route[17]==0  # 80h encodes all callbacks.
         assert self.word(self.lfo['hooks_installed'])==1 and self.word(self.lfo['in_sram'])==1
         self.sr=0x2000
         self.w(0x444db730,POOL)

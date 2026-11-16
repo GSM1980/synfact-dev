@@ -64,8 +64,10 @@ def verify(folder,synfact=None):
         assert r['instructions'][name]['instructions']>0
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
-    native_sites=[s for s in manifest['sites'] if s['target'].startswith('core_native_')]
-    assert len(native_sites)==14 and len(manifest['sites'])==106 and len(manifest['collections'])==16
+    native_sites=[s for s in manifest['sites'] if s.get('target','').startswith('core_native_')]
+    assert len(native_sites)==14 and len(manifest['sites'])==107 and len(manifest['collections'])==16
+    cleanup=next(s for s in manifest['sites'] if s['addr']=='0x40100f2c')
+    assert cleanup['op']=='bytes' and read(0x40100f2c,18)==bytes.fromhex('4200174000224a0367082f0b4ebafba4588f')
     assert any(s['addr']=='0x400a423e' and s['target']=='core_native_note_accept' for s in native_sites)
     for site in native_sites:
         assert read(int(site['addr'],16),6)==struct.pack('>HI',0x4eb9 if site['op']=='jsr' else 0x4ef9,address(site['target']))

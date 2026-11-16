@@ -1,5 +1,86 @@
 # Digitone ARP → Syntakt: experimental source port
 
+## Publish the selected page before native composition (1.10.4)
+
+Normal opening now selects its target TRIG/ARP page before publishing the
+new view. The fallback path passes its current subpage into the same opening
+routine, so both paths publish a coherent page and view together.
+
+Native manager push calls visibility recomputation, which synchronously calls
+UI compose (`4000a0e6`) and the real core tick before attaching the view.
+Previously the key path still selected the preceding native page then:
+the nested tick closed the new ARP session. 1.10.3's immediate logical close
+therefore left both screen and keyboard absent. Under mute the fallback was
+already on an ARP page, explaining the different behavior on hardware.
+
+`tests/test_st_arp_reentrant_view_emu.py` executes that native compose/core
+tick path and real base View constructor/destructor. It reproduces the blank
+normal opening in 1.10.3, and checks cold entry, both pages, wrap/reopen,
+fallback subpages, both mute orders and retained old owners on digital/analog
+tracks with/without POLY. Only the LCD work after the tick is omitted from
+composition. No new core hooks or periodic work are added.
+
+## Re-entering ARP after mute/TRIG wrap (1.10.3)
+
+Closing an ARP session now clears its logical UI binding immediately, while
+native shared ownership continues to manage the view's lifetime. Previously
+only its destructor cleared `arp_view`. A native callback retaining the old
+view could therefore block a new session after removal: MODE still drew from
+the old binding, but its closed view could not own the blue keyboard. Releasing
+that owner made the keyboard work again.
+
+`tests/test_st_arp_retained_view_emu.py` follows mute → ARP → chord → first
+TRIG → close mute → ARP using native manager key traversal and a real native
+shared-owner copy. It checks blue LEDs through the native LED frame/walk
+before releasing that owner. The later old destructor must preserve the new
+view, settings and a held step; old LED callbacks cannot claim the new keys.
+It rejects 1.10.2 and covers digital/analog tracks with/without POLY. The extra
+reference models a valid callback lifetime; the specific hardware holder is
+not identified. Native cleanup/refcounts are executed, not forced by a mock.
+
+This only changes close/destruction transitions. Core, AUDIO, foreground,
+render and steady UI paths retain the previous behavior and cost gates.
+
+## Mute first, then ARP (1.10.2)
+
+ARP content stays visible whenever its native TRIG page is selected. Mute
+always remains above ARP and owns the trig keyboard while present; closing
+mute exposes the ARP keyboard without another navigation step.
+
+1.10.1 prevented ARP creation if mute was already open, so native navigation
+onto either ARP page left it empty. The tick now creates the transparent ARP
+view below the native PermanentMuteMenuView. Native TRIG still takes both
+key edges. The new view's retained list node is moved beneath mute using
+native unlink/insert under the manager mutex, without changing ownership or
+the highest opaque view. Unrelated windows still block creation.
+
+Foreground, LED, drawing and render callbacks are unchanged. Additional
+work happens only when opening beneath mute. The native-stack regression
+checks both orders, both pages, mute removal, restored step taps, list links
+and native publication/removal on digital/analog tracks with/without POLY;
+`--mute-before` reproduces the blank page on the delivered 1.10.1 bank.
+
+## TRIG pages and mute focus (1.10.1)
+
+This fixes TRIG/ARP page duplication and keyboard ownership on top of the
+current optimized 1.10 sources, preserving the clock, selector, event and
+render optimizations. It adopts the native page index, relinquishes step
+LEDs under mute, cancels held edits while retaining their releases, and
+closes on native parameter-page changes even while covered.
+
+Opening accepts MainScreen and its six normal published children, including
+the transparent layers above TRIG; unrelated windows such as mute still
+block it. The earlier 1.9.1/1.9.2 test deliveries incorrectly rejected those
+normal layers and left ARP inactive. The native stack regression executes
+the original MainScreen publication, manager insertion and drawing, and the
+core contextual DRAW bus, checking both pages and blue step-key response.
+
+The bank uses the current normal configuration, including Chorus 1.2, with
+core 1.8.1 rebuilt from main. Only ARP UI source changes; render instruction
+counts are compared with an unmodified bank from the same main revision.
+See [the investigation](../../docs/TRIG-ARP-MUTE-INVESTIGATION.md),
+`tests/test_st_arp_mute_emu.py` and `tests/test_st_arp_native_stack_emu.py`.
+
 The consolidated MAIN optimization release is **ARP 1.10**. Sections labelled
 1.10 through 1.13 below record local development iterations, all included in
 this single release step from 1.9. See [the mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).

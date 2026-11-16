@@ -611,3 +611,14 @@ There is no new hook, ABI, SDK field, allocation, SRAM reservation or cadence.
 All runtime code remains resident in the same 64 KiB reserve; AUDIO and the
 MSKIP 1.4 complete bank are byte-identical to their previous delivery.
 See [core MAIN performance](CORE-MAIN-PERFORMANCE.md) for validation and limits.
+
+## Syntakt core 1.8.2: preserve view closes raised by composition
+
+Deferred UI view cleanup can synchronously compose the screen and run core
+tick subscribers. A close requested by that composition must survive the
+cleanup's return. The inline native site now clears the consumed request
+before visibility/composition, instead of erasing newly raised requests
+afterwards. The native list, mutex, ABI, resident budgets, instruction counts
+and audio/render paths are unchanged. No module API or SDK field is added.
+This general UI lifecycle fix is part of the core, not a private ARP hook.
+See [the patch and regression](../mods/core-st/VIEW-CLEANUP.md).
