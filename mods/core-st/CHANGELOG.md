@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.8.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.8.2.
+
+## 1.8.2 (2026-11-16)
+
+- Fix TRIG/ARP mute navigation and reentrant native view cleanup (`5ff821a`, 2026-11-16)
 
 ## 1.8.1 (2026-11-14)
 
 - Playhead 1.0: step order per track (reverse, pendulum, random, walk) (`9dd0e4d`, 2026-11-16)
+- Changelogs: Playhead 1.0 (`c60f324`, 2026-11-16)
 - Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
 - Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
 - Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)

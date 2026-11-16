@@ -1,12 +1,28 @@
 {
   "id": "arp-st",
   "title": "ARP experiment",
-  "latest": "1.10",
+  "latest": "1.10.4",
   "entries": [
+    {
+      "version": "1.10.4",
+      "date": "2026-11-16",
+      "commits": [
+        {
+          "sha": "5ff821a",
+          "date": "2026-11-16",
+          "subject": "Fix TRIG/ARP mute navigation and reentrant native view cleanup"
+        }
+      ]
+    },
     {
       "version": "1.10",
       "date": "2026-11-14",
       "commits": [
+        {
+          "sha": "c60f324",
+          "date": "2026-11-16",
+          "subject": "Changelogs: Playhead 1.0"
+        },
         {
           "sha": "d322360",
           "date": "2026-11-15",
