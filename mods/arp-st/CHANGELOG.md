@@ -1,10 +1,15 @@
 # Changelog: ARP experiment
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.10.5.
+Generated from git history by `tools/changelog.py`. Latest version: 1.10.6.
+
+## 1.10.6 (2026-11-17)
+
+- ARP 1.10.6: RANGE shows the octaves moved (-3..3) (`07c5d2b`, 2026-11-17)
 
 ## 1.10.5 (2026-11-17)
 
 - move to OS 1.42 (`276667a`, 2026-11-17)
+- Changelogs: move to OS 1.42 (`3c0cdcb`, 2026-11-17)
 
 ## 1.10.4 (2026-11-16)
 

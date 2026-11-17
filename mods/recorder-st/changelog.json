@@ -11,6 +11,11 @@
           "sha": "276667a",
           "date": "2026-11-17",
           "subject": "move to OS 1.42"
+        },
+        {
+          "sha": "3c0cdcb",
+          "date": "2026-11-17",
+          "subject": "Changelogs: move to OS 1.42"
         }
       ]
     },

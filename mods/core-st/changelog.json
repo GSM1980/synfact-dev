@@ -11,6 +11,11 @@
           "sha": "b6406a5",
           "date": "2026-11-17",
           "subject": "Core 2.0.1: stream stock PCM safely and defer waveforms"
+        },
+        {
+          "sha": "eae3159",
+          "date": "2026-11-17",
+          "subject": "Changelogs: core 2.0.1"
         }
       ]
     },

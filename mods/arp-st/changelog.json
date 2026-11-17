@@ -1,8 +1,19 @@
 {
   "id": "arp-st",
   "title": "ARP experiment",
-  "latest": "1.10.5",
+  "latest": "1.10.6",
   "entries": [
+    {
+      "version": "1.10.6",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "07c5d2b",
+          "date": "2026-11-17",
+          "subject": "ARP 1.10.6: RANGE shows the octaves moved (-3..3)"
+        }
+      ]
+    },
     {
       "version": "1.10.5",
       "date": "2026-11-17",
@@ -11,6 +22,11 @@
           "sha": "276667a",
           "date": "2026-11-17",
           "subject": "move to OS 1.42"
+        },
+        {
+          "sha": "3c0cdcb",
+          "date": "2026-11-17",
+          "subject": "Changelogs: move to OS 1.42"
         }
       ]
     },
