@@ -1,10 +1,15 @@
 # Changelog: SY MONOMACHINE
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.3.0.
+Generated from git history by `tools/changelog.py`. Latest version: 0.3.1.
+
+## 0.3.1 (2026-11-17)
+
+- Calibrate ENS PW and WAVE laws against independent harmonic responses (`04c943f`, 2026-11-17)
 
 ## 0.3.0 (2026-11-11)
 
 - Calibrate ENS intervals, waveform blend and stereo chorus with MONO2K (`f9652a6`, 2026-11-11)
+- Record Digi Mono 0.3.0 ENS calibration release (`f30645a`, 2026-11-11)
 
 ## 0.2.0 (2026-11-11)
 

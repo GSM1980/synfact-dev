@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
   "title": "SY MONOMACHINE",
-  "latest": "0.3.0",
+  "latest": "0.3.1",
   "entries": [
+    {
+      "version": "0.3.1",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "04c943f",
+          "date": "2026-11-17",
+          "subject": "Calibrate ENS PW and WAVE laws against independent harmonic responses"
+        }
+      ]
+    },
     {
       "version": "0.3.0",
       "date": "2026-11-11",
@@ -11,6 +22,11 @@
           "sha": "f9652a6",
           "date": "2026-11-11",
           "subject": "Calibrate ENS intervals, waveform blend and stereo chorus with MONO2K"
+        },
+        {
+          "sha": "f30645a",
+          "date": "2026-11-11",
+          "subject": "Record Digi Mono 0.3.0 ENS calibration release"
         }
       ]
     },
