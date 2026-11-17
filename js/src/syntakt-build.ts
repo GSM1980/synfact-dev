@@ -25,7 +25,7 @@ export async function buildSyntakt(stockBytes: Uint8Array, manifestBytes: Uint8A
   if (!/^[0-9a-f]{64}$/.test(manifestSha256) || sha(manifestBytes) !== manifestSha256)
     throw new Error('Syntakt manifest hash mismatch')
   const m = JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(manifestBytes))
-  if (m.schema !== 1 || m.device !== 'syntakt' || m.os !== '1.41' || typeof m.meter !== 'boolean' ||
+  if (m.schema !== 1 || m.device !== 'syntakt' || m.os !== '1.42' || typeof m.meter !== 'boolean' ||
       !Array.isArray(m.mods) || m.mods.length !== 2 || !m.symbols || typeof m.symbols !== 'object' ||
       [m.mainSha256,m.audioSha256,m.outputSha256].some(x=>typeof x!=='string'||!/^[0-9a-f]{64}$/.test(x)))
     throw new Error('Invalid Syntakt manifest')
@@ -34,7 +34,7 @@ export async function buildSyntakt(stockBytes: Uint8Array, manifestBytes: Uint8A
       !/^[0-9a-f]{64}$/.test(p.sha256)) || new Set(pins.map(p=>p.file)).size !== pins.length)
     throw new Error('Invalid Syntakt artifact pins')
   const [stock, dev, rel] = await load(stockBytes)
-  if (dev.key !== 'syntakt' || rel.version !== '1.41' || !(stock instanceof Syx)) throw new Error('Requires official Syntakt OS 1.41')
+  if (dev.key !== 'syntakt' || rel.version !== '1.42' || !(stock instanceof Syx)) throw new Error('Requires official Syntakt OS 1.42')
   const raw = await Promise.all(pins.map(async p=>{
     const data=await fetchFile(p.file)
     if (sha(data)!==p.sha256) throw new Error(`${p.file}: artifact hash mismatch`)

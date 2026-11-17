@@ -9,6 +9,7 @@
     {"id": "system-info-smz-st", "path": "mods/system-info-smz-st", "kind": "module"},
     {"id": "sample-manager-st", "path": "mods/sample-manager-st", "kind": "module"},
     {"id": "chorus-st", "path": "mods/chorus-st", "kind": "module"},
+    {"id": "playhead-st", "path": "mods/playhead-st", "kind": "module"},
     {"id": "modulation-skip-st", "path": "mods/modulation-skip-st", "kind": "module", "always": true}
   ]
 }

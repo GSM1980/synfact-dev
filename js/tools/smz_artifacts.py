@@ -95,7 +95,7 @@ def main():
         entries.append({'id':doc['id'],'file':name,'sha256':hashlib.sha256(payload).hexdigest()})
         if recipe:entries[-1]['donor']={k:recipe[k] for k in ('title','device','versions')}
     source_hashes={Path(path).resolve().relative_to(source_root).as_posix():digest for path,digest in report['source_sha256'].items()}
-    manifest={'schema':schema,'device':'syntakt','os':'1.41','modules':entries,'sourceBankSha256':report['sha256'],
+    manifest={'schema':schema,'device':'syntakt','os':'1.42','modules':entries,'sourceBankSha256':report['sha256'],
               'sourceSha256':source_hashes,'approved':[]}
     payload=(json.dumps(manifest,indent=2)+'\n').encode();(a.out/'catalog.json').write_bytes(payload)
     print('Catalog SHA-256:',hashlib.sha256(payload).hexdigest())

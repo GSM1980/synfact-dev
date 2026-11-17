@@ -35,6 +35,8 @@ test('Syntakt builder rejects unpinned and malformed manifests before fetching',
   const data=new TextEncoder().encode('{}'), fetch=async()=>{throw Error('must not fetch')}
   await assert.rejects(buildSyntakt(new Uint8Array(),data,'0'.repeat(64),fetch),/manifest hash mismatch/)
   await assert.rejects(buildSyntakt(new Uint8Array(),data,sha(data),fetch),/Invalid Syntakt manifest/)
+  const old=new TextEncoder().encode(JSON.stringify({schema:1,device:'syntakt',os:'1.41'}))
+  await assert.rejects(buildSyntakt(new Uint8Array(),old,sha(old),fetch),/Invalid Syntakt manifest/)
 })
 
 test('Syntakt core matches an independent desktop reference',
