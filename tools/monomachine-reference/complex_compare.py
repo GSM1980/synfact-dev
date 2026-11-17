@@ -19,7 +19,7 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.signal import find_peaks, resample_poly, welch
 
 import compare as common
-from complex_cases import FAMILIES, cases
+from complex_cases import FAMILIES, cases, ens_cases, ens_shape_cases
 
 HERE, ROOT = common.HERE, common.ROOT
 BAND_EDGES = 20*2**(np.arange(121)/12)
@@ -181,18 +181,19 @@ def plot_report(result, spectra, out):
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     rows = result['cases']
+    families=list(dict.fromkeys(row['family'] for row in rows))
     fig, axis = plt.subplots(figsize=(12, 6), layout='constrained')
-    for y, family in enumerate(FAMILIES):
+    for y, family in enumerate(families):
         values = [row['spectral_js_distance'] for row in rows if row['family']==family and row['spectral_js_distance'] is not None]
         jitter = np.linspace(-.13, .13, len(values))
         axis.scatter(values, y+jitter, alpha=.75, s=28)
-    axis.set(yticks=range(len(FAMILIES)), yticklabels=list(FAMILIES), xlim=(-.02,1.02),
+    axis.set(yticks=range(len(families)), yticklabels=families, xlim=(-.02,1.02),
              xlabel='Distancia espectral normalizada (0: igual distribución; 1: disjunta)',
              title='Motores complejos · casos individuales · diagnóstico, no porcentaje de fidelidad')
     axis.grid(axis='x', alpha=.25)
     fig.savefig(out/'overview.png', dpi=140);plt.close(fig)
     selected = []
-    for family in FAMILIES:
+    for family in families:
         candidates = [row for row in rows if row['family']==family and row['spectral_js_distance'] is not None]
         row = max(candidates, key=lambda r:r['spectral_js_distance'])
         selected.append(row['name'])
@@ -217,14 +218,16 @@ def plot_report(result, spectra, out):
 
 def write_report(result, out):
     rows = result['cases']
+    families=list(dict.fromkeys(row['family'] for row in rows))
+    notes=sorted(set(row['note'] for row in rows))
     lines = ['# Máquinas complejas: comparación con Monomachine', '',
-             f"{len(rows)} casos en {len(FAMILIES)} motores, mismos valores crudos de controles y misma afinación física.", '',
+             f"{len(rows)} casos en {len(families)} motores, notas MIDI {notes}, mismos valores crudos de controles y misma afinación física.", '',
              'Referencia: DSP original OS 1.32B en Monomodule/JIT con cadena neutralizada. Nuestro lado: generador del banco, antes de declick/gain/FLTR/AMP/FX de Syntakt. No hay validación con Monomachine física.', '',
              'La distancia espectral compara energía normalizada en bandas de 1/12 de octava entre 20 Hz y 20,48 kHz. No es un porcentaje de fidelidad, ni distingue por sí sola diferencias del generador y de la cadena residual. Las fases y el volumen global no forman parte de esa distancia. El ruido y la modulación requieren interpretación estadística.', '',
              'La respuesta de nivel es el cambio respecto al caso base de cada motor, restando el cambio original. Cancela una ganancia constante entre cadenas, pero conserva posibles diferencias de filtrado, saturación y modulación. No es una calibración de ganancia absoluta.', '',
              '| Motor | Casos | Mayor distancia espectral | Caso |', '|---|---:|---:|---|']
     sections = []
-    for family in FAMILIES:
+    for family in families:
         group = [row for row in rows if row['family']==family]
         audible = [row for row in group if row['spectral_js_distance'] is not None]
         worst = max(audible,key=lambda r:r['spectral_js_distance'])
@@ -245,7 +248,7 @@ def write_report(result, out):
         if row['family']=='ENS' and 'chorus' in row['name']:
             lines.append(f"- {row['feature']}: correlación L/R original {row['reference']['stereo']['correlation']:.4f}; nuestro generador {row['raw']['stereo']['correlation']:.4f}.")
     lines += ['', '## Alcance', '',
-              'SAW/PULSE/VO usan Digi Mono; ENS, SID y FM+ usan nuestro port MONO2K. Los hashes registran la versión medida de cada generador. Cada motor usa una nota de prueba (MIDI 48; VO, MIDI 60); esto no valida todo el teclado ni todas las combinaciones.', '',
+              'SAW/PULSE/VO usan Digi Mono; ENS, SID y FM+ usan nuestro port MONO2K. Los hashes registran la versión medida de cada generador. Las notas y los parámetros de cada caso se muestran en el JSON; esto no valida todo el teclado ni todas las combinaciones.', '',
               'Los casos de ocho segundos de ENS permiten observar movimiento lento de chorus. VO incluye ventanas tempranas para consonantes/transiciones. No hay note-off, portamento, PRCH entre pistas ni locks/LFO externos; la modulación interna sí funciona.', '',
               'A/B: solo los archivos de escucha están igualados en RMS AC y resampleados a 48 kHz. Si una ventana estable es silenciosa, se usa RMS del clip completo para ambos lados y se conservan los transitorios. Los WAV reference/raw mantienen sus tasas y ganancias nativas. El caso totalmente silencioso no se amplifica. La comparación espectral promedia potencia L/R sin cancelar el contenido fuera de fase.', '',
               '[Informe con audios](report.html) · [Resultados y procedencia](results.json) · [Vista general](overview.png)', '']
@@ -253,7 +256,7 @@ def write_report(result, out):
     document = '''<!doctype html><html lang="es"><meta charset="utf-8"><title>Máquinas complejas · Monomachine</title>
 <style>body{font:16px system-ui;max-width:1260px;margin:30px auto;padding:0 20px;color:#18202b;background:#fafbfc}table{border-collapse:collapse;width:100%}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}img{width:100%}.note{background:#e9eef5;padding:18px;line-height:1.5}audio{width:270px}pre{font-size:12px;max-width:500px;white-space:pre-wrap}section{margin:45px 0}nav a{margin-right:15px}</style>
 <h1>Máquinas complejas · OS 1.32B</h1><p class="note">DSP original con cadena neutralizada frente a generadores brutos del banco. La distancia espectral es un diagnóstico, no un porcentaje de fidelidad. Niveles absolutos y estéreo corresponden a etapas diferentes; no hay prueba con hardware físico. A/B: primero original y después nuestro motor, igualados en RMS.</p>
-<nav>'''+''.join('<a href="#'+f.lower().replace('+','_').replace('-','_')+'">'+html.escape(f)+'</a>' for f in FAMILIES)+'''</nav><img src="overview.png" alt="Distancias de los casos por motor"><p><a href="report.md">Método, alcance y resumen</a> · <a href="results.json">Resultados completos</a></p>'''+''.join(sections)+'</html>'
+<nav>'''+''.join('<a href="#'+f.lower().replace('+','_').replace('-','_')+'">'+html.escape(f)+'</a>' for f in families)+'''</nav><img src="overview.png" alt="Distancias de los casos por motor"><p><a href="report.md">Método, alcance y resumen</a> · <a href="results.json">Resultados completos</a></p>'''+''.join(sections)+'</html>'
     (out/'report.html').write_text(document,encoding='utf-8')
 
 
@@ -264,6 +267,9 @@ def main():
     parser.add_argument('--cc',type=Path,required=True)
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--captures',type=Path,help='reanalyze verified captures with identical controls/OS/engine sources')
+    parser.add_argument('--suite',choices=('complex','ens','ens-shape'),default='complex')
+    parser.add_argument('--reference-dist',type=int,choices=range(128),default=64,
+                        help='original AMP DIST; lower values test extra internal headroom')
     args = parser.parse_args()
     build = json.loads((args.reference.resolve().parent/'reference-build.json').read_text())
     for name,digest in build['driver_sha256'].items():
@@ -284,7 +290,8 @@ def main():
         lib=None
     else:
         lib,_ = common.host_engine(args.cc,out)
-    result = {'schema':1,'suite':'complex-machines','scope':'original neutral track chain vs raw bank OSC',
+    fixtures={'complex':cases,'ens':ens_cases,'ens-shape':ens_shape_cases}[args.suite]()
+    result = {'schema':1,'suite':args.suite,'scope':'original neutral track chain vs raw bank OSC',
               'reference_build':build,'os_sha256':common.sha(args.os),
               'reference_executable_sha256':common.sha(args.reference),
               'quiet_threshold_dbfs_ac':QUIET_DBFS,'band_edges_hz':BAND_EDGES.tolist(),
@@ -292,18 +299,21 @@ def main():
               'source_sha256':{p.relative_to(ROOT).as_posix():common.sha(p) for p in
                               [*sorted(p for p in HERE.glob('*') if p.suffix in ('.py','.c','.cpp','.h','.cmake','.json','.patch')),
                                *sorted(p for p in (ROOT/'mods/digimono-st').rglob('*') if p.is_file() and p.suffix in ('.c','.h','.inc','.json'))]},
-              'reference_chain':{'amp':[0,127,127,0,64,64,64,0],'filt':[0,127,0,0,0,0,64,64],
+              'reference_chain':{'amp':[0,127,127,0,args.reference_dist,64,64,0],'filt':[0,127,0,0,0,0,64,64],
                                  'efx':[64,64,0,64,64,0,0,127],'level':100,'warmup_blocks':8},
               'cases':[]}
     if cached is not None:
+        assert cached['reference_chain']==result['reference_chain'],'reference chain differs'
+        assert set(cached_rows)=={case['name'] for case in fixtures},'capture fixture set differs'
         result['reused_captures_manifest_sha256']=common.sha(args.captures/'results.json')
     spectra, anchors = {}, {}
-    for case in cases():
+    for case in fixtures:
         name=case['name'];refpath=out/(name+'-reference.wav');rawpath=out/(name+'-raw.wav')
         events=[(round(time*44100),note) for time,note in case['events']]
         assert all(frame%16==0 for frame,_ in events)
         command=[str(args.reference.resolve()),'--fw',str(args.os.resolve()),'--out',str(refpath),
                  '--frames',str(round(case['duration_s']*44100)),'--machine',str(case['original_machine']),
+                 '--dist',str(args.reference_dist),
                  '--syn',','.join(map(str,case['params']+[case['tune']])),
                  '--events',','.join(f'{frame}:{note}' for frame,note in events)]
         if cached is None:
@@ -326,10 +336,11 @@ def main():
             if raw.shape[1]==1:raw=raw[:,0]
         row,spectra[name]=score_case(case,reference,raw)
         row['reference_sha256'],row['raw_sha256']=common.sha(refpath),common.sha(rawpath)
-        if case['family'] not in anchors:
-            anchors[case['family']]=row
-        row['anchor']=anchors[case['family']]['name']
-        row['relative_gain_change_db']=relative_gain_change(row,anchors[case['family']])
+        anchor=case.get('anchor_group',case['family'])
+        if anchor not in anchors:
+            anchors[anchor]=row
+        row['anchor']=anchors[anchor]['name']
+        row['relative_gain_change_db']=relative_gain_change(row,anchors[anchor])
         result['cases'].append(row)
         row['ab_normalization']=listen_ab(reference,raw,out/(name+'-ab.wav'),row['analysis_window_s'])
         with (out/'measurements.jsonl').open('a',encoding='utf-8') as log:
@@ -339,7 +350,7 @@ def main():
     plot_report(result,spectra,out)
     (out/'results.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n',encoding='utf-8')
     write_report(result,out)
-    print(f"Created {len(result['cases'])} captures in {len(FAMILIES)} engines, WAV A/B, plots and report; no device access.")
+    print(f"Created {len(result['cases'])} captures in {len(anchors)} anchor groups, WAV A/B, plots and report; no device access.")
 
 
 if __name__=='__main__':

@@ -162,6 +162,41 @@ combination; WAVE/PW colour and relative gain response still differ.
 
 ## Further rounds
 
+The ENS control-law round adds `--suite ens` (149 fixtures at MIDI
+36/48/60/72/84) and `--suite ens-shape` (28 additional cuts, including 22
+independent response checks). Each note has its own gain anchor. The original
+driver's optional `--dist` and comparator's `--reference-dist` default to 64;
+48 provides more internal headroom. All other chain controls remain recorded.
+Capture reuse also requires identical chain settings and fixture sets.
+
+```powershell
+python tools/monomachine-reference/complex_compare.py --suite ens --reference-dist 48 `
+  --os $env:MONOMACHINE_OS --reference "$env:MONO_REFERENCE_BUILD/synfact-mnm-reference.exe" `
+  --cc "$env:LLVM_MINGW_BIN/x86_64-w64-mingw32-clang.exe" --out out/ens-grid
+python tools/monomachine-reference/complex_compare.py --suite ens-shape --reference-dist 48 `
+  --os $env:MONOMACHINE_OS --reference "$env:MONO_REFERENCE_BUILD/synfact-mnm-reference.exe" `
+  --cc "$env:LLVM_MINGW_BIN/x86_64-w64-mingw32-clang.exe" --out out/ens-shape
+python tools/monomachine-reference/ens_model.py out/ens-grid `
+  --validation-captures out/ens-shape --out out/ens-model
+```
+
+`ens_model.py` fits 12 harmonics at each capture's native rate, using verified
+original WAVs only. Same-note, same-harmonic ratios cancel a shared linear track
+response. PW uses the odd harmonics of the half-period pulse as its anchor;
+WAVE uses the same PW and the pulse-end saw blend. It records assumptions,
+input/tool/WAV hashes, fit errors and independent validation. Training settings
+are excluded from the validation even when rendered again. Magnitudes infer
+the smaller duty of a complementary pair; the existing monotonic PW direction
+is retained. Very narrow pulses
+are less well conditioned, and this method does not infer absolute gain.
+
+The measured laws are duty `0.01 + 0.98*PW/128` and saw weights `1-.30*x`,
+`1-1.70*x`, `x=WAVE/127`. They replace MONO2K's zero-width endpoint and .63
+pulse weight in Digi Mono 0.3.1. Mean harmonic-response RMS error on the 22
+validation cuts falls 0.943 to 0.006 dB. The uncorrected raw spectral diagnostic
+can move in either direction: the original track chain and raw OSC remain
+different stages. No compensating filter or global gain is added to the engine.
+
 First establish how much of the measured gain/colour comes from the neutral
 reference chain. A comparable raw reference tap or independent chain
 characterisation is needed before changing oscillator gain. Extend the complex

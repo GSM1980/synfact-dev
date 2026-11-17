@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Extracted MONO2K SWAVE-ENS; generated, do not edit. */
+ * MONO2K SWAVE-ENS with measured PW/WAVE laws; generated, do not edit. */
     case M_ENS: {                      /* PCH2 PCH3 PCH4 WAVE PW CHRL CHRW TUNE */
         /* after the Monomachine's SWAVE-ENS, measured on its OS (tools/ref/chain_ens15..20): the root and up to three
          * voices off its interval table (equal tempered, and the just 3/2 4/3 5/4 6/5 beside them), no level shared
-         * between them. A voice is two saws an octave under its note, the second PW / 128 of a period on; WAVE fades
-         * their sum out and their difference in at 0.63 (weights 1 - 0.37 x and 1 - 1.63 x, x = WAVE / 127): PW 64
+         * between them. A voice is two saws an octave under its note, the second 0.01 + 0.98 * PW / 128 of a period on; WAVE fades
+         * their sum out and their difference in at 0.70 (weights 1 - 0.30 x and 1 - 1.70 x, x = WAVE / 127): PW 64
          * one saw at the note, WAVE 127 a pulse an octave under. The chorus (tools/ref/chain_ens41.spec): two copies
          * off a half-rate line, each delayed by a sine at 0.2 Hz swinging +-16.8 c, the second a quarter turn on;
          * CHRL their mix (dry 1 - 0.83 x, wet 0.85 x). CHRW sets them apart across the stereo: the left hears
@@ -12,9 +12,10 @@
          * (CHRW / 127)^1.15, T_ENS_W), so at 0 both hear their mean (mono); out as the mid here and the side (eside) */
         int32_t base = pitch + (PB8(t, P_SYN + 7) >> 7) - 12 * 64;
         int32_t w8 = P8(t, P_SYN + 3);
-        int32_t wa = 32768 - (w8 * 12124) / (127 * 256);                   /* Q15 (2^15 by 2^16) */
-        int32_t wb = 32768 - (w8 * 53412) / (127 * 256);
-        uint32_t off = (uint32_t)P8(t, P_SYN + 4) << 17;
+        int32_t wa = 32768 - (w8 * 9830) / (127 * 256);                   /* Q15 (2^15 by 2^16) */
+        int32_t wb = 32768 - (w8 * 55706) / (127 * 256);
+        uint32_t width = (uint32_t)P8(t, P_SYN + 4) << 17;
+        uint32_t off = 42949673u + width - (width + 25u) / 50u;
         uint32_t inc[4], inv[4];
         for (int k = 0; k < 4; k++) {
             int32_t iv = k ? T_ENS_PCH[P7(t, P_SYN + k - 1)] : 0;

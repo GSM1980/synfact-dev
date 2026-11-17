@@ -1,4 +1,4 @@
-# SY MONOMACHINE 0.3.0
+# SY MONOMACHINE 0.3.1
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
@@ -154,6 +154,8 @@ pinned MONO2K with native 64-bit arithmetic, deterministic extraction and
 44.1/48 kHz tables, wide multiply checks, an independent 440 Hz tuning check,
 all five SID waveforms, ENS L/R and chorus continuity across retriggers.
 This is a port comparison, not original-MNM matching.
+ENS's oracle applies the measured PW/WAVE corrections to the pinned source;
+the phase mapping uses independent native-wide arithmetic in the oracle.
 Regenerate committed source with `python mods/digimono-st/mono2k/generate.py`.
 
 The emulator command needs the EMAC-capable Unicorn (`LIBUNICORN_PATH`).
@@ -161,7 +163,7 @@ It executes the linked ColdFire bank and native gain calls, comparing PCM
 before native gains against the host engine, including both ENS channels and
 the no-service fold-down. See `docs/TESTS.md` for scope.
 
-Version 0.3's offline OS 1.32B comparison improves all 13 ENS fixtures at MIDI
+Version 0.3.0's offline OS 1.32B comparison improves all 13 ENS fixtures at MIDI
 48. Spectral distance falls from 0.604 to 0.047 for PCH2=96, and 0.749 to 0.160
 for WAVE=127/PW=32. At CHRL/CHRW=127, L/R correlation is 0.782 versus 0.785 in
 the reference. This diagnostic is not a fidelity percentage: original neutral
@@ -170,6 +172,20 @@ colour, level response and wider keyboard/gate behaviour need further rounds.
 The same run retains byte-identical raw WAVs for all 75 non-ENS fixtures.
 ENS's saved values keep their positions but intentionally sound different:
 PCH=63 now disables that added voice, and 96 selects +6 rather than +18.
+
+Version 0.3.1 measures 149 ENS cases across MIDI 36/48/60/72/84 and 28 additional
+WAVE/PW cuts. Same-note harmonic ratios cancel the common linear track response:
+PW's duty is `0.01 + 0.98 * PW / 128`; WAVE blends the paired saws with weights
+`1 - 0.30*x` and `1 - 1.70*x`, where `x=WAVE/127`. PW=0 retains a narrow pulse,
+PW=64 stays exactly half a period, and the pulse-end blend has weight 0.70.
+Fractional Q8 controls remain supported, using integer arithmetic on ColdFire.
+The 22 independent harmonic-response checks reduce mean RMS error from 0.943
+to 0.006 dB. This is a control-law measurement, not whole-instrument fidelity.
+Repeating the original captures at DIST=48 instead of 64 barely changes their
+normalized spectra; global gain is still not calibrated. Raw spectral distances
+have mixed changes because that diagnostic also includes the unmatched track
+chain. Chorus, intervals, UI/storage and the other eleven generators are unchanged
+from 0.3.0. Native Syntakt listening and CPU timing remain owner QA.
 
 To combine it with the normal bank, append `mods/digimono-st` to the machine
 folders in the documented bank command. It needs no Monomachine/Digitakt OS.

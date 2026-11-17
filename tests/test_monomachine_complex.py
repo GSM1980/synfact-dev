@@ -9,10 +9,28 @@ import numpy as np
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/monomachine-reference'))
 import complex_compare as bench
-from complex_cases import FAMILIES,cases
+import ens_model
+from complex_cases import FAMILIES,cases,ens_cases,ens_shape_cases
 
 
 class ComplexMetrics(unittest.TestCase):
+    def test_ens_control_inference_from_harmonic_ratios(self):
+        odd=np.arange(1,13,2)
+        for duty in (.01,.01765625,.1325,.255,.3775):
+            ratios=abs(np.sin(np.pi*odd*duty))
+            result=ens_model.fit_width(ratios,odd)
+            self.assertAlmostEqual(result['duty'],duty,places=7)
+            self.assertLess(result['log_rms_error'],1e-6)
+        k=np.arange(1,13);duty=.255
+        for ratio,scale in ((.1688,1.2125),(-.5,.8),(.8,1.4)):
+            values=scale*np.sqrt(1+ratio**2+2*ratio*np.cos(2*np.pi*k*duty))/(2*abs(np.sin(np.pi*k*duty)))
+            result=ens_model.fit_mix(values,k,duty)
+            self.assertAlmostEqual(result['b_over_a'],ratio,places=6)
+            self.assertAlmostEqual(result['scale'],scale,places=6)
+        with self.assertRaises(ValueError):ens_model.fit_width([1,0],[1,3])
+        with self.assertRaises(ValueError):ens_model.fit_width([1,1],[1,2])
+        with self.assertRaises(ValueError):ens_model.fit_mix([1,-1],[1,2],duty)
+
     def test_spectral_distribution_has_explicit_limits_and_ignores_gain(self):
         self.assertAlmostEqual(bench.spectral_distance([1,0],[0,1]),1)
         self.assertAlmostEqual(bench.spectral_distance([1,2],[7,14]),0)
@@ -106,6 +124,30 @@ class ComplexMetrics(unittest.TestCase):
         mono=bench.raw_render(Driver(),case)
         self.assertEqual(mono.shape,(32,))
         np.testing.assert_array_equal(mono,.25)
+
+    def test_ens_grid_has_extremes_octaves_per_note_anchors_and_all_voices(self):
+        grid=ens_cases();self.assertEqual(len(grid),149)
+        self.assertEqual(len({c['name'] for c in grid}),149)
+        self.assertEqual(set(c['note'] for c in grid),{36,48,60,72,84})
+        for note in (36,48,60,72,84):
+            group=[c for c in grid if c['note']==note]
+            self.assertEqual(group[0]['params'],[63,63,63,0,64,0,127])
+            self.assertEqual({c['anchor_group'] for c in group},{f'ENS-{note}'})
+            shapes={(c['params'][3],c['params'][4]) for c in group if c['params'][:3]==[63]*3}
+            self.assertTrue({(w,p) for w in (0,64,127) for p in (0,16,32,64,96,112,127)}<=shapes)
+        for case in grid:
+            self.assertEqual((case['bank_type'],case['original_machine']),(4,14))
+            self.assertTrue(all(0<=p<=127 for p in case['params']))
+            for time,_ in case['events']:
+                self.assertEqual(round(time*44100)%16,0)
+                self.assertEqual(round(time*48000)%32,0)
+        self.assertTrue(any(c['params'][1]==103 and c['params'][0]==63 for c in grid))
+        self.assertTrue(any(c['params'][2]==103 and c['params'][0]==63 for c in grid))
+        shape=ens_shape_cases();self.assertEqual(len(shape),28)
+        fitted={(c['note'],tuple(c['params'])) for c in grid}
+        independent=[c for c in shape if (c['note'],tuple(c['params'])) not in fitted]
+        self.assertEqual(len(independent),22)
+        self.assertEqual(len({c['name'] for c in shape}),28)
 
 
 if __name__=='__main__':unittest.main()

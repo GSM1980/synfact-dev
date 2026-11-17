@@ -32,6 +32,13 @@ metrics, stereo/silence handling, gain-response calculation, transient-preservin
 A/B normalization and explicit fixtures without any firmware input. Reanalysis
 may reuse hash-verified captures; the linked DSP/native generator sources and
 every parameter/event must match.
+The ENS extension adds 149 octave/control/chorus/retrigger fixtures and 28
+separate shape cuts, with per-note gain anchors. `ens_model.py` checks hashed
+original captures and infers duty/blend from same-note harmonic ratios, then
+validates 22 independent response cuts, excluding repeated grid settings.
+Numerical tests cover width/blend
+inference, invalid inputs, the five-octave grid and stereo captures. Original
+DIST, the entire chain and the fixture set must also match for capture reuse.
 
 The standalone Digi Mono port test runs all twelve types through the real
 adapter/DSP, checking PCM/state against the engine, UI labels and chord names,
@@ -57,6 +64,8 @@ deterministic extraction; the generated tables at 44.1 kHz match upstream and
 the committed ones regenerate at 48 kHz. The five MONO2K generators compare
 6,912 blocks of PCM/state against the pinned code using native 64-bit maths,
 including fractional controls, low/high pitches and changing modulation.
+ENS's oracle includes the measured 0.3.1 PW/WAVE laws; its width conversion uses
+independent wide arithmetic. The adapter checks PW=0 remains audible at WAVE127.
 Independent checks cover wide arithmetic, 440 Hz carrier tuning at 48 kHz
 and all five SID waves, ENS L/R and delay/clock continuity across retriggers.
 `test_st_digimono_stereo.c` checks both output channels, single ramp advancement,

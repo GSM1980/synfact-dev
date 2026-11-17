@@ -51,6 +51,15 @@ int main(void)
         p[5]=0;p[6]=127<<8;dm_ens_render(&v,p,60*64,l,r);assert(!memcmp(l,r,sizeof l));
         assert(T_ENS_PCH[61]==ENS_OFF && T_ENS_PCH[62]==ENS_OFF && T_ENS_PCH[63]==ENS_OFF);
         assert(T_ENS_PCH[96]==6*64);
+        /* The measured minimum width is 1%, including PW=0: no cancelled
+         * saw pair at the pulse end of WAVE. It remains mono with CHRL=0. */
+        p[3]=127<<8;p[4]=0;dm_ens_init(&v);unsigned audible=0;
+        for(unsigned n=0;n<32;n++){
+            dm_ens_render(&v,p,60*64,l,r);
+            assert(!memcmp(l,r,sizeof l));
+            for(unsigned i=0;i<32;i++)audible+=l[i]!=0;
+        }
+        assert(audible>100);
     }
     for(unsigned type=DM_SID;type<=DM_FMDYN;type++)for(unsigned trial=0;trial<24;trial++){
         struct dm_m2k_voice actual,reference;

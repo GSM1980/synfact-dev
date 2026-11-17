@@ -67,6 +67,11 @@ void dm_ref_render(struct dm_m2k_voice *v,unsigned type,const uint16_t *p,int32_
 }
 '''
     ens = dsp[dsp.index('    case M_ENS: {'):dsp.index('    case M_WAV: {')]
+    # Measured control-law corrections; native-wide arithmetic independently
+    # checks the phase mapping's ColdFire split/divide implementation.
+    ens = ens.replace('12124','9830').replace('53412','55706')
+    ens = ens.replace('(uint32_t)P8(t, P_SYN + 4) << 17',
+                      '(uint32_t)(42949673u + (((uint64_t)P8(t, P_SYN + 4) * (1u<<17) * 49u + 25u) / 50u))')
     code += '''static void ref_ens_block(struct dm_ens_voice *t,const uint16_t *p,int32_t pitch,int16_t *o,int16_t *side){
     int ti=0;int16_t *ens_mem[1]={t->line},*eside[1]={side};
     switch(DM_ENS){

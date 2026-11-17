@@ -109,3 +109,48 @@ def cases():
     for envelope in (32, 96):
         add('FM+DYN', f'fen_{envelope}', [64,envelope,64,64,74,64,0], f'1FEN={envelope}')
     return result
+
+
+def ens_cases():
+    """Dense, held-note ENS cuts. Original raw controls, per-note gain anchors."""
+    result=[]
+    def add(suffix,p,feature,note=48,duration=2,events=None):
+        result.append(dict(name='ens_'+suffix,family='ENS',bank_type=4,original_machine=14,
+                           note=note,tune=64,params=list(p),feature=feature,duration_s=duration,
+                           events=events or [(0,note)],anchor_group=f'ENS-{note}'))
+    for note in (36,48,60,72,84):
+        add(f'n{note}_base',[63,63,63,0,64,0,127],f'MIDI {note}: base, WAVE=0/PW=64',note)
+        for wave in (0,64,127):
+            for pw in (0,16,32,64,96,112,127):
+                if wave==0 and pw==64:continue
+                add(f'n{note}_w{wave}_pw{pw}',[63,63,63,wave,pw,0,127],
+                    f'MIDI {note}: WAVE={wave}, PW={pw}',note)
+        add(f'n{note}_four',[0,103,127,64,32,0,127],f'MIDI {note}: cuatro voces, -12/+3:2/+12',note)
+    # Each distinct interval including just ratios and the OFF boundaries.
+    for value in (0,18,22,33,37,41,45,49,53,57,60,61,62,63,64,72,76,80,84,88,92,96,100,103,107,111,115,119,123,127):
+        add(f'interval_{value}',[value,63,63,0,64,0,127],f'PCH2={value}')
+    for index in (1,2):
+        p=[63,63,63,0,64,0,127];p[index]=103
+        add(f'voice{index+2}_just',p,f'PCH{index+2}=103 (+3:2)')
+    for note in (36,60,84):
+        for width in (64,127):
+            add(f'n{note}_chorus_{width}',[63,63,63,0,64,127,width],
+                f'MIDI {note}: chorus CHRL=127, CHRW={width}',note,duration=8)
+    add('repeat',[0,103,127,64,32,127,127],'Cuatro voces con chorus, tres retriggers',
+        duration=2,events=[(0,48),(.64,48),(1.28,48)])
+    return result
+
+
+def ens_shape_cases():
+    """WAVE/PW validation cuts plus anchors; ens_model excludes grid repeats."""
+    result=[]
+    for note in (48,60,72):
+        waves=(0,16,32,48,64,80,96,112,127) if note==48 else (8,24,40,56,72,88,104,120) if note==72 else ()
+        pairs=[(0,64)]+[(wave,32) for wave in waves]
+        if note==60:pairs += [(127,pw) for pw in (8,24,40,56,72,88,104,120)]
+        for wave,pw in pairs:
+            result.append(dict(name=f'ens_shape_n{note}_w{wave}_pw{pw}',family='ENS',bank_type=4,original_machine=14,
+                               note=note,tune=64,params=[63,63,63,wave,pw,0,127],
+                               feature=f'MIDI {note}: WAVE={wave}, PW={pw}',duration_s=2,events=[(0,note)],
+                               anchor_group=f'ENS-{note}'))
+    return result

@@ -58,12 +58,22 @@ def generate_ens():
     source = (HERE/'upstream/m2k_dsp.c').read_text()
     case = source[source.index('    case M_ENS: {'):source.index('    case M_WAV: {')]
     case = case.replace('ens_mem[ti]', 't->line').replace('eside[ti]', 'side')
+    # Same-note harmonic ratios cancel the original track response. The ENS
+    # grid infers duty=.01+.98*PW/128 and saw weights 1-.3*x / 1-1.7*x,
+    # x=WAVE/127; ens_model.py validates these laws on independent cuts.
+    case = case.replace('12124', '9830').replace('53412', '55706')
+    case = case.replace('uint32_t off = (uint32_t)P8(t, P_SYN + 4) << 17;',
+                        'uint32_t width = (uint32_t)P8(t, P_SYN + 4) << 17;\n'
+                        '        uint32_t off = 42949673u + width - (width + 25u) / 50u;')
+    case = case.replace('their difference in at 0.63 (weights 1 - 0.37 x and 1 - 1.63 x, x = WAVE / 127): PW 64',
+                        'their difference in at 0.70 (weights 1 - 0.30 x and 1 - 1.70 x, x = WAVE / 127): PW 64')
+    case = case.replace('the second PW / 128 of a period on;', 'the second 0.01 + 0.98 * PW / 128 of a period on;')
     # Each product fits signed 32 bits; their sum may not. Split at Q15 to
     # preserve the exact signed wide sum without a ColdFire helper/overflow.
     case = case.replace('(int32_t)(((int64_t)(s * dry) + ((y[0] + y[1]) >> 1) * wet) >> 15)',
                         'add_sh15(s * dry, ((y[0] + y[1]) >> 1) * wet)')
     return ('/* SPDX-License-Identifier: GPL-3.0-only\n'
-            ' * Extracted MONO2K SWAVE-ENS; generated, do not edit. */\n')+case
+            ' * MONO2K SWAVE-ENS with measured PW/WAVE laws; generated, do not edit. */\n')+case
 
 
 def generate_ens_ui():

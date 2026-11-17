@@ -45,7 +45,7 @@ int main(int argc,char** argv)
 #endif
     try{
         std::string fwPath,outPath,eventsText="0:60";
-        int machine=1,frames=44100;
+        int machine=1,frames=44100,dist=64;
         std::array<int,8> syn={0,0,0,0,0,0,0,64};
         for(int i=1;i<argc;i++){
             const std::string key=argv[i];
@@ -55,11 +55,12 @@ int main(int argc,char** argv)
             else if(key=="--out")outPath=value;
             else if(key=="--machine")machine=std::stoi(value);
             else if(key=="--frames")frames=std::stoi(value);
+            else if(key=="--dist")dist=std::stoi(value);
             else if(key=="--events")eventsText=value;
             else if(key=="--syn")syn=page(value);
             else throw std::runtime_error("unknown option: "+key);
         }
-        if(fwPath.empty() || outPath.empty() || frames<16 || frames>44100*60)
+        if(fwPath.empty() || outPath.empty() || frames<16 || frames>44100*60 || dist<0 || dist>127)
             throw std::runtime_error("--fw OS.syx --out FILE.wav --frames N --events frame:note,... [--machine N --syn a,b,c,d,e,f,g,h]");
         const auto kind=static_cast<mnm::host::Machine>(machine);
         if(!mnm::host::machineDef(kind))throw std::runtime_error("unknown machine");
@@ -81,7 +82,7 @@ int main(int argc,char** argv)
         mnm::MonoVoice voice(fw);auto& host=voice.host();host.setMachine(kind);
         // Sustained AMP, open filters without envelope/resonance, neutral EQ,
         // SRR off and zero delay send. Pan and volume retain the original laws.
-        const std::array<int,8> amp={0,127,127,0,64,64,64,0};
+        const std::array<int,8> amp={0,127,127,0,dist,64,64,0};
         const std::array<int,8> filt={0,127,0,0,0,0,64,64};
         const std::array<int,8> efx={64,64,0,64,64,0,0,127};
         for(int k=0;k<8;k++){
