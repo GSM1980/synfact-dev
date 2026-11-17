@@ -1,12 +1,28 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.0.1",
+  "latest": "2.0.2",
   "entries": [
+    {
+      "version": "2.0.2",
+      "date": "2026-11-18",
+      "commits": [
+        {
+          "sha": "e07cef9",
+          "date": "2026-11-18",
+          "subject": "Core 2.0.2: retain native interest filters with the full Playhead bank"
+        }
+      ]
+    },
     {
       "version": "2.0.1",
       "date": "2026-11-17",
       "commits": [
+        {
+          "sha": "c0e44f9",
+          "date": "2026-11-18",
+          "subject": "Changelogs: POLY 1.7"
+        },
         {
           "sha": "b6406a5",
           "date": "2026-11-17",

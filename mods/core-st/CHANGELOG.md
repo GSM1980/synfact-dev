@@ -1,9 +1,14 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.0.1.
+Generated from git history by `tools/changelog.py`. Latest version: 2.0.2.
+
+## 2.0.2 (2026-11-18)
+
+- Core 2.0.2: retain native interest filters with the full Playhead bank (`e07cef9`, 2026-11-18)
 
 ## 2.0.1 (2026-11-17)
 
+- Changelogs: POLY 1.7 (`c0e44f9`, 2026-11-18)
 - Core 2.0.1: stream stock PCM safely and defer waveforms (`b6406a5`, 2026-11-17)
 - Changelogs: core 2.0.1 (`eae3159`, 2026-11-17)
 - Changelogs: ARP 1.10.6 (`3d50e09`, 2026-11-17)
