@@ -109,6 +109,22 @@ sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
 
+### Syntakt core 2.0.1: streamed samples and deferred waveforms
+
+Call UI API `wave_idle(slot, budget)` only for a visible waveform. It polls
+playheads and lazily scans bounded disk slices until `wave(slot)->ready == 2`.
+It can perform task IO and allocation, so never call it in an IRQ or draw.
+Boot computes no stock/HZFS envelopes; cached waves need no further disk reads.
+Runtime HZFS transfers can populate the same cache. UI/host ABI is unchanged.
+
+Stock and HZFS PCM stream through temporary boot pages. MAIN retains only
+metadata after transfer; `core_pool_sample_source` no
+longer lends a stock PCM pointer. Use UI API `wave` for envelopes and AUDIO
+sample services for playback. The UI/host ABI and bank contract stay unchanged.
+The new core-owned task completion site frees boot scratch after the final
+mailbox copy; no module may hook it or retain those page buffers. See
+[the memory investigation](STOCK-SAMPLE-CORE-OVERLAP.md).
+
 ### Syntakt core 1.9: stopped-transport preview owner
 
 Host API 15 appends `audio_idle` at offset 100, preserving the earlier

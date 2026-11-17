@@ -24,6 +24,8 @@
 | Startup/task-only services and native SYN layout template.
         FW fw_malloc,0x401036d0
         FW fw_free,0x401038d6
+        FW fw_memcpy,0x4011613c
+        FW fw_memset,0x40116184
         FW fw_lcd_front,0x402d7110
         FW fw_lcd_back,0x402d7114
         FW fw_lcd_swap,0x4011391a

@@ -179,6 +179,9 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     # The linked core's own safe-boot record writes, executed (core 1.7.1): the
     # path core 1.7 crashed on at its first trial boot. Needs Unicorn.
     if unicorn_python:
+        run('64-slot stock streaming and release (Unicorn)',[
+            unicorn_python,'-B','tests/test_st_stock_stream_emu.py',
+            '--core',out,'--out',out/'stock-stream.json'])
         run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
         run('module startup after native clearing (Unicorn)',[unicorn_python,'-B','tests/test_st_module_startup_emu.py',
             '--core',out,'--bank',out/'synfact-machines.smz4','--out',out/'module-startup.json'])

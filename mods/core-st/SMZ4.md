@@ -244,8 +244,10 @@ parameter arrays are aligned to four bytes. SDK descriptor types enforce their
 alignment. Numeric fields/layout entries cannot be relocation targets.
 
 Callbacks and the borrowed service API are declared in
-`syntakt/machines.h`. The API exposes cached sample names, 96-bin waveforms,
-bounded idle scanning and asynchronous AUDIO playhead snapshots. Draw never
+`syntakt/machines.h`. The API exposes cached sample names, 96-bin waveforms
+and asynchronous AUDIO playhead snapshots. Core 2.0.1 generates envelopes
+on demand through bounded disk reads in waveform idle; boot only transfers PCM.
+Draw never
 reads storage or waits. Idle returns nonzero only when it needs a redraw.
 From core 0.10, idle callbacks run through `ev_tick`, traversing the native live
 visible list. No native idle vptr is replaced or cloned; no view pointer is

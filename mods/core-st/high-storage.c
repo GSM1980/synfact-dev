@@ -13,6 +13,7 @@ extern void *fw_malloc(u32);
 extern void fw_free(void *),fw_info_copy(void *,const void *);
 extern void fw_string_ctor(void *,const char *,void *),core_fn_manager(void);
 extern void core_high_validate(void);
+extern void core_pool_stock_changed(u32);
 /* Native DataWriteClose calls its completion event only when this capture
  * is present. A non-owning no-op enables the existing ev_fs_written for high
  * windows too; no additional hook or storage mutation is introduced. */
@@ -73,7 +74,7 @@ int core_sample_write_guard(void *router,const struct info *info,void *out)
         if((address&(ST_HZ_WINDOW-1)) || info->bytes>STOCK_BODY ||
            info->bytes>STOCK_END-address){
             error(out,"Stock sample exceeds 5 seconds / one slot",16);return 1;
-        }return 0;
+        }core_pool_stock_changed(address);return 0;
     }
     if(info->validate.manager!=(void *)core_fn_manager ||
        info->validate.invoke!=(void *)core_high_validate)return 0;

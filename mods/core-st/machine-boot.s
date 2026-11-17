@@ -27,7 +27,7 @@ core_machine_flush:
 core_machine_page_count:
         move.l core_machine_pages,%d0
         beq.s 1f
-        move.l 0x4d84f2c1,%d2
+        move.l core_pool_stock_bytes,%d2
         addi.l #2047,%d2
         lsr.l #8,%d2
         lsr.l #3,%d2
@@ -35,13 +35,13 @@ core_machine_page_count:
         lsl.l #8,%d2
         lsl.l #3,%d2
         rts
-1:      move.l 0x4d84f2c1,%d2
+1:      move.l core_pool_stock_bytes,%d2
         rts
 core_machine_page_map:
         move.l core_machine_pages,%d0
         beq.s 2f
         move.l 0x41bbf424,%d0
-        move.l 0x4d84f2c1,%d1
+        move.l core_pool_stock_bytes,%d1
         addi.l #2047,%d1
         lsr.l #8,%d1
         lsr.l #3,%d1
@@ -59,7 +59,10 @@ core_machine_page_map:
 1:      moveq #11,%d1
 2:      move.l 0x41bbf424,%d0
         move.w %d0,0x1000000c
-        lsl.l %d1,%d0
+        move.l %d0,-(%sp)
+        jsr core_pool_stock_page
+        addq.l #4,%sp
+        subi.l #0x4d84f2c5,%d0
         rts
 core_machine_copy_page:
         movea.l 4(%sp),%a0

@@ -1,9 +1,24 @@
-# Syntakt core 2.0.0
+# Syntakt core 2.0.1
 
-Desktop OS 1.42 release: **2.0.0**, based on remote main `f48f3ab`.
+Core **2.0.1** defers stock and HZFS waveform computation until a sample's
+waveform UI requests it. Boot allocates no waveform cache and performs no
+min/max accumulation. The native 2 KiB sender/ACK protocol, PCM bytes and
+5120-byte boot scratch release are unchanged. Lazy UI slices reread bounded
+disk spans, cache completed envelopes in MAIN, and free each temporary buffer.
+HZFS CRC validation during boot remains mandatory. No complete PCM is retained.
+
+It streams native samples from eMMC through 5 KiB of temporary
+MAIN buffers, then frees those buffers at the sender's completion. All 64
+five-second slots retain their native AUDIO layout without overwriting the
+resident core. Exact waveform envelopes are cached on demand after boot.
+The CPU2 base in pool descriptors is corrected to `4004f750`, also on OS 1.42.
+The 64 KiB resident reserve, bank contract and AUDIO firmware remain unchanged.
+See [the memory investigation and validation](../../docs/STOCK-SAMPLE-CORE-OVERLAP.md).
+
+Desktop OS 1.42 base release: **2.0.0**, based on remote main `f48f3ab`.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
-Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
+Current desktop target: **OS 1.42 / core 2.0.1**.
 See [the port notes](../../docs/OS142-PORT.md).
 
 1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for
@@ -86,8 +101,8 @@ See [HZFS.md](HZFS.md) for the disk format, native API and transfer commands.
 
 ## Optional machine bank
 
-At the application startup site `400826a6`, eMMC is ready and neither the
-saved project nor the sample blob has been loaded:
+At the application startup site `4008271e`, eMMC is ready and neither the
+saved project nor stock PCM has been loaded:
 
 1. Ensure/mount the high-zone sample filesystem, then read `/mods` metadata and silently validate the complete SMZ4 bank.
 2. Missing, incompatible, corrupt or unsupported bank: skip all machine

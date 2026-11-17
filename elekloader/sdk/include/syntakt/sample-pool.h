@@ -17,6 +17,8 @@ pool_u32 core_pool_code_used(pool_u32 code);
 void core_pool_wave_begin(pool_u32 code,pool_u32 frames,pool_u32 channels);
 void core_pool_wave_feed(const pool_u8 *,pool_u32);
 void core_pool_wave_finish(pool_u32);
+int core_pool_wave_storage(pool_u32 slot,pool_u32 out[5]);
+void core_pool_stock_changed(pool_u32 address);
 #define CORE_POOL_SLOTS 128u
 #define CORE_POOL_STOCK_SLOTS 64u
 #define CORE_POOL_OFFSET 0xf0u
@@ -36,6 +38,9 @@ void core_pool_write(pool_u8 *,const pool_u16 *);
 void core_pool_empty(pool_u8 *);
 void core_pool_created(void);
 void core_pool_prepare(void);
+extern pool_u32 core_pool_stock_bytes;
+const void *core_pool_stock_page(pool_u32 ordinal);
+void core_pool_boot_release(void);
 const void *core_pool_boot_page(pool_u32 ordinal,pool_u32 *wire);
 int core_pool_sync(void);
 int core_pool_cached_name(pool_u32 code,char *out);

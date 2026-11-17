@@ -3,7 +3,7 @@
 # Tests
 
 Current desktop builds target OS 1.42. `tests/test_st_os142.py --stock STOCK
---build BUILD --previous-build REFERENCE_141` checks 216 stock preimages and four Playhead CRC contexts, the
+--build BUILD --previous-build REFERENCE_141` checks 217 stock preimages and four Playhead CRC contexts, the
 actual SYX, the complete bank contract and unchanged core/bank AUDIO. See
 [the port notes](OS142-PORT.md) for the direct 1.42 emulator checks and the
 historical 1.41/donor fixtures that are not current-release validation.
@@ -12,7 +12,35 @@ Each suite takes its input files from environment variables or arguments. A
 test whose input files are not given is skipped, not passed: say which ran.
 Firmware files never go in this repository.
 
+The full LFO3/MSKIP installation regression executes native ColdFire
+MAC-with-load instructions. Set `LIBUNICORN_PATH` to a Unicorn build with
+that support; generic 2.1.4 raises an exception at the native MAC instruction.
+The stock-stream test itself uses ordinary integer instructions.
+
 ## Syntakt
+
+`tests/test_st_stock_stream_emu.py --core BUILD --out BUILD/stock-stream.json`
+executes the actual boot replacement, native sender loop, target page/wave
+code, task release hook and native CPU2 descriptor parser. It compares all
+64 five-second samples byte-for-byte, split-page cases, an optional machine
+batch and a disabled pool-service image. It verifies code preservation, exact
+CPU2 pointer agreement and scratch release, with poisoned freed memory.
+Core 2.0.1 also requires zero boot calls to the waveform builder and no cache
+allocation during transfer, then executes lazy disk reads and cache reuse.
+Disk, heap, semaphore, notification and mailbox delivery are boundaries, not a full
+RTOS boot or hardware validation. The host project-pool fixture additionally
+covers empty/oversized headers, missing disk, read/allocation failures, exact
+stock peaks after release, lazy HZFS CRC refusal/retry, source changes during
+partial scans, and HZFS mono/stereo boot/runtime behavior.
+
+`tests/test_st_stock_blob_emu.py --stock OS1.41.syx --stock OS1.42.syx
+--out out/sample-memory/reproduction.json` reproduces native sample writes
+into the resident core's RAM window. It runs the actual stock constructor and
+memory copies with sample-read/heap fixtures and shared DDR alias backing.
+Five cases per OS cover 16/17/64 five-second samples and the exact first
+overlapping frame. This is an investigation test that expects corruption,
+not evidence of a fix, full boot or hardware behavior. See
+[the findings and scope](STOCK-SAMPLE-CORE-OVERLAP.md).
 
 `tests/test_st_view_cleanup_emu.py --before old-core/main.bin
 --after new-core/main.bin --bank bank.smz4 --out report.json` executes native

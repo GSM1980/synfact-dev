@@ -1,4 +1,4 @@
-# Project sample pool and Sample Manager (core 0.8.3)
+# Project sample pool and Sample Manager (core 2.0.1)
 
 The core owns the 128-position pool, its project record, storage, preview and
 MAIN/AUDIO transport. From core 0.13.0 the optional sample-manager-st SMZ module
@@ -72,23 +72,35 @@ editing the pool. No autosave or backup is added.
 ## Boot and the native progress bar
 
 1. The optional SMZ bank is validated and loaded silently before project loading.
-2. Native project/state loading runs, then the **original stock sample-blob
-   builder** loads its 64 samples unchanged.
+2. Native project/state loading runs. From core 2.0.1 the core reads the 64
+   stock SAMP headers and plans their native AUDIO offsets, without building
+   the old aggregate PCM blob in MAIN.
 3. The core reads the project pool and HZFS catalogue, plans unique long-sample
-   extents that fit in PCM RAM, and maps stock references to the native blob.
+   extents that fit in PCM RAM, and maps stock references to native AUDIO PCM.
 4. The **same native sample sender and progress bar** cover stock PCM, the
-   optional machine batch, long PCM and the core service pages. Long files
-   are streamed from eMMC while the native sender requests each page.
+   optional machine batch, long PCM and the core service pages. Both stock
+   and long files stream from eMMC as the native sender requests each page.
 5. Every long file's complete SAMP header/body CRC is verified. Its descriptor
    is published in the service's final pages only after successful readback.
    A missing, corrupt, unreadable or oversized sample has an empty descriptor.
 6. AUDIO parses its native stock descriptors, verifies and installs the core
    service, then installs any valid machine bank before voice initialization.
+   After the final sender memcpy into the FPGA mailbox, the task frees the
+   shared 5120-byte MAIN page/read allocation. Core 2.0.1 computes no stock
+   or HZFS envelopes during boot and allocates no waveform cache then. Only
+   runtime pool metadata remains; no complete PCM copy is retained in MAIN.
 
 There is no separate boot progress dialog for long samples. The native page
 count includes the additional pages, so the original bar measures the whole
 transfer. An invalid/absent SMZ is skipped; stock and pool loading continue.
 Samples do not need an SMZ to be loaded into the core pool.
+
+Core 2.0.1 removes the native MAIN aggregate that overlapped the resident core
+after about 84 seconds. All 64 five-second stock samples keep their original
+AUDIO byte layout. Native AUDIO receives them at `4004f750`, unchanged between
+1.41 and 1.42; the pool descriptors use this same CPU2 base. There is no
+resident relocation, larger core reserve or native heap expansion. See
+[the investigation, fix and emulator checks](../../docs/STOCK-SAMPLE-CORE-OVERLAP.md).
 
 The PCM region is **`42101750..4404f750` on AUDIO**, about 31.30 MiB. The first
 4 KiB at `42100750` hold the generic service code and 128 PCM descriptors.
@@ -158,8 +170,13 @@ extent arrives. RETIRE removes references before their memory can be reused.
 Replayed sequences return the same ACK without replaying writes. Runtime
 requests cannot write machine/core code, scheduler tables or native descriptors.
 
-MAIN uses temporary heap buffers for the boot plan, PCM page/read scratch,
-catalogues and UI state; full long samples are never retained in MAIN RAM.
+MAIN uses heap memory for the retained pool metadata, catalogues and UI state.
+Boot PCM page/read scratch is a separate 5120-byte allocation, freed by the
+sender's task-only completion hook at `40083026`. Complete stock or long
+samples are never retained in MAIN RAM. Allocation failure sends an empty
+stock table without entering the old builder. A stock PCM read failure sends
+silence for the failed span, increments the error counter and leaves its
+waveform unavailable; no uninitialized read buffer is sent.
 The 64 KiB reserve contains code/data, including the source-built service image.
 The explicit builder prints resident bytes used and **bytes/KiB remaining**
 and writes the layout into `verification.json` for every iteration.
@@ -192,15 +209,18 @@ unconfirmed: native sample preparation is still synchronous.
 ## Cached waveforms and AUDIO playheads (0.8)
 
 The generic `st_machine_ui_api` lends a 96-bin min/max envelope for each selected
-sample. HZFS PCM is accumulated while the existing loader reads it and becomes
-ready only after complete CRC verification. On first selection, stock PCM gets
-a bounded, evenly spaced overview of at most 2048 frames so the whole waveform
-appears immediately. Subsequent UI idle slices (2048 frames in the sampler bank)
-refine all 96 bins to exact min/max peaks using the existing MAIN copy. Explicit
-reimport of a sample invalidates its cached envelope even if its id and length
-are unchanged.
-The cache is an owned native-heap allocation, approximately 50 KiB for 128
-entries, outside the 64 KiB code reserve. Allocation failure leaves no waveform;
+sample. From core 2.0.1 the visible waveform page requests bounded UI-idle
+reads from eMMC: at most 4096 PCM bytes per call, with a temporary 5120-byte
+buffer freed before returning. Draw never reads storage. Until the complete
+envelope is ready, the page shows LOADING WAVE. Cached envelopes require no
+further IO. Stock and stereo HZFS samples use their published frame/channel
+metadata; HZFS lazy scans also check the saved full SAMP CRC. Stock writes
+mark the affected source unavailable for further lazy reads until reboot,
+so a new disk file cannot be mistaken for PCM already in AUDIO. A previously
+completed cache still describes that original AUDIO sample. Runtime HZFS
+imports can populate the cache while they stream, resetting old envelopes.
+The stereo-capable cache is an owned native-heap allocation, approximately 98 KiB for 128
+entries, outside the 64 KiB code reserve, allocated on first request. Allocation failure leaves no waveform;
 it does not prevent audio playback.
 
 Machines can publish a bounded playhead snapshot through the core AUDIO API

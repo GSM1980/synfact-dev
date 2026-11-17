@@ -3,14 +3,13 @@
         .section .run,"ax"
         .globl core_pool_blob,core_pool_count,core_pool_map
 core_pool_blob:
-        jsr 0x40082334
         jsr core_pool_prepare
         jmp 0x40082e9c
 core_pool_count:
         move.l core_pool_boot_pages,%d0
         add.l core_machine_pages,%d0
         beq.s 1f
-        move.l 0x4d84f2c1,%d2
+        move.l core_pool_stock_bytes,%d2
         addi.l #2047,%d2
         lsr.l #8,%d2
         lsr.l #3,%d2
@@ -18,7 +17,7 @@ core_pool_count:
         lsl.l #8,%d2
         lsl.l #3,%d2
         rts
-1:      move.l 0x4d84f2c1,%d2
+1:      move.l core_pool_stock_bytes,%d2
         rts
 core_pool_map:
         lea -16(%sp),%sp
@@ -29,7 +28,7 @@ core_pool_map:
         addq.l #8,%sp
         movem.l (%sp),%d0-%d1/%a0-%a1
         lea 16(%sp),%sp
-        move.l 0x4d84f2c1,%d1
+        move.l core_pool_stock_bytes,%d1
         addi.l #2047,%d1
         lsr.l #8,%d1
         lsr.l #3,%d1
@@ -57,6 +56,15 @@ core_pool_map:
 | core_machine_pages is zero: that fallback shifts D0 by D1 directly.
 1:      moveq #11,%d1
         jmp core_machine_page_map
+
+| TASK context, after the last 2048-byte memcpy into the FPGA mailbox.
+| No sender can still read MAIN scratch when it is returned to the heap.
+        .globl core_pool_sender_done
+core_pool_sender_done:
+        jsr core_pool_boot_release
+        moveq #4,%d0
+        move.l %d0,0x41bb32b0
+        rts
 
         .globl core_machine_raw,core_machine_length
 core_machine_raw:
