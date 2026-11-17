@@ -1,8 +1,19 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.0.0",
+  "latest": "2.0.1",
   "entries": [
+    {
+      "version": "2.0.1",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "b6406a5",
+          "date": "2026-11-17",
+          "subject": "Core 2.0.1: stream stock PCM safely and defer waveforms"
+        }
+      ]
+    },
     {
       "version": "2.0.0",
       "date": "2026-11-17",
@@ -11,6 +22,11 @@
           "sha": "276667a",
           "date": "2026-11-17",
           "subject": "move to OS 1.42"
+        },
+        {
+          "sha": "3c0cdcb",
+          "date": "2026-11-17",
+          "subject": "Changelogs: move to OS 1.42"
         }
       ]
     },

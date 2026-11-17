@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.0.0.
+Generated from git history by `tools/changelog.py`. Latest version: 2.0.1.
+
+## 2.0.1 (2026-11-17)
+
+- Core 2.0.1: stream stock PCM safely and defer waveforms (`b6406a5`, 2026-11-17)
 
 ## 2.0.0 (2026-11-17)
 
 - move to OS 1.42 (`276667a`, 2026-11-17)
+- Changelogs: move to OS 1.42 (`3c0cdcb`, 2026-11-17)
 
 ## 1.9.0 (2026-11-16)
 
