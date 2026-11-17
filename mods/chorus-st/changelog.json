@@ -1,12 +1,28 @@
 {
   "id": "chorus-st",
   "title": "Chorus",
-  "latest": "1.2",
+  "latest": "1.2.1",
   "entries": [
+    {
+      "version": "1.2.1",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "276667a",
+          "date": "2026-11-17",
+          "subject": "move to OS 1.42"
+        }
+      ]
+    },
     {
       "version": "1.2",
       "date": "2026-11-15",
       "commits": [
+        {
+          "sha": "c60f324",
+          "date": "2026-11-16",
+          "subject": "Changelogs: Playhead 1.0"
+        },
         {
           "sha": "5deb0eb",
           "date": "2026-11-15",

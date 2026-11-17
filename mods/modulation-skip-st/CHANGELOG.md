@@ -1,9 +1,14 @@
 # Changelog: Skip unchanged modulation per track
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.2.4.
+Generated from git history by `tools/changelog.py`. Latest version: 1.2.5.
+
+## 1.2.5 (2026-11-17)
+
+- move to OS 1.42 (`276667a`, 2026-11-17)
 
 ## 1.2.4 (2026-11-14)
 
+- Changelogs: Playhead 1.0 (`c60f324`, 2026-11-16)
 - Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
 - Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
 - Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)

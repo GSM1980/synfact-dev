@@ -1,10 +1,15 @@
 # Changelog: ARP experiment
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.10.4.
+Generated from git history by `tools/changelog.py`. Latest version: 1.10.5.
+
+## 1.10.5 (2026-11-17)
+
+- move to OS 1.42 (`276667a`, 2026-11-17)
 
 ## 1.10.4 (2026-11-16)
 
 - Fix TRIG/ARP mute navigation and reentrant native view cleanup (`5ff821a`, 2026-11-16)
+- Generate ARP 1.10.4 and core 1.8.2 changelogs (`84ec2db`, 2026-11-16)
 
 ## 1.10 (2026-11-14)
 

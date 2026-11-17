@@ -1,12 +1,28 @@
 {
   "id": "system-info-smz-st",
   "title": "System info",
-  "latest": "1.1",
+  "latest": "1.1.2",
   "entries": [
+    {
+      "version": "1.1.2",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "276667a",
+          "date": "2026-11-17",
+          "subject": "move to OS 1.42"
+        }
+      ]
+    },
     {
       "version": "1.1",
       "date": "2026-11-03",
       "commits": [
+        {
+          "sha": "c60f324",
+          "date": "2026-11-16",
+          "subject": "Changelogs: Playhead 1.0"
+        },
         {
           "sha": "d322360",
           "date": "2026-11-15",

@@ -1,12 +1,28 @@
 {
   "id": "poly-st",
   "title": "POLY",
-  "latest": "1.6",
+  "latest": "1.6.1",
   "entries": [
+    {
+      "version": "1.6.1",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "276667a",
+          "date": "2026-11-17",
+          "subject": "move to OS 1.42"
+        }
+      ]
+    },
     {
       "version": "1.6",
       "date": "2026-11-14",
       "commits": [
+        {
+          "sha": "c60f324",
+          "date": "2026-11-16",
+          "subject": "Changelogs: Playhead 1.0"
+        },
         {
           "sha": "d322360",
           "date": "2026-11-15",

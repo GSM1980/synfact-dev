@@ -1,9 +1,14 @@
 # Changelog: System info
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.1.2.
+
+## 1.1.2 (2026-11-17)
+
+- move to OS 1.42 (`276667a`, 2026-11-17)
 
 ## 1.1 (2026-11-03)
 
+- Changelogs: Playhead 1.0 (`c60f324`, 2026-11-16)
 - Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
 - Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
 - Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)

@@ -1,10 +1,15 @@
 # Changelog: Audio Recorder
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.4.
+Generated from git history by `tools/changelog.py`. Latest version: 1.4.1.
+
+## 1.4.1 (2026-11-17)
+
+- move to OS 1.42 (`276667a`, 2026-11-17)
 
 ## 1.4 (2026-11-16)
 
 - Recorder 1.4 and core 1.9: reduced post-take audio and faster MAIN capture (`085868a`, 2026-11-16)
+- Changelogs: core 1.9.0 and Recorder 1.4 (`f48f3ab`, 2026-11-16)
 
 ## 1.2 (2026-11-14)
 

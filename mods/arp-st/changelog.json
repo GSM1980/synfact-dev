@@ -1,8 +1,19 @@
 {
   "id": "arp-st",
   "title": "ARP experiment",
-  "latest": "1.10.4",
+  "latest": "1.10.5",
   "entries": [
+    {
+      "version": "1.10.5",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "276667a",
+          "date": "2026-11-17",
+          "subject": "move to OS 1.42"
+        }
+      ]
+    },
     {
       "version": "1.10.4",
       "date": "2026-11-16",
@@ -11,6 +22,11 @@
           "sha": "5ff821a",
           "date": "2026-11-16",
           "subject": "Fix TRIG/ARP mute navigation and reentrant native view cleanup"
+        },
+        {
+          "sha": "84ec2db",
+          "date": "2026-11-16",
+          "subject": "Generate ARP 1.10.4 and core 1.8.2 changelogs"
         }
       ]
     },
