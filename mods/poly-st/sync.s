@@ -3,12 +3,12 @@
 .text
 .globl poly_sync
 poly_sync:
- movea.l 0x43bd7430,%a0
+ movea.l 0x43bd8430,%a0
  tst.l %a0
  beq.w poly_sync_submit
  cmpa.l poly_sync_sequence_cache,%a0
  bne.w poly_sync_submit
- movea.l 0x43bd743c,%a1
+ movea.l 0x43bd843c,%a1
  move.l #0xffff,%d0
  tst.l %a1
  beq.s poly_sync_midi_ready

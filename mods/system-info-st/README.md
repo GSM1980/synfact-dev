@@ -1,5 +1,12 @@
 # System info for Syntakt OS 1.41
 
+Desktop OS 1.42 release: **1.1.2**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
+
 Adds an info icon and `SYSTEM INFO: OFF/ON` to SETTINGS. Press YES on the
 row to toggle. OFF is the power-on default; the setting is temporary.
 The header alternates every two seconds between:

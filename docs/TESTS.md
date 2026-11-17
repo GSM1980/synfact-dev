@@ -2,6 +2,12 @@
 
 # Tests
 
+Current desktop builds target OS 1.42. `tests/test_st_os142.py --stock STOCK
+--build BUILD --previous-build REFERENCE_141` checks 216 stock preimages and four Playhead CRC contexts, the
+actual SYX, the complete bank contract and unchanged core/bank AUDIO. See
+[the port notes](OS142-PORT.md) for the direct 1.42 emulator checks and the
+historical 1.41/donor fixtures that are not current-release validation.
+
 Each suite takes its input files from environment variables or arguments. A
 test whose input files are not given is skipped, not passed: say which ran.
 Firmware files never go in this repository.
@@ -16,6 +22,10 @@ a closed ARP node blocking re-entry; a new cleanup request recovers it. The
 new core must preserve the request and return screen/blue keyboard without
 a modifier key. It checks digital/analog, POLY, retained owners and removal
 of mute while staying on ARP, including a complete-call instruction equality.
+For that equality, the negative control must differ only in the cleanup site:
+restore the 18 stock bytes at `401010f0` in a copy of the current MAIN and use
+it as `--before`, beside the current `verification.json`. An older complete
+core can reproduce the behavior, but other code changes affect its total cost.
 
 `tests/test_st_arp_reentrant_view_emu.py --core main.bin --bank candidate.smz4
 --before old-1.10.3.smz4 --out report.json` executes native push/visibility,

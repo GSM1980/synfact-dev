@@ -177,9 +177,11 @@ export const SYNTAKT: Device = {
   releases: [
     rel('1.41', '8e2488f462c4a5656396a895f113bcd415e9900fa8709340dccf45d4cb9ed19e',
       '8cf2b4b4ea80d58953da46ca453328454fb3fca5cb5f844a2f7bad4b72241f53', 3438480),
+    rel('1.42', 'ded3c59fdb909eb9e2c3307b30a486452c8fa6947b12c14e0ce35a187b7f37c1',
+      '1a9723b19fb54d0566c1f690379d2e6dfe43227f77e170ad731dd029430eb3e7', 3442576),
   ],
   stage: 0x40200000, flashAt: 0x80000,
-  flashLimit: 0x80000 + 2028880, // stock container size: build budget, not a measured hardware limit
+  flashLimit: 0x80000 + 2029392, // official 1.42 container: same conservative build budget
   versionOptional: true, terminalZeroPacket: true,
   secondary: {7: ['daf6451cf9587c0b628e901b7bb6b25f4e2633d448c534c0c181dd35ec783bc2',
     383760, 0x40000400, [[0x4000094a,0x40000950],[0x40000ac6,0x40000acc],[0x40000b04,0x40000b0a],

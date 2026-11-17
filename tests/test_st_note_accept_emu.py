@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from elekloader import formats
 from unicorn import Uc,UC_ARCH_M68K,UC_MODE_BIG_ENDIAN,UC_HOOK_CODE
 from unicorn.m68k_const import *
-BASE,ENTRY,EFFECTS,CLEANUP=0x40000400,0x400a4180,0x400a4244,0x400a471e
+BASE,ENTRY,EFFECTS,CLEANUP=0x40000400,0x400a41f8,0x400a42bc,0x400a4796
 KIT,EVENT,BUCKET,FRAME,STACK=0x43000000,0x49000000,0x49000100,0x49001000,0x48010000
 REGS=[UC_M68K_REG_D0,UC_M68K_REG_D1,UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,
       UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A0,UC_M68K_REG_A1,
@@ -36,11 +36,11 @@ class Runtime:
         u=self.u;sp=u.reg_read(UC_M68K_REG_A7);pc=int.from_bytes(self.read(sp,4),'big')
         u.reg_write(UC_M68K_REG_D0,v);u.reg_write(UC_M68K_REG_A7,sp+4);u.reg_write(UC_M68K_REG_PC,pc)
     def code(self,u,pc,n,_):
-        if pc==EFFECTS or (pc==CLEANUP and not self.finish_cleanup) or (pc==0x400a3b76 and self.finish_cleanup):
+        if pc==EFFECTS or (pc==CLEANUP and not self.finish_cleanup) or (pc==0x400a3bee and self.finish_cleanup):
             u.emu_stop();return
         self.count+=1
-        if pc==0x4011a4f8:self.frees+=1
-        if pc==0x400a1b14:self.predicates+=1;self.ret(self.reject);return
+        if pc==0x4011a6bc:self.frees+=1
+        if pc==0x400a1b8c:self.predicates+=1;self.ret(self.reject);return
         if pc==self.dispatch:
             sp=u.reg_read(UC_M68K_REG_A7);op,args=struct.unpack('>2I',self.read(sp+4,8))
             assert op==20
@@ -58,27 +58,27 @@ class Runtime:
                     (UC_M68K_REG_A2,EVENT),(UC_M68K_REG_A3,BUCKET),(UC_M68K_REG_A6,FRAME)]:u.reg_write(r,v)
         if self.interest:u.mem_write(self.interest+20,bytes([interest]))
         self.w(0x800030b8,KIT);self.w(0x800046ec,100000);self.w(FRAME-64,128800)
-        self.w(FRAME-56,0);self.w(0x43bdc828,0)
-        self.u.mem_write(0x43bde43e,struct.pack('>H',(1<<track) if refusal=='mute' else 0))
-        self.w(0x45510fc8+4*track,3 if refusal=='stale' else 0)
+        self.w(FRAME-56,0);self.w(0x43bdd828,0)
+        self.u.mem_write(0x43bdf43e,struct.pack('>H',(1<<track) if refusal=='mute' else 0))
+        self.w(0x45511fc8+4*track,3 if refusal=='stale' else 0)
         self.w(EVENT+4,action);self.w(EVENT+8,track);self.w(EVENT+12,kind);self.w(EVENT+36,0x123400)
         chosen=KIT+0x2a+track*0x123
         if sound in ['borrowed','pooled']:
             chosen=KIT+0x1000;self.w(EVENT+(40 if sound=='borrowed' else 44),chosen)
         self.w(BUCKET,immediate);self.w(BUCKET+4,110000)
-        self.w(0x444de440,0)
+        self.w(0x444df440,0)
         self.before=self.read(EVENT,80)
         u.emu_start(ENTRY,0,count=5000)
-        pc=u.reg_read(UC_M68K_REG_PC);assert pc in [EFFECTS,CLEANUP,0x400a3b76],hex(pc)
+        pc=u.reg_read(UC_M68K_REG_PC);assert pc in [EFFECTS,CLEANUP,0x400a3bee],hex(pc)
         assert u.reg_read(UC_M68K_REG_A7)==STACK
         assert self.read(EVENT,80)==self.before,'shim changed/freed the borrowed event'
         if finish_cleanup:
-            assert self.frees==1 and int.from_bytes(self.read(0x444de440,4),'big')==EVENT
+            assert self.frees==1 and int.from_bytes(self.read(0x444df440,4),'big')==EVENT
         return dict(pc=pc,regs=[u.reg_read(r) for r in REGS],sr=u.reg_read(UC_M68K_REG_SR),
                     notifications=list(self.notifications),predicates=self.predicates,count=self.count,chosen=chosen)
 
 def verify(stock,core,out):
-    f,d,r=formats.load(stock);assert f.sha256=='8e2488f462c4a5656396a895f113bcd415e9900fa8709340dccf45d4cb9ed19e'
+    f,d,r=formats.load(stock);assert f.sha256=='ded3c59fdb909eb9e2c3307b30a486452c8fa6947b12c14e0ce35a187b7f37c1'
     report=json.loads((core.parent/'verification.json').read_text())
     a,b=Runtime(f.section(3)),Runtime(core.read_bytes(),report)
     rows=[];cost=[]

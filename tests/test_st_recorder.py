@@ -54,7 +54,7 @@ def verify(folder,synfact=None):
     assert read(s['core:core_high_written'],2)==bytes.fromhex('4e75')
     # The existing native close notification is conditional on a valid
     # written capture. The high-zone descriptor now supplies that no-op.
-    assert read(0x4010b886,4)==bytes.fromhex('4aaa0098')
+    assert read(0x4010ba4a,4)==bytes.fromhex('4aaa0098')
     if synfact:
         provenance=json.loads((mod/'provenance.json').read_text())
         for name,digest in provenance['source_sha256'].items():

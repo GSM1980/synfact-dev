@@ -26,19 +26,19 @@ extern u32 recorder_irq_lock(void);extern void recorder_irq_unlock(u32);
 #define MMC_READ host->storage->read
 #define MMC_WRITE host->storage->write
 #define CARD_SECTORS (host->storage->sectors())
-#define UI_PUSH ((u32 (*)(void *,void *,u32))0x40100bc2u)
-#define UI_DROP ((void (*)(void *))0x4016dde8u)
-#define UI_CLOSE ((void (*)(void *))0x400ffd02u)
-#define UI_DIRTY ((void (*)(void *))0x400ffc5eu)
-#define UI_OPAQUE ((void (*)(void *,u32))0x400ffaf4u)
-#define QSTR_INIT ((void *(*)(void *,const char *,void *))0x401bf082u)
-#define WAVE_FILL ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7df2u)
-#define WAVE_PIXEL ((void (*)(void *,s32,s32,u32))0x400f7140u)
-#define WAVE_TEXT ((void (*)(void *,void *,s32,s32,u32,const char *,...))0x400f8a0cu)
+#define UI_PUSH ((u32 (*)(void *,void *,u32))0x40100d86u)
+#define UI_DROP ((void (*)(void *))0x4016dfacu)
+#define UI_CLOSE ((void (*)(void *))0x400ffec6u)
+#define UI_DIRTY ((void (*)(void *))0x400ffe22u)
+#define UI_OPAQUE ((void (*)(void *,u32))0x400ffcb8u)
+#define QSTR_INIT ((void *(*)(void *,const char *,void *))0x401bf31eu)
+#define WAVE_FILL ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)
+#define WAVE_PIXEL ((void (*)(void *,s32,s32,u32))0x400f7304u)
+#define WAVE_TEXT ((void (*)(void *,void *,s32,s32,u32,const char *,...))0x400f8bd0u)
 #define MAIN_BUS ((s32 *)ST_PREVIEW_BUS)
 #endif
 #include "native.h"
-#define WORKING_PROJECT ((u8 *)0x40652514u)
+#define WORKING_PROJECT ((u8 *)0x40653514u)
 #define SLOTS 128u
 #define HZ_FLAG 0x8000u
 #define HZ_BLOCK_SECTORS 1024u

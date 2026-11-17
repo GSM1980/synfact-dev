@@ -5,7 +5,7 @@
 #include <syntakt/host.h>
 typedef unsigned int u32;
 #ifndef CORE_IDLE_SEQ_STATE
-#define CORE_IDLE_SEQ_STATE (*(const volatile u32 *)0x43bd73bcu)
+#define CORE_IDLE_SEQ_STATE (*(const volatile u32 *)0x43bd83bcu)
 #endif
 volatile u32 core_audio_idle_active;
 const struct st_audio_idle_owner *volatile core_audio_idle_owner;

@@ -1,5 +1,8 @@
 # LFO3 port to elekloader (working design, 2026-10-28)
 
+Desktop OS 1.42 release: **1.3.1**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
 The consolidated release is **LFO3 1.3**, one step from main's 1.2. Numbers
 1.4 through 1.7 below identify development measurements, not public releases.
 See [the version mapping and inactive-engine policy](../../docs/MAIN-OPTIMIZATION-RELEASE.md).

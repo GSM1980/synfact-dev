@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| Sequencer step direction per track, OS 1.41. Written in the core's shape
+| Sequencer step direction per track, OS 1.42. Written in the core's shape
 | (its sites, one table, its own files) so that it can move into the core.
 |
 | The sequencer interrupt (4008c924) keeps each track's step counting
@@ -76,7 +76,7 @@ playhead_trig_a:
         move.l %d5,-(%sp)
         clr.l -(%sp)
         move.l %d1,-(%sp)
-        jmp 0x4008cf08
+        jmp 0x4008cf80
 playhead_trig_b:
         lea -8(%sp),%sp
         movem.l %d7/%a0,(%sp)
@@ -90,7 +90,7 @@ playhead_trig_b:
         move.l %d5,-(%sp)
         clr.l -(%sp)
         move.l %d1,-(%sp)
-        jmp 0x4008cf1c
+        jmp 0x4008cf94
 
 | 4008c204: move.l d0,-(sp) / move.l a0,-(sp) / move.l 43bd7430,-(sp).
 | d0 (the step, sign-extended) is pushed as it is unless the track's mode
@@ -102,7 +102,7 @@ playhead_trig_c:
         moveq #0,%d1
         move.b %d0,%d1
         move.l %d2,%d7
-        movea.l 0x43bd7430,%a0
+        movea.l 0x43bd8430,%a0
         bsr.w playhead_mirror
         moveq #0,%d7
         move.b %d0,%d7                  | the step as it came
@@ -113,8 +113,8 @@ playhead_trig_c:
         lea 12(%sp),%sp
         move.l %d0,-(%sp)
         move.l %a0,-(%sp)
-        move.l 0x43bd7430,-(%sp)
-        jmp 0x4008c20e
+        move.l 0x43bd8430,-(%sp)
+        jmp 0x4008c286
 
 | 4008d1b8: move.b (a6)+,(a1,d0.l) / movea.l d7,a1 / addq.l #1,d0 /
 | move.b (a5)+,(a4)+   (a1 = 444e2370 on entry)
@@ -137,7 +137,7 @@ playhead_ui_copy:
         lea 16(%sp),%sp
         movea.l %d7,%a1
         addq.l #1,%d0
-        jmp 0x4008d1c2
+        jmp 0x4008d23a
 
 | 4008b746: lea 43bd7414,a0, then mvz.b 2(a0,d0.l),d0 / rts. The accessor
 | 4008b734(t) gives the step a track plays, last[t], for t 0..12: the
@@ -145,12 +145,12 @@ playhead_ui_copy:
 | d0-d1/a0-a1 are the caller's scratch.
 .globl playhead_step_shown
 playhead_step_shown:
-        lea 0x43bd7416,%a0
+        lea 0x43bd8416,%a0
         moveq #0,%d1
         move.b (%a0,%d0.l),%d1
         move.l %d7,-(%sp)
         move.l %d0,%d7
-        movea.l 0x43bd7430,%a0
+        movea.l 0x43bd8430,%a0
         bsr.w playhead_peek              | UI task: never chooses a step
         move.l (%sp)+,%d7
         move.l %d1,%d0

@@ -3,9 +3,9 @@
         .section .run,"ax"
         .globl core_pool_blob,core_pool_count,core_pool_map
 core_pool_blob:
-        jsr 0x400822bc
+        jsr 0x40082334
         jsr core_pool_prepare
-        jmp 0x40082e24
+        jmp 0x40082e9c
 core_pool_count:
         move.l core_pool_boot_pages,%d0
         add.l core_machine_pages,%d0
@@ -24,7 +24,7 @@ core_pool_map:
         lea -16(%sp),%sp
         movem.l %d0-%d1/%a0-%a1,(%sp)
         move.l %d2,-(%sp)
-        move.l 0x41bbe424,-(%sp)
+        move.l 0x41bbf424,-(%sp)
         jsr core_sample_progress
         addq.l #8,%sp
         movem.l (%sp),%d0-%d1/%a0-%a1
@@ -34,7 +34,7 @@ core_pool_map:
         lsr.l #8,%d1
         lsr.l #3,%d1
         add.l core_machine_pages,%d1
-        move.l 0x41bbe424,%d0
+        move.l 0x41bbf424,%d0
         sub.l %d1,%d0
         bcs.s 1f
         tst.l core_pool_boot_pages
@@ -74,14 +74,14 @@ core_machine_raw:
         move.l 0x48(%a1),0x24(%a0)
         move.w 0x4e(%a1),0x2a(%a0)
         move.w 0x50(%a1),0x2c(%a0)
-        jmp 0x400979f6
+        jmp 0x40097a6e
 1:      movem.l (%sp),%d0-%d1/%a0-%a1
         lea 16(%sp),%sp
         cmp.l %d0,%d1
         bne.s 2f
         move.w 0x42(%a1),0x1e(%a0)
-        jmp 0x400979f0
-2:      jmp 0x400979f6
+        jmp 0x40097a68
+2:      jmp 0x40097a6e
 core_machine_length:
         lea -16(%sp),%sp
         movem.l %d0-%d1/%a0-%a1,(%sp)
@@ -141,7 +141,7 @@ core_pool_snapshot:
 pool_native_snapshot:
         movea.l 4(%sp),%a0
         move.l 8(%sp),%d0
-        jmp 0x4019ffdc
+        jmp 0x401a01a0
 core_pool_validate:
         move.l 4(%sp),-(%sp)
         jsr core_pool_before_validate
@@ -161,7 +161,7 @@ core_pool_validate:
 pool_native_validate:
         lea -44(%sp),%sp
         movem.l %d2-%d3/%a2-%a6,(%sp)
-        jmp 0x400afa86
+        jmp 0x400afafe
 core_pool_load:
         move.l 12(%sp),-(%sp)
         move.l 12(%sp),-(%sp)
@@ -184,7 +184,7 @@ core_pool_save:
         move.l 8(%sp),-(%sp)
         jsr core_pool_before_save
         addq.l #8,%sp
-        jmp 0x400c1c10
+        jmp 0x400c1cbc
 
         .globl core_pool_sound_menu,core_pool_label
 core_pool_sound_menu:
@@ -198,7 +198,7 @@ core_pool_sound_menu:
 pool_native_menu:
         lea -168(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp 0x40064920
+        jmp 0x40064998
 core_pool_label:
         link %a6,#-4
         move.l %d2,-(%sp)

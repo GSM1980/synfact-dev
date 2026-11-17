@@ -12,7 +12,7 @@ static void textf(void *c,void *f,int x,int y,u32 flags,const char *fmt,...)
 {va_list a;(void)c;(void)f;(void)x;(void)y;(void)flags;va_start(a,fmt);snprintf(painted,sizeof(painted),"%s",va_arg(a,const char *));va_end(a);}
 static void native_dial(void *m,u32 id,u32 raw,u32 a,u32 b,void *ctx,int x,int y)
 {(void)m;(void)a;(void)b;(void)ctx;(void)x;(void)y;assert(id==0x13);dial_value=raw;}
-static void *bitmap(void *v,u32 i,u32 a){assert((u32)v==0x444e0cc8u && !a);bitmap_index=i;return (void *)1;}
+static void *bitmap(void *v,u32 i,u32 a){assert((u32)v==0x444e1cc8u && !a);bitmap_index=i;return (void *)1;}
 static void blit(void *c,void *b,int x,int y,u32 f){(void)c;(void)x;(void)y;(void)f;assert(b==(void *)1);blits++;}
 #define ST_UI_PRIMITIVES
 #define FILL fill

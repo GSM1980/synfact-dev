@@ -87,7 +87,7 @@ s32 chorus_param_set(void *model,u32 id,s32 raw)
         if(playing && playing!=fx) store(playing,values);
     }
     {
-        u8 *ui=*(u8 *volatile *)0x444e1334u;
+        u8 *ui=*(u8 *volatile *)0x444e2334u;
         if (ui) ui[96]=1;
     }
     return 0;

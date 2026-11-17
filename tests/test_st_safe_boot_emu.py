@@ -30,7 +30,7 @@ class Core:
         lo,hi=layout['ddr'];at=layout['run_load']-BASE;u.mem_write(lo,raw[at:at+hi-lo])
         u.mem_write(RET,b'\x4e\x71')
         self.read_entry,self.write_entry=self.sym['core:fw_mmc_read'],self.sym['core:fw_mmc_write']
-        assert (self.read_entry,self.write_entry)==(0x4010f44e,0x4010f634)
+        assert (self.read_entry,self.write_entry)==(0x4010f612,0x4010f7f8)
         # The card is ready and large enough for the bank slots and legacy record.
         self.w(self.sym['core:fw_mmc_ready'],1);self.w(self.sym['core:fw_mmc_sectors'],0x400000)
         self.card={};self.writes=[];self.reads=0

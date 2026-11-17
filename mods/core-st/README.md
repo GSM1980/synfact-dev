@@ -1,4 +1,10 @@
-# Syntakt core 1.9.0
+# Syntakt core 2.0.0
+
+Desktop OS 1.42 release: **2.0.0**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
+See [the port notes](../../docs/OS142-PORT.md).
 
 1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for
 normalization/editing, retaining the 1.8.2 native view cleanup and MAIN routes.

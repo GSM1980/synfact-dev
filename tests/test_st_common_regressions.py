@@ -65,8 +65,8 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         exe=out/(name+'.exe')
         run('compile '+name,[cc,'-O2','-Wl,--large-address-aware','-I','elekloader/sdk/include',*sources,'-o',exe])
         args=[out/'synfact-machines.smz4'] if name in ('smz-parser','smz-boot','trial-boot') else []
-        legacy=ROOT/'out/smz-module-0.8-final/example.smz4'
-        if name=='smz-parser' and legacy.exists():args.append(legacy)
+        # Core 2.0 refuses old/untagged banks. The parser's checksummed negative
+        # controls cover both; only current-contract banks belong in its argv.
         run(name,[exe,*args])
     run('boot preimage source',[sys.executable,'tools/generate_boot_preimages.py','--check'])
     boot_exe=out/'boot-preimages.exe'
@@ -112,7 +112,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
             # The chain end (core 1.8) calls the companion; a previous build
             # has it stock (move.l 4004f6e0,d0) or as a call.
             i=0x40000ac6-base;assert new[i:i+2]==b'\x4e\xb9'
-            if old[i:i+6]==bytes.fromhex('20394004f6e0'):operands.update(range(i,i+6))
+            if old[i:i+6]==bytes.fromhex('20394004f758'):operands.update(range(i,i+6))
             else:
                 assert old[i:i+2]==b'\x4e\xb9'
                 operands.update(range(i+2,i+6))
@@ -154,6 +154,11 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 if 'st_stereo_module' in current['modules'] and 'st_stereo_module' not in modules:
                     modules.insert(modules.index('sp_sampler_input_module')+1,'st_stereo_module')
                     assert 'audio0-5.o' in new_objects and 'audio0-5.o' not in old_objects
+                # Playhead has MAIN code only; its addition must not change any
+                # other module's order or introduce a non-sampler AUDIO object.
+                if 'playhead_module' in current['modules'] and 'playhead_module' not in modules:
+                    at=modules.index('modulation_skip_module') if 'modulation_skip_module' in modules else len(modules)
+                    modules.insert(at,'playhead_module')
                 def index(name):return int(Path(name).stem.split('-')[1])
                 added={name for name in new_objects if name not in old_objects}
                 assert all(name.startswith('audio0-') for name in added),added

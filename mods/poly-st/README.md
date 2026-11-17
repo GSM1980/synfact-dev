@@ -1,5 +1,12 @@
 # POLY for Syntakt (1.6)
 
+Desktop OS 1.42 release: **1.6.1**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
+
 Source port of Synfact POLY for digital and compatible analog tracks, with compact scalar
 publication. Playback uses native per-track modulation/LFO engines. Requires Syntakt OS 1.41,
 **UI API 7 / module API 3 / host API 2+**, and the matching AUDIO

@@ -26,7 +26,7 @@ lfo3_constructor:
 lfo3_constructor_native:
         lea -40(%sp),%sp
         movem.l %d2-%d3/%a2-%a3,(%sp)
-        jmp 0x400f38fa
+        jmp 0x400f3abe
 
 | Inside the native LFO draw (A2 = view, D2 = canvas), 400f37f8: the six
 | displaced bytes load the page index and branch to the LFO2 wave.
@@ -44,8 +44,8 @@ lfo3_wave_site:
         move.l 0x90(%a2),%d0
         tst.l %d0
         bne.w 2f
-        jmp 0x400f37fe
-2:      jmp 0x400f3848
+        jmp 0x400f39c2
+2:      jmp 0x400f3a0c
 3:      lea -12(%sp),%sp
         movem.l %d1/%a0-%a1,(%sp)
         move.l %d2,-(%sp)
@@ -54,7 +54,7 @@ lfo3_wave_site:
         addq.l #8,%sp
         movem.l (%sp),%d1/%a0-%a1
         lea 12(%sp),%sp
-        jmp 0x400f38c0
+        jmp 0x400f3a84
 
 | Value getter 40039160 (view, id, locked*).
 | Page key lock collector 40031de6 (closure, step): its stock prologue,
@@ -148,7 +148,7 @@ lfo3_widget_wave_flags:
 1:      movea.l #1,%a6
 2:      move.l 0x74(%a2),-(%sp)
         jsr 0x4001ff74
-        jmp 0x400f3712
+        jmp 0x400f38d6
 
 | Sound publication 400a31a2 (source, track) and its success tail 400a3226.
         .globl lfo3_sound_publication,lfo3_sound_success
@@ -178,14 +178,14 @@ lfo3_sound_complete:
         rts
 3:      lea -12(%sp),%sp
         movem.l %d2-%d3/%a2,(%sp)
-        jmp 0x400a31aa
+        jmp 0x400a3222
 lfo3_sound_success:
         move.l (%sp),%d0
         cmpi.l #lfo3_sound_complete,%d0
         bne.w 1f
         moveq #1,%d0
         move.l %d0,16(%sp)
-1:      jmp 0x400976b4
+1:      jmp 0x4009772c
 
 | FX publication 400a1d18 (source).
         .globl lfo3_fx_publication
@@ -210,9 +210,9 @@ lfo3_fx_publication:
         movem.l (%sp),%d0-%d1/%a0-%a1
         lea 24(%sp),%sp
         rts
-3:      move.l 0x43bde444,%d0
+3:      move.l 0x43bdf444,%d0
         move.l %d0,%d1
-        jmp 0x400a1d20
+        jmp 0x400a1d98
 
 | Hook installation: IRQ exclusion and one code word write with the D-cache
 | line pushed (as fast-main-st); lfo3_sync then invalidates I/branch caches.
@@ -422,6 +422,6 @@ lfo3_native_release:
         move.l 4(%sp),%d0
         addq.l #4,%d0
         move.l %d0,-(%sp)
-        jsr 0x4016dde8
+        jsr 0x4016dfac
         addq.l #4,%sp
         rts

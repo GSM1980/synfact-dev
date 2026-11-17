@@ -10,10 +10,10 @@
 #include "crc.h"
 #include <syntakt/machines.h>
 typedef pool_u8 u8;typedef pool_u16 u16;typedef pool_u32 u32;
-#define PROJECT ((u8 *)0x40652514u)
+#define PROJECT ((u8 *)0x40653514u)
 #define STOCK_BLOB ((const u8 *)0x4d84f2c5u)
 #define STOCK_BYTES (*(const u32 *)0x4d84f2c1u)
-#define STOCK_AUDIO 0x4004f750u
+#define STOCK_AUDIO 0x4004f7c8u
 #define WIRE_FIRST 0x4162u
 #define IMAGE_MAGIC 0x454c5031u
 extern void *fw_malloc(u32);extern void fw_free(void *);
@@ -96,7 +96,7 @@ void core_pool_before_save(void *object,u32 slot)
 {
     u8 *cached;
     if(slot>128 || !core_pool_valid(PROJECT))return;
-    cached=((u8 *(*)(void *,u32))0x400c1700u)(object,slot);
+    cached=((u8 *(*)(void *,u32))0x400c17acu)(object,slot);
     if(!cached || (u32)cached<0x40000000u)return;cached+=12;
     if(cached!=PROJECT)cp(cached+CORE_POOL_OFFSET,PROJECT+CORE_POOL_OFFSET,CORE_POOL_RECORD);
 }
@@ -200,11 +200,11 @@ const void *core_pool_boot_page(u32 ordinal,u32 *wire)
     }return state->page;
 }
 #ifndef CORE_POOL_SLEEP
-#define CORE_POOL_SLEEP ((void (*)(u32))0x40116134u)
+#define CORE_POOL_SLEEP ((void (*)(u32))0x401162f8u)
 #endif
 static void sleep(void){CORE_POOL_SLEEP(500);}
 int core_pool_ready(void)
-{return state && state->boot_finished && !state->fault && !core_pool_busy && *(volatile u32 *)0x43bdc824u;}
+{return state && state->boot_finished && !state->fault && !core_pool_busy && *(volatile u32 *)0x43bdd824u;}
 static int send(u32 cmd,u32 dst,u32 len,const u8 *data,u32 bytes)
 {
     volatile u32 *m=(void *)0x10000800u;u32 i,seq,sum,attempt,status;
@@ -254,7 +254,7 @@ int core_pool_sync(void)
 {
     struct st_hzfs fs;struct st_sample_entry e;struct stream stream;
     u32 i,j,n,frames,pointer,bytes,ordinal=0,ch;u8 payload[4];int opened=0,result=1;
-    if(!state || !state->boot_finished || state->fault || core_pool_busy || !*(volatile u32 *)0x43bdc824u)return -1;
+    if(!state || !state->boot_finished || state->fault || core_pool_busy || !*(volatile u32 *)0x43bdd824u)return -1;
     if(state->query){volatile u32 *m=(void *)0x10000800u;
         for(i=0;i<200 && m[6]>>16!=state->query;i++)sleep();
         if(m[6]>>16!=state->query)return -1;state->query=0;core_pool_query_owner=0;}
@@ -327,7 +327,7 @@ int core_pool_sample_name(u32 slot,char *out)
     u32 code,i;const u8 *pcm;u32 frames;void *fs;
     code=core_pool_sample_source(slot,&pcm,&frames);if(!code)return 0;
     if(code>64)return core_pool_cached_name(code,out);
-    fs=((void *(*)(void))0x4016f0ceu)();if((u32)fs<0x40000000u)return 0;
+    fs=((void *(*)(void))0x4016f292u)();if((u32)fs<0x40000000u)return 0;
     pcm=(const u8 *)fs+0x12e28+24*(code-1);
     for(i=0;i<16 && pcm[i];i++)out[i]=(char)pcm[i];out[i]=0;return i!=0;
 }

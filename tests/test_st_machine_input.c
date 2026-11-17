@@ -54,7 +54,7 @@ int main(void)
     *(u32 *)(view+0x88)=0x14;type=65;
     {
         u32 pages[4]={6,6,6,6},old;
-        *(u32 *)view=0x401ca0dcu;
+        *(u32 *)view=0x401ca37cu;
         *(u32 **)(view+0x7c)=pages;*(u32 **)(view+0x80)=*(u32 **)(view+0x84)=pages+4;
         assert(!core_machine_action_begin(view) && core_machine_action_codec==&codec);
         *(u32 *)(view+0x90)=1;old=core_machine_action_begin(view);

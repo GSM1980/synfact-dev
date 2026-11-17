@@ -1,5 +1,12 @@
 # Sample Manager (Syntakt)
 
+Desktop OS 1.42 release: **1.2.1**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
+
 Optional SMZ UI for the core-owned project sample pool and HZFS library.
 Requires core 0.13.1 (host API 11), Syntakt OS 1.41. No firmware sites,
 patch installer, storage implementation, audio renderer or alternate pool.

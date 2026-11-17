@@ -17,7 +17,7 @@ __attribute__((noinline)) u32 core_native_original(u32 op,const u32 *a)
 {
     switch(op){
     case ST_NATIVE_TRIG:return core_stock_trig(a[0],a[1],a[2],a[3],a[4],a[5]);
-    case ST_NATIVE_ENQUEUE:return ((u32 (*)(u32,u32))0x4011a648u)(a[0],a[1]);
+    case ST_NATIVE_ENQUEUE:return ((u32 (*)(u32,u32))0x4011a80cu)(a[0],a[1]);
     case ST_NATIVE_TYPE:return (u32)(int)*(const signed char *)a[0];
     case ST_NATIVE_HEADER_LOAD:return core_stock_header_load(a[0],a[1]);
     case ST_NATIVE_HEADER_RESET:core_stock_header_reset(a[0],a[1]);return 0;

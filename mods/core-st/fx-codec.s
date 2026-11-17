@@ -24,7 +24,7 @@ core_fx_encode:
         rts
 core_stock_fx_encode:
         .byte 0x2f,0x0b,0x2f,0x0a,0x24,0x6f,0x00,0x0c
-        jmp 0x400a6d9e
+        jmp 0x400a6e16
 core_fx_decode:
         move.l 8(%sp),-(%sp)
         move.l 8(%sp),-(%sp)
@@ -42,4 +42,4 @@ core_fx_decode:
         rts
 core_stock_fx_decode:
         .byte 0x4f,0xef,0xff,0xf4,0x48,0xd7,0x1c,0x00
-        jmp 0x400a6d36
+        jmp 0x400a6dae

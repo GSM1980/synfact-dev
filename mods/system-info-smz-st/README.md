@@ -1,5 +1,12 @@
 # System info in the Syntakt SMZ
 
+Desktop OS 1.42 release: **1.1.2**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
+
 Uses the same [System info implementation](../system-info-st/README.md), font,
 icon, CPU/RAM collectors, cadence and AUDIO mailbox. Only its placement changes:
 UI/collector code and state live in the SMZ. Requires core 0.12 / UI API 6 /

@@ -17,8 +17,8 @@ static void text(void *p,void *font,int x,int y,unsigned int a,const char *fmt,c
 {(void)p;(void)font;assert(x==20 && y==55 && !a && !strcmp(fmt,"%s"));strcpy((char *)ui_drawn,s);paints++;}
 static volatile unsigned char *code(unsigned int at)
 {
-    if(at>=0x400a30c4u && at<0x400a30ccu)return writer+(at-0x400a30c4u);
-    assert(at>=0x40097b04u && at<0x40097b0au);return site+(at-0x40097b04u);
+    if(at>=0x400a313cu && at<0x400a3144u)return writer+(at-0x400a313cu);
+    assert(at>=0x40097b7cu && at<0x40097b82u);return site+(at-0x40097b7cu);
 }
 #define SKIP_HOST 1
 #define SKIP_R32(a) r32(a)

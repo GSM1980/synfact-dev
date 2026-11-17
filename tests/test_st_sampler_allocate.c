@@ -144,7 +144,7 @@ int main(int argc,char **argv)
         switch(c){case 0:type=66;break;case 1:type=67;break;case 2:type=68;break;
         case 3:selecting=1;break;case 4:trig=1;break;case 5:recording=1;break;
         case 6:pages[0]=7;break;case 7:*(u32 *)(view+0x88)=0x10;break;
-        case 8:*(u32 *)view=0x40241bd4;break;}
+        case 8:*(u32 *)view=0x40241ef4;break;}
         assert(!menu_key(12,1) && !sp_allocate_active(view) && !sets);
     }
     setup(0,16,0);assert(!menu_key(12,3) && !sp_allocate_active(view));

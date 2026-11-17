@@ -1,5 +1,11 @@
 # Skip native modulation per track
 
+Desktop OS 1.42 release: **1.2.5**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
+See [the port notes](../../docs/OS142-PORT.md).
+
 The consolidated release is **1.2.4**, one step from main's 1.2.3. Sections
 labelled 1.3 and 1.4 below are development iterations included together in
 this release. See [the mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).

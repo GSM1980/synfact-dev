@@ -30,7 +30,7 @@ def main():
     if out.is_relative_to(ROOT):
         subprocess.run(['git','check-ignore',str(out/'artifact.bin')],cwd=ROOT,check=True,capture_output=True)
     stock,dev,release=formats.load(a.stock)
-    if dev.key!='syntakt' or release.version!='1.41':raise ValueError('requires official Syntakt OS 1.41')
+    if dev.key!='syntakt' or release.version!='1.42':raise ValueError('requires official Syntakt OS 1.42')
     mods=[]
     dirs=[ROOT/'mods/core-st',ROOT/'mods/machines-st']
     # --system-info retains AUDIO telemetry; its UI now lives in the SMZ.
@@ -84,7 +84,7 @@ def main():
     audio,ainfo=audio_build(stock,dev,out/'audio',a.system_info)
     main_bin=out/'main.bin';audio_bin=out/'audio.bin'
     main_bin.write_bytes(linked.image);audio_bin.write_bytes(audio)
-    output=out/('Syntakt_OS1.41_Elekloader_Core'+mods[0].version+('_SystemInfo' if a.system_info else '')+'_EXPERIMENTAL.syx')
+    output=out/('Syntakt_OS1.42_Elekloader_Core'+mods[0].version+('_SystemInfo' if a.system_info else '')+'_EXPERIMENTAL.syx')
     if output.exists():raise ValueError('output already exists; choose a new --out directory')
     run=subprocess.run([a.eft,'-i',str(Path(a.stock).resolve()),'-c','3',str(main_bin),
         '-c','7',str(audio_bin),'-l','1','-o',str(output)],capture_output=True,text=True)

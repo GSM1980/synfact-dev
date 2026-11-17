@@ -1,6 +1,6 @@
 # Synfact
 
-Custom firmware and mods for the **Elektron Syntakt** (OS 1.41). You pick the
+Custom firmware and mods for the **Elektron Syntakt** (OS 1.42). You pick the
 mods and supply the stock OS file Elektron publishes. The firmware is built on
 your own machine, or in your browser, and you install it like any OS update.
 

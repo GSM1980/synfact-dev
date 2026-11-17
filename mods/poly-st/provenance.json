@@ -32,20 +32,22 @@
     "1.6: integer-only MAIN fast sync using existing locked caches; aligned MOVEM publication; bounded raw Sound/event copies; leaf keyboard-origin census; local scalar/held-note loop simplification; native queue, synthesis, EMAC, AUDIO and core unchanged"
   ],
   "local_sha256": {
-    "main.c": "516039b11e0547954d4235b7ce369c113627c98300a8b680ea7b0a65dc8916c9",
-    "poly_core.c": "406a984485481907aee865a4b1b2943db2830429849f8708451f1a134a60abb3",
-    "poly_event.c": "3b06dd4b2b3edee382e2042af3563e772ccd3eee8c69f7576dbbbaefc5693301",
+    "main.c": "6684fd831132896f89d0a2c7b0d29759c7a04486c7a48bd7fd35455629392248",
+    "poly_core.c": "a0e6c585224b55933d27d92d26ef5a6ccc3c0c99873045fb2b18793ade677028",
+    "poly_event.c": "7ee471184419ef874fb4990067424731a2f7eb4382ac943940d6fd3295f4892f",
     "poly_groups.c": "9d873f431e780f7201cc90edb8c60e2ec745e3543151bc256cd1ddc3cbdfc63b",
     "poly_pattern.c": "c503a5afda21197951d627f849378a7a5b2e60bf7b16e843e1b6c852035669d1",
-    "poly_sequence.c": "9075b19d5284966db5a7c803375df5a77ebb83e3438fac5b303c0df8dd8fe682",
+    "poly_sequence.c": "f2b8e37db8558fbdd89a2cc392cc0eef4a1d51b5afdce85e40401ba46c43e70c",
     "poly_publication.c": "55671a510144abef6a1acc5f292a1192896841672b4adafd4e454ff9af9d4220",
-    "poly_ui.c": "7e50c2cf879c4a48cda6e3b2f10e181552128def7df55622a08d208ecf917124",
+    "poly_ui.c": "c349a67300acdf49bcfbadcffa7eced62ede0199ed17bd4f9bcf620d6dcf0319",
     "publication.s": "9c95e3bcc66fdfa89b5009a4a88bc749b2a7abb8d3941a16a4504936f9145d39",
     "poly_codec.c": "62cf3ca5e409f1e2b6624fa4d7a4abbe4bdf27a35319d165310a29d0c4f6a222",
     "poly_play.c": "dc71f514af45dc27afc79fb853d039e5eca113e00d645b9258d62b6f1fc6ad13",
-    "poly_copy.c": "88b9935bcb2ca129e6a27f694596aceb5b82c7eddc4142a25aba4d0c2709fc58",
-    "sync.s": "7006bd8b5a9f85e0a070f3331f51e5b564712a585816716471705ae03fe0123b",
-    "copies.s": "0a5460ab171112d0bdcdbdd542167a54e675886a71a0740c8821c4f39e2be18f"
+    "poly_copy.c": "ec5eb539e11efc860eea204c37699a1bec7de3e6cc36ce3c9dff455211901df0",
+    "sync.s": "1217a57bb488ccce2cd3f3e890c5f42b05e457ceec9123f7b021ce5cda5783ae",
+    "copies.s": "d7b71ee0cd549078374537d3154f2400f8956a492a647033e9304694693b8fec"
   },
-  "local_sha256_eol": "lf"
+  "local_sha256_eol": "lf",
+  "os": "1.42",
+  "port_base": "f48f3abc4eb598351311c1f6970f6651b8f4bdcb"
 }

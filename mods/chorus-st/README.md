@@ -1,5 +1,12 @@
 # Chorus
 
+Desktop OS 1.42 release: **1.2.1**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
+
 Synfact's chorus on the Syntakt's MAIN mixer. Each track sends through its
 CHO control (the Sound's dormant Digitone chorus send, parameter 72); the
 sends sum to one mono signal, the chorus renders it to a stereo wet and
@@ -107,7 +114,7 @@ ever changes.
   (1.2 above). On the unit, MAIN pays for code and data fetched from DDR in
   every audio block more than for instructions: the first port (all in DDR,
   unrolled) took MAIN from 88% to 100% with one send, and its sound broke up
-  from the overload. Per block it touched 5.4 KB of code and 2.1 KB of data
+  from the overload. Per block it touched 5.4 KB of code and 2.0 KB of data
   in DDR. V56 had its state at `80007340`, where LFO3 now runs.
 - The settings' codec runs on the core's FX record notifications (queries
   28/29), which LFO3 shares.

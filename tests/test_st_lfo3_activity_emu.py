@@ -16,13 +16,14 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT),str(ROOT/'tests')]
 from test_st_patchers_emu import Patchers
+from test_st_module_startup_emu import DESCRIPTORS
 from test_st_safe_boot_emu import SP,RET
 from unicorn import UC_HOOK_MEM_WRITE
 from unicorn.m68k_const import *
 
 POOL=0x44000000
-PATTERN=0x40a38b34
-KIT=0x41ad5134
+PATTERN=0x40a39b34
+KIT=0x41ad6134
 WORK=0x800021b0
 PROXY,GETTER=0x45000000,0x45010000
 SAVED=(UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,
@@ -43,6 +44,17 @@ class Activity(Patchers):
                       self.bs.get('lfo3_output_track'):'output_updates'}
         self.event_boundaries={self.bs['lfo3_events_native_'+name] for name in ('apply','clear','restore','fx_restore')}
         self.u.hook_add(UC_HOOK_MEM_WRITE,self.write_hook)
+        # This differential isolates the four LFO3/ARP/POLY/Chorus routes.
+        # Playhead's metadata observer is tested separately with real init;
+        # a fifth observer exceeds the core's four narrowing slots and uses
+        # the documented fail-open route. It must not be represented here
+        # by an uninitialized, all-operations callback in a cost comparison.
+        for i,(name,init,subscriptions) in enumerate(self.modules):
+            if name=='PLAYHEAD':
+                assert subscriptions==[2,0x101,11],subscriptions
+                self.w(DESCRIPTORS+16*i+12,2)
+                self.modules[i]=(name,init,subscriptions[:2])
+                self.expected[11].remove(self.bs['playhead_native'])
         self.run('full')
         if 'chorus_native' in self.bs:
             # Chorus initialization is a boundary in Patchers. Its real UI
@@ -51,10 +63,11 @@ class Activity(Patchers):
             # a LFO subscriber and fail even on an unmodified normal main bank.
             self.call('core_native_interest_set',self.bs['chorus_native'],1<<11)
             route=bytes(self.u.mem_read(self.sym['core:core_native_interest'],24))
-            assert route[11]&0x88 and route[17]==0  # 80h encodes all callbacks.
+            # Pre-optimization LFO3 remains subscribed even with neutral output.
+            assert route[11]&0x88 and route[17]==(0 if self.dynamic else 1),route.hex()
         assert self.word(self.lfo['hooks_installed'])==1 and self.word(self.lfo['in_sram'])==1
         self.sr=0x2000
-        self.w(0x444db730,POOL)
+        self.w(0x444dc730,POOL)
         self.context=self.word(self.bs['lfo3_events_context'])
         self.call('lfo3_events_init',self.context,71)
         self.store=self.call('lfo3_owned_lookup',PATTERN+0x3bc5)
@@ -72,7 +85,7 @@ class Activity(Patchers):
                 assert u.reg_read(UC_M68K_REG_SR)&0x700==0x700,'route setter outside IRQ exclusion'
             if self.break_updates and self.tracked[pc]=='output_updates':
                 self.ret(0);return
-        if pc==0x4011926e:
+        if pc==0x40119432:
             # Original LFO body boundary, after the adapter's exact 64-byte
             # frame. Restore its real MOVEM saves and return to the caller.
             self.hits['original_lfo']+=1
@@ -84,9 +97,9 @@ class Activity(Patchers):
         if render and pc==render:
             self.hits['render']+=1;self.ret(0);return
         if pc in self.event_boundaries:self.ret(0);return
-        if pc in (0x400a63ec,0x400a6300):
+        if pc in (0x400a6464,0x400a6378):
             slot=self.args(1)[0];self.ret(0x100+slot if slot else 0);return
-        if pc==0x400a666a:self.ret(0x200);return
+        if pc==0x400a66e2:self.ret(0x200);return
         if pc==GETTER:self.ret(self.getter_source);return
         super().code(u,pc,n,user)
 
@@ -142,7 +155,7 @@ class Activity(Patchers):
             if value is not None:assert self.call('lfo3_owned_set',self.store,t,3,parameter,value,0)==1
         lock=POOL
         if static:
-            lock=POOL+0x10000+4*t;self.w(0x444e3884+4*t,lock)
+            lock=POOL+0x10000+4*t;self.w(0x444e4884+4*t,lock)
         self.call('lfo3_events_capture',lock,PATTERN,t,3)
         before=self.expected_output()
         self.call('lfo3_events_apply',t,lock,WORK)
@@ -278,6 +291,7 @@ def verify(core,before,after):
                 negative_control=negative,device_access=False,
                 limits=['Real initialization, public publication/locks, IRQ masking and resident route builder.',
                         'Native metadata/event bodies/heap/mutex and DSP renderer/original LFO body are explicit boundaries.',
+                        'Playhead metadata subscription is excluded from this isolated LFO3 cost comparison; full-bank fifth-subscriber fallback is not a measured optimization.',
                         'Separate analog-emu runs the unchanged real renderer/EMAC.',
                         'Instructions are not cycles or hardware CPU points.'])
 

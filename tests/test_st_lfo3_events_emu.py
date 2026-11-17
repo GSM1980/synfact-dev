@@ -55,8 +55,8 @@ def lookup_cases(old, new):
         checks += 1
 
     layouts = [
-        (0x40a38b34, [], [], True, True),
-        (0x40a38b34, [(0x45000000, PATTERN*3, 3, 1),
+        (0x40a39b34, [], [], True, True),
+        (0x40a39b34, [(0x45000000, PATTERN*3, 3, 1),
                       (0x46000000, 141756, 1, 1),
                       (0x46100000, 10468, 1, 2)], [], True, True),
         # A temporary or an overlapping owner can win at a lower track than
@@ -112,7 +112,7 @@ def event_cases(native, before, after):
     for r in (old, new):
         assert r.call('lfo3_locks_setup', [])[0] == 1
         r.u.mem_map(LOCK, 0x1000000)
-        r.write(0x444db730, LOCK)
+        r.write(0x444dc730, LOCK)
         r.write(r.sym['lfo3_events_context'], EVENTS)
         r.call('lfo3_events_init', [EVENTS, 71])
         for name in ('apply', 'convert', 'clear', 'restore', 'fx_restore'):
@@ -141,7 +141,7 @@ def event_cases(native, before, after):
 
     # Every live track, with real lane storage and non-neutral LFO3/ARP values.
     for r in (old, new):
-        store = r.call('lfo3_owned_lookup', [0x40a38b34+MATRIX])[0]
+        store = r.call('lfo3_owned_lookup', [0x40a39b34+MATRIX])[0]
         for t in range(13):
             for p in (0, 3, 8, 15):
                 value = 0x100 if p==3 else 0x1234+t+p
@@ -150,7 +150,7 @@ def event_cases(native, before, after):
     for t in range(13):
         for step in (3, 4, 63, 64):
             check(f'convert-live-{t}-{step}', 'lfo3_events_convert',
-                  [LOCK, 0x40a38b34+MATRIX+t*ROW, 0, 0, step, 0])
+                  [LOCK, 0x40a39b34+MATRIX+t*ROW, 0, 0, step, 0])
     owners = []
     for r in (old, new):
         r.irq = 0
@@ -168,22 +168,22 @@ def event_cases(native, before, after):
               [LOCK, owners[0]+MATRIX+t*ROW, 0, 0, 3, 0])
     for t in range(13):
         for r in (old, new):
-            r.write(0x444e3884+4*t, STATIC+4*t)
+            r.write(0x444e4884+4*t, STATIC+4*t)
         check(f'convert-static-{t}', 'lfo3_events_convert',
-              [STATIC+4*t, 0x40a38b34+MATRIX+t*ROW, 0, 0, 3, 0])
+              [STATIC+4*t, 0x40a39b34+MATRIX+t*ROW, 0, 0, 3, 0])
     for r in (old, new):
-        r.u.mem_write(0x444e3884, bytes(13*4))
+        r.u.mem_write(0x444e4884, bytes(13*4))
     # Queued and static PLAY-start locks; all active payload words must remain
     # exact even if mask zero. ARP output may be halfword aligned or overlap.
     for static in (False, True):
         lock = STATIC if static else LOCK
         for r in (old, new):
             if static:
-                r.write(0x444e3884+12*4, STATIC)
+                r.write(0x444e4884+12*4, STATIC)
         for t in (0, 7, 11, 12, 13):
             for step in (3, 4):
                 for r in (old, new):
-                    r.call('lfo3_events_capture', [lock, 0x40a38b34, t, step])
+                    r.call('lfo3_events_capture', [lock, 0x40a39b34, t, step])
                     r.u.mem_write(OUT, b'\x9c'*96)
                 check(f'apply-{static}-{t}-{step}', 'lfo3_events_apply', [t, lock, 0])
                 for address in (OUT, OUT+2):

@@ -123,7 +123,7 @@ static int poly_initialize(const struct st_smz_api *api)
        !api->ui->host || api->ui->host->version<2)return 1;
     poly_host=api->ui->host;poly_native_interest();
     /* Host API 6: POLY's page handlers act only on the TRIG ParameterView. */
-    if(poly_host->version>=6)poly_host->native_page_view((void (*)(void))poly_native,0x401c97fcu);
+    if(poly_host->version>=6)poly_host->native_page_view((void (*)(void))poly_native,0x401c9a9cu);
     /* Before host API 13 there is one provider slot (LFO3's); 14 asks query 31. */
     if(poly_host->version>=14)poly_host->parameter_provider(poly_query);
     return 0;

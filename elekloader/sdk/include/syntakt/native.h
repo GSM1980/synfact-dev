@@ -2,7 +2,7 @@
 #ifndef ELEKLOADER_ST_NATIVE_H
 #define ELEKLOADER_ST_NATIVE_H
 #include "modules.h"
-/* Core-owned OS 1.41 native transactions. ST_EV_NATIVE handlers have signature
+/* Core-owned OS 1.42 native transactions. ST_EV_NATIVE handlers have signature
  * int f(operation, borrowed arguments, result). Nonzero supplies *result;
  * zero continues the shared collection and then the exact stock replay.
  * Arguments/results are 32-bit target words, synchronous, never retained.

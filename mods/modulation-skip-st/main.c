@@ -29,8 +29,8 @@ typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;typ
 #define SKIP_R32(a) (*(const volatile u32 *)(a))
 #define SKIP_R16(a) (*(const volatile u16 *)(a))
 #define SKIP_W16(a,v) (*(volatile u16 *)(a)=(u16)(v))
-#define SKIP_FILL ((void (*)(void *,int,int,int,int,u32))0x400f7df2u)
-#define SKIP_TEXT ((void (*)(void *,void *,int,int,u32,const char *,const char *))0x400f8a0cu)
+#define SKIP_FILL ((void (*)(void *,int,int,int,int,u32))0x400f7fb6u)
+#define SKIP_TEXT ((void (*)(void *,void *,int,int,u32,const char *,const char *))0x400f8bd0u)
 #define SKIP_MEM(a) ((volatile u8 *)(a))
 #endif
 #ifndef MODULATION_SKIP_VERIFY
@@ -39,8 +39,8 @@ typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;typ
 #define WORKING 0x80006348u
 #define TRACK(t) (WORKING+0x1cu+0x8eu*(t))
 #define RAW(t) (WORKING+0x754u+0x7cu*(t))
-#define SITE 0x40097b04u
-#define WRITER 0x400a30c4u
+#define SITE 0x40097b7cu
+#define WRITER 0x400a313cu
 #define CHECK_EVERY 64u
 enum {OFF,VERIFY,ON,REFUSED};
 enum {RUN_STOCK,SKIPPED,RUN_AND_CHECK,RUN_FILTERED,RUN_SPARSE};
@@ -253,7 +253,7 @@ static u32 sparse_ok(u32 mask)
 {return !(mask&ALL_TRACKS&~sparse_track_mask);}
 #ifndef SKIP_HOST
 static void native_group(u32 row,s32 value,u32 entries)
-{((void (*)(u32,s32,u32))0x40097aacu)(row,value,entries);}
+{((void (*)(u32,s32,u32))0x40097b24u)(row,value,entries);}
 #else
 extern void modulation_skip_host_group(u32,s32,u32);
 static void native_group(u32 row,s32 value,u32 entries)
@@ -428,7 +428,7 @@ __asm__(
 "        moveq #0,%d0\n"
 "        movea.l 64(%sp),%a2\n"
 "        move.l %a2,%d3\n"
-"        jmp 0x40097b0a\n"
+"        jmp 0x40097b82\n"
 "1:      cmpi.l #3,%d0\n"
 "        beq.s 5f\n"
 "        cmpi.l #2,%d0\n"
@@ -454,7 +454,7 @@ __asm__(
 "        movem.l %d2-%d7/%a2-%a6,(%sp)\n"
 "        movea.l 64(%sp),%a2\n"
 "        move.l %a2,%d3\n"
-"        jmp 0x40097b0a\n"
+"        jmp 0x40097b82\n"
 "| 400a30c4 (source, track): the stock prologue's two instructions moved here;\n"
 "| one write counted before and one after, on the caller's stack, without\n"
 "| touching a register (it runs in the task and inside the IRQ).\n"
@@ -489,7 +489,7 @@ __asm__(
 "        rts\n"
 "4:      lea -12(%sp),%sp\n"
 "        movem.l %d2/%a2-%a3,(%sp)\n"
-"        jmp 0x400a30cc\n"
+"        jmp 0x400a3144\n"
 "| IRQ exclusion and one code halfword write with the core's cache sequence.\n"
 "        .globl modulation_skip_lock,modulation_skip_unlock,modulation_skip_code16,modulation_skip_sync\n"
 "modulation_skip_lock:\n"
@@ -560,7 +560,7 @@ static void skip_draw(void *bitmap,void *controller)
     (void)controller;
     if(ticks/120u%3u!=2u || !shown())return;
     SKIP_FILL(bitmap,18,54,127,63,0);
-    SKIP_TEXT(bitmap,(void *)0x443da230u,20,55,0,"%s",line);
+    SKIP_TEXT(bitmap,(void *)0x443db230u,20,55,0,"%s",line);
 }
 static int initialize(const struct st_smz_api *api)
 {

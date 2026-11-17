@@ -36,9 +36,9 @@ class ReentrantMachine(RetainedMachine):
                 return  # Execute real synchronous composition, not the old stub.
             if pc==0x4000a22c:
                 u.reg_write(UC_M68K_REG_PC,0x4000a2a0);return  # LCD work after tick.
-            if pc in (0x400ffba6,0x400ffaf4):
+            if pc in (0x400ffd6a,0x400ffcb8):
                 return  # Actual View construction and transparency setter.
-            if pc==0x400ffdfc:
+            if pc==0x400fffc0:
                 self.disposals+=1;return  # Actual base destructor, then native free.
         return super().code(u,pc,n,ctx)
 

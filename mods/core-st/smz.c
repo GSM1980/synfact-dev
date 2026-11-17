@@ -95,8 +95,7 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
        (!count && v->ui!=CORE_SMZ_NONE)){core_smz_failure=__LINE__;return 0;}
     v->contract=core_smz_be(h+24)&16u?core_smz_be(h+64):0;
     if(core_smz_be(h+48)!=0x534d5a34u ||
-       (!(core_smz_be(h+24)&16u) && core_smz_be(h+64)!=CORE_SMZ_NONE) ||
-       ((core_smz_be(h+24)&16u) && v->contract!=CORE_SMZ_CONTRACT) ||
+       !(core_smz_be(h+24)&16u) || v->contract!=CORE_SMZ_CONTRACT ||
        (!(core_smz_be(h+24)&8u) && core_smz_be(h+60))){core_smz_failure=__LINE__;return 0;}
     v->bytes=core_smz_be(h+52);v->nrel=core_smz_be(h+56);v->relocs=80;
     if(v->nrel>(r->bytes-80)/4){core_smz_failure=__LINE__;return 0;}
@@ -138,7 +137,7 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
         x=core_smz_be(d);params=core_smz_be(d+4);param_at=core_smz_be(d+20);
         if(x<64 || x>=80 || (types&(1u<<(x-64))) || !params || params>CORE_SMZ_STORED_PARAMS ||
            (param_at&3) || !span(param_at,24*params,v->bytes) ||
-           /* OS 1.41's native menu/icon dispatch supports categories 1..14. */
+           /* OS 1.42's native menu/icon dispatch supports categories 1..14. */
            core_smz_be(d+28)!=44 || core_smz_be(d+32)-1u>=14u ||
            core_smz_be(d+36)>127){core_smz_failure=__LINE__;return 0;}
         types|=1u<<(x-64);

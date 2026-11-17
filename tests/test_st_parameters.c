@@ -38,12 +38,12 @@ void audio_machine_flush(void *p,u32 n){(void)p;(void)n;}
 void audio_machine_silent(void){}
 static void map(u32 base,u32 size)
 {assert(VirtualAlloc((void *)base,size,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)base);}
-#define GATE (*(volatile u32 *)0x43bdc824u)
+#define GATE (*(volatile u32 *)0x43bdd824u)
 #define FPGA ((unsigned char *)0x10000c00u)
 static u32 values[96];
 static unsigned short *working(u32 t){return (unsigned short *)(0x80006364u+t*0x8e);}
 static unsigned short *mirror(u32 t){return (unsigned short *)(0x800021ccu+t*0x8e);}
-static int *lfo(u32 t,u32 n){return (int *)(0x444da748u+t*0x50+n*0x28);}
+static int *lfo(u32 t,u32 n){return (int *)(0x444db748u+t*0x50+n*0x28);}
 static const void *audio_params(u32 t){return (const void *)(0x80003c5cu+t*0x8e);}
 static u32 *bank_of(u32 tag){return (u32 *)PARAM_BANK(tag);}
 /* MAIN's saved machine of a track and AUDIO's received voice type. */

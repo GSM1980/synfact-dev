@@ -20,7 +20,7 @@ core_track_send_table:
         lea ev_track_send,%a0
         tst.l (%a0)
         bne.s 1f
-        jmp 0x4008f3a8
+        jmp 0x4008f420
 1:      lea core_track_sends,%a1                 | A1 is rewritten at 4008f3a8
         lea (%a1,%d2.l*4),%a1                   | D2 = 4 x track: 16-byte rows
         movem.l %d0-%d1/%a3,(%a1)
@@ -41,7 +41,7 @@ core_track_send_table:
         bra.s 2b
 3:      movem.l (%sp),%d0-%d1/%a1-%a2
         lea 16(%sp),%sp
-4:      jmp 0x4008f3a8
+4:      jmp 0x4008f420
 
 | struct st_track_sends: 12 rows {left, right, mix record, 0}, then the mutes
         .section .bss
@@ -58,7 +58,7 @@ core_delay_in_table:
         lea ev_delay_in,%a0
         tst.l (%a0)
         bne.s 1f
-        jmp 0x40096890
+        jmp 0x40096908
 1:      move.l %a2,-(%sp)
         movea.l %a0,%a2
 2:      move.l (%a2)+,%d0
@@ -67,7 +67,7 @@ core_delay_in_table:
         jsr (%a0)
         bra.s 2b
 3:      movea.l (%sp)+,%a2
-        jmp 0x40096890
+        jmp 0x40096908
 
 | ev_reverb_in: void f(void), at 4008f952, when ST_FX_SEND_BUS holds the
 | block's complete reverb input, before the native reverb renders it.
@@ -77,7 +77,7 @@ core_reverb_in_table:
         lea ev_reverb_in,%a0
         tst.l (%a0)
         bne.s 1f
-        jmp 0x40096e3c
+        jmp 0x40096eb4
 1:      move.l %a2,-(%sp)
         movea.l %a0,%a2
 2:      move.l (%a2)+,%d0
@@ -86,4 +86,4 @@ core_reverb_in_table:
         jsr (%a0)
         bra.s 2b
 3:      movea.l (%sp)+,%a2
-        jmp 0x40096e3c
+        jmp 0x40096eb4

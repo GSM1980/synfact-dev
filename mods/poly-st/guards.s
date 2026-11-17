@@ -14,7 +14,7 @@ poly_mod_dispatch:
  | The resident body is untouched. Only its prologue needs replaying.
  lea -60(%sp),%sp
  movem.l %d2-%d7/%a2-%a6,(%sp)
- jmp 0x40097b04
+ jmp 0x40097b7c
 mod_grouped:
  jmp poly_mod_shared
 poly_mod_first_guard:

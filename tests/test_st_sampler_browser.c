@@ -127,7 +127,7 @@ static u32 key[5];
 static void begin(u32 machine,u32 page,u32 original)
 {
     sp_browser_reset();type=machine;raw=base_raw=original;locked=trig=recording=0;track=0;
-    *(u32 *)view=0x401ca0dc;*(u32 *)(view+0x88)=0x14;*(u32 *)(view+0x90)=page;
+    *(u32 *)view=0x401ca37c;*(u32 *)(view+0x88)=0x14;*(u32 *)(view+0x90)=page;
     *(void **)(view+0x74)=(void *)0x1234;*(void **)(view+0x6c)=(void *)0x5678;
     edits=clears=reads=invalidations=0;sp_browser_begin(&api,view,type,page);
     assert(sp_browser_active(view) && invalidations==1);

@@ -19,7 +19,7 @@ class Patchers(Startup):
         super().__init__(core,bank,'full')
         self.u.mem_map(HEAP,0x400000);self.u.mem_map(0x80000000,0x10000)
         self.heap_next=HEAP
-        self.w(0x402d4fd8,HEAP);self.w(0x402d4fe0,HEAP+0x400000)
+        self.w(0x402d5328,HEAP);self.w(0x402d5330,HEAP+0x400000)
         e=Elf.load(bank.with_suffix('.work')/'main.elf')
         self.bs={s.name:BANK+s.value for s in e.symbols if s.name}
         for name,init,_ in self.modules:
@@ -48,22 +48,22 @@ class Patchers(Startup):
 
 def verify(core,bank,refuse=False):
     m=Patchers(core,bank)
-    writer=bytes(m.u.mem_read(0x400a30c4,8))
-    if refuse:m.u.mem_write(0x40097b04,b'\x4e\x71')
+    writer=bytes(m.u.mem_read(0x400a313c,8))
+    if refuse:m.u.mem_write(0x40097b7c,b'\x4e\x71')
     m.run('full')
     mode=m.word(m.bs['modulation_skip_mode'])
     if m.lfo:
         assert m.word(m.lfo['hooks_installed'])==1
         assert m.word(m.lfo['in_sram'])==1
     if refuse:
-        assert mode==3 and bytes(m.u.mem_read(0x400a30c4,8))==writer
+        assert mode==3 and bytes(m.u.mem_read(0x400a313c,8))==writer
         return dict(bank_sha256=hashlib.sha256(bank.read_bytes()).hexdigest(),
                     negative_control='bad modulation preimage refused without partial writer patch',mode=mode)
     assert mode==2,mode
     # Isolate the installed native modulation path. Other native subscriptions
     # are not initialized by this fixture; no POLY replacement is requested.
     m.u.mem_write(m.sym['core:core_native_interest']+16,b'\0')
-    m.sym['core:probe_modulation']=0x40097afc
+    m.sym['core:probe_modulation']=0x40097b74
     for _ in range(128):m.call('probe_modulation',0x80006348)
     counts={key:m.word(m.bs['modulation_skip_'+key]) for key in ('mode','blocks','hits','skips','errors')}
     assert counts==dict(mode=2,blocks=128,hits=127,skips=124,errors=0),counts

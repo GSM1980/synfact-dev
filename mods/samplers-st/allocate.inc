@@ -12,9 +12,9 @@
 #define SP_ALLOCATE_GET st_pattern_lock_get
 #define SP_ALLOCATE_SET st_pattern_lock_set
 #define SP_ALLOCATE_CLEAR st_pattern_lock_clear
-#define SP_ALLOCATE_SELECTING ((u32 (*)(void *))0x400c3294u)
-#define SP_ALLOCATE_CLOCK ((u32 (*)(void))0x400c2caau)
-#define SP_ALLOCATE_NOTIFY ((void (*)(void *,const char *,...))0x400c33d0u)
+#define SP_ALLOCATE_SELECTING ((u32 (*)(void *))0x400c3340u)
+#define SP_ALLOCATE_CLOCK ((u32 (*)(void))0x400c2d56u)
+#define SP_ALLOCATE_NOTIFY ((void (*)(void *,const char *,...))0x400c347cu)
 #endif
 #define SP_SLICE_BASE (0x1f9u+5u*32u)
 static struct {
@@ -30,8 +30,8 @@ static int sp_allocate_eligible(void *view)
 {
     u8 *v=view;const u32 *pages;u32 vt;
     if(!v)return 0;vt=*(u32 *)v;
-    if(vt!=0x401c7838u && vt!=0x401c8838u && vt!=0x401ca0dcu &&
-       vt!=0x401c8d94u && vt!=0x4023ff74u && vt!=0x401c97fcu)return 0;
+    if(vt!=0x401c7ad8u && vt!=0x401c8ad8u && vt!=0x401ca37cu &&
+       vt!=0x401c9034u && vt!=0x40240294u && vt!=0x401c9a9cu)return 0;
     if(*(u32 *)(v+0x88)!=0x14 || *(u32 *)(v+0x90)>=2)return 0;
     /* Same source-page ownership gate as the core: no machine selector,
      * held-trig/selected-step edit context or foreign parameter page. */

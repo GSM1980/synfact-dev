@@ -130,7 +130,7 @@ int main(void)
     }
     entries[64]=0x8001;core_pool_write(PROJECT,entries);
     for(i=0;i<128;i++){receiver_table[2*i]=state->frames[i];receiver_table[2*i+1]=state->pointer[i];}
-    *(volatile u32 *)0x43bdc824u=1;core_pool_created();assert(receiver_calls);
+    *(volatile u32 *)0x43bdd824u=1;core_pool_created();assert(receiver_calls);
     core_pool_read(PROJECT,entries);
     for(i=0;i<128;i++){
         assert(entries[i]==(i<64?i+1:0));assert(state->code[i]==entries[i]);

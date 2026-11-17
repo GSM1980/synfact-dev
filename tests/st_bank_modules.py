@@ -15,9 +15,10 @@ def check_bank_modules(report, raw, allowed):
     # samplers-st 1.3: its stereo-track module follows the input module
     expected += [['sp_sampler_input_module','st_stereo_module',*names] for names in allowed]
     expected += [names+['sample_manager_module'] for names in list(expected)]
-    # optional modules after them, in bank order: the chorus, then modulation skip
+    # Optional modules in bank order: Chorus, Playhead, then Modulation Skip.
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
     expected += [names+['chorus_module'] for names in list(expected)]
+    expected += [names+['playhead_module'] for names in list(expected)]
     expected += [names+['modulation_skip_module'] for names in list(expected)]
     assert modules in expected, ('unexpected module composition/order',modules)
     directory,count=struct.unpack_from('>II',raw,32)

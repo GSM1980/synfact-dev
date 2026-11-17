@@ -7,16 +7,16 @@
 #include "allocate.h"
 typedef st_u32 u32;typedef unsigned char u8;
 #ifndef ST_UI_PRIMITIVES
-#define FILL ((void (*)(void *,int,int,int,int,u32))0x400f7df2u)
-#define FRAME ((void (*)(void *,int,int,int,int,u32))0x400f7bd6u)
-#define PIXEL ((void (*)(void *,int,int,u32))0x400f7140u)
-#define TEXT ((void (*)(void *,void *,int,int,u32,const char *,...))0x400f8a0cu)
-#define FONT ((void *)0x443da210u)
+#define FILL ((void (*)(void *,int,int,int,int,u32))0x400f7fb6u)
+#define FRAME ((void (*)(void *,int,int,int,int,u32))0x400f7d9au)
+#define PIXEL ((void (*)(void *,int,int,u32))0x400f7304u)
+#define TEXT ((void (*)(void *,void *,int,int,u32,const char *,...))0x400f8bd0u)
+#define FONT ((void *)0x443db210u)
 #endif
 #ifndef ST_UI_NATIVE_DIAL
 #define ST_UI_NATIVE_DIAL ((void (*)(void *,u32,u32,u32,u32,void *,int,int))0x40011e74u)
-#define ST_UI_BITMAP ((void *(*)(void *,u32,u32))0x400f9258u)
-#define ST_UI_BLIT ((void (*)(void *,void *,int,int,u32))0x400f8dacu)
+#define ST_UI_BITMAP ((void *(*)(void *,u32,u32))0x400f941cu)
+#define ST_UI_BLIT ((void (*)(void *,void *,int,int,u32))0x400f8f70u)
 #endif
 enum {INTEGER,DECIMAL,PLAY,SAMPLE,SEG,MODE,BARS,SLICE,LENGTH,GRID,TUNE};
 static char text[24];
@@ -67,7 +67,7 @@ static int dial(const struct st_machine_ui_api *api,const struct core_machine_de
         ST_UI_NATIVE_DIAL(d->model,0x13,normalized,d->a,d->b,d->ctx,d->x,d->y);return 1;
     }
     if(k==PLAY || k==MODE){
-        bmp=ST_UI_BITMAP((void *)0x444e0cc8u,n<4?n:3,0);
+        bmp=ST_UI_BITMAP((void *)0x444e1cc8u,n<4?n:3,0);
         ST_UI_BLIT(d->ctx,bmp,d->x,d->y,0);return 1;
     }
     FILL(d->ctx,d->x,d->y,d->x+18,d->y+16,0);

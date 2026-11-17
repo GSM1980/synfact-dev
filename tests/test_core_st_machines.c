@@ -51,7 +51,7 @@ static u8 *default_get(void *model)
 static void default_notify(void *model,void *raw)
 {
     u32 i,*event=raw;assert(model==&default_model && notifications<20);
-    assert(event[0]==0x401c39d8 && event[1]==core_machine_slot(8+notifications) && event[2]==0x01000000);
+    assert(event[0]==0x401c3c78 && event[1]==core_machine_slot(8+notifications) && event[2]==0x01000000);
     /* All values are committed before the first notification. */
     for(i=8;i<28;i++)assert(*(unsigned short *)(default_sound+0x14+2*core_machine_slot(i))==fm_tone.parameter[i].initial);
     notifications++;
@@ -112,7 +112,7 @@ int main(void)
     args[0]=0x1fe;assert(!core_machine_query(ST_ENCODER_CACHED,args,0,&value) && args[0]==0x13);
     args[0]=0x219+26;assert(core_machine_query(ST_OWNER,args,0,&value) && value==65);
     args[0]=0x219+27;assert(!core_machine_query(ST_OWNER,args,0,&value));
-    *(u32 *)view=0x401ca0dcu;*(u32 *)(view+0x88)=0x14;*(u32 **)(view+0x7c)=malloc(4);**(u32 **)(view+0x7c)=6;
+    *(u32 *)view=0x401ca37cu;*(u32 *)(view+0x88)=0x14;*(u32 **)(view+0x7c)=malloc(4);**(u32 **)(view+0x7c)=6;
     *(u32 **)(view+0x80)=*(u32 **)(view+0x84)=*(u32 **)(view+0x7c)+1;
     assert(!core_machine_sync(view));assert(*(u32 **)(view+0x80)-*(u32 **)(view+0x7c)==4 && resets==1);
     *(u32 *)(view+0x90)=3;assert(core_machine_nav(view,3)==0x1f9+27);

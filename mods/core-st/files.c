@@ -28,7 +28,7 @@ static u32 trial_ready_ticks;
 extern int core_mods_audio_ready(void);
 #else
 static int core_mods_audio_ready(void)
-{return *(const volatile u32 *)0x43bdc824u!=0;}
+{return *(const volatile u32 *)0x43bdd824u!=0;}
 #endif
 static u32 sectors(void){return fw_mmc_ready[0]?fw_mmc_sectors[0]:0;}
 static const struct core_mods_io io={fw_mmc_read,fw_mmc_write,sectors};

@@ -1,5 +1,8 @@
 # Synfact docs
 
+Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
+See [OS142-PORT.md](OS142-PORT.md).
+
 Everything past the [front page](../README.md). The pages are plain Markdown
 and change with the code, so a commit's docs match its code.
 

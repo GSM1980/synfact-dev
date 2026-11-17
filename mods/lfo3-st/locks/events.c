@@ -39,13 +39,13 @@ void lfo3_events_init(events_t *c,u32 native_slots)
  * 64: capture, convert, apply and the extra-lock reader find it here too. */
 static locks_t *queued(u32 lock)
 {
-    events_t *c=lfo3_events_context;u32 base=*(const u32 *)0x444db730u,off,i;
+    events_t *c=lfo3_events_context;u32 base=*(const u32 *)0x444dc730u,off,i;
     if(!c || !c->stride || !lock) return 0;
     if(base && lock>=base) {
         off=lock-base;i=off/c->stride;
         if(i<64 && off==i*c->stride) return &c->queued[i];
     }
-    for(i=0;i<13;i++) if(lock==*(const volatile u32 *)(0x444e3884u+4*i)) return &start_locks[i];
+    for(i=0;i<13;i++) if(lock==*(const volatile u32 *)(0x444e4884u+4*i)) return &start_locks[i];
     return 0;
 }
 void lfo3_events_allocate(u32 lock)

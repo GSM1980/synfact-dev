@@ -30,7 +30,7 @@ Notes:
 
 - **The stock file must match exactly.** The engine knows the supported
   releases by hash (`elekloader/devices/syntakt.py`). The Syntakt build needs
-  **Syntakt OS 1.41**. The Digitone-based import steps need
+  **Syntakt OS 1.42**. The Digitone-based import steps need
   If Elektron's page offers a different version, the engine refuses the file,
   which is the intended behaviour.
 - **SGDK's binary names.** The SGDK 2.11 build this repository was tested with has unprefixed tools
@@ -53,7 +53,7 @@ export PY=python                                             # or the full path 
 export SGDK_BIN=/path/to/sgdk211/bin                         # folder with gcc, as, ld, objcopy
 export PATH="$SGDK_BIN:$PATH"
 export LLVM_MINGW_BIN=/path/to/llvm-mingw/bin                # folder with i686-w64-mingw32-clang
-export SYNTAKT_STOCK=/path/to/Syntakt_OS1.41.syx             # your stock Syntakt OS file
+export SYNTAKT_STOCK=/path/to/Syntakt_OS1.42.syx             # your stock Syntakt OS file
 export SYNTAKT_EFT=/path/to/elektron-firmware-tool           # the executable
 export DIGITONE_OS=/path/to/Digitone_and_Digitone_Keys_OS1.44.syx   # optional: Digitone-based import steps
 ```
@@ -75,7 +75,7 @@ $env:PY = 'python'
 $env:SGDK_BIN = 'C:\path\to\sgdk211\bin'
 $env:PATH = "$env:SGDK_BIN;$env:PATH"
 $env:LLVM_MINGW_BIN = 'C:\path\to\llvm-mingw\bin'
-$env:SYNTAKT_STOCK = 'C:\path\to\Syntakt_OS1.41.syx'
+$env:SYNTAKT_STOCK = 'C:\path\to\Syntakt_OS1.42.syx'
 $env:SYNTAKT_EFT = 'C:\path\to\elektron-firmware-tool.exe'
 $env:DIGITONE_OS = 'C:\path\to\Digitone_and_Digitone_Keys_OS1.44.syx'
 ```

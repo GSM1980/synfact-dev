@@ -103,12 +103,12 @@ int main(void)
      * opaque node (+1Ch) is the MainScreen, its parameter view (+C0h) is TRIG. */
     *(unsigned int *)view=ST_TRIG_VIEW;*(unsigned int *)(view+0x88)=0x13;
     *(unsigned char **)(ui+0x40+0x1c)=node;*(unsigned char **)(node+8)=main_screen;
-    *(unsigned int *)main_screen=0x401c81fcu;*(unsigned char **)(main_screen+0xc0)=view;
+    *(unsigned int *)main_screen=0x401c849cu;*(unsigned char **)(main_screen+0xc0)=view;
     assert(st_trig_current()==view);
     *(unsigned char **)(ui+0x40+0x1c)=ui+0x40+0x14;assert(!st_trig_current());  /* empty stack */
     *(unsigned char **)(ui+0x40+0x1c)=node;*(unsigned int *)(view+0x88)=0x12;assert(!st_trig_current());
     *(unsigned int *)(view+0x88)=0x13;*(unsigned int *)main_screen=0;assert(!st_trig_current());
-    *(unsigned int *)main_screen=0x401c81fcu;
+    *(unsigned int *)main_screen=0x401c849cu;
     /* The popup: the shown page's title (its descriptor, as the core's hook
      * answers), its number and the page count, in the view's popup (+6Ch). */
     for(i=1;i<=2;i++){descriptors[i][0]=1;descriptors[i][1]=(unsigned int)stock_titles[i-1].text;}

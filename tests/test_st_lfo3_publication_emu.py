@@ -54,8 +54,8 @@ class Runtime:
             u.mem_map(at, n)
         self.irq, self.depth, self.next_heap = 0, 0, META
         self.allocations = {}
-        self.native = {0x40001980: 'enter', 0x40001aa2: 'leave', 0x400a63ec: 'dest',
-                       0x400a6300: 'fxdest', 0x400a666a: 'flags',
+        self.native = {0x40001980: 'enter', 0x40001aa2: 'leave', 0x400a6464: 'dest',
+                       0x400a6378: 'fxdest', 0x400a66e2: 'flags',
                        self.sym['lfo3_memcpy_native']: 'copy',
                        self.sym['lfo3_owned_native_allocate']: 'allocate',
                        self.sym['lfo3_owned_native_release']: 'release'}
@@ -64,8 +64,8 @@ class Runtime:
         self.break_invalidation = break_invalidation
         u.hook_add(UC_HOOK_CODE, self.code)
         u.hook_add(UC_HOOK_MEM_READ, self.read_hook)
-        self.write(0x402d4fd8, META)
-        self.write(0x402d4fe0, META+0x400000)
+        self.write(0x402d5328, META)
+        self.write(0x402d5330, META+0x400000)
         for name, value in (('kits_base', LIVE), ('pool_base', POOL), ('lfo3_bank', ENGINE),
                             ('lfo3_budget_context', BUDGET),
                             ('shadow_query_callback', self.query),

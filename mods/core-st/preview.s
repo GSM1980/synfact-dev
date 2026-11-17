@@ -15,7 +15,7 @@
 core_preview_selected:
         lea -12(%sp),%sp                    | F = SP+12
         movem.l %d3-%d4/%a4,(%sp)
-        jsr 0x4016e804                      | application
+        jsr 0x4016e9c8                      | application
         move.l %d0,-(%sp)
         jsr 0x40019036                      | its track model
         move.l %d0,(%sp)
@@ -23,7 +23,7 @@ core_preview_selected:
         move.l %d0,%d3
         movea.l 0x6c(%a2),%a4               | selection
         move.l %a4,(%sp)
-        jsr 0x400c34d6
+        jsr 0x400c3582
         addq.l #4,%sp
         tst.b %d0
         beq.s 9f

@@ -8,7 +8,7 @@ enum {PLAYHEAD_UNCHECKED,PLAYHEAD_READY,PLAYHEAD_REFUSED};
 enum {PLAYHEAD_FORWARDS,PLAYHEAD_BACKWARDS,PLAYHEAD_PENDULUM,PLAYHEAD_RANDOM,PLAYHEAD_WALK,PLAYHEAD_MODES};
 /* The live kits, one per pattern. */
 #define PLAYHEAD_KITS 128u
-#define PLAYHEAD_KIT_BASE 0x41ad5134u
+#define PLAYHEAD_KIT_BASE 0x41ad6134u
 #define PLAYHEAD_KIT_BYTES 0x1618u
 /* Each kit's track modes; 0 forwards. Read by the sequencer interrupt. */
 extern volatile unsigned char playhead_modes[PLAYHEAD_KITS][16];

@@ -2,7 +2,7 @@
 
 # Syntakt builds (core-st, SMZ banks)
 
-The exact toolchain, flags and commands used for the Syntakt OS 1.41 core
+The exact toolchain, flags and commands used for the Syntakt OS 1.42 core
 (`mods/core-st`) and its SMZ4 machine/module banks. Every command below is run
 from the repository root in Git Bash, with the environment variables set as
 [SETUP.md](SETUP.md) section 2 says. If a step fails, fix the environment;
@@ -15,7 +15,7 @@ do not change flags or the builders to make it pass.
 | Cross compiler | `$SGDK_BIN`: the folder with SGDK 2.11's m68k toolchain (GCC 13.2.0, `m68k-elf`) |
 | Executable names | `gcc`, `as`, `ld`, `objcopy`, `objdump`, `nm`. Unprefixed in the SGDK 2.11 build used for testing; the engine's default prefix is `m68k-elf-` |
 | Python | `$PY` (3.9 or newer). `elekloader` is imported from the repository (run from its root) |
-| Stock OS | `$SYNTAKT_STOCK`: your Syntakt OS 1.41 `.syx` from Elektron |
+| Stock OS | `$SYNTAKT_STOCK`: your Syntakt OS 1.42 `.syx` from Elektron |
 | Elektron firmware tool | `$SYNTAKT_EFT`: the `elektron-firmware-tool` executable |
 | Host compiler for regressions | `$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe` (llvm-mingw, UCRT x86_64) |
 | Digitone OS (optional) | `$DIGITONE_OS`: your Digitone OS 1.44 `.syx`, for FM TONE and the chorus |
@@ -86,17 +86,24 @@ MAIN and 7 AUDIO change).
 
 ### SMZ4 bank (machines + modules)
 
+The 1.42 port's POLY kernels must be generated in each checkout:
+
+```bash
+"$PY" tools/import_poly_kernels.py --stock "$SYNTAKT_STOCK"
+```
+
 FM TONE needs its Digitone parts first (once per checkout, or after a change
 to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
 
 ```bash
 "$PY" mods/fm-tone-st/tools/import_digitone.py "$DIGITONE_OS"
+"$PY" mods/chorus-st/tools/import_digitone.py "$DIGITONE_OS"
 ```
 
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
-    --module mods/modulation-skip-st \
+    --module mods/chorus-st --module mods/playhead-st --module mods/modulation-skip-st \
     --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
@@ -154,7 +161,7 @@ user sends the SYX with FUNC+POWER and writes the bank with:
 ```
 
 Recovery after a bank that hangs at boot: FUNC+POWER with
-`out/core-st-0.12.9-recovery-no-bank/Syntakt_OS1.41_Elekloader_Core0.12.9_RECOVERY_NO_BANK.syx`
+`out/core-st-0.12.9-recovery-no-bank/Syntakt_OS1.42_Elekloader_Core0.12.9_RECOVERY_NO_BANK.syx`
 (a core that never loads `/mods`), write a good bank, then install the normal
 core SYX again.
 

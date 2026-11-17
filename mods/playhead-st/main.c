@@ -43,18 +43,18 @@ typedef unsigned int u32;typedef unsigned char u8;
 #define KEY_TRK 2u
 #define KEY_UP 14u
 #define KEY_DOWN 15u
-#define HELD ((u32 (*)(u32))0x40102d7cu)
-#define APP ((u8 *(*)(void))0x4016e804u)
+#define HELD ((u32 (*)(u32))0x40102f40u)
+#define APP ((u8 *(*)(void))0x4016e9c8u)
 #define TRACK_INDEX ((u32 (*)(void *))0x4001ff74u)
-#define UI ((u8 *(*)(void))0x4016de80u)
-#define MESSAGE ((void (*)(u32,const char *,...))0x400c33d0u)   /* printf popup */
-#define MAIN_SCREEN 0x401c81fcu
-#define FILL ((void (*)(void *,int,int,int,int,int))0x400f7df2u)    /* x0,y0,x1,y1, colour 0 clear, 1 set,
+#define UI ((u8 *(*)(void))0x4016e044u)
+#define MESSAGE ((void (*)(u32,const char *,...))0x400c347cu)   /* printf popup */
+#define MAIN_SCREEN 0x401c849cu
+#define FILL ((void (*)(void *,int,int,int,int,int))0x400f7fb6u)    /* x0,y0,x1,y1, colour 0 clear, 1 set,
                                                                       negative XOR (400f7ec4); y grows up */
-#define TEMPO 0x402d7010u
-#define TEMPO_SPLIT ((u32 (*)(u32,u32,u32,u32))0x4013273eu)        /* the whole BPM */
-#define TEXT_WIDTH ((int (*)(u32,int,const void *))0x400f92beu)    /* font, -1, a std::string */
-#define HEADER_FONT 0x443da1f0u
+#define TEMPO 0x402d7360u
+#define TEMPO_SPLIT ((u32 (*)(u32,u32,u32,u32))0x40132902u)        /* the whole BPM */
+#define TEXT_WIDTH ((int (*)(u32,int,const void *))0x400f9482u)    /* font, -1, a std::string */
+#define HEADER_FONT 0x443db1f0u
 static u32 taken;                       /* bit k: the press of key 14+k (UP, DOWN) was taken */
 static const char *const names[PLAYHEAD_MODES]={"FORWARD","REVERSE","PENDULUM","RANDOM","WALK"};
 static u32 word(const void *p,u32 at){return *(const u32 *)((const u8 *)p+at);}
@@ -74,7 +74,7 @@ static u32 popup_target(void)
     u8 *main=main_screen(),*view;u32 vt;
     if(!main || !(view=*(u8 **)(main+0xc0)))return 0;
     vt=word(view,0);
-    if(vt<0x40000408u || vt>=0x40338600u || ((const u32 *)vt)[0x88/4]!=0x4003792cu)return 0;
+    if(vt<0x40000408u || vt>=0x40339600u || ((const u32 *)vt)[0x88/4]!=0x4003792cu)return 0;
     return word(view,0x6c);
 }
 static void show(u32 t,const char *what)

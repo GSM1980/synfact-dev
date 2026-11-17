@@ -48,8 +48,8 @@ def fixed_cases(core, bank):
                 m = InvestigationMachine(core,bank); m.start()
                 for at,value in ((0x161,active),(0x168,grid),(0x16a,live)):
                     m.u.mem_write(m.selection+at,bytes([value]))
-                native = bool((m.call(0x400c2e56,m.selection)&255) or
-                              (m.call(0x400c2fb6,m.selection)&255))
+                native = bool((m.call(0x400c2f02,m.selection)&255) or
+                              (m.call(0x400c3062,m.selection)&255))
                 m.arp_leds()
                 assert bool(m.leds) != native
 
@@ -98,7 +98,7 @@ def fixed_cases(core, bank):
     m.w(PARAM+0x90,2)
     assert m.encoder(2,1) == 1 and m.word(m.sym['arp_page']) == 0
     # External parameter replacement without a key event is handled by the tick.
-    m.w(MAIN+0xc0,SYN); m.w(SYN,0x401c8d58)
+    m.w(MAIN+0xc0,SYN); m.w(SYN,0x401c8ff8)
     m.call('arp_view_tick',APP); assert m.closed == 1
     return cases
 

@@ -2,18 +2,18 @@
  * in the existing file-owned hook table, so replacing the machine file leaves
  * no callbacks or data pointers inside native views. */
 /* TRIG pages shared with ARP (list item 37), through POLY_CALL. */
-#define ST_TRIG_NEW POLY_CALL(0x40103788u,u32 *(*)(u32))
-#define ST_TRIG_DELETE POLY_CALL(0x40103794u,void (*)(void *))
-#define ST_TRIG_RESET POLY_CALL(0x400f6730u,void (*)(void *))
-#define ST_TRIG_UI POLY_CALL(0x4016de80u,u8 *(*)(void))
-#define ST_TRIG_LAYOUT POLY_CALL(0x4007b9d0u,u32 *(*)(u32))
-#define ST_TRIG_MESSAGE POLY_CALL(0x400c33d0u,void (*)(u32,const char *,...))
+#define ST_TRIG_NEW POLY_CALL(0x4010394cu,u32 *(*)(u32))
+#define ST_TRIG_DELETE POLY_CALL(0x40103958u,void (*)(void *))
+#define ST_TRIG_RESET POLY_CALL(0x400f68f4u,void (*)(void *))
+#define ST_TRIG_UI POLY_CALL(0x4016e044u,u8 *(*)(void))
+#define ST_TRIG_LAYOUT POLY_CALL(0x4007ba48u,u32 *(*)(u32))
+#define ST_TRIG_MESSAGE POLY_CALL(0x400c347cu,void (*)(u32,const char *,...))
 #include <syntakt/trig-pages.h>
 #define UI_GET POLY_CALL(0x40039160u,u32 (*)(void *,u32,u8 *))
-#define UI_TEXT POLY_CALL(0x400f8a0cu,void (*)(void *,void *,s32,s32,u32,const char *,const char *))
-#define UI_FILL POLY_CALL(0x400f7df2u,void (*)(void *,s32,s32,s32,s32,u32))
-#define UI_RECT POLY_CALL(0x400f7bd6u,void (*)(void *,s32,s32,s32,s32,u32))
-#define UI_TOGGLE POLY_CALL(0x40070362u,void (*)(void *,u32,void *,s32,s32,u32))
+#define UI_TEXT POLY_CALL(0x400f8bd0u,void (*)(void *,void *,s32,s32,u32,const char *,const char *))
+#define UI_FILL POLY_CALL(0x400f7fb6u,void (*)(void *,s32,s32,s32,s32,u32))
+#define UI_RECT POLY_CALL(0x400f7d9au,void (*)(void *,s32,s32,s32,s32,u32))
+#define UI_TOGGLE POLY_CALL(0x400703dau,void (*)(void *,u32,void *,s32,s32,u32))
 static u32 poly_layout_view DATA=0;
 static u32 poly_trig_layout[11] DATA={0};
 /*  page, as the native MIDI TRIG page (40041076..40041530): positions
@@ -28,7 +28,7 @@ u32 poly_ui_parameter_view(u8 *view)
 {
     u32 vt=*(u32 *)view;
     volatile u32 qualified=0;
-    if(vt<0x40000408u || vt>=0x40338600u)return 0;
+    if(vt<0x40000408u || vt>=0x40339600u)return 0;
     if(((const u32 *)vt)[0x88/4]==0x4003792cu)qualified=1;
     return qualified;
 }
@@ -148,7 +148,7 @@ static u32 poly_ui_settings_write(u8 *view,u32 track,u32 enabled,u32 voices,u32 
     if(!header)return 0;
     if(!(mode<2?poly_mode_write(track,mode):poly_record_write(track,enabled,voices)))return 0;
     poly_copy_ui();
-    sequence=*(const volatile u8 **)0x43bd7430u;
+    sequence=*(const volatile u8 **)0x43bd8430u;
     for(i=0;i<7;i++)header[0x21+i]=sequence[0x21381+i];
     ((void (*)(void *,u32))(*(u32 **)model)[0x10/4])(model,0);
     return 1;
@@ -165,18 +165,18 @@ u32 poly_ui_encoder(u8 *view,void *event)
     poly_ui_sync(view);
     /* Shared core editor gate checks slave ownership before subscribers. */
     if(!poly_ui_third(view))return 0;
-    if(!POLY_CALL(0x400f660au,u32 (*)(void *,u32))(event,0xfffffffdu))return 0;
-    position=POLY_CALL(0x400f6632u,u32 (*)(void *))(event);
+    if(!POLY_CALL(0x400f67ceu,u32 (*)(void *,u32))(event,0xfffffffdu))return 0;
+    position=POLY_CALL(0x400f67f6u,u32 (*)(void *))(event);
     if(position>7)return 0;
     /* Hidden controls are inert; NOTE and NOT2..NOT4 use the native editor. */
     if(position && !poly_ui_on(view))return 1;
     if(position>=4)return 0;
     if(position==3)return 1;
-    policy=POLY_CALL(0x4007b9b2u,u32 (*)(u32))(0x13);
+    policy=POLY_CALL(0x4007ba2au,u32 (*)(u32))(0x13);
     for(i=0;i<7;i++)increment[i]=((u32 *)*(u32 *)(policy+16))[i];
-    delta=POLY_CALL(0x400f66a2u,s32 (*)(void *,u32,u32))(event,*(u32 *)(policy+4),*(u32 *)(policy+8));
-    pressed=POLY_CALL(0x400f66c0u,u32 (*)(void *))(event);
-    delta=POLY_CALL(0x400f68d2u,s32 (*)(void *,u32,s32,void *,u32))(view+0x94,position,delta,increment,pressed);
+    delta=POLY_CALL(0x400f6866u,s32 (*)(void *,u32,u32))(event,*(u32 *)(policy+4),*(u32 *)(policy+8));
+    pressed=POLY_CALL(0x400f6884u,u32 (*)(void *))(event);
+    delta=POLY_CALL(0x400f6a96u,s32 (*)(void *,u32,s32,void *,u32))(view+0x94,position,delta,increment,pressed);
     if(!delta)return 1;
     track=poly_ui_track(view);poly_sync();state=poly_seq_config.states[track];
     enabled=0;voices=state+2;
@@ -191,7 +191,7 @@ u32 poly_ui_encoder(u8 *view,void *event)
     else if(voices>2)voices--;
     poly_ui_record_write(view,track,enabled,voices);
     }
-    POLY_CALL(0x400ffc5eu,void (*)(void *))(view);
+    POLY_CALL(0x400ffe22u,void (*)(void *))(view);
     return 1;
 }
 
@@ -201,7 +201,7 @@ u32 poly_ui_encoder(u8 *view,void *event)
  * 401c97cc white key->semitone). Notes are native Q8 intervals around NOTE;
  * OFF (interval 0 or >127) and voices beyond VOICES are not marked, exactly
  * as poly_sequence never fires them. Divisions are done by counting. */
-#define UI_PATTERN POLY_CALL(0x400f8104u,void (*)(void *,s32,s32,s32,s32,u32))
+#define UI_PATTERN POLY_CALL(0x400f82c8u,void (*)(void *,s32,s32,s32,s32,u32))
 static u32 poly_ui_pitch(s32 note)
 {
     while(note>=12)note-=12;
@@ -223,7 +223,7 @@ static u32 poly_ui_marked(const s32 *notes,s32 note)
 
 void poly_ui_keyboard(void *ctx,const u32 *values,u32 voices)
 {
-    const s32 *white_of=(const s32 *)0x401c979cu,*semitone=(const s32 *)0x401c97ccu;
+    const s32 *white_of=(const s32 *)0x401c9a3cu,*semitone=(const s32 *)0x401c9a6cu;
     s32 notes[4],low,high,base,start,key,octave,note,x;
     u32 i,interval;
     notes[0]=(s32)(values[0]>>8);low=notes[0];high=notes[0];
@@ -271,8 +271,8 @@ void poly_ui_keyboard(void *ctx,const u32 *values,u32 voices)
 static void poly_ui_widget(u8 *view,void *ctx,u32 position,u32 id,u32 value,u8 locked,u32 hide)
 {
     s32 x=24+26*(s32)(position&3u),y=position<4?27:0;
-    u32 state=POLY_CALL(0x400f68aau,u32 (*)(void *,u32))(view+0x94,position);
-    u32 turning=POLY_CALL(0x400f6abcu,u32 (*)(void *,u32))(view+0x94,position);
+    u32 state=POLY_CALL(0x400f6a6eu,u32 (*)(void *,u32))(view+0x94,position);
+    u32 turning=POLY_CALL(0x400f6c80u,u32 (*)(void *,u32))(view+0x94,position);
     ((void (*)(void *,void *,s32,s32,u32,u32,u32,u32,u32,u32))(*(u32 **)(view))[0xb4/4])
         (view,ctx,x,y,id,value,state,locked,turning,hide);
 }
@@ -288,8 +288,8 @@ u32 poly_ui_draw(u8 *view,void *ctx)
     if(poly_ui_slave(view)) {
         UI_FILL(ctx,20,0,127,53,0);
         /* Frame y grows up: TRACK IN on the upper line, SLAVE MODE below. */
-        UI_TEXT(ctx,(void *)0x443da230u,74,32,2,"%s","TRACK IN");
-        UI_TEXT(ctx,(void *)0x443da230u,74,22,2,"%s","SLAVE MODE");
+        UI_TEXT(ctx,(void *)0x443db230u,74,32,2,"%s","TRACK IN");
+        UI_TEXT(ctx,(void *)0x443db230u,74,22,2,"%s","SLAVE MODE");
         return 1;
     }
     if(!poly_ui_third(view))return 0;
@@ -297,20 +297,20 @@ u32 poly_ui_draw(u8 *view,void *ctx)
     voices=state+2;if(state>=3){on=1;voices=state-1;}
     UI_FILL(ctx,20,0,127,53,0);
     /* A: POLY, top row. */
-    UI_TEXT(ctx,(void *)0x443da230u,33,27,2,"%s","POLY");
+    UI_TEXT(ctx,(void *)0x443db230u,33,27,2,"%s","POLY");
     UI_TOGGLE(view,on?256u:0u,ctx,24,34,0);
     if(on) {
         /* B: VOICES, top row. */
-        UI_TEXT(ctx,(void *)0x443da230u,59,27,2,"%s","VOICES");
+        UI_TEXT(ctx,(void *)0x443db230u,59,27,2,"%s","VOICES");
         UI_RECT(ctx,50,34,68,50,1);
         number[0]=(char)('0'+voices);number[1]=0;
-        UI_TEXT(ctx,(void *)0x443da210u,59,39,2,"%s",number);
+        UI_TEXT(ctx,(void *)0x443db210u,59,39,2,"%s",number);
         if(track<8) {
         /* C: PLAY; D: native empty-position bitmap, no control. */
-        UI_TEXT(ctx,(void *)0x443da230u,85,27,2,"%s","PLAY");
-        UI_TEXT(ctx,(void *)0x443da230u,85,39,2,"%s",
+        UI_TEXT(ctx,(void *)0x443db230u,85,27,2,"%s","PLAY");
+        UI_TEXT(ctx,(void *)0x443db230u,85,39,2,"%s",
             poly_modes[track]?"POLY":"M.LFO");
-        POLY_CALL(0x400f8dacu,void (*)(void *,void *,s32,s32,u32))(ctx,(void *)0x444df0b4u,103,34,0);
+        POLY_CALL(0x400f8f70u,void (*)(void *,void *,s32,s32,u32))(ctx,(void *)0x444e00b4u,103,34,0);
         }
         /* E: NOTE; F..H: NOT2..NOT4 labels, then the keyboard over F..H. */
         for(i=0;i<4;i++) {
@@ -330,7 +330,7 @@ u32 poly_ui_draw(u8 *view,void *ctx)
 u32 poly_ui_block_key(u8 *view,void *event)
 {
     volatile u32 blocked=0;
-    u32 key=POLY_CALL(0x400f95c8u,u32 (*)(void *))(event);
+    u32 key=POLY_CALL(0x400f978cu,u32 (*)(void *))(event);
     poly_ui_sync(view);
     /* A slave track blocks only the other parameter pages (TRIG 19, SYN 20,
      * FLTR 21, AMP 22, LFO 23); FUNC, TRK, the trigs and the rest pass, so

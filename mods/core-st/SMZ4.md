@@ -8,6 +8,12 @@ An optional module uses bounded event subscriptions, never a file-supplied
 firmware patch plan. Transfers, storage and project/sample loading work without
 an SMZ. Missing or invalid files are skipped silently.
 
+Core 2.0 targets OS 1.42 and requires feature 16 with contract `0x53594605`.
+The disk layout and checksums are unchanged. Both older contract IDs and
+untagged banks are rejected before relocation or module initialization, because
+their MAIN code can contain OS 1.41 addresses. Build a new bank with the local
+1.42 SDK; do not reuse a bank downloaded for an older core.
+
 ## Source and builds
 
 A machine uses C/assembler SDK sources and a `mod.json`, plus an `smz` description:

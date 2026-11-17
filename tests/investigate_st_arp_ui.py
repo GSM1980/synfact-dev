@@ -30,16 +30,16 @@ class InvestigationMachine(ChordViewMachine):
         self.u.mem_write(self.selection + 0x161, b'\x01')
         # PermanentMuteMenuView's native vptr and the fields its handlers read.
         # Its native ctor uses the transparent base View default (+16h = 0).
-        self.w(MUTE, 0x401c9010)
-        self.w(MUTE + 0x68, 0x401c90c0)
+        self.w(MUTE, 0x401c92b0)
+        self.w(MUTE + 0x68, 0x401c9360)
         self.w(MUTE + 0x74, APP)
         self.w(MUTE + 0x78, self.selection)
         self.w(MUTE + 0x80, MODEL)
         self.w(MAIN + 0x230, MUTE)
         for k in range(16):
             self.w(MAP + 4*k, k+1)
-        self.w(0x405d3600, MAP)
-        self.w(0x405d3604, MAP + 64)
+        self.w(0x405d4600, MAP)
+        self.w(0x405d4604, MAP + 64)
         self.bump = HEAP
         self.native_publications = []
         self.page_handoffs = []
@@ -47,26 +47,26 @@ class InvestigationMachine(ChordViewMachine):
     def code(self, u, pc, n, ctx):
         if self.ready:
             # Stock parameter-view title/COW-string construction and popup IO.
-            if pc in (0x40037dd0, 0x400c3376, 0x401bd5d2):
+            if pc in (0x40037dd0, 0x400c3422, 0x401bd86e):
                 self.ret(); return
             # Native base key chain, and the parameter page's transient editor.
-            if pc in (0x400ffb18, 0x4003b1aa):
+            if pc in (0x400ffcdc, 0x4003b1aa):
                 self.ret(0); return
-            if pc == 0x400ffd62:
+            if pc == 0x400fff26:
                 parent, pair, secondary = self.args(3)
                 view = self.word(pair)
                 assert parent == MAIN and view == MUTE and secondary == 1
                 self.native_publications.append(view)
                 self.stack_top(view)  # explicit manager publication boundary
                 self.ret(); return
-            if pc == 0x400ffd02:
+            if pc == 0x400ffec6:
                 assert self.args(1) == (ROOT+16,)
                 self.closed += 1
                 self.u.mem_write(ROOT+16+0x30, b'\x01')
                 if self.word(self.word(APP+0x58)+8) == ROOT+16:
                     self.top(MAIN)
                 self.ret(); return
-            if pc == 0x4017cdee:
+            if pc == 0x4017cfb2:
                 dst, src = self.args(2)
                 self.w(dst, self.word(src)); self.w(dst+4, 0)
                 self.ret(); return
@@ -74,14 +74,14 @@ class InvestigationMachine(ChordViewMachine):
                 main, page, secondary = self.args(3)
                 assert main == MAIN and page == 1 and secondary == 0
                 self.page_handoffs.append(page)
-                self.w(SYN, 0x401c8d58)
+                self.w(SYN, 0x401c8ff8)
                 self.w(SYN+0x88, 0x14)
                 self.w(SYN+0x6c, self.selection)
                 self.w(MAIN+0xc0, SYN)
                 self.ret(); return
-            if pc == 0x4016dde8:
+            if pc == 0x4016dfac:
                 self.ret(); return  # borrowed shared owner boundary
-            if pc == 0x4016ee9c:
+            if pc == 0x4016f060:
                 out = u.reg_read(UC_M68K_REG_A0)
                 self.w(out, 0); self.w(out+4, 0)
                 self.ret(); return
@@ -93,12 +93,12 @@ class InvestigationMachine(ChordViewMachine):
                 self.ret(track & 1); return  # alternating native track mutes
             if pc == 0x4000828a:
                 self.ret(); return  # non-trig LED IO
-            if pc == 0x40103788:
+            if pc == 0x4010394c:
                 size, = self.args(1)
                 result = self.bump
                 self.bump += (size+3) & ~3
                 self.ret(result); return
-            if pc == 0x40103794:
+            if pc == 0x40103958:
                 self.ret(); return
         return super().code(u, pc, n, ctx)
 

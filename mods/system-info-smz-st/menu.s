@@ -9,7 +9,7 @@ si_label:
         pea -1(%a6)
         move.l %d0,-(%sp)
         move.l %d2,-(%sp)
-        jsr 0x401bf082
+        jsr 0x401bf31e
         lea 12(%sp),%sp
         move.l %d2,%d0
         move.l -8(%a6),%d2

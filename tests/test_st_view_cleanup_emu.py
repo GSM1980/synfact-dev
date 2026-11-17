@@ -21,15 +21,15 @@ class CleanupMachine(ReentrantMachine):
 
     def code(self,u,pc,n,ctx):
         self.instructions+=1
-        if self.native and self.compose and pc==0x40100f50:
+        if self.native and self.compose and pc==0x40101114:
             self.cleanup_returns.append(self.read(APP+0x62,1)[0])
         return super().code(u,pc,n,ctx)
 
     def close_mute(self):
-        self.call(0x400ffd02,MUTE)
+        self.call(0x400ffec6,MUTE)
         assert self.read(APP+0x62,1)==b'\x01'
         start=self.instructions
-        self.call(0x40100ea4,APP+0x40)
+        self.call(0x40101068,APP+0x40)
         count=self.instructions-start
         assert MUTE not in self.stack() and not self.word(MUTE+0x2c)
         return count
@@ -94,7 +94,7 @@ if __name__=='__main__':
     assert not old.texts() and not old.led_frame() and view in old.stack()
     assert old_count==cases[0]['cleanup_instructions'],(old_count,cases[0])
     # A later unrelated close would wake GC and recover the old core too.
-    old.call(0x4010078c,APP+0x40);old.call(0x40100ea4,APP+0x40)
+    old.call(0x40100950,APP+0x40);old.call(0x40101068,APP+0x40)
     old.call('arp_view_tick',APP)
     assert 'MODE' in old.texts() and len(old.led_frame())==16
     result=dict(ok=True,cases=cases,previous_core_full_failure_reproduced=True,

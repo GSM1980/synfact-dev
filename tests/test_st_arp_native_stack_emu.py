@@ -37,7 +37,7 @@ class NativeStackMachine(InvestigationMachine):
         self.layers = {}
         for i, off in enumerate(o for o in CHILDREN if o != 0xc0):
             view = EX+0x1000+i*0x100
-            self.w(view, 0x40241bdc)
+            self.w(view, 0x40241efc)
             self.w(MAIN+off, view)
             self.w(MAIN+off+4, self.owner(view, EX+0x200+i*0x20))
             self.layers[view] = off
@@ -46,11 +46,11 @@ class NativeStackMachine(InvestigationMachine):
         self.w(EX+0x600, self.sym['arp_view_draw'] | 0x80000000)
         self.w(EX+0x604, 0); self.w(self.cs['core:events']+8, EX+0x600)
         self.native = True
-        assert self.call(0x40100bc2, manager, EX, 0) == 1
+        assert self.call(0x40100d86, manager, EX, 0) == 1
         assert self.stack() == [MAIN] + [self.word(MAIN+o) for o in CHILDREN]
 
     def owner(self, view, root):
-        for off, value in ((0,0x401c9670),(4,1),(8,1),(12,view)):
+        for off, value in ((0,0x401c9910),(4,1),(8,1),(12,view)):
             self.w(root+off, value)
         return root
 
@@ -66,40 +66,40 @@ class NativeStackMachine(InvestigationMachine):
     def draw(self):
         self.rows = []; self.draw_walk = []
         self.u.mem_write(APP+0x60, b'\x01')
-        self.call(0x401007ce, APP+0x40, BMP)
+        self.call(0x40100992, APP+0x40, BMP)
         assert PARAM in self.draw_walk, self.draw_walk
         return self.rows
 
     def push_mute(self):
         self.w(EX+0x700, MUTE)
         self.w(EX+0x704, self.owner(MUTE, EX+0x720))
-        self.call(0x40100bc2, APP+0x40, EX+0x700, 0)
+        self.call(0x40100d86, APP+0x40, EX+0x700, 0)
         assert self.stack()[-1] == MUTE
 
     def remove_mute(self):
-        assert self.call(0x40100d20,APP+0x40,EX+0x700)&255 == 1
+        assert self.call(0x40100ee4,APP+0x40,EX+0x700)&255 == 1
         assert MUTE not in self.stack()
 
     def code(self, u, pc, n, ctx):
         if self.native:
-            if pc == 0x40100bc2:
+            if pc == 0x40100d86:
                 self.publications.append(self.word(self.args(3)[1]))
                 return  # Execute the actual manager, bypass the old fixture.
-            if pc in (0x4016dde8,0x4017cdee,0x4003384a,0x400ffd62):
+            if pc in (0x4016dfac,0x4017cfb2,0x4003384a,0x400fff26):
                 return  # Actual shared ownership and MainScreen publication.
-            if pc == 0x400ffd02:
+            if pc == 0x400ffec6:
                 self.closed += 1
                 return  # Actual deferred close; preserve the real list.
             if pc == 0x40033c44:
                 # All normal children are now published; remaining native code
                 # manages optional application dialogs, outside this scenario.
                 u.reg_write(UC_M68K_REG_PC,0x40033db2); return
-            if pc in (0x40032692,0x40041076,self.word(0x401c9010+0x10)):
+            if pc in (0x40032692,0x40041076,self.word(0x401c92b0+0x10)):
                 self.draw_walk.append(self.args(2)[0]); self.ret(); return
-            if pc in (0x4000a0e6,0x400200ae,0x400c2e32,0x400ffc96,0x400ffc5e):
+            if pc in (0x4000a0e6,0x400200ae,0x400c2ede,0x400ffe5a,0x400ffe22):
                 self.ret(); return
             if pc in (0x40020058,0x4000f5ae): self.ret(0); return
-            if pc == 0x4006f3ba: self.ret(1); return
+            if pc == 0x4006f432: self.ret(1); return
         return super().code(u, pc, n, ctx)
 
 

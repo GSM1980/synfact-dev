@@ -1,5 +1,8 @@
 # Playhead: step order per track (playhead-st)
 
+Desktop OS 1.42 release: **1.0.1**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
 **TRK + UP** / **TRK + DOWN**: the active track goes to the next / the
 previous mode of the cycle
 

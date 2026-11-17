@@ -54,8 +54,8 @@ u32 lfo3_locks_setup(void)
     lfo3_budget_context=budget_storage;
     if(!lfo3_budget_init(budget_storage,0x800000u))return 0;
     lfo3_pattern_context=pattern_storage;
-    lfo3_pattern_init(pattern_storage,0x40a38b34u);          /* 128 live patterns */
-    if(!lfo3_owned_init(owned_storage,0x40a38b34u))return 0;
+    lfo3_pattern_init(pattern_storage,0x40a39b34u);          /* 128 live patterns */
+    if(!lfo3_owned_init(owned_storage,0x40a39b34u))return 0;
     lfo3_events_context=(events_t *)events_storage;
     shadow_query_callback=(u32)lfo3_shadow_owned_record_body;
     shadow_relocate_callback=(u32)lfo3_shadow_owner_relocate_body;
@@ -132,8 +132,8 @@ const u16 *lfo3_events_bank(void)
         if(dest_raw[t]!=o[3] || dest_type[t]!=type){
             dest_raw[t]=o[3];dest_type[t]=(u8)type;slot=o[3]>>8;id=flags=0;
             if(lfo3_track_valid(t) && slot<=70 && !(o[3]&255)){
-                id=t==12?((u32 (*)(u32))0x400a6300u)(slot):((u32 (*)(u32,u32))0x400a63ecu)(slot,type);
-                if(id)flags=((u32 (*)(u32))0x400a666au)(id);
+                id=t==12?((u32 (*)(u32))0x400a6378u)(slot):((u32 (*)(u32,u32))0x400a6464u)(slot,type);
+                if(id)flags=((u32 (*)(u32))0x400a66e2u)(id);
             }
             dest_done[t]=flags&0x200?o[3]:0x7f00;
         }

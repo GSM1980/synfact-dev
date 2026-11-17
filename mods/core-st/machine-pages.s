@@ -13,7 +13,7 @@ core_machine_slot_to_storage:
 1:      move.l %d2,-(%sp)
         moveq #12,%d2
         move.l 8(%sp),%d1
-        jmp 0x400a6cfc
+        jmp 0x400a6d74
 core_machine_id_to_slot:
         move.l 8(%sp),-(%sp)
         move.l 8(%sp),-(%sp)
@@ -25,7 +25,7 @@ core_machine_id_to_slot:
 1:      move.l %d2,-(%sp)
         moveq #12,%d2
         move.l 8(%sp),%d1
-        jmp 0x400a6cc2
+        jmp 0x400a6d3a
         .globl core_machine_lane_bound,core_machine_lane_compress,core_machine_lane_update
 core_machine_lane_bound:
         moveq #0x46,%d5
@@ -35,21 +35,21 @@ core_machine_lane_bound:
 1:      mvz.b %d0,%d1
         cmp.l %d1,%d5
         bcs.s 2f
-        jmp 0x400a7fce
-2:      jmp 0x400a8030
+        jmp 0x400a8046
+2:      jmp 0x400a80a8
 core_machine_lane_compress:
         tst.l core_machine_active
         beq.s 1f
         movea.l core_machine_lanes,%a5
         rts
-1:      lea 0x402340a4,%a5
+1:      lea 0x40234344,%a5
         rts
 core_machine_lane_update:
         tst.l core_machine_active
         beq.s 1f
         movea.l core_machine_lanes,%a2
         rts
-1:      lea 0x402340a4,%a2
+1:      lea 0x40234344,%a2
         rts
         .globl core_machine_page_nav_37d9e,core_stock_page_nav_37d9e
 core_machine_page_nav_37d9e:
@@ -299,7 +299,7 @@ core_machine_page_layout:
 1:
 core_stock_page_layout:
         .byte 0x72,0x24,0x20,0x2f,0,4,0xb2,0x80
-        jmp 0x4007b9d8
+        jmp 0x4007ba50
         .globl core_machine_sound_save,core_stock_sound_save
 core_machine_sound_save:
         move.l 12(%sp),-(%sp)
@@ -318,7 +318,7 @@ core_machine_sound_save:
         rts
 core_stock_sound_save:
         .byte 0x4f,0xef,0xff,0xe0,0x48,0xd7,0x7c,0x1c
-        jmp 0x400a736e
+        jmp 0x400a73e6
         .globl core_machine_sound_load,core_stock_sound_load
 core_machine_sound_load:
         move.l 8(%sp),-(%sp)
@@ -336,4 +336,4 @@ core_machine_sound_load:
         rts
 core_stock_sound_load:
         .byte 0x4f,0xef,0xff,0xe0,0x48,0xd7,0x7c,0x1c
-        jmp 0x400a6f86
+        jmp 0x400a6ffe

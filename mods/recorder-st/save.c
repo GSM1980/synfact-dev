@@ -34,7 +34,7 @@ static const char *sam_assign_apply(u32 slot)
     sound=((u8 *(*)(void *))(*(u32 **)model)[0x28/4])(model);
     if(!sound || sound[0xa2]!=ASSIGN_TYPE)return "SAVED / NOT ASSIGNED";
     /* SoundParameterSet (vtable 401c3aac) borrowing the track model at +10. */
-    proxy[0]=0x401c3aacu;proxy[1]=0;proxy[2]=0;proxy[3]=0;proxy[4]=(u32)model;
+    proxy[0]=0x401c3d4cu;proxy[1]=0;proxy[2]=0;proxy[3]=0;proxy[4]=(u32)model;
     REC_SET_PARAM(proxy,ASSIGN_SAMP,slot<<8,(u32)track,0,1);
     text_set(sam_assign_text,"SAVED > TRACK 1",16);sam_assign_text[14]=(char)('1'+track);
     return sam_assign_text;
@@ -237,7 +237,7 @@ static void sam_assign_open(void)
     sam_assign_mask=REC_AVAILABILITY(0,ASSIGN_TYPE)&0xFFu;
     block=sam_assign_mask?MALLOC(0xac):0;
     if(!heap_ok(block)){sam_assign_answer=-1;sam_assign_phase=SAM_ASSIGN_DONE;return;}
-    put32(block,0x401d26c8u);put32(block+4,1);put32(block+8,1);*(u8 **)(block+12)=block+16;
+    put32(block,0x401d2968u);put32(block+4,1);put32(block+8,1);*(u8 **)(block+12)=block+16;
     QSTR_INIT(&text,"ASSIGN SAMPLE TO TRACK?\nPRESS TRIG KEY TO ASSIGN.\nPRESS NO TO SKIP.",&alloc);
     REC_TRACK_CTOR(block+16,&callback,sam_assign_mask,&text);
     REC_QSTR_DTOR(&text);
@@ -275,7 +275,7 @@ static void sam_name_open(void)
     QSTR_INIT(&title,"ENTER SAMPLE NAME",&alloc);QSTR_INIT(&name,sam_save_name[0]?sam_save_name:"RECORDING",&alloc);
     REC_NAME_CTOR(view,&title,&name,0,16,0,&callback);
     REC_QSTR_DTOR(&name);REC_QSTR_DTOR(&title);
-    put32(control,0x401c9638u);put32(control+4,1);put32(control+8,1);*(u8 **)(control+12)=view;
+    put32(control,0x401c98d8u);put32(control+4,1);put32(control+8,1);*(u8 **)(control+12)=view;
     pair[0]=view;pair[1]=control;sam_name_view=view;
     UI_PUSH(sam_manager,pair,0);UI_DROP(pair+1);
 }

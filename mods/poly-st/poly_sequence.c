@@ -28,8 +28,8 @@ static __inline__ u32 poly_native_address(u32 address)
 #endif
     return address;
 }
-#define PREP_EVENT(t) ((volatile u32 *)(poly_native_address(0x444e2438u)+(t)*0x50u))
-#define PREP_TIME(t) (*(volatile s32 *)(poly_native_address(0x444e2848u)+(t)*4u))
+#define PREP_EVENT(t) ((volatile u32 *)(poly_native_address(0x444e3438u)+(t)*0x50u))
+#define PREP_TIME(t) (*(volatile s32 *)(poly_native_address(0x444e3848u)+(t)*4u))
 static u8 prep_step[12] DATA={0};
 static u32 prep_generation[12] DATA={0};
 
@@ -55,11 +55,11 @@ static s32 signed_byte(u32 value)
 
 static s32 prep_delay(const volatile u8 *sequence,u32 track)
 {
-    s32 rem=signed_byte(*(volatile u8 *)(0x43bd74fcu+track)),speed,scale;
+    s32 rem=signed_byte(*(volatile u8 *)(0x43bd84fcu+track)),speed,scale;
     if(rem<1)return 0;
     scale=signed_byte(sequence[0x2137au]);
     if(sequence[0x21379u]==1)scale=signed_byte(sequence[track*0x499u+0x3ccu]);
-    speed=*(volatile s32 *)(0x401da9b8u+(u32)(scale*4));
+    speed=*(volatile s32 *)(0x401dac58u+(u32)(scale*4));
     return (speed-rem)*900000;
 }
 
@@ -67,7 +67,7 @@ static s32 prep_delay(const volatile u8 *sequence,u32 track)
  * no native event ownership/refcounts; it copies exactly those twenty words. */
 #ifdef __mcoldfire__
 extern void poly_copy_static_event(volatile u32 *,const volatile u32 *);
-_Static_assert(0x444e2438u%4u==0 && 0x50u%4u==0,"POLY static event alignment");
+_Static_assert(0x444e3438u%4u==0 && 0x50u%4u==0,"POLY static event alignment");
 #endif
 /* Copy the prepared master trig to one SLAVE static, same start instant. */
 static u32 prep_fill(const volatile u8 *sequence,u32 master,u32 voice,s32 time)
@@ -105,16 +105,16 @@ static void prep_fill_group(const volatile u8 *sequence,u32 master,s32 time)
 /* Native per-track preparation, as 4008c0b0 does for one audio track. */
 static void prep_rebuild(const volatile u8 *sequence,u32 track)
 {
-    u32 kit=*(volatile u32 *)0x43bd743cu,step;
+    u32 kit=*(volatile u32 *)0x43bd843cu,step;
     u32 midi_bit;
     s32 time=0;
     volatile u32 *event=PREP_EVENT(track);
-    if(!kit || *(volatile u32 *)(0x43bd73c8u+track*4u)==1)return;
+    if(!kit || *(volatile u32 *)(0x43bd83c8u+track*4u)==1)return;
     midi_bit=(*(volatile u16 *)(kit+0x1550u)>>track)&1u;
     if(midi_bit)return;
     if(poly_seq_config.owners[track]<track)return;
-    step=(u32)signed_byte(*(volatile u8 *)(0x43bd74efu+track));
-    event[17]=*(volatile u32 *)(0x444e3884u+track*4u);
+    step=(u32)signed_byte(*(volatile u8 *)(0x43bd84efu+track));
+    event[17]=*(volatile u32 *)(0x444e4884u+track*4u);
     if(stock_trig(track,sequence,kit,step,(u32 *)event,(u32 *)&time))PREP_TIME(track)=time;
     else event[1]=0;
     if(PREP_TIME(track)<0)event[1]=0;
@@ -161,7 +161,7 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
         affected[i]=0;
         if(!old_roots[poly_seq_config.owners[i]] && !new_roots[owners[i]])continue;
         affected[i]=1;
-        bucket=*(volatile u32 **)0x444de434u;
+        bucket=*(volatile u32 **)0x444df434u;
         while(bucket) {
             event=(u32 *)bucket[2];
             while(event) {native_cancel_track(event,i);event=(u32 *)event[19];}
@@ -176,7 +176,7 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
             if(owners[i]<i && (owners[i]!=poly_seq_config.owners[i] || sequence!=poly_seq_config.sequence))
                 poly_copy_group(i,owners[i]);
         }else if(poly_seq_config.owners[i]<i && owners[i]==i) {
-            u32 kit=*(volatile u32 *)0x43bd743cu;
+            u32 kit=*(volatile u32 *)0x43bd843cu;
             if(kit)native_publish_sound((const volatile u8 *)(kit+0x2au+i*0x123u),i);
         }
     }
@@ -193,7 +193,7 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
     }
     /* Analog TYPE is native, so publish its master's Sound at group apply. */
     for(i=8;i<12;i++)if(owners[i]<i) {
-        u32 kit=*(volatile u32 *)0x43bd743cu;
+        u32 kit=*(volatile u32 *)0x43bd843cu;
         if(kit)native_publish_sound((const volatile u8 *)(kit+0x2au+owners[i]*0x123u),i);
     }
     for(i=8;i<10;i++)poly_analog_type[i-8]=*(volatile u8 *)(0x80002f50u+i);
@@ -204,9 +204,9 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
     /* A group edited while stopped must not start from statics prepared
      * under the previous topology. Only the same sequence is rebuilt: a new
      * pattern is prepared by its own native 4008c0b0 pass. */
-    if(sequence==*(volatile u32 *)0x43bd7430u) {
+    if(sequence==*(volatile u32 *)0x43bd8430u) {
         for(i=0;i<12;i++)
-            if(affected[i] && owners[i]<i && *(volatile u32 *)(0x43bd73c8u+i*4u)!=1)PREP_EVENT(i)[1]=0;
+            if(affected[i] && owners[i]<i && *(volatile u32 *)(0x43bd83c8u+i*4u)!=1)PREP_EVENT(i)[1]=0;
         for(i=0;i<12;i++)
             if(affected[i] && owners[i]==i)prep_rebuild((const volatile u8 *)sequence,i);
     }

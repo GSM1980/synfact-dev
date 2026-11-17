@@ -569,10 +569,10 @@ void sampler_draw(u8 *iface,void *ctx)
      * stock toggles with their labels underneath as on native pages; then
      * SRC, the meter (L above R in stereo) and MEM below it. */
     SAM_TOGGLE(0,sam_stereo?0x100u:0u,ctx,6,47,0);
-    WAVE_TEXT(ctx,(void *)0x443da210u,16,45,2,"%s","STEREO");
+    WAVE_TEXT(ctx,(void *)0x443db210u,16,45,2,"%s","STEREO");
     SAM_TOGGLE(0,sam_post?0x100u:0u,ctx,36,47,0);
-    WAVE_TEXT(ctx,(void *)0x443da210u,46,45,2,"%s","POST FX");
-    WAVE_TEXT(ctx,(void *)0x443da210u,64,58,0,"SRC: %s",source);
+    WAVE_TEXT(ctx,(void *)0x443db210u,46,45,2,"%s","POST FX");
+    WAVE_TEXT(ctx,(void *)0x443db210u,64,58,0,"SRC: %s",source);
     WAVE_FILL(ctx,64,49,127,55,1);
     WAVE_FILL(ctx,65,50,126,54,0);
     if(sam_stereo) {
@@ -586,15 +586,15 @@ void sampler_draw(u8 *iface,void *ctx)
     for(i=48;i<=56;i+=2)WAVE_PIXEL(ctx,(s32)mark,(s32)i,1);
     if(sam_peak>=0x7f000000u || sam_peak_r>=0x7f000000u)WAVE_FILL(ctx,126,48,127,56,1);
     sam_time_text(time,sam_pcm?sam_max_frames(stereo)-frames:0);
-    WAVE_TEXT(ctx,(void *)0x443da210u,64,41,0,"MEM:%s",time);
+    WAVE_TEXT(ctx,(void *)0x443db210u,64,41,0,"MEM:%s",time);
     /* Original recorder frame: x0..127, y16..40. */
     WAVE_FILL(ctx,0,16,127,16,1);WAVE_FILL(ctx,0,40,127,40,1);
     WAVE_FILL(ctx,0,16,0,40,1);WAVE_FILL(ctx,127,16,127,40,1);
     if(sam_save_phase || sam_save_message[0]) {
-        WAVE_TEXT(ctx,(void *)0x443da210u,64,32,2,"%s",sam_save_phase?"SAVING":sam_save_message);
+        WAVE_TEXT(ctx,(void *)0x443db210u,64,32,2,"%s",sam_save_phase?"SAVING":sam_save_message);
         if(sam_save_phase){number3(value,sam_save_total?sam_save_pos*100u/sam_save_total:0);value[3]='%';value[4]=0;
-            WAVE_TEXT(ctx,(void *)0x443da210u,64,23,2,"%s",value);}
-        else WAVE_TEXT(ctx,(void *)0x443da210u,64,23,2,"%s","FUNC+YES: PLAY");
+            WAVE_TEXT(ctx,(void *)0x443db210u,64,23,2,"%s",value);}
+        else WAVE_TEXT(ctx,(void *)0x443db210u,64,23,2,"%s","FUNC+YES: PLAY");
     } else if(state==SAM_READY && sam_wave_ready && frames) {
         for(i=0;i<126;i++) {
             lo=28+((s32)sam_wave_low[i]*10>>15);
@@ -612,11 +612,11 @@ void sampler_draw(u8 *iface,void *ctx)
     else if(state==SAM_ARMED) {line1="ARMED";line2="WAITING FOR THR";}
     else if(frames) {line1=sam_play_length?"PLAYING":"FUNC+YES: PLAY";line2="FUNC+NO: CLEAR";}
     else {line1="FUNC+YES: REC";line2="YES: ARM";}
-    WAVE_TEXT(ctx,(void *)0x443da210u,64,32,2,"%s",line1);
-    WAVE_TEXT(ctx,(void *)0x443da210u,64,25,2,"%s",line2);
+    WAVE_TEXT(ctx,(void *)0x443db210u,64,32,2,"%s",line1);
+    WAVE_TEXT(ctx,(void *)0x443db210u,64,25,2,"%s",line2);
     if(frames) {
         sam_time_text(time,sam_play_length?sam_play_pos:frames);
-        WAVE_TEXT(ctx,(void *)0x443da210u,64,18,2,"%s",time);
+        WAVE_TEXT(ctx,(void *)0x443db210u,64,18,2,"%s",time);
     }
     if(state==SAM_NORMALIZING)sam_norm_shown=1;
     }
@@ -627,8 +627,8 @@ void sampler_draw(u8 *iface,void *ctx)
         } else if(i==1) {number3(value,sam_thr);value[3]=0;}
         else if(i==2)text_set(value,sam_stereo?source:sam_source==5?"MAIN+":sam_source==2?"IN L+R":source,11);
         else text_set(value,sam_source<3?(sam_mon?"YES":"NO"):"--",11);
-        WAVE_TEXT(ctx,(void *)0x443da210u,16+32*i,7,2,"%s",value);
-        WAVE_TEXT(ctx,(void *)0x443da210u,16+32*i,0,2,"%s",sam_labels[3+i]);
+        WAVE_TEXT(ctx,(void *)0x443db210u,16+32*i,7,2,"%s",value);
+        WAVE_TEXT(ctx,(void *)0x443db210u,16+32*i,0,2,"%s",sam_labels[3+i]);
         if(sam_focus==i)WAVE_FILL(ctx,2+32*i,14,29+32*i,14,1);
     }
 }
@@ -638,7 +638,7 @@ void sampler_open(u8 *manager)
     if(sam_view || !manager)return;
     preview_stop();
     root=MALLOC(16+0x50);if(!heap_ok(root))return;
-    *(u32 *)root=0x401c9670u;put32(root+4,1);put32(root+8,1);
+    *(u32 *)root=0x401c9910u;put32(root+4,1);put32(root+8,1);
     view=root+16;*(u8 **)(root+12)=view;
     /* A recorder is a plain custom IView, not a list or a ThreePaneList.
      * No list-model, row-label or inherited child-list callbacks exist here. */

@@ -11,11 +11,11 @@ static const struct st_machine_host_api *si_host;
 #define core_pool_query_owner si_host->query_owner
 #define SI_CORE_INFO (si_host->core_info)
 #define SI_BANK_INFO (si_host->bank_info ? *si_host->bank_info : 0)
-#define fw_invalidate ((void (*)(void *))0x400ffc5eu)
-#define fw_fillrect ((void (*)(void *,int,int,int,int,unsigned int))0x400f7df2u)
-#define fw_bitmap_ctor ((void (*)(void *,unsigned int,unsigned int,const void *,const void *))0x400f70fau)
-#define fw_bitmap_dtor ((void (*)(void *))0x400f702cu)
-#define fw_blit ((void (*)(void *,const void *,int,int,unsigned int))0x400f8dacu)
+#define fw_invalidate ((void (*)(void *))0x400ffe22u)
+#define fw_fillrect ((void (*)(void *,int,int,int,int,unsigned int))0x400f7fb6u)
+#define fw_bitmap_ctor ((void (*)(void *,unsigned int,unsigned int,const void *,const void *))0x400f72beu)
+#define fw_bitmap_dtor ((void (*)(void *))0x400f71f0u)
+#define fw_blit ((void (*)(void *,const void *,int,int,unsigned int))0x400f8f70u)
 extern void si_label(void);
 #include "../system-info-st/system_info.c"
 static int si_initialize(const struct st_smz_api *api)

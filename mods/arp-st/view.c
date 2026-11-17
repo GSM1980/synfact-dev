@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * OS 1.41 plain IView, using the Recorder's native shared-owner lifecycle.
+ * OS 1.42 plain IView, using the Recorder's native shared-owner lifecycle.
  * Included by module.c; no private code patches or parameter-provider claim.
  */
 #include "ui.h"
@@ -8,9 +8,9 @@
 #include <syntakt/trig-pages.h>
 typedef unsigned char arp_u8;
 #define UI_CALL(a,t) ((t)(a))
-#define ARP_DIRTY UI_CALL(0x400ffc5eu,void (*)(void *))
-#define ARP_CLOSE UI_CALL(0x400ffd02u,void (*)(void *))
-#define ARP_FILLRECT UI_CALL(0x400f7df2u,void (*)(void *,int,int,int,int,arp_u32))
+#define ARP_DIRTY UI_CALL(0x400ffe22u,void (*)(void *))
+#define ARP_CLOSE UI_CALL(0x400ffec6u,void (*)(void *))
+#define ARP_FILLRECT UI_CALL(0x400f7fb6u,void (*)(void *,int,int,int,int,arp_u32))
 static arp_u8 *arp_view DATA=0,*arp_manager DATA=0;
 static arp_u8 *arp_main DATA=0;
 static arp_u32 arp_vtable[19] DATA={0};
@@ -60,7 +60,7 @@ extern arp_u32 lfo3_pattern_set(void *,arp_u32,arp_u32,arp_u32,int);
  * pattern's (40019000) lock model at +620h (40016062), as 4001ef50 passes it;
  * not the pattern itself, nor anything from the parameter view's +68h. */
 static void *arp_app(void)
-{return UI_CALL(0x4016e804u,void *(*)(void))();}
+{return UI_CALL(0x4016e9c8u,void *(*)(void))();}
 static void *arp_pattern_model(void)
 {
     void *app=arp_app(),*pattern=app?UI_CALL(0x40019000u,void *(*)(void *))(app):0;
@@ -108,8 +108,8 @@ static void arp_lock_sync(void)
     void *selection=arp_selection();
     unsigned int i,first=64,previous=arp_lock_mode;
     arp_held[0]=arp_held[1]=0;
-    if(selection && (unsigned char)UI_CALL(0x400c34d6u,arp_u32 (*)(void *))(selection)){
-        for(i=0;i<64;i++)if((unsigned char)UI_CALL(0x400c2d94u,arp_u32 (*)(void *,arp_u32))(selection,i)){
+    if(selection && (unsigned char)UI_CALL(0x400c3582u,arp_u32 (*)(void *))(selection)){
+        for(i=0;i<64;i++)if((unsigned char)UI_CALL(0x400c2e40u,arp_u32 (*)(void *,arp_u32))(selection,i)){
             arp_held[i>>5]|=1u<<(i&31);if(first==64)first=i;
         }
     }
@@ -122,7 +122,7 @@ static void arp_lock_sync(void)
 static void arp_lock_mark(void)
 {
     void *selection=arp_selection();
-    if(selection)UI_CALL(0x400c2d34u,void (*)(void *,arp_u32))(selection,1);
+    if(selection)UI_CALL(0x400c2de0u,void (*)(void *,arp_u32))(selection,1);
 }
 static int arp_lock_write(unsigned int slot,unsigned int value)
 {
@@ -169,7 +169,7 @@ static void arp_chord_store(void *track,unsigned int lane,unsigned int step,unsi
      * Mirror the value accepted by the native setter, as POLY's live chord
      * recorder does, so the next TRIG reads this step rather than the default. */
     if(!lane || arp_track>=ARP_TRACKS ||
-       !(sequence=*(const volatile arp_u32 *)0x43bd7430u) ||
+       !(sequence=*(const volatile arp_u32 *)0x43bd8430u) ||
        !(model=(volatile arp_u8 *)st_pattern_track_data(track)))return;
     mirror=(volatile arp_u8 *)sequence+arp_track*ST_CHORD_TRACK_BYTES;
     mirror[off]=model[off];
@@ -227,8 +227,8 @@ static arp_u32 proxy_sound(void *proxy)
  * an unrelated preview must not alter another Sound. */
 static arp_u32 active_kit_sound(unsigned int track)
 {
-    const arp_u32 base=0x41ad5134u,size=0x1618u;
-    arp_u32 kit=*(const volatile arp_u32 *)0x43bd743cu;
+    const arp_u32 base=0x41ad6134u,size=0x1618u;
+    arp_u32 kit=*(const volatile arp_u32 *)0x43bd843cu;
     if(track>=ARP_TRACKS || kit<base || kit>=base+128u*size || (kit-base)%size)return 0;
     return kit+0x2au+track*0x123u;
 }
@@ -268,7 +268,7 @@ static int arp_can_open(void *app,arp_u8 *main)
     arp_u8 *top=arp_stack_top((arp_u8 *)app+0x40);unsigned int i;
     if(!top)return 0;
     if(top==main)return 1;
-    if(top==*(arp_u8 **)(main+0x230) && view_word(top,0)==0x401c9010u)return 2;
+    if(top==*(arp_u8 **)(main+0x230) && view_word(top,0)==0x401c92b0u)return 2;
     for(i=0;i<sizeof(children)/sizeof(children[0]);i++)
         if(top==*(arp_u8 **)(main+children[i]))return 1;
     return 0;
@@ -290,7 +290,7 @@ static void arp_forget(void *v)
 static void arp_dispose(void *v)
 {
     arp_forget(v);
-    UI_CALL(0x400ffdfcu,void (*)(void *))(v);
+    UI_CALL(0x400fffc0u,void (*)(void *))(v);
 }
 static void arp_view_close(void)
 {
@@ -316,8 +316,8 @@ static void arp_view_close(void)
 #define ARP_LED_ACTIVE 14u
 #define ARP_LED_INACTIVE 3u
 static const char arp_type_name[]="10ArpSeqView";
-static const arp_u32 arp_type[8]={0x4024947cu,(arp_u32)arp_type_name,0,2,
-    0x40241b9cu,2u,0x401c7104u,(ARP_VIEW_BYTES<<8)|2u};
+static const arp_u32 arp_type[8]={0x4024979cu,(arp_u32)arp_type_name,0,2,
+    0x40241ebcu,2u,0x401c73a4u,(ARP_VIEW_BYTES<<8)|2u};
 static void arp_led_nothing(void *handler){(void)handler;}
 static void arp_view_leds(void *handler,void *claimed,void *offered)
 {
@@ -325,7 +325,7 @@ static void arp_view_leds(void *handler,void *claimed,void *offered)
     unsigned int k,mode,palette;void *mgr;(void)claimed;(void)offered;
     if(!arp_view || handler!=arp_view+ARP_VIEW_BYTES || arp_lock_mode || arp_page ||
        !arp_foreground() || arp_recording())return;
-    mgr=UI_CALL(0x4016ede0u,void *(*)(void))();
+    mgr=UI_CALL(0x4016efa4u,void *(*)(void))();
     for(k=0;k<16;k++){
         if(k>p->length){mode=1;palette=2;}
         else{mode=2;palette=p->enabled&(1u<<k)?ARP_LED_ACTIVE:ARP_LED_INACTIVE;}
@@ -342,26 +342,26 @@ static void arp_fill(void *bmp,int x,int y,int x2,int y2,unsigned int col){ARP_F
 static void arp_text(void *bmp,unsigned int font,int x,int y,unsigned int align,const char *s)
 {
     if(font==ARP_FONT_SMALL){arp_small_text(bmp,arp_fill,x,y,align,s);return;}
-    UI_CALL(0x400f8a0cu,void (*)(void *,const void *,int,int,arp_u32,const char *,const char *))
-        (bmp,(const void *)(font==ARP_FONT_VALUE?0x443da210u:0x443da230u),x,y,align,"%s",s);
+    UI_CALL(0x400f8bd0u,void (*)(void *,const void *,int,int,arp_u32,const char *,const char *))
+        (bmp,(const void *)(font==ARP_FONT_VALUE?0x443db210u:0x443db230u),x,y,align,"%s",s);
 }
 static void arp_shape(void *bmp,unsigned int kind,int x,int y,int x2,int y2,unsigned int col)
 {
     if(kind==ARP_RECT)
-        UI_CALL(0x400f7bd6u,void (*)(void *,int,int,int,int,arp_u32))(bmp,x,y,x2,y2,col);
+        UI_CALL(0x400f7d9au,void (*)(void *,int,int,int,int,arp_u32))(bmp,x,y,x2,y2,col);
     else if(kind==ARP_PATTERN)   /* the hatched key fill of POLY's keyboard */
-        UI_CALL(0x400f8104u,void (*)(void *,int,int,int,int,arp_u32))(bmp,x,y,x2,y2,col);
+        UI_CALL(0x400f82c8u,void (*)(void *,int,int,int,int,arp_u32))(bmp,x,y,x2,y2,col);
     else if(kind==ARP_TOGGLE)
-        UI_CALL(0x40070362u,void (*)(void *,arp_u32,void *,int,int,arp_u32))(0,col?0x100u:0,bmp,x,y,0);
+        UI_CALL(0x400703dau,void (*)(void *,arp_u32,void *,int,int,arp_u32))(0,col?0x100u:0,bmp,x,y,0);
     else ARP_FILLRECT(bmp,x,y,x2,y2,col);
 }
 static void arp_bitmap(void *bmp,unsigned int resource,int x,int y,unsigned int mode)
-{UI_CALL(0x400f8dacu,void (*)(void *,const void *,int,int,arp_u32))(bmp,(const void *)resource,x,y,mode);}
+{UI_CALL(0x400f8f70u,void (*)(void *,const void *,int,int,arp_u32))(bmp,(const void *)resource,x,y,mode);}
 /* The MainScreen's parameter view while it is TRIG's (key 13h), else 0. */
 static arp_u8 *arp_trig_view(const arp_u8 *main)
 {
     arp_u8 *trig;
-    if(!main || view_word(main,0)!=0x401c81fcu || !(trig=*(arp_u8 *const *)(main+0xc0)) ||
+    if(!main || view_word(main,0)!=0x401c849cu || !(trig=*(arp_u8 *const *)(main+0xc0)) ||
        view_word(trig,0)!=ST_TRIG_VIEW || view_word(trig,0x88)!=0x13u)return 0;
     return trig;
 }
@@ -439,7 +439,7 @@ static void arp_view_draw(void *v,void *bmp,arp_u32 phase)
             }
         }else{
             struct arp_screen s;arp_u32 icons,last,count;char length[12];
-            icons=*(const volatile arp_u32 *)0x444df618u;last=*(const volatile arp_u32 *)0x444df61cu;
+            icons=*(const volatile arp_u32 *)0x444e0618u;last=*(const volatile arp_u32 *)0x444e061cu;
             count=(last-icons)/28u;
             if(count>=24 && count<=128){
                 s.settings=&arp_ui_parameters;s.track=arp_track;s.selected=arp_selected;
@@ -472,7 +472,7 @@ static void arp_scale_update(void)
         model=(arp_u8 *)pattern+0x2cu;
         h=((const volatile signed char *(*)(void *))(*(arp_u32 **)model)[0x28/4])(model);
         if(h && (row=h[0x1e]+1)>=1 && row<=35){
-            const int *degree=(const int *)(0x40248818u+64u*(arp_u32)row);
+            const int *degree=(const int *)(0x40248b38u+64u*(arp_u32)row);
             for(i=8;i<16;i++)key|=1u<<((arp_u32)degree[i]%12u);
             root=h[0x20]%12;if(root<0)root+=12;
             key|=(arp_u32)root<<16;
@@ -521,8 +521,8 @@ static int arp_open(void *app,arp_u32 track,unsigned int page,int covered)
     arp_u8 *root,*v,*main,*parameter,*cover=0;void *pair[2],*proxy;arp_u32 sound;
     unsigned int i,position;struct arp_settings p;
     if(track>=ARP_TRACKS || !eligible(track))return 0;
-    main=arp_top(app);if(!main || view_word(main,0)!=0x401c81fcu)return 0;
-    parameter=*(arp_u8 **)(main+0xc0);if(!parameter || view_word(parameter,0)!=0x401c97fcu)return 0;
+    main=arp_top(app);if(!main || view_word(main,0)!=0x401c849cu)return 0;
+    parameter=*(arp_u8 **)(main+0xc0);if(!parameter || view_word(parameter,0)!=0x401c9a9cu)return 0;
     position=arp_can_open(app,main);if(!position || (position==2 && !covered))return 0;
     if(position==2)cover=*(arp_u8 **)((arp_u8 *)app+0x40+0x18);
     proxy=((void *(*)(void *,arp_u32,int))(*(arp_u32 **)parameter)[0xc4/4])(parameter,0x60u,-1);
@@ -530,9 +530,9 @@ static int arp_open(void *app,arp_u32 track,unsigned int page,int covered)
     arp_ui_read_settings(sound,track,&p);
     if(arp_view)return 0;
     root=arp_host->storage->alloc(16+ARP_VIEW_BYTES+ARP_LED_BYTES);if((arp_u32)root<0x40000000u)return 0;
-    *(arp_u32 *)root=0x401c9670u;*(arp_u32 *)(root+4)=1;*(arp_u32 *)(root+8)=1;
+    *(arp_u32 *)root=0x401c9910u;*(arp_u32 *)(root+4)=1;*(arp_u32 *)(root+8)=1;
     v=root+16;*(void **)(root+12)=v;
-    UI_CALL(0x400ffba6u,void (*)(void *,const char *))(v,"ARPEGGIATOR");
+    UI_CALL(0x400ffd6au,void (*)(void *,const char *))(v,"ARPEGGIATOR");
     arp_activate(&p);
     for(i=0;i<sizeof(p);i++)((volatile arp_u8 *)&arp_ui_parameters)[i]=((const arp_u8 *)&p)[i];
     /* 1.8: not opaque (+16h, 400ffaf4): the MainScreen and its TRIG view stay
@@ -540,8 +540,8 @@ static int arp_open(void *app,arp_u32 track,unsigned int page,int covered)
      * below the highest opaque one). The view draws nothing; it remains for
      * the step LEDs (a LedHandler) and as the ARP's foreground mark. Keys it
      * does not take pass to the views beneath, as before. */
-    UI_CALL(0x400ffaf4u,void (*)(void *,arp_u32))(v,0);
-    for(i=0;i<19;i++)arp_vtable[i]=((const arp_u32 *)0x40241bd4u)[i];
+    UI_CALL(0x400ffcb8u,void (*)(void *,arp_u32))(v,0);
+    for(i=0;i<19;i++)arp_vtable[i]=((const arp_u32 *)0x40241ef4u)[i];
     arp_vtable[1]=(arp_u32)arp_type;arp_vtable[2]=(arp_u32)arp_dispose;*(arp_u32 **)v=arp_vtable+2;
     *(const arp_u32 **)(v+ARP_VIEW_BYTES)=arp_led_vtable+2;
     *(arp_u32 *)(v+ARP_VIEW_BYTES+4)=0;*(arp_u32 *)(v+ARP_VIEW_BYTES+8)=0;
@@ -552,20 +552,20 @@ static int arp_open(void *app,arp_u32 track,unsigned int page,int covered)
      * so that the nested tick cannot close this just-created ARP session. */
     arp_trig_page(page);
     pair[0]=v;pair[1]=root;
-    UI_CALL(0x40100bc2u,arp_u32 (*)(void *,void *,arp_u32))(arp_manager,pair,0);
+    UI_CALL(0x40100d86u,arp_u32 (*)(void *,void *,arp_u32))(arp_manager,pair,0);
     if(cover){
         arp_u32 guard[2];arp_u8 *node;
         /* Native push appends. Move that same retained node before mute using
          * the native list primitives, under the manager's own mutex. Both
          * views are transparent, so highest opaque/visibility do not change.
          * Only opening does this; foreground and the periodic paths stay as-is. */
-        UI_CALL(0x4016e76au,void (*)(void *,void *))(guard,arp_manager+4);
+        UI_CALL(0x4016e92eu,void (*)(void *,void *))(guard,arp_manager+4);
         node=*(arp_u8 **)(arp_manager+0x18);
-        UI_CALL(0x401bb31cu,void (*)(void *))(node);
-        UI_CALL(0x401bb2f6u,void (*)(void *,void *))(node,cover);
-        UI_CALL(0x4016e790u,void (*)(void *))(guard);
+        UI_CALL(0x401bb5b8u,void (*)(void *))(node);
+        UI_CALL(0x401bb592u,void (*)(void *,void *))(node,cover);
+        UI_CALL(0x4016e954u,void (*)(void *))(guard);
     }
-    UI_CALL(0x4016dde8u,void (*)(void *))(pair+1);arp_dirty();return 1;
+    UI_CALL(0x4016dfacu,void (*)(void *))(pair+1);arp_dirty();return 1;
 }
 /* Encoder turns as the native pages take them (1.2). 400f66a2 scales the
  * event's ticks by 1, or 8 with the knob pressed; the stock increment
@@ -581,7 +581,7 @@ static int arp_open(void *app,arp_u32 track,unsigned int page,int covered)
  * chord page). Records and rests are cleared when the view opens, the track
  * or the page changes. */
 #define ARP_ENC_FIELDS 8
-#define ARP_ENC_CHOICES 0x443da178u
+#define ARP_ENC_CHOICES 0x443db178u
 static arp_u8 arp_enc_state[20*(ARP_ENC_FIELDS+1)] DATA={0};
 static int arp_enc_rest[ARP_ENC_FIELDS] DATA={0};
 static void arp_enc_reset(void)
@@ -594,9 +594,9 @@ static int arp_encoder_steps(unsigned int field,const void *event)
 {
     arp_u32 pressed;int delta,steps;
     if(field>=ARP_ENC_FIELDS)return 0;
-    delta=UI_CALL(0x400f66a2u,int (*)(const void *,arp_u32,arp_u32))(event,1,8);
-    pressed=UI_CALL(0x400f66c0u,arp_u32 (*)(const void *))(event);
-    delta=UI_CALL(0x400f68d2u,int (*)(void *,arp_u32,int,arp_u32,arp_u32))(arp_enc_state,field,delta,ARP_ENC_CHOICES,pressed&255u);
+    delta=UI_CALL(0x400f6866u,int (*)(const void *,arp_u32,arp_u32))(event,1,8);
+    pressed=UI_CALL(0x400f6884u,arp_u32 (*)(const void *))(event);
+    delta=UI_CALL(0x400f6a96u,int (*)(void *,arp_u32,int,arp_u32,arp_u32))(arp_enc_state,field,delta,ARP_ENC_CHOICES,pressed&255u);
     if(!delta)return 0;
     if((delta<0)!=(arp_enc_rest[field]<0))arp_enc_rest[field]=0;
     arp_enc_rest[field]+=delta;steps=arp_enc_rest[field]/256;
@@ -629,7 +629,7 @@ static int arp_edit(unsigned int field,int delta)
  * NOT2..NOT4's track defaults over the native range 0..127, as POLY's page
  * does, and keeps NOTE, as the stock TRIG page does. Not with locks shown. */
 static int arp_random(int low,int high)
-{return low+(int)((UI_CALL(0x40131d24u,arp_u32 (*)(void))()&0x7fffu)*(arp_u32)(high-low+1)>>15);}
+{return low+(int)((UI_CALL(0x40131ee8u,arp_u32 (*)(void))()&0x7fffu)*(arp_u32)(high-low+1)>>15);}
 static void arp_randomize(void)
 {
     struct arp_settings p=arp_ui_parameters;void *track;volatile arp_u8 *data;unsigned int i;
@@ -666,7 +666,7 @@ static void arp_view_tick(void *controller)
         arp_u32 track=UI_CALL(0x4001ff74u,arp_u32 (*)(void *))(*(void **)(arp_main+0xa4));
         if(track!=arp_track){
             arp_u8 *parameter=*(arp_u8 **)(arp_main+0xc0);void *proxy=0;arp_u32 sound=0;
-            if(track<ARP_TRACKS && eligible(track) && parameter && view_word(parameter,0)==0x401c97fcu){
+            if(track<ARP_TRACKS && eligible(track) && parameter && view_word(parameter,0)==0x401c9a9cu){
                 proxy=((void *(*)(void *,arp_u32,int))(*(arp_u32 **)parameter)[0xc4/4])(parameter,0x60u,-1);
                 sound=proxy_sound(proxy);
             }
@@ -705,7 +705,7 @@ static int arp_view_encoder(void *app,const void *event)
          * directly, including the pressed x8 rate. F..H do nothing. */
         if(knob>=1 && knob<=4){
             steps=knob==1?arp_encoder_steps(0,event):
-                UI_CALL(0x400f66a2u,int (*)(const void *,arp_u32,arp_u32))(event,1,8);
+                UI_CALL(0x400f6866u,int (*)(const void *,arp_u32,arp_u32))(event,1,8);
             if(steps)arp_chord_edit(knob-1,steps);
         }else if(knob==5 && !arp_lock_mode && (steps=arp_encoder_steps(4,event))!=0){
             struct arp_settings p=arp_ui_parameters;
@@ -753,8 +753,8 @@ static int arp_step_key(arp_u32 key,arp_u32 flags)
         if(!arp_steps_held)arp_steps_edited=0;
         arp_dirty();return 1;
     }
-    if(arp_recording() || UI_CALL(0x40102d7cu,arp_u32 (*)(arp_u32))(1) ||
-       UI_CALL(0x40102d7cu,arp_u32 (*)(arp_u32))(2) || UI_CALL(0x40102d7cu,arp_u32 (*)(arp_u32))(0x12)){
+    if(arp_recording() || UI_CALL(0x40102f40u,arp_u32 (*)(arp_u32))(1) ||
+       UI_CALL(0x40102f40u,arp_u32 (*)(arp_u32))(2) || UI_CALL(0x40102f40u,arp_u32 (*)(arp_u32))(0x12)){
         arp_steps_held=0;arp_steps_edited=0;return 0;
     }
     if(!(flags&8)){
@@ -766,7 +766,7 @@ static int arp_step_key(arp_u32 key,arp_u32 flags)
 static int arp_view_key(void *app,const void *event)
 {
     arp_u32 key=view_word(event,12),flags=view_word(event,16),track=0xffffffffu;
-    arp_u8 *top=arp_top(app),*trig;int foreground,main=top && view_word(top,0)==0x401c81fcu;
+    arp_u8 *top=arp_top(app),*trig;int foreground,main=top && view_word(top,0)==0x401c849cu;
     arp_brain=app;
     if(main && view_word(top,0xa4))track=UI_CALL(0x4001ff74u,arp_u32 (*)(void *))(*(void **)(top+0xa4));
     /* TRIG on the last TRIG page before ARP's: the arp page. FUNC (2),
@@ -804,7 +804,7 @@ static int arp_view_key(void *app,const void *event)
         return 1;
     }
     /* YES with TRIG held: randomize the page shown before that TRIG press. */
-    if(key==12 && UI_CALL(0x40102d7cu,arp_u32 (*)(arp_u32))(0x13)){
+    if(key==12 && UI_CALL(0x40102f40u,arp_u32 (*)(arp_u32))(0x13)){
         if((flags&1) && !(flags&8)){
             /* That page is the native one before ARP's: its own randomize. */
             if(arp_trig_opened){arp_trig_opened=0;arp_trig_close(1);return 0;}

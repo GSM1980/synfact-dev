@@ -37,8 +37,8 @@
 typedef unsigned int u32;typedef unsigned char u8;
 #define KIT_SLOT 0x1600u
 #define KIT_SLOTS 0x2e0200u
-#define SAVE_BUFFER 0x405ff554u
-#define RELOAD_BUFFER 0x405fd354u
+#define SAVE_BUFFER 0x40600554u
+#define RELOAD_BUFFER 0x405fe354u
 #define SIDE 16u
 static u32 mutex[4];                     /* the native recursive task mutex, as LFO3's and ARP's */
 void playhead_enter(void){((void (*)(void *))0x40001980u)(mutex);}
@@ -57,8 +57,8 @@ static u32 in_container(u32 a,u32 base)
 }
 static u32 known_slot(u32 a,u32 container)
 {
-    return a && (a==SAVE_BUFFER || a==RELOAD_BUFFER || in_container(a,0x43c0cfc0u) ||
-                 in_container(a,0x43ff35d0u) || in_container(a,container));
+    return a && (a==SAVE_BUFFER || a==RELOAD_BUFFER || in_container(a,0x43c0dfc0u) ||
+                 in_container(a,0x43ff45d0u) || in_container(a,container));
 }
 /* A kit's modes: the live table, the side table, or all FORWARD. */
 static void modes_of(u32 kit,u8 *out)
@@ -134,9 +134,9 @@ static void meta(const u32 *a)
  * it); it is used only while its vtable (401c33f4), its kits (+10h,
  * 41ad5134) and that vtable entry are the stock ones. The re-encode reaches
  * KIT_ENCODE above, which writes the record. */
-#define KIT_ACTIVE 0x40a703f0u
-#define KIT_ACTIVE_VTABLE 0x401c33f4u
-#define KIT_CHANGED 0x40172250u
+#define KIT_ACTIVE 0x40a713f0u
+#define KIT_ACTIVE_VTABLE 0x401c3694u
+#define KIT_CHANGED 0x40172414u
 u32 playhead_persist_changed(u32 k)
 {
     const volatile u32 *o=(const volatile u32 *)KIT_ACTIVE;

@@ -1,5 +1,5 @@
 | Fused 13-track LFO3 render. Imported from Synfact src/features/lfo3/throughput/render.s
-| (sha256 65110d2a...), derived from the native OS 1.41 LFO kernel. Position independent:
+| (sha256 65110d2a...), derived from the native OS 1.42 LFO kernel. Position independent:
 | it runs from a MAIN SRAM copy; native helpers/tables are absolute. Same EMAC contract.
 .text
 .globl lfo3_render,lfo3_step_body
@@ -81,7 +81,7 @@ wave_ready:
         move.l %d2,44(%sp)
         asr.l %d7,%d5
         move.l %d0,-(%sp)
-        jsr 0x40118c74
+        jsr 0x40118e38
         addq.l #4,%sp
         mvs.b 6(%a3),%d4
         move.l %d5,%d2
@@ -103,7 +103,7 @@ wave_ready:
         moveq #4,%d7
         cmp.l %d4,%d7
         bne.s wrap_phase
-        lea 0x402457e4,%a0
+        lea 0x40245b04,%a0
         movea.l (%a0,%d3.l*4),%a0
         move.l %a0,-32(%a2)
         move.b #1,(%a2)
@@ -117,10 +117,10 @@ wrap_phase:
         moveq #3,%d1
         cmp.l %d4,%d1
         bne.s wrap_now
-        lea 0x4024581c,%a1
+        lea 0x40245b3c,%a1
         tst.l %d5
         blt.s wrap_latch
-        lea 0x40245800,%a1
+        lea 0x40245b20,%a1
 wrap_latch:
         movea.l (%a1,%d3.l*4),%a0
         move.l %a0,-32(%a2)
@@ -166,7 +166,7 @@ reset_fade:
         moveq #1,%d7
         mvs.w -2(%a3),%d1
         move.l %d1,-(%sp)
-        jsr 0x40118cf0
+        jsr 0x40118eb4
         clr.b (%a2)
         addq.l #4,%sp
         move.b %d7,1(%a2)
@@ -176,7 +176,7 @@ trig_other_mode:
         clr.b (%a2)
         mvs.w -2(%a3),%d0
         move.l %d0,-(%sp)
-        jsr 0x40118cf0
+        jsr 0x40118eb4
         addq.l #4,%sp
         bra.s no_reset
 trig_mode_two:
@@ -213,7 +213,7 @@ calculate_wave:
         move.l #0x636ba875,%d0
         .word 0xa400,0x0800,0xa1c2
         lsl.l #2,%d2
-        lea 0x40245838,%a1
+        lea 0x40245b58,%a1
         movea.l (%a1,%d3.l*4),%a1
         move.l %d2,-(%sp)
         move.l %d1,%d4
@@ -252,7 +252,7 @@ held_wave:
 random_slew:
         move.l 44(%sp),%d7
         asr.l #8,%d7
-        lea 0x40245850,%a0
+        lea 0x40245b70,%a0
         move.l -28(%a2),%d2
         move.l #0x7fffffff,%d0
         move.l -24(%a2),%d3

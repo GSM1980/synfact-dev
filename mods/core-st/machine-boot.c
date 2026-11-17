@@ -47,7 +47,7 @@ static int disk_read(void *context,u32 at,void *out,u32 n)
 /* The first native UI message changes the title; subsequent messages update
  * the original bar. Report percentage changes even for batches <128 pages. */
 #ifndef CORE_SAMPLE_NOTIFY
-#define CORE_SAMPLE_NOTIFY ((void (*)(u32))0x4008297cu)
+#define CORE_SAMPLE_NOTIFY ((void (*)(u32))0x400829f4u)
 #endif
 void core_sample_progress(u32 page,u32 total)
 {

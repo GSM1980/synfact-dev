@@ -44,13 +44,13 @@ BANK = 0x46000000
 STACK = 0x48010000
 RETURN = 0x4f000000
 SEQ, UI = 0x43bd0000, 0x444e0000                  # the sequencer's and the UI copies' RAM
-STEP, LAST, TICK = 0x43bd73fc, 0x43bd7416, 0x43bd7409
-CURRENT = 0x43bd7430                              # the pattern playing
-CURRENT_KIT = 0x43bd743c                          # its kit (43bd7438 / 43bd7444: the next ones)
-KITS, KIT_BYTES, KIT_INDEX = 0x41ad5134, 0x1618, 5  # the live kits; the tests' pattern uses kit 5
-UI_LAST, UI_STEP = 0x444e2370, 0x444e237d
+STEP, LAST, TICK = 0x43bd83fc, 0x43bd8416, 0x43bd8409
+CURRENT = 0x43bd8430                              # the pattern playing
+CURRENT_KIT = 0x43bd843c                          # its kit (43bd7438 / 43bd7444: the next ones)
+KITS, KIT_BYTES, KIT_INDEX = 0x41ad6134, 0x1618, 5  # the live kits; the tests' pattern uses kit 5
+UI_LAST, UI_STEP = 0x444e3370, 0x444e337d
 PATTERN = 0x50000000                              # + 21379h flag, + 21374h length, tracks + 499h * t
-SITES = (0x4008cf00, 0x4008cf14, 0x4008c204, 0x4008d1b8, 0x4008b746)
+SITES = (0x4008cf78, 0x4008cf8c, 0x4008c27c, 0x4008d230, 0x4008b7be)
 TRACKS = 13
 D = [UC_M68K_REG_D0 + i for i in range(8)]
 A = [UC_M68K_REG_A0 + i for i in range(7)]
@@ -159,7 +159,7 @@ def run(stock_path, bank_path):
             for step in sorted({0, 1, length(t) - 1, length(t), length(t) + 3, 255}):
                 want_step = mirror(step, length(t))
                 # The trig preparation's pushes at a step's tick 0, both calls.
-                for start, end in ((0x4008cf00, 0x4008cf08), (0x4008cf14, 0x4008cf1c)):
+                for start, end in ((0x4008cf78, 0x4008cf80), (0x4008cf8c, 0x4008cf94)):
                     regs = garbage(rnd)
                     regs.update({D[0]: PATTERN, D[6]: t, A[6]: STEP + t})
                     for m in (stock, hooked):
@@ -181,13 +181,13 @@ def run(stock_path, bank_path):
                 # A pattern started mid-way: the step is d0, sign-extended.
                 regs = garbage(rnd)
                 regs.update({D[0]: (step - 256 if step >= 128 else step) & 0xffffffff, D[2]: t})
-                want, want_stack = stock.run(0x4008c204, 0x4008c20e, regs)
+                want, want_stack = stock.run(0x4008c27c, 0x4008c286, regs)
                 for backwards in (0, 1):
                     if t != 12:
                         hooked.w8(dirs + t, backwards)
                     elif not backwards:
                         continue
-                    got, stack = hooked.run(0x4008c204, 0x4008c20e, regs)
+                    got, stack = hooked.run(0x4008c27c, 0x4008c286, regs)
                     if not backwards or want_step == step:
                         assert got == want and stack == want_stack, ('mid-way', t, step, backwards)
                         continue
@@ -197,15 +197,15 @@ def run(stock_path, bank_path):
                 # The step the LEDs show: 4008b734(t) -> last[t].
                 for m in (stock, hooked):
                     m.w8(LAST + t, step)
-                    m.w16(0x43bd73c4, 0x1234)
-                want = stock.call(0x4008b734, t)
+                    m.w16(0x43bd83c4, 0x1234)
+                want = stock.call(0x4008b7ac, t)
                 assert want == step
                 for backwards in (0, 1):
                     if t != 12:
                         hooked.w8(dirs + t, backwards)
                     elif not backwards:
                         continue
-                    got = hooked.call(0x4008b734, t)
+                    got = hooked.call(0x4008b7ac, t)
                     assert got == (want_step if backwards else want), ('LEDs', t, step, backwards, got)
                 n += 4
                 if t != 12:
@@ -223,26 +223,26 @@ def run(stock_path, bank_path):
                     m.w8(STEP + t, steps[t])
                     m.w8(LAST + t, lasts[t])
                     m.w8(TICK + t, t * 3)
-                    m.w32(0x444e2404 + 4 * t, 0x1000 + t)
+                    m.w32(0x444e3404 + 4 * t, 0x1000 + t)
             for t in range(TRACKS):
                 hooked.w8(dirs + t, back[t])
             regs = garbage(rnd)
             regs[D[0]] = 13                             # the advance loop leaves d0 = 13; 4008d166 clears its byte
-            want, want_stack = stock.run(0x4008d166, 0x4008d1d2, regs)
-            want_ui = bytearray(stock.u.mem_read(0x444e2300, 0x140))
-            got, stack = hooked.run(0x4008d166, 0x4008d1d2, regs)
-            got_ui = bytes(hooked.u.mem_read(0x444e2300, 0x140))
+            want, want_stack = stock.run(0x4008d1de, 0x4008d24a, regs)
+            want_ui = bytearray(stock.u.mem_read(0x444e3300, 0x140))
+            got, stack = hooked.run(0x4008d1de, 0x4008d24a, regs)
+            got_ui = bytes(hooked.u.mem_read(0x444e3300, 0x140))
             assert got == want and stack == want_stack, 'ui copy registers'
             for t in range(TRACKS):
                 if back[t]:
-                    want_ui[UI_LAST - 0x444e2300 + t] = mirror(lasts[t], length(t))
-                    want_ui[UI_STEP - 0x444e2300 + t] = mirror(steps[t], length(t))
+                    want_ui[UI_LAST - 0x444e3300 + t] = mirror(lasts[t], length(t))
+                    want_ui[UI_STEP - 0x444e3300 + t] = mirror(steps[t], length(t))
             assert got_ui == bytes(want_ui), ('ui copy', back, steps, lasts)
             n += 1
         for t in range(TRACKS - 1):
             hooked.w8(dirs + t, 0)
     # Past the tracks the accessor gives the pattern's step, mirrored or not.
-    assert stock.call(0x4008b734, 13) == hooked.call(0x4008b734, 13) == 0x1234
+    assert stock.call(0x4008b7ac, 13) == hooked.call(0x4008b7ac, 13) == 0x1234
     # The sites stay while another track is backwards, and go out with the last.
     assert hooked.call(sym['playhead_seq_set'], KIT_INDEX, 3, 1) == 0
     assert hooked.call(sym['playhead_seq_set'], KIT_INDEX, 12, 0) == 0
@@ -253,7 +253,7 @@ def run(stock_path, bank_path):
     assert [hooked.site(at) for at in SITES] == stock_sites
     # A context that is not the stock one: refused, nothing written.
     refused = Machine(main, bank, sym)
-    refused.u.mem_write(0x4008d1ca, b'\x4e\x71')
+    refused.u.mem_write(0x4008d242, b'\x4e\x71')
     assert refused.call(sym['playhead_seq_set'], KIT_INDEX, 0, 1) == 1
     assert [refused.site(at) for at in SITES] == stock_sites and refused.u.mem_read(dirs, 1) == b'\0'
     return n
@@ -269,7 +269,7 @@ def run_modes(stock_path, bank_path):
     step, dirs = sym['playhead_step'], sym['playhead_modes'] + 16 * KIT_INDEX
     lengths = [16, 1, 2, 3, 7, 64, 5, 8, 4, 16, 31, 12, 16]
     m.song(1, 16, lengths)
-    m.w32(0x43bcb3a4, 0x1234567)
+    m.w32(0x43bcc3a4, 0x1234567)
     n = 0
     for t, L in enumerate(lengths):
         def play(mode, steps):
@@ -319,14 +319,14 @@ def run_modes(stock_path, bank_path):
         m.w8(STEP + t, k)
         regs = {r: 0 for r in D + A}
         regs[D[0]] = 13
-        m.run(0x4008d166, 0x4008d1d2, regs)                          # the tick's copy, after the advance
+        m.run(0x4008d1de, 0x4008d24a, regs)                          # the tick's copy, after the advance
         ui = m.u.mem_read(UI_STEP + t, 1)[0]
         regs = {r: 0 for r in D + A}
         regs.update({D[0]: PATTERN, D[6]: t, A[6]: STEP + t, D[5]: 0x5555})
-        _, stack = m.run(0x4008cf00, 0x4008cf08, regs)              # the trig at tick 0
+        _, stack = m.run(0x4008cf78, 0x4008cf80, regs)              # the trig at tick 0
         assert struct.unpack_from('>I', stack, 0)[0] == ui, (i, ui)
         m.w8(LAST + t, k)
-        shown.append(m.call(0x4008b734, t))                           # the LEDs, a step later
+        shown.append(m.call(0x4008b7ac, t))                           # the LEDs, a step later
         assert shown[-1] == ui
     cycle = list(range(L)) + list(range(L - 2, 0, -1))
     assert shown == [cycle[i % len(cycle)] for i in range(3 * L)], shown
@@ -356,19 +356,19 @@ def run_header(stock_path, bank_path):
     ui, screen, app, font = FAKE, FAKE + 0x100, FAKE + 0x200, FAKE + 0x300
     m.w32(ui + 0x40 + 0x1c, FAKE + 0x400)            # the top opaque node
     m.w32(FAKE + 0x400 + 8, screen)
-    m.w32(screen, 0x401c81fc)
-    m.w32(0x443da1f0 + 4, font)
+    m.w32(screen, 0x401c849c)
+    m.w32(0x443db1f0 + 4, font)
     m.w32(font, 5)
     m.w32(font + 8, 0)
     state = {'track': 0, 'fills': []}
 
     def hook(uc, at, size, user):
-        stub = {0x4016de80: ui, 0x4016e804: app, 0x4001ff74: None, 0x400f7df2: 0}
+        stub = {0x4016e044: ui, 0x4016e9c8: app, 0x4001ff74: None, 0x400f7fb6: 0}
         if at not in stub:
             return
         sp = uc.reg_read(UC_M68K_REG_A7)
         ret, *args = struct.unpack('>7I', bytes(uc.mem_read(sp, 28)))
-        if at == 0x400f7df2:
+        if at == 0x400f7fb6:
             state['fills'].append(tuple(v - (1 << 32) if v >= 1 << 31 else v for v in args[1:6]))
         value = state['track'] if at == 0x4001ff74 else stub[at]
         uc.reg_write(UC_M68K_REG_D0, value)
@@ -378,7 +378,7 @@ def run_header(stock_path, bank_path):
     m.song(0, 16, [16] * TRACKS)
     n = 0
     for bpm, digits in ((120, 3), (75, 2), (300, 3)):
-        m.w32(0x402d7010, bpm * 120)
+        m.w32(0x402d7360, bpm * 120)
         width = 6 * (digits + 2) - 1
         for t, mode in ((0, BACKWARDS), (3, PENDULUM), (5, RANDOM), (12, WALK), (7, FORWARDS)):
             m.call(sym['playhead_seq_set'], KIT_INDEX, 1, PENDULUM)           # keeps the sites in
@@ -400,13 +400,13 @@ def run_header(stock_path, bank_path):
     # Another view's layer, the MainScreen not on top, every track FORWARD: nothing.
     state.update(track=0, fills=[])
     m.call(sym['playhead_seq_set'], KIT_INDEX, 0, BACKWARDS)
-    m.w32(FAKE + 0x500, 0x401c9670)
+    m.w32(FAKE + 0x500, 0x401c9910)
     m.call(sym['playhead_draw'], FAKE + 0x500, 0x7000, 0)
     assert state['fills'] == []
-    m.w32(screen, 0x401c9670)
+    m.w32(screen, 0x401c9910)
     m.call(sym['playhead_draw'], screen, 0x7000, 0)
     assert state['fills'] == []
-    m.w32(screen, 0x401c81fc)
+    m.w32(screen, 0x401c849c)
     m.call(sym['playhead_draw'], screen, 0x7000, 0)
     assert state['fills']
     state['fills'] = []
@@ -419,8 +419,8 @@ def run_header(stock_path, bank_path):
 
 SOUND_META, KIT_ENCODE, KIT_DECODE = 21, 5, 6
 COPY, NEW, FREE, RELOCATE, PROJECT_NEW = 1, 2, 3, 4, 11
-CONTAINER, KIT_SLOTS, KIT_SLOT, RECORD = 0x43c0cfc0, 0x2e0200, 0x1600, 0x15e0
-SAVE_BUFFER = 0x405ff554
+CONTAINER, KIT_SLOTS, KIT_SLOT, RECORD = 0x43c0dfc0, 0x2e0200, 0x1600, 0x15e0
+SAVE_BUFFER = 0x40600554
 BUFFER = 0x52000000        # a kit outside the live array (undo, clipboard)
 
 
@@ -468,7 +468,7 @@ def run_persist(stock_path, bank_path):
         return list(m.u.mem_read(sym['playhead_modes'] + 16 * k, 13))
 
     def installed():
-        return m.site(0x4008cf00)[:2] == bytes([0x4e, 0xf9])
+        return m.site(0x4008cf78)[:2] == bytes([0x4e, 0xf9])
 
     m.song(1, 16, [16] * TRACKS)
     want = [0] * 13
@@ -552,19 +552,19 @@ def run_key(stock_path, bank_path):
     u = m.u
     u.mem_map(0x40a70000, 0x10000)
     u.mem_map(FAKE, 0x10000)
-    kit_active = 0x40a703f0
-    m.w32(kit_active, 0x401c33f4)
+    kit_active = 0x40a713f0
+    m.w32(kit_active, 0x401c3694)
     m.w32(kit_active + 16, KITS)
     state = {'track': 4, 'changed': []}
 
     def hook(uc, at, size, user):
-        stub = {0x40001980: 0, 0x40001aa2: 0, 0x40102d7c: 1, 0x4016e804: FAKE, 0x4001ff74: None,
-                0x4016de80: 0, 0x40172250: 0}
+        stub = {0x40001980: 0, 0x40001aa2: 0, 0x40102f40: 1, 0x4016e9c8: FAKE, 0x4001ff74: None,
+                0x4016e044: 0, 0x40172414: 0}
         if at not in stub:
             return
         sp = uc.reg_read(UC_M68K_REG_A7)
         ret, *args = struct.unpack('>4I', bytes(uc.mem_read(sp, 16)))
-        if at == 0x40172250:
+        if at == 0x40172414:
             state['changed'].append(tuple(args))
         uc.reg_write(UC_M68K_REG_D0, state['track'] if at == 0x4001ff74 else stub[at])
         uc.reg_write(UC_M68K_REG_A7, sp + 4)

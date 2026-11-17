@@ -63,7 +63,7 @@ void core_machine_defaults(u32 type,void *model,u32 quiet)
     for(i=8;i<m->params;i++)
         *(u16 *)(sound+0x14+2*slots[i])=(u16)m->parameter[i].initial;
     if(!(quiet&255u))for(i=8;i<m->params;i++){
-        u32 event[3]={0x401c39d8u,slots[i],0x01000000u};
+        u32 event[3]={0x401c3c78u,slots[i],0x01000000u};
         ((void (*)(void *,void *))vt[0x10/4])(model,event);
     }
 }
@@ -144,7 +144,7 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     if(q<=ST_DIGITAL || q==ST_PAGE_COPY || q==ST_LAYOUT)m=find(id);
     else if(q==ST_SLOT_ENGINE || q==ST_PAGE_LOCAL)m=find(args[1]);
     else if(q==ST_RANK){
-        if(id!=0x4060c510u)return 0;
+        if(id!=0x4060d510u)return 0;
         m=find(*(u32 *)args[1]);
     }else if(q==ST_UI_ENGINE){
         if(id<0x2e0)return 0;

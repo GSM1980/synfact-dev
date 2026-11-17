@@ -100,9 +100,9 @@ class Cpu:
 
 # ---- A: the core's stubs -------------------------------------------------------------
 STUB_LIST, SUB_A, SUB_B, TABLE = DATA + 0x8000, DATA + 0x8100, DATA + 0x8200, DATA + 0x9000
-STOCK = {'track': (0x4008f3a0, 'ae000900ae810900', 0x4008f3a8),
-         'delay': (0x4008f828, '4eb940096890', 0x40096890),
-         'reverb': (0x4008f952, '4eb940096e3c', 0x40096e3c)}
+STOCK = {'track': (0x4008f418, 'ae000900ae810900', 0x4008f420),
+         'delay': (0x4008f8a0, '4eb940096908', 0x40096908),
+         'reverb': (0x4008f9ca, '4eb940096eb4', 0x40096eb4)}
 
 
 def link_stubs(folder):
@@ -236,7 +236,7 @@ def build_v56(folder, digitone):
     if dev.key != 'digitone-mk1' or rel.version != '1.44':
         raise SystemExit('--digitone must be the Digitone OS 1.44')
     native = types.ModuleType('chorus_native')
-    native.BASE, native.STATE_BEGIN, native.HPF = 0x40000400, 0x8000cbc8, 0x40234204
+    native.BASE, native.STATE_BEGIN, native.HPF = 0x40000400, 0x8000cbc8, 0x402344a4
     native.source = lambda: parsed.section(3)
     sys.modules['chorus_native'] = native
     spec = importlib.util.spec_from_file_location('chorus24_kernels_v56', V56 / 'chorus24_kernels.py')

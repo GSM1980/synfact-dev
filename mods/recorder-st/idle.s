@@ -1,6 +1,6 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | Preview-only mixer, selected by the core's Host API 15 owner slot.
-| Native OS 1.41 mixer ABI: three stack words; third is the mixer/Kit record.
+| Native OS 1.42 mixer ABI: three stack words; third is the mixer/Kit record.
 | Own the same 556-byte frame/callee saves as 4008f1ca; 4008fb38 initializes
 | its output locals, handles analog/digital output and USB, and unwinds it.
         .text
@@ -22,4 +22,4 @@ recorder_idle_mix:
         move.l %d0,%acc2
         move.l %d0,%acc3
         move.l #0x80000000,%d3
-        jmp 0x4008fb38
+        jmp 0x4008fbb0

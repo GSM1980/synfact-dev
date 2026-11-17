@@ -22,15 +22,15 @@
  */
 #ifndef ELEKLOADER_ST_TRIG_PAGES_H
 #define ELEKLOADER_ST_TRIG_PAGES_H
-#define ST_TRIG_VIEW 0x401c97fcu
+#define ST_TRIG_VIEW 0x401c9a9cu
 #define ST_TRIG_NATIVE_PAGES 2u
 #define ST_TRIG_ADDED_ID 3u
 #define ST_TRIG_POLY 1u
 #define ST_TRIG_ARP 2u
 #ifndef ST_TRIG_NEW
-#define ST_TRIG_NEW ((unsigned int *(*)(unsigned int))0x40103788u)   /* as POLY 0.8 */
-#define ST_TRIG_DELETE ((void (*)(void *))0x40103794u)
-#define ST_TRIG_RESET ((void (*)(void *))0x400f6730u)                /* the view's increments */
+#define ST_TRIG_NEW ((unsigned int *(*)(unsigned int))0x4010394cu)   /* as POLY 0.8 */
+#define ST_TRIG_DELETE ((void (*)(void *))0x40103958u)
+#define ST_TRIG_RESET ((void (*)(void *))0x400f68f4u)                /* the view's increments */
 #endif
 /* The UI controller (4016de80, a 0xf0-byte singleton; its constructor
  * 400095a2 builds the view manager at +40h, and the key and draw loops pass
@@ -39,11 +39,11 @@
  * application's +40h, found no MainScreen and answered 0 outside page
  * actions, so the page popup read page 3's "Euclidean" on POLY's page. */
 #ifndef ST_TRIG_UI
-#define ST_TRIG_UI ((unsigned char *(*)(void))0x4016de80u)
+#define ST_TRIG_UI ((unsigned char *(*)(void))0x4016e044u)
 #endif
 #ifndef ST_TRIG_LAYOUT
-#define ST_TRIG_LAYOUT ((unsigned int *(*)(unsigned int))0x4007b9d0u) /* a page's descriptor (the core's hook) */
-#define ST_TRIG_MESSAGE ((void (*)(unsigned int,const char *,...))0x400c33d0u) /* printf popup */
+#define ST_TRIG_LAYOUT ((unsigned int *(*)(unsigned int))0x4007ba48u) /* a page's descriptor (the core's hook) */
+#define ST_TRIG_MESSAGE ((void (*)(unsigned int,const char *,...))0x400c347cu) /* printf popup */
 #endif
 static __inline__ unsigned int st_trig_word(const void *view,unsigned int at)
 {return *(const unsigned int *)((const unsigned char *)view+at);}
@@ -95,7 +95,7 @@ static __inline__ unsigned char *st_trig_current(void)
     unsigned char *ui=ST_TRIG_UI(),*m,*n,*main,*trig;
     if(!ui)return 0;
     m=ui+0x40;n=*(unsigned char **)(m+0x1c);
-    if(!n || n==m+0x14 || !(main=*(unsigned char **)(n+8)) || st_trig_word(main,0)!=0x401c81fcu)return 0;
+    if(!n || n==m+0x14 || !(main=*(unsigned char **)(n+8)) || st_trig_word(main,0)!=0x401c849cu)return 0;
     trig=*(unsigned char **)(main+0xc0);
     if(!trig || st_trig_word(trig,0)!=ST_TRIG_VIEW || st_trig_word(trig,0x88)!=0x13u)return 0;
     return trig;

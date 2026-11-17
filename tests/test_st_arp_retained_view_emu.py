@@ -28,27 +28,27 @@ class RetainedMachine(NativeStackMachine):
                 assert self.args(1)==(16+0x50+12,)
                 root=ROOT if not self.roots else EX+0x4000+0x100*(len(self.roots)-1)
                 self.roots.append(root);self.allocs+=1;self.ret(root);return
-            if pc==0x400ffba6:
+            if pc==0x400ffd6a:
                 view,title=self.args(2)
                 assert view==self.roots[-1]+16 and self.string(title)=='ARPEGGIATOR'
-                u.mem_write(view,bytes(80));self.w(view,0x40241bdc);self.ret();return
-            if pc==0x400ffaf4:
+                u.mem_write(view,bytes(80));self.w(view,0x40241efc);self.ret();return
+            if pc==0x400ffcb8:
                 assert self.args(2)==(self.roots[-1]+16,0)
                 self.ret();return
-            if pc in (0x400ffc5e,0x400ffc96):
+            if pc in (0x400ffe22,0x400ffe5a):
                 return  # Real redraw/LED invalidation, including manager flags.
             if pc==0x400082ce:
                 self.leds={};self.ret();return  # Panel buffer clear boundary.
             if pc==0x400082f6:
                 self.ret();return  # Panel commit boundary.
-            if pc==0x401ba378 and self.args(4)[0] not in [MUTE]+[r+16 for r in self.roots]:
+            if pc==0x401ba614 and self.args(4)[0] not in [MUTE]+[r+16 for r in self.roots]:
                 self.ret(0);return  # Unrelated native LED handlers are omitted.
         return super().code(u,pc,n,ctx)
 
     def pulse(self,key=0x13):
         for flags in (1,16):
             if not self.key(key,flags,20):
-                self.call(0x401012d4,APP+0x40,EV)
+                self.call(0x40101498,APP+0x40,EV)
             self.call('arp_view_tick',APP)
 
     def led_frame(self):
@@ -59,12 +59,12 @@ class RetainedMachine(NativeStackMachine):
         view=self.word(self.sym['arp_view']);root=view-16
         self.w(HOLD,view);self.w(HOLD+4,root)
         before=self.word(root+4)
-        self.call(0x4017cdee,HOLD+8,HOLD)
+        self.call(0x4017cfb2,HOLD+8,HOLD)
         assert self.word(root+4)==before+1
         return view
 
     def release(self):
-        self.call(0x4016dde8,HOLD+12)
+        self.call(0x4016dfac,HOLD+12)
 
 
 def cycle(core,bank,track,poly,machine=RetainedMachine):

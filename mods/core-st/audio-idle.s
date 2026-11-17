@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| OS 1.41: replace only the JSR at 400a4fce. Normal path tail-calls the
+| OS 1.42: replace only the JSR at 400a4fce. Normal path tail-calls the
 | original mixer without changing its arguments/registers. The retained
 | bank owner supplies the preview replacement, with the same native C ABI.
         .section .run,"ax"
@@ -7,7 +7,7 @@
 core_audio_idle_mix:
         tst.l core_audio_idle_active
         bne.s 1f
-        jmp 0x4008f1ca
+        jmp 0x4008f242
 1:      movea.l core_audio_idle_owner,%a0
         movea.l 4(%a0),%a0
         jmp (%a0)
@@ -22,7 +22,7 @@ core_audio_idle_begin:
         tst.l %a0
         beq.s 3f
         moveq #2,%d1
-        cmp.l 0x43bd73bc,%d1
+        cmp.l 0x43bd83bc,%d1
         bne.s 3f
         movea.l (%a0),%a0
         jsr (%a0)

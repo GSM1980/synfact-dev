@@ -3,7 +3,11 @@
 This guide is for people and for coding agents. Every step has a command
 and the output that means it worked; the last sections map every refusal to
 its fix and give a definition of done. The format itself is
-[FORMAT.md](FORMAT.md). Addresses are Syntakt OS 1.41's.
+[FORMAT.md](FORMAT.md). Current source builds target Syntakt OS 1.42; historical
+address examples below are from 1.41. Use the current manifests and SDK headers
+for addresses, and [OS142-PORT.md](OS142-PORT.md) for the port and validation.
+Core 2.0 requires SMZ4 feature 16 and exact contract `0x53594605`; rebuild every
+bank, including banks containing only modules. Untagged and 1.41 banks are refused.
 
 Most Syntakt mods are machines or modules in the core's SMZ4 bank: the
 "Syntakt core" sections below describe its services, and
@@ -345,7 +349,7 @@ examples for elekloader's other devices, is elekloader's own
 | `ends mid-instruction`, `sweeps land on the start`, `does not decode` | the site does not cover whole instructions | move or widen the site to instruction boundaries (disassemble the stock main OS) |
 | `... overlap (0x...-0x...)` | another mod patches or claims those bytes | subscribe to an event instead, agree with that mod's author, or propose the site as a core event ([CORE-CONTRIBUTING.md](CORE-CONTRIBUTING.md)) |
 | `X requires Y` / `core is not enabled` | a dependency is missing | add Y (with lint: `--with Y.elemod`) |
-| `X needs core 3.0 or newer, and this build has core 2.1` | the mod's `resources.core` asks for a newer core | build with that core (the app and the web page take it when you tick the mod); an older loader says `imports fw_..., which no given mod exports` instead |
+| `X needs core 3.0 or newer, and this build has core 2.0` | the mod's `resources.core` asks for a newer core | build with that core (the app and the web page take it when you tick the mod); an older loader says `imports fw_..., which no given mod exports` instead |
 | `imports cm_ui_v31, which no given mod exports` | the page names `cm_ui_v31` (a knob that draws itself, `CM_DRAW`), and no mod given exports it: machine-pages before 1.1 does not | use machine-pages 1.1 or newer |
 | `CM_KNOB: draw= needs flags=CM_DRAW` or `CM_KNOB: with CM_DRAW, +36 is draw` (assembly, `core3.inc`) | a knob's `draw=` without `flags=CM_DRAW`, or its `gfx=` with it | give the knob `flags=CM_DRAW` with `draw=`, or `draw=` in place of `gfx=`; the page's `CM_UI` needs `abi=cm_ui_v31` |
 | `imports N, which no given mod exports` | a missing dependency, or a typo | add the mod that exports N, fix the name, or list N under `weak` |

@@ -26,16 +26,16 @@ volatile u8 playhead_modes[PLAYHEAD_KITS][16];
 u32 playhead_seq_state,playhead_seq_installed;
 #define SITES 5u
 static const struct {u32 at;u16 stock[3];} sites[SITES]={
-    {0x4008cf00u,{0x2f05u,0x42a7u,0x7396u}},    /* + 2f01 */
-    {0x4008cf14u,{0x2f05u,0x42a7u,0x7396u}},    /* + 2f01 */
-    {0x4008c204u,{0x2f00u,0x2f08u,0x2f39u}},    /* + 43bd 7430 */
-    {0x4008d1b8u,{0x139eu,0x0800u,0x2247u}},    /* + 5280 18dd */
-    {0x4008b746u,{0x41f9u,0x43bdu,0x7414u}}};   /* the LEDs' step */
+    {0x4008cf78u,{0x2f05u,0x42a7u,0x7396u}},    /* + 2f01 */
+    {0x4008cf8cu,{0x2f05u,0x42a7u,0x7396u}},    /* + 2f01 */
+    {0x4008c27cu,{0x2f00u,0x2f08u,0x2f39u}},    /* + 43bd 7430 */
+    {0x4008d230u,{0x139eu,0x0800u,0x2247u}},    /* + 5280 18dd */
+    {0x4008b7beu,{0x41f9u,0x43bdu,0x8414u}}};   /* the LEDs' step */
 static const struct {u32 from,to,crc;} contexts[4]={
-    {0x4008cefau,0x4008cf2cu,0xcc47c601u},     /* both trig pushes and calls */
-    {0x4008c1f2u,0x4008c216u,0xa85c6db3u},     /* the mid-pattern trig */
-    {0x4008d180u,0x4008d1d2u,0xf8a50444u},     /* the UI copy loop */
-    {0x4008b734u,0x4008b752u,0xb8cbde27u}};    /* the step the LEDs show */
+    {0x4008cf72u,0x4008cfa4u,0xcc47c601u},     /* both trig pushes and calls */
+    {0x4008c26au,0x4008c28eu,0xb810e12au},     /* the mid-pattern trig */
+    {0x4008d1f8u,0x4008d24au,0x1be04482u},     /* the UI copy loop */
+    {0x4008b7acu,0x4008b7cau,0xc43b9480u}};    /* the step the LEDs show */
 static u32 be16(u32 at)
 {return (u32)((const volatile u8 *)at)[0]<<8|((const volatile u8 *)at)[1];}
 static u32 crc32(u32 at,u32 end)
@@ -101,7 +101,7 @@ static u32 track_length(const u8 *pattern,u32 t)
 }
 static u32 start(u32 mode,struct playhead_track *s,u32 j,u32 n)
 {
-    seed^=*(const volatile u32 *)0x43bcb3a4u;if(!seed)seed=1;   /* the native clock */
+    seed^=*(const volatile u32 *)0x43bcc3a4u;if(!seed)seed=1;   /* the native clock */
     s->dir=j+1u>=n?-1:1;
     return mode==PLAYHEAD_RANDOM?below(n):j;
 }
@@ -124,12 +124,12 @@ u32 playhead_kit_index(u32 kit)
     return (kit-PLAYHEAD_KIT_BASE)/PLAYHEAD_KIT_BYTES;
 }
 u32 playhead_active_kit(void)
-{return playhead_kit_index(*(const volatile u32 *)0x43bd743cu);}
+{return playhead_kit_index(*(const volatile u32 *)0x43bd843cu);}
 /* The kit of a pattern the sequencer holds: playing or next. */
 static u32 pattern_kit(const u8 *pattern)
 {
-    if(pattern==*(const u8 *const volatile *)0x43bd7430u)return playhead_kit_index(*(const volatile u32 *)0x43bd743cu);
-    if(pattern==*(const u8 *const volatile *)0x43bd7438u)return playhead_kit_index(*(const volatile u32 *)0x43bd7444u);
+    if(pattern==*(const u8 *const volatile *)0x43bd8430u)return playhead_kit_index(*(const volatile u32 *)0x43bd843cu);
+    if(pattern==*(const u8 *const volatile *)0x43bd8438u)return playhead_kit_index(*(const volatile u32 *)0x43bd8444u);
     return PLAYHEAD_KITS;
 }
 u32 playhead_step(u32 t,u32 j,const u8 *pattern,u32 compute)

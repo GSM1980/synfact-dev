@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * OS 1.41 chord lanes of an audio track: the Digitone's trig NOTE and
+ * OS 1.42 chord lanes of an audio track: the Digitone's trig NOTE and
  * NOT2..NOT4, dormant on the Syntakt's audio tracks. The sequencer's copy
  * (43bd7430, 499h bytes a track) and the UI pattern model's track data share
  * this layout; POLY reads the same lanes. Per step, 255 inherits the track

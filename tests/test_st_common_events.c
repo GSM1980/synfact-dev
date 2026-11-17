@@ -76,7 +76,7 @@ int main(void)
      * stationary cursor, opaque overlay, deactivation and view removal. */
     static const u32 syn_pages[2]={6,6};
     *(const u32 **)(view+0x7c)=syn_pages;
-    *(u32 *)view=0x401c8d94u;*(u32 *)(view+0x2c)=1;
+    *(u32 *)view=0x401c9034u;*(u32 *)(view+0x2c)=1;
     *(u32 *)(view+0x88)=0x14;*(u32 *)(view+0x90)=1;
     *(void **)(ctrl+0x1c)=node;*(void **)node=ctrl+0x14;*(void **)(node+8)=view;
     core_machine_tick(ctrl);assert(idles==1 && paints==1);
@@ -93,7 +93,7 @@ int main(void)
     *(void **)overlay=node;core_machine_tick(ctrl);assert(idles==3); /* transparent overlay */
     core_machine_active=0;core_machine_tick(ctrl);assert(idles==3);core_machine_active=1;
     *(void **)(ctrl+0x1c)=ctrl+0x14;core_machine_tick(ctrl);assert(idles==3);
-    assert(allocations==1 && *(u32 *)view==0x401c8d94u); /* no clones/cached view */
+    assert(allocations==1 && *(u32 *)view==0x401c9034u); /* no clones/cached view */
     fw_free((void *)events[ST_EV_DRAW].list);
     puts("PASS: one collection per event; raw/view isolation; encoder consumption; key/draw contexts; tick visibility/lifetime and stationary-wave gates; no idle vptr edits");
     return 0;

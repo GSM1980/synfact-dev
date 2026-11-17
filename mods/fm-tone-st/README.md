@@ -1,5 +1,12 @@
 # FM TONE for Syntakt
 
+Desktop OS 1.42 release: **1.1.2**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
+
 On the Syntakt and on the site, the machine is **SY FM DTONE** (short name
 **DTON**); it was FM TONE until 2026-11-02. These notes keep the old name.
 

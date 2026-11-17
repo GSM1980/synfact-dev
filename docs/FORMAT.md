@@ -1,5 +1,10 @@
 # The .elemod format
 
+For Syntakt core 2.0's separate SMZ4 banks, OS 1.42 requires feature 16 and
+contract `0x53594605` in the existing word at offset 64. Older and untagged
+banks are rejected before execution. This changes compatibility, not the disk
+layout or `.elemod` format. See [SMZ4](../mods/core-st/SMZ4.md).
+
 A `.elemod` is a JSON file. How to make one is [ADAPTING.md](ADAPTING.md).
 Every mod names its **target**: the stock release it was made for, by hash.
 
@@ -223,7 +228,7 @@ loader. The table gives the Digitakt mk1 1.53's sites, which 1.54 has at
 the same addresses; the Digitone mk1 1.43's are 0x4001900c, 0x40019072,
 0x40019d9c, 0x40019de4, 0x40072a34, 0x4009d108 and 0x4009e51c, in the same
 order, and 1.44 has the last three at 0x40072a54, 0x4009d128 and 0x4009e53c
-(`mods/core-dn1/mod.json`, its `ports`). core-dn1 2.1 adds a Digitone-only
+(`mods/core-dn1/mod.json`, its `ports`). core-dn1 2.0 adds a Digitone-only
 event, `ev_voice_on` (at 0x4009e928; 0x4009e948 in 1.44), and the tables
 `core_params` (parameter slots, docs/ADAPTING.md), `core_pages` (mod pages)
 and `core_projdata` (project data); 2.2 the event `ev_hold` and the table

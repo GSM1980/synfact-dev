@@ -1,13 +1,13 @@
 {
   "id": "system-info-st",
-  "version": "1.1",
+  "version": "1.1.2",
   "title": "System info",
   "category": "Interface",
   "author": "GSM1980; Synfact; digihealth (irpina)",
   "license": "GPL-2.0-or-later",
   "description": "SETTINGS switch and icon; header alternates CPU M / CPU A and RAM M / RAM A every two seconds. AUDIO readings require the companion built by build.py.",
   "device": "syntakt",
-  "os": "1.41",
+  "os": "1.42",
   "sources": [
     "system_info.c",
     "menu.s"

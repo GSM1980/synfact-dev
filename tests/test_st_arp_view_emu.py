@@ -21,7 +21,7 @@ GET_SOUND,NOTIFY=RET+0x200,RET+0x204
 # 443da124 gave LEN, OFS and the chord page no travel on the unit). Both are explicit
 # doubles: a tick is self.travel sub-steps (256 = one value by default). The table is built
 # at boot and the acceleration curve is not modelled; the feel is checked on the instrument.
-CHOICES=0x443da178
+CHOICES=0x443db178
 
 class ViewMachine(Machine):
     def __init__(self,core,bank):
@@ -29,16 +29,16 @@ class ViewMachine(Machine):
         self.ready=True;self.track=0;self.allocs=0;self.disposals=0;self.closed=0;self.dirty=0;self.rows=[];self.overlay=0;self.oom=False
         host=self.word(self.sym['arp_host']);storage=self.word(host+4)
         self.alloc=self.word(storage+12);self.telemetry=self.word(host+64)
-        self.w(MAIN,0x401c81fc);self.w(MAIN+0xa4,MODEL);self.top(MAIN)
-        self.w(MAIN+0xc0,PARAM);self.w(PARAM,0x401c97fc);self.w(PARAM+0x68,MODEL+0x40)
+        self.w(MAIN,0x401c849c);self.w(MAIN+0xa4,MODEL);self.top(MAIN)
+        self.w(MAIN+0xc0,PARAM);self.w(PARAM,0x401c9a9c);self.w(PARAM+0x68,MODEL+0x40)
         # List item 37: the TRIG view (key 13h) of a digital track with ARP's two
         # pages after the native two, on the second native page.
         self.w(PARAM+0x88,0x13);self.w(PARAM+0x74,MODEL);self.pages([2,3,3,3]);self.w(PARAM+0x90,1)
-        self.resets=0;self.held=set();self.tail=self.word(0x401c97fc+0xb8)
+        self.resets=0;self.held=set();self.tail=self.word(0x401c9a9c+0xb8)
         self.w(PROXY,PVT);self.w(PVT+0x28,0x40012986);self.w(PROXY+0x10,INNER)
         self.w(INNER,IVT);self.w(IVT+0x28,GET_SOUND);self.w(IVT+0x10,NOTIFY)
         self.u.mem_write(GET_SOUND,b'\x4e\x75');self.u.mem_write(NOTIFY,b'\x4e\x75');self.notified=0
-        self.w(0x444df618,VECTOR);self.w(0x444df61c,VECTOR+96*28)
+        self.w(0x444e0618,VECTOR);self.w(0x444e061c,VECTOR+96*28)
         self.popups=[]
     # The view manager at APP+40h: +1Ch the highest opaque view's node, the
     # sentinel at +14h whose previous node (+4) is the top of the stack. An
@@ -72,22 +72,22 @@ class ViewMachine(Machine):
         if not self.ready:return super().code(u,pc,n,ctx)
         # The UI controller (4016de80): its view manager is APP+40h here. ARP
         # 1.9 reads the TRIG view the MainScreen shows from it (st_trig_current).
-        if pc==0x4016de80:self.ret(APP);return
+        if pc==0x4016e044:self.ret(APP);return
         # 1.9: the page popup (400c33d0, printf form) on the TRIG view's object.
-        if pc==0x400c33d0:
+        if pc==0x400c347c:
             obj,fmt,title,page,count=self.args(5);assert self.string(fmt)=='%s (%d/%d)'
             self.popups.append((obj,'%s (%d/%d)'%(self.string(title),page,count)));self.ret();return
         if pc==self.alloc:
             assert self.args(1)==(16+0x50+12,);self.allocs+=1;self.ret(0 if self.oom else ROOT);return
         if pc==0x4001ff74:assert self.args(1)==(MODEL,);self.ret(self.track);return
-        if pc==0x400f6730:assert self.args(1)==(PARAM+0x94,);self.resets+=1;self.ret();return
-        if pc==0x40102d7c:self.ret(1 if self.args(1)[0] in self.held else 0);return
+        if pc==0x400f68f4:assert self.args(1)==(PARAM+0x94,);self.resets+=1;self.ret();return
+        if pc==0x40102f40:self.ret(1 if self.args(1)[0] in self.held else 0);return
         if pc==0x4001c422:
             assert self.args(3)==(MODEL+0x40,0x60,0xffffffff);self.ret(PROXY);return
-        if pc==0x400f66a2:
+        if pc==0x400f6866:
             ev,normal,pressed=self.args(3);assert (normal,pressed)==(1,8),(normal,pressed)
             self.ret(self.word(ev+16));return
-        if pc==0x400f68d2:
+        if pc==0x400f6a96:
             _,field,delta,table,pressed=self.args(5);delta=delta-(1<<32) if delta>>31 else delta
             assert table==CHOICES and pressed<256,(field,hex(table))
             self.ret(delta*getattr(self,'travel',256));return
@@ -95,40 +95,40 @@ class ViewMachine(Machine):
             assert self.args(1)==(INNER,);self.ret(KIT+0x2a+self.track*0x123);return
         if pc==NOTIFY:
             assert self.args(2)==(INNER,0);self.notified+=1;self.ret();return
-        if pc==0x400ffba6:
+        if pc==0x400ffd6a:
             v,title=self.args(2);assert v==ROOT+16 and self.string(title)=='ARPEGGIATOR'
-            self.u.mem_write(v,bytes(80));self.w(v,0x40241bdc);self.ret();return
-        if pc==0x400ffaf4:assert self.args(2)==(ROOT+16,0);self.ret();return  # 1.8: not opaque
-        if pc==0x40100bc2:
+            self.u.mem_write(v,bytes(80));self.w(v,0x40241efc);self.ret();return
+        if pc==0x400ffcb8:assert self.args(2)==(ROOT+16,0);self.ret();return  # 1.8: not opaque
+        if pc==0x40100d86:
             manager,pair,flags=self.args(3);assert manager==APP+0x40 and flags==0
             assert self.word(pair)==ROOT+16 and self.word(pair+4)==ROOT
             self.stack_top(ROOT+16);self.ret(1);return
-        if pc==0x4016dde8:
+        if pc==0x4016dfac:
             # Shared owner release: stack manager retains the view after push.
             assert self.word(self.args(1)[0])==ROOT;self.ret();return
-        if pc==0x400ffdfc:self.disposals+=1;self.ret();return
-        if pc==0x400ffd02:
+        if pc==0x400fffc0:self.disposals+=1;self.ret();return
+        if pc==0x400ffec6:
             assert self.args(1)==(ROOT+16,);self.closed+=1
             # Native close removes the view from the foreground stack.
             self.u.mem_write(ROOT+16+0x30,b'\x01');self.top(MAIN);self.ret();return
-        if pc==0x400ffc5e:self.dirty+=1;self.ret();return
+        if pc==0x400ffe22:self.dirty+=1;self.ret();return
         # 1.8: the pages draw in the TRIG view (PARAM) with the native page
         # fonts (labels 443da230, values 443da210), primitives, the stock
         # toggle, the TRIG view's tail (+b8h) and the page indicator 4003a1c2.
-        if pc==0x400f8a0c:
+        if pc==0x400f8bd0:
             bmp,font,x,y,align,fmt,text=self.args(7);assert bmp==BMP and self.string(fmt)=='%s'
-            assert font in (0x443da230,0x443da210)
+            assert font in (0x443db230,0x443db210)
             self.rows.append(['text',font,x,y,align,self.string(text)]);self.ret();return
         if pc==self.sym['arp_small_text']:
             # ARP's 3x5 font (its pixels are checked by test_st_arp_ui.c).
             ctx,fill,x,y,align,text=self.args(6);assert ctx==BMP
             self.rows.append(['small',x,y,align,self.string(text)]);self.ret();return
-        if pc in [0x400f7df2,0x400f7bd6]:
+        if pc in [0x400f7fb6,0x400f7d9a]:
             self.rows.append(['shape',pc,*self.args(6)[1:]]);self.ret();return
-        if pc==0x400f8dac:
+        if pc==0x400f8f70:
             bmp,resource,x,y,mode=self.args(5);assert bmp==BMP and VECTOR<=resource<VECTOR+96*28
             self.rows.append(['bitmap',(resource-VECTOR)//28,x,y,mode]);self.ret();return
-        if pc==0x40070362:
+        if pc==0x400703da:
             view,value,bmp,x,y,mode=self.args(6);assert view==0 and bmp==BMP and mode==0
             self.rows.append(['toggle',value,x,y]);self.ret();return
         if pc==0x4003a1c2:
@@ -159,7 +159,7 @@ class NativeKeyMachine(ViewMachine):
             v,page,secondary=self.args(3)
             assert v==MAIN and not secondary
             self.native_pages.append(page);self.ret();return
-        if pc==0x401012d4:
+        if pc==0x40101498:
             assert self.args(2)==(APP+0x40,EV);self.manager_calls+=1;self.ret();return
         return super().code(u,pc,n,ctx)
     def stock_key(self,key,flags=1):
@@ -181,18 +181,18 @@ class LockViewMachine(ViewMachine):
         self.w(PARAM+0x68,W+0x1900)
     def code(self,u,pc,n,ctx):
         if self.ready:
-            if pc==0x4016ede0:self.ret(LEDMGR);return
+            if pc==0x4016efa4:self.ret(LEDMGR);return
             # The application (patterns at +3394h), for 400c34d6. Not the UI
             # controller: page_descriptors moves it away to prove it.
-            if pc==0x4016e804:self.ret(getattr(self,'application',APP));return
+            if pc==0x4016e9c8:self.ret(getattr(self,'application',APP));return
             if pc==0x40008220:
                 mgr,led,mode,palette=self.args(4);assert mgr==LEDMGR
                 self.leds.setdefault(led,(mode,palette));self.ret();return
             if pc==0x4001c422:self.ret(PROXY);return
             # 40019000 and 40016062 execute: pattern APP+3394h+680h*index, its
             # lock model at +620h. Only the project and pattern index are doubles.
-            if pc==0x4016e946:self.ret(W+0x1a00);return
-            if pc==0x400c20a8:assert self.args(1)==(W+0x1a00,);self.ret(2);return
+            if pc==0x4016eb0a:self.ret(W+0x1a00);return
+            if pc==0x400c2154:assert self.args(1)==(W+0x1a00,);self.ret(2);return
             if pc==0x40019036:assert self.args(1)==(APP,),hex(self.args(1)[0]);self.ret(MODEL);return
             if pc==0x40027f3a:self.ret(64);return
             if pc==0x4002787c:self.ret(1);return
@@ -246,7 +246,7 @@ def step_editing(core,bank):
     enabled=lambda:int.from_bytes(m.read(p+6,2),'big')
     # The firmware's own __dynamic_cast (View -> LedHandler, hint -2), as the
     # LED frame's view walk 40100856 calls it, finds the view's LedHandler.
-    handler=m.call(0x401ba378,view,0x40241b9c,0x401c7104,0xfffffffe)
+    handler=m.call(0x401ba614,view,0x40241ebc,0x401c73a4,0xfffffffe)
     assert handler==view+0x50
     def leds():
         m.leds={};m.call(m.word(m.word(handler)+8),handler,0,0);return m.leds
@@ -380,14 +380,14 @@ class ChordViewMachine(LockViewMachine):
     def lane(self,n,step=None):return self.read(TRACKDATA+(0x3c5+n if step is None else 0x2c0+n*0x40+step),1)[0]
     def code(self,u,pc,n,ctx):
         if self.ready:
-            if pc==0x400f68d2 and getattr(self,'no_extra_chord_travel',False) and self.args(5)[1]>=5:
+            if pc==0x400f6a96 and getattr(self,'no_extra_chord_travel',False) and self.args(5)[1]>=5:
                 self.ret(0);return
             if pc==TDATA:assert self.args(1)==(MODEL,);self.ret(TRACKDATA);return
             if pc==SDATA:assert self.args(1)==(PATTERN+0x2c,);self.ret(SHEADER);return
             if pc==TNOTIFY:
                 track,notice=self.args(2);assert track==MODEL
                 self.notices.append(self.word(notice));self.ret();return
-            if pc==0x400f8104:self.rows.append(['shape',pc,*self.args(6)[1:]]);self.ret();return
+            if pc==0x400f82c8:self.rows.append(['shape',pc,*self.args(6)[1:]]);self.ret();return
         return super().code(u,pc,n,ctx)
     def texts(self):
         self.draw()
@@ -403,9 +403,9 @@ def chord_page(core,bank):
     t=m.texts();assert t[:9]==['NOTE','C4','NOT2','OFF','NOT3','+7','NOT4','OFF','SCALE'],t
     # 1.8: inside the TRIG view's page area, the rail/header untouched, the
     # tail and the indicator (4 pages, the chord page is the fourth) after it.
-    assert ['shape',0x400f7df2,20,0,127,53,0] in m.rows and m.rows[-2:]==[['tail'],['indicator',4,3]]
+    assert ['shape',0x400f7fb6,20,0,127,53,0] in m.rows and m.rows[-2:]==[['tail'],['indicator',4,3]]
     assert ['toggle',0,24,7] in m.rows
-    keys=[r for r in m.rows if r[0]=='shape' and r[1]==0x400f8104]
+    keys=[r for r in m.rows if r[0]=='shape' and r[1]==0x400f82c8]
     assert len(keys)==2,keys # C4 and G4, hatched
     # 1.8: A..D edit the track defaults through the native setters; F..H do nothing.
     base=m.read(m.sym['arp_parameters'],24)
@@ -422,7 +422,7 @@ def chord_page(core,bank):
     m.encoder(2,3);m.encoder(1,-1);m.encoder(4,-200)
     assert (m.lane(0),m.lane(1),m.lane(3))==(59,67,1),(m.lane(0),m.lane(1),m.lane(3))
     assert m.read(SEQ+0x3c6,1)==b'\x43' and m.read(SEQ+0x3c8,1)==b'\x01'
-    assert m.notices==[0x401c690c]*3
+    assert m.notices==[0x401c6bac]*3
     assert m.texts()[1:8:2]==['B3','+3','+7','-63'] # the lowest step is raw 1; 0 is OFF
     m.encoder(4,1);assert m.lane(3)==2 and m.texts()[7]=='-62'
     # The arp page's keys do nothing here; the trig keys stay the sequencer's.
@@ -437,7 +437,7 @@ def chord_page(core,bank):
     assert (m.lane(2,31),m.lane(2,47),m.lane(2))==(73,82,71)
     assert m.read(SEQ+0x2c0+2*0x40+31,1)==b'\x49'
     assert m.read(SEQ+0x2c0+2*0x40+47,1)==b'\x52'
-    assert m.notices==[0x401c68fc]*2 and m.read(selection+0x160,1)==b'\x01'
+    assert m.notices==[0x401c6b9c]*2 and m.read(selection+0x160,1)==b'\x01'
     # Hardware reported no effective native choices travel for F..H. Their
     # step edits still advance directly from the event's signed tick count.
     m.no_extra_chord_travel=True
@@ -446,12 +446,12 @@ def chord_page(core,bank):
     assert got==(68,68,3,3),got
     assert [m.read(SEQ+0x2c0+lane*0x40+step,1)[0]
             for lane in (1,2,3) for step in (31,47)]==[68,68,73,82,3,3]
-    assert m.notices==[0x401c68fc]*4
+    assert m.notices==[0x401c6b9c]*4
     assert m.texts()[1:8:2]==['B3','+4','+9','-61']
-    m.texts();assert ['shape',0x400f7df2,76,34,94,50,0xffffffff] in m.rows # NOT3 shown as the step's own
+    m.texts();assert ['shape',0x400f7fb6,76,34,94,50,0xffffffff] in m.rows # NOT3 shown as the step's own
     # C's push: the held steps inherit NOT3 again. A's push leaves NOTE alone.
     m.u.mem_write(TRACKDATA+0x2c0+31,b'\x30');m.notices=[]
-    assert m.key(42,1,240)==1 and m.lane(2,31)==255 and m.lane(2,47)==255 and m.notices==[0x401c68fc]*2
+    assert m.key(42,1,240)==1 and m.lane(2,31)==255 and m.lane(2,47)==255 and m.notices==[0x401c6b9c]*2
     assert m.read(SEQ+0x2c0+2*0x40+31,1)==b'\xff'
     assert m.read(SEQ+0x2c0+2*0x40+47,1)==b'\xff'
     assert m.key(40,1,241)==1 and m.lane(0,31)==0x30
@@ -468,7 +468,7 @@ def chord_page(core,bank):
     # On the chord page: its NOT2..NOT4 defaults, and the view stays.
     assert m.open(500)==1;m.key(0x13,1,510);m.key(0x13,16,511);assert page()==1
     m.notices=[];m.closed=0;m.held={0x13};assert m.key(0x13,1,520)==1
-    assert m.key(12,1,521)==1 and m.notices==[0x401c690c]*3 and page()==1
+    assert m.key(12,1,521)==1 and m.notices==[0x401c6bac]*3 and page()==1
     m.held=set();assert m.key(0x13,16,522)==1 and not m.closed and page()==1 and m.index()==3
     # Just switched to the chord page: back to the arp page, randomized there.
     m.key(13,1,523);m.dispose();assert m.open(600)==1
@@ -511,8 +511,8 @@ def kit_sound_mirror(core,bank):
     # The UI getter can expose an editable mirror, while project/+Drive saves
     # encode the active Kit. An ARP edit must publish both Sound identities.
     m=ViewMachine(core,bank)
-    owned=0x41ad5134+3*0x1618+0x2a
-    m.w(0x43bd743c,0x41ad5134+3*0x1618)
+    owned=0x41ad6134+3*0x1618+0x2a
+    m.w(0x43bd843c,0x41ad6134+3*0x1618)
     initial=struct.pack('>5BxH16b',2,10,1,30,15,0xffff,*([0]*16))
     m.u.mem_write(W+0x100,initial)
     assert m.call('arp_sound_store',owned,W+0x100)==1
@@ -531,10 +531,10 @@ def page_popups(core,bank):
     out=[]
     for ids in ([2,3,3,3],[2,3,3,3,3],[1,3,3,3]):
         m=ViewMachine(core,bank);m.pages(ids);m.w(PARAM+0x6c,POPUP);n=len(ids);first=n-2
-        stock=0x41b9f3c8+44*ids[0]
+        stock=0x41ba03c8+44*ids[0]
         m.w(W+0x9a0,PARAM);m.call('arp_native',9,W+0x9a0,W+0x9b0);title=m.word(stock+4)   # PAGE_SYNC
         assert m.string(title)=='TRIG' and m.word(title-4)==0xffffffff and m.word(title-12)==4
-        assert m.word(0x41b9f3c8+44*3+4)==0          # page 3's stock descriptor untouched
+        assert m.word(0x41ba03c8+44*3+4)==0          # page 3's stock descriptor untouched
         m.w(PARAM+0x90,first-1);assert m.key(0x13,1,100)==1 and m.index()==first
         assert m.popups==[(POPUP,'Arpeggiator (%d/%d)'%(first+1,n))],m.popups
         assert m.key(0x13,16,110)==1 and len(m.popups)==1
@@ -559,33 +559,33 @@ def verify(core,bank,out):
     m.w(PARAM+0x90,1);assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
     assert m.key(0x13,16,110)==1 and m.index()==2 and m.resets==1
     assert m.read(m.sym['arp_parameters'],1)==b'\x00' # opening keeps MODE OFF
-    assert m.word(ROOT+16)!=0x40241bdc and m.allocs==1
+    assert m.word(ROOT+16)!=0x40241efc and m.allocs==1
     m.draw()
     # 1.8: MODE, SPEED, RANGE, LEN at the native positions; the LEN icon;
     # the steps and OFS/LEN (F); the tail and the indicator (page 3 of 4).
-    for x,label in ((33,'MODE'),(59,'SPEED'),(85,'RANGE'),(111,'LEN')):assert ['text',0x443da230,x,27,2,label] in m.rows
+    for x,label in ((33,'MODE'),(59,'SPEED'),(85,'RANGE'),(111,'LEN')):assert ['text',0x443db230,x,27,2,label] in m.rows
     assert ['small',33,40,2,'OFF'] in m.rows and ['small',59,40,2,'1/16'] in m.rows
-    assert ['text',0x443da210,85,39,2,'2'] in m.rows and any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows)
-    assert ['text',0x443da230,108,20,2,'OFS (E)'] in m.rows and ['text',0x443da230,108,1,2,'16'] in m.rows
-    assert m.rows[0]==['shape',0x400f7df2,20,0,127,53,0] and m.rows[-2:]==[['tail'],['indicator',4,2]]
+    assert ['text',0x443db210,85,39,2,'2'] in m.rows and any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows)
+    assert ['text',0x443db230,108,20,2,'OFS (E)'] in m.rows and ['text',0x443db230,108,1,2,'16'] in m.rows
+    assert m.rows[0]==['shape',0x400f7fb6,20,0,127,53,0] and m.rows[-2:]==[['tail'],['indicator',4,2]]
     assert all(r[0]!='text' or 20<=r[2]<=123 for r in m.rows)
     # Another TRIG page, or another view, is not ARP's.
     m.w(PARAM+0x90,1);assert not m.draw();m.w(PARAM+0x90,2)
     m.rows=[];m.call('arp_view_draw',ROOT+16,BMP,0);assert not m.rows
     # The open page follows the selected track and edits its own Sound.
     m.track=1;m.call('arp_view_tick',APP);m.draw()
-    assert ['text',0x443da230,33,27,2,'MODE'] in m.rows
+    assert ['text',0x443db230,33,27,2,'MODE'] in m.rows
     assert m.encoder(1,1)==1 and m.read(m.track_address('arp_parameters',1),1)==b'\x01'
     m.track=0;m.call('arp_view_tick',APP)
     for knob,delta in [(1,3),(2,127),(3,127),(4,127),(5,-127),(6,-127)]:assert m.encoder(knob,delta)==1
     p=m.sym['arp_parameters'];assert m.read(p,5)==bytes([3,17,3,127,0])
     assert m.read(p+8,1)==b'\xe8'
     m.draw()   # LEN stays the native knob; while it turns its value takes the label's place
-    assert any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows) and ['text',0x443da230,111,27,2,'128'] in m.rows
-    assert ['text',0x443da230,111,27,2,'LEN'] not in m.rows
-    assert ['small',33,40,2,'DOWN'] in m.rows and ['small',59,40,2,'1/96'] in m.rows and ['text',0x443da210,85,39,2,'4'] in m.rows
+    assert any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows) and ['text',0x443db230,111,27,2,'128'] in m.rows
+    assert ['text',0x443db230,111,27,2,'LEN'] not in m.rows
+    assert ['small',33,40,2,'DOWN'] in m.rows and ['small',59,40,2,'1/96'] in m.rows and ['text',0x443db210,85,39,2,'4'] in m.rows
     m.w(m.telemetry,1610);m.call('arp_view_tick',APP);m.draw()   # 1500 blocks later: the label again
-    assert ['text',0x443da230,111,27,2,'LEN'] in m.rows and not any(r[-1]=='128' for r in m.rows)
+    assert ['text',0x443db230,111,27,2,'LEN'] in m.rows and not any(r[-1]=='128' for r in m.rows)
     assert m.key(17,1,200)==1 and m.word(m.sym['arp_selected'])==1
     assert m.key(12,1,210)==1 and int.from_bytes(m.read(p+6,2),'big')==0xfffd
     assert m.key(12,16,211)==1
@@ -636,7 +636,7 @@ def verify(core,bank,out):
     assert q.word(q.sym['arp_generation'])==generation
     q.frame(5400000);assert q.log[-1]['gate']==2868750
     q.draw();assert any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in q.rows)
-    assert ['text',0x443da230,111,27,2,'1.03'] in q.rows
+    assert ['text',0x443db230,111,27,2,'1.03'] in q.rows
     q.w(q.telemetry,0xfffffa24);assert q.encoder(4,1)==1 # deadline wraps exactly to zero
     assert q.word(q.sym['arp_length_until'])==0
     q.w(q.telemetry,0);q.call('arp_view_tick',APP);assert q.word(q.sym['arp_length_show'])==0

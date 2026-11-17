@@ -1,5 +1,8 @@
 # SP sample machines 1.5
 
+Desktop OS 1.42 release: **1.5.1**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
 Version 1.5 includes all MAIN stereo optimizations below. Their 1.4.x numbers
 were development iterations, consolidated into one release step from 1.4.
 See [the release mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
@@ -15,6 +18,10 @@ measured stable/dynamic case uses fewer instructions. See
 copy. Empty masks and active mixes avoid a helper call/frame. First stereo
 ramps, SRAM ownership, AUDIO and machine behavior remain unchanged. See
 [idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
 
 Four source-built sample machines for Syntakt and its explicit AUDIO companion.
 Banks 0.9 and later require the existing UI API 7 and module API 3 for guarded native-view

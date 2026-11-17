@@ -64,7 +64,7 @@ int fw_mmc_read(u32 lba,u32 bytes,void *out)
 static u32 pane(void *v){assert(v==fake_view || v==fake_view+0x1c0 || v==fake_view+0x380);return v==fake_view?0:v==fake_view+0x1c0?1:2;}
 static void fake_add(void *view,void *item){u32 p=pane(view);rows[p]++;last_kind[p]=*(u32 *)item;}
 static void fake_init(void *v,const char *s,u32 n,u32 a,u32 b,u32 c)
-{u32 i;(void)a;(void)b;(void)c;assert(!strcmp(s,"SAMPLE MANAGER") && n==128);fake_view=v;for(i=0;i<3;i++)*(u32 **)(fake_view+i*0x1c0)=(u32 *)0x40240df4u;*(u8 **)(fake_view+0x540)=fake_view;}
+{u32 i;(void)a;(void)b;(void)c;assert(!strcmp(s,"SAMPLE MANAGER") && n==128);fake_view=v;for(i=0;i<3;i++)*(u32 **)(fake_view+i*0x1c0)=(u32 *)0x40241114u;*(u8 **)(fake_view+0x540)=fake_view;}
 static void fake_item(void *item,void *label,void *action,void *icon,void *empty,int n,u32 flags)
 {struct fn_capture *f=label;struct row_capture *c=f->data;(void)action;(void)icon;(void)empty;assert(n==-1 && flags==8);*(u32 *)item=c->kind;}
 static void fake_clear(void *v){rows[pane(v)]=0;}
@@ -84,7 +84,7 @@ int main(void)
 {
     u32 i,reads_before,allocs_before;struct row_capture capture={ROW_FILE,3,0};struct fn_capture src={&capture,0,row_manager,0},dst={0};
     assert(VirtualAlloc((void *)0x40240000u,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x40240000u);
-    ((u32 *)0x40240decu)[4]=(u32)fake_add;
+    ((u32 *)0x4024110cu)[4]=(u32)fake_add;
     menu=fw_malloc(256);manager=fw_malloc(256);node=fw_malloc(32);*(u8 **)(menu+0x64)=manager;
     row_manager(&dst,&src,2);assert(dst.data!=src.data && ((struct row_capture *)dst.data)->code==3);row_manager(&dst,0,3);
     /* Empty library has a real owned row, with logical count still zero. */
@@ -142,7 +142,7 @@ int main(void)
     assert(st_pool_ui_preview(0x8001)==100000 && preview_length==100000 && io_reads==2);
     reads_before=io_reads;allocs_before=allocated;in_irq=1;st_pool_preview_mix();in_irq=0;
     assert(preview_pos==32 && bus[0]<0 && io_reads==reads_before && allocated==allocs_before);
-    assert(ui_view_table[2+11]==((u32 *)0x40240EA0u)[2+11]);
+    assert(ui_view_table[2+11]==((u32 *)0x402411c0u)[2+11]);
     preview_pos=PREVIEW_CHUNK;manager_tick(manager);assert(preview_loaded==3*PREVIEW_CHUNK);
     preview_pos=2*PREVIEW_CHUNK;manager_tick(manager);assert(preview_loaded==100000);
     *(u8 **)(manager+0x1c)=manager+0x14;manager_tick(manager);assert(!preview_length && !ui_yes_down);

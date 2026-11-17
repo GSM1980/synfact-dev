@@ -13,8 +13,8 @@ extern u32 lfo3_dest_encode(u32);
 extern u32 lfo3_dest_decode(u32);
 #define EMPTY 0xffffu
 #define LANES 80u
-static void *allocate(u32 n) {return ((void *(*)(u32))0x4010350c)(n);}
-static void release(void *p) {if(p) ((void (*)(void *))0x40103712)(p);}
+static void *allocate(u32 n) {return ((void *(*)(u32))0x401036d0)(n);}
+static void release(void *p) {if(p) ((void (*)(void *))0x401038d6)(p);}
 static void copy_values(u16 *d,const u16 *s)
 {u32 j;for(j=0;j<64;j++) d[j]=s[j];}
 

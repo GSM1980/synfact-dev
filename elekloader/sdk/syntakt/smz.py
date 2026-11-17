@@ -21,7 +21,7 @@ from ...devices.syntakt import DEVICE
 import hashlib
 
 ABI=0x454c0001
-CONTRACT=0x53594603  # exact resident core/SMZ contract, mods/core-st/smz.h
+CONTRACT=0x53594605  # OS 1.42 native addresses; mods/core-st/smz.h
 AUDIO=0x4204f750
 AUDIO_MAX=0x42100000-AUDIO
 MAIN_MAX=0x200000
@@ -100,7 +100,7 @@ def build(directories,stock_path=None,output=None,module_directories=()):
     dev=DEVICE
     if stock_path:
         stock,dev,release=formats.load(stock_path)
-        if dev.key!='syntakt' or release.version!='1.41':raise ValueError('requires Syntakt OS 1.41')
+        if dev.key!='syntakt' or release.version!='1.42':raise ValueError('requires Syntakt OS 1.42')
     prefix=os.environ.get('ELEKLOADER_CROSS',dev.toolchain['prefix'])
     descriptors=[];uis=[];modules=[];main_objs=[];audio_objs=[];audio_exports=[];types=set();features=0;inputs={};audits={};mod_records=[]
     api_header=Path(sdk.INCLUDE)/'syntakt/machines.h'
@@ -115,8 +115,8 @@ def build(directories,stock_path=None,output=None,module_directories=()):
         # Machine source compilation needs the target profile, not an OS image.
         if any(manifest.get(f) for f in ('sites','subscribe','contribute','collections','fixed','storage','machines','dsp','weak')):
             raise ValueError('SMZ banks accept machine sources only, without resident hooks/resources')
-        if manifest.get('device')!='syntakt' or str(manifest.get('os'))!='1.41':
-            raise ValueError('machine sources must target Syntakt OS 1.41')
+        if manifest.get('device')!='syntakt' or str(manifest.get('os'))!='1.42':
+            raise ValueError('machine sources must target Syntakt OS 1.42')
         config=manifest['smz_module'] if is_module else manifest['smz'];audio=config.get('audio',{})
         requested=config.get('features',[])
         if any(f not in ('sample-pool-v1','machine-ui-v1') for f in requested):raise ValueError('unknown SMZ feature')

@@ -20,15 +20,15 @@ extern int fw_mmc_read(u32,u32,void *);
 #define MMC_READ fw_mmc_read
 #endif
 #ifndef SLOT_READ
-#define SLOT_READ ((s32 (*)(u32,void *,void *,u32,u32))0x4011320au)
+#define SLOT_READ ((s32 (*)(u32,void *,void *,u32,u32))0x401133ceu)
 #endif
 #ifndef MMCFS
-#define MMCFS ((u8 *(*)(void))0x4016f0ceu)
+#define MMCFS ((u8 *(*)(void))0x4016f292u)
 #endif
 #ifndef QSTR_ASSIGN
-#define QSTR_ASSIGN ((void (*)(void *,const char *))0x401bde32u)
+#define QSTR_ASSIGN ((void (*)(void *,const char *))0x401be0ceu)
 #endif
-#define WORKING_PROJECT ((u8 *)0x40652514u)
+#define WORKING_PROJECT ((u8 *)0x40653514u)
 #define SLOTS 128u
 #define STOCK_SLOTS CORE_POOL_STOCK_SLOTS
 #define HZ_FLAG 0x8000u
@@ -60,49 +60,49 @@ static u8 *hz_load(u32 *length)
 {struct st_hzfs fs;u8 *p;*length=0;if(core_hzfs_open(&fs,&core_hzfs_native_io)!=1)return 0;
  p=fs.copy[fs.best];*length=fs.length[fs.best];fs.copy[fs.best]=0;core_hzfs_close(&fs);return p;}
 #ifndef UI_LIST_INIT
-#define UI_LIST_INIT ((void (*)(void *,const char *,u32,s32,s32,s32,s32,u32,u32))0x400F521Cu)
+#define UI_LIST_INIT ((void (*)(void *,const char *,u32,s32,s32,s32,s32,u32,u32))0x400f53e0u)
 #endif
 #ifndef UI_ITEM_INIT
-#define UI_ITEM_INIT ((void (*)(void *,void *,void *,void *,void *,s32,u32))0x400FA688u)
+#define UI_ITEM_INIT ((void (*)(void *,void *,void *,void *,void *,s32,u32))0x400fa84cu)
 #endif
 #ifndef UI_LIST_CLEAR
-#define UI_LIST_CLEAR ((void (*)(void *))0x400F9FE0u)
+#define UI_LIST_CLEAR ((void (*)(void *))0x400fa1a4u)
 #endif
 #ifndef UI_LIST_SELECT
-#define UI_LIST_SELECT ((void (*)(void *,u32,u32))0x400F9B88u)
+#define UI_LIST_SELECT ((void (*)(void *,u32,u32))0x400f9d4cu)
 #endif
 #ifndef UI_THREE_INIT
-#define UI_THREE_INIT ((void (*)(void *,const char *,u32,u32,u32,u32))0x400FABBEu)
+#define UI_THREE_INIT ((void (*)(void *,const char *,u32,u32,u32,u32))0x400fad82u)
 #endif
 #ifndef UI_THREE_FOCUS
-#define UI_THREE_FOCUS ((void (*)(void *,void *))0x400FAB74u)
+#define UI_THREE_FOCUS ((void (*)(void *,void *))0x400fad38u)
 #endif
 #ifndef UI_THREE_DTOR
-#define UI_THREE_DTOR ((void (*)(void *))0x40184DFCu)
+#define UI_THREE_DTOR ((void (*)(void *))0x40184fc0u)
 #endif
 #ifndef UI_LIST_DTOR
-#define UI_LIST_DTOR ((void (*)(void *))0x40184CFAu)
+#define UI_LIST_DTOR ((void (*)(void *))0x40184ebeu)
 #endif
 #ifndef UI_PUSH
-#define UI_PUSH ((u32 (*)(void *,void *,u32))0x40100BC2u)
+#define UI_PUSH ((u32 (*)(void *,void *,u32))0x40100d86u)
 #endif
 #ifndef UI_DROP
-#define UI_DROP ((void (*)(void *))0x4016DDE8u)
+#define UI_DROP ((void (*)(void *))0x4016dfacu)
 #endif
 #ifndef UI_CLOSE
-#define UI_CLOSE ((void (*)(void *))0x400FFD02u)
+#define UI_CLOSE ((void (*)(void *))0x400ffec6u)
 #endif
 #ifndef UI_DIRTY
-#define UI_DIRTY ((void (*)(void *))0x400FFC5Eu)
+#define UI_DIRTY ((void (*)(void *))0x400ffe22u)
 #endif
 #ifndef UI_OPAQUE
-#define UI_OPAQUE ((void (*)(void *,u32))0x400FFAF4u)
+#define UI_OPAQUE ((void (*)(void *,u32))0x400ffcb8u)
 #endif
 #ifndef QSTR_INIT
-#define QSTR_INIT ((void *(*)(void *,const char *,void *))0x401BF082u)
+#define QSTR_INIT ((void *(*)(void *,const char *,void *))0x401bf31eu)
 #endif
 #ifndef UI_ROOT
-#define UI_ROOT (*(u8 *volatile *)0x444E1334u)
+#define UI_ROOT (*(u8 *volatile *)0x444e2334u)
 #endif
 #define PREVIEW_CHUNK 0x8000u
 #define PREVIEW_FRAMES (2*PREVIEW_CHUNK)
@@ -232,27 +232,27 @@ static u32 ui_foreground(void)
 void st_pool_ui_draw(u8 *iface,void *ctx)
 {
     u32 width;void *font;
-    ((void (*)(void *,void *))0x400FA86Au)(iface-0x38,ctx);
+    ((void (*)(void *,void *))0x400faa2eu)(iface-0x38,ctx);
     if(!ui_loading) return;
-    font=((void *(*)(void *))0x400F92B4u)(ui_view+0x94);
-    ((void (*)(void *,s32,s32,s32,s32,u32))0x400F7DF2u)(ctx,1,1,126,19,0);
-    ((void (*)(void *,void *,s32,s32,u32,const char *))0x400F89A4u)(ctx,font,3,12,0xFFFFFFFFu,ui_progress_label);
-    ((void (*)(void *,s32,s32,s32,s32,u32))0x400F7DF2u)(ctx,2,2,125,7,1);
-    ((void (*)(void *,s32,s32,s32,s32,u32))0x400F7DF2u)(ctx,3,3,124,6,0);
+    font=((void *(*)(void *))0x400f9478u)(ui_view+0x94);
+    ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)(ctx,1,1,126,19,0);
+    ((void (*)(void *,void *,s32,s32,u32,const char *))0x400f8b68u)(ctx,font,3,12,0xFFFFFFFFu,ui_progress_label);
+    ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)(ctx,2,2,125,7,1);
+    ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)(ctx,3,3,124,6,0);
     width=ui_progress_total?120u*ui_progress_done/ui_progress_total:0;
     if(width>120) width=120;
-    if(width) ((void (*)(void *,s32,s32,s32,s32,u32))0x400F7DF2u)(ctx,4,4,3+width,5,1);
+    if(width) ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)(ctx,4,4,3+width,5,1);
 }
 static void progress_paint(void)
 {
     u32 bitmap[8],pixels;
     if(!ui_foreground()) return;
-    ui_redraw();pixels=*(u32 *)0x405D3A18u;
+    ui_redraw();pixels=*(u32 *)0x405d4a18u;
     if(!pixels) return; /* Native App has not yet initialised its LCD context. */
-    ((void (*)(void *,u32,u32,u32,u32))0x400F70FAu)(bitmap,128,64,pixels,0x405D3618u);
-    ((void (*)(void *,void *))0x401007CEu)(ui_manager,bitmap);
-    *(u32 *)0x405D3A18u=((u32 (*)(void))0x40113756u)();
-    ((void (*)(void *))0x400F702Cu)(bitmap);
+    ((void (*)(void *,u32,u32,u32,u32))0x400f72beu)(bitmap,128,64,pixels,0x405d4618u);
+    ((void (*)(void *,void *))0x40100992u)(ui_manager,bitmap);
+    *(u32 *)0x405d4a18u=((u32 (*)(void))0x4011391au)();
+    ((void (*)(void *))0x400f71f0u)(bitmap);
 }
 static void st_pool_ui_progress_begin(u32 count)
 {
@@ -361,7 +361,7 @@ u32 st_pool_ui_key(u8 *iface,const u8 *ev)
 {
     if(!ui_foreground() || iface!=ui_view+0x38) return 0;
     if(st_pool_ui_event(ev)) return 1;
-    return ((u32 (*)(void *,const void *))0x400FAD00u)(iface-0x38,ev);
+    return ((u32 (*)(void *,const void *))0x400faec4u)(iface-0x38,ev);
 }
 static u32 st_pool_row_selected(void *view,u32 row)
 {
@@ -377,10 +377,10 @@ void st_pool_menu_icon_draw(const struct fn_capture *fn,void *item,void *ctx,s32
     u32 bitmap[8];
     (void)fn;(void)item;
     /* Non-owning descriptor over original ROM-format columns; no pixel heap. */
-    ((void (*)(void *,u32,u32,const void *,void *))0x400F70FAu)
+    ((void (*)(void *,u32,u32,const void *,void *))0x400f72beu)
         (bitmap,12,11,sample_menu_pixels,(void *)sample_menu_mask);
-    ((void (*)(void *,void *,s32,s32,u32))0x400F8DACu)(ctx,bitmap,x,y,0);
-    ((void (*)(void *))0x400F702Cu)(bitmap);
+    ((void (*)(void *,void *,s32,s32,u32))0x400f8f70u)(ctx,bitmap,x,y,0);
+    ((void (*)(void *))0x400f71f0u)(bitmap);
 }
 static void add_row(u8 *view,u32 kind,u32 code,u8 *menu)
 {
@@ -491,7 +491,7 @@ void st_pool_ui_open(u8 *menu)
     u8 *root,*view; u32 i,j,n,code; void *pair[2]; const u8 *e;
     if(ui_view) return;
     root=MALLOC(16+0x550); if(!heap_ok(root)) return;
-    *(u32 *)root=0x401C9670u; put32(root+4,1);put32(root+8,1);
+    *(u32 *)root=0x401c9910u; put32(root+4,1);put32(root+8,1);
     view=root+16; *(u8 **)(root+12)=view;
     UI_THREE_INIT(view,"SAMPLE MANAGER",128,1,1,1);
     /* Wider owned action pane fits REMOVE FROM POOL in the native small font.
@@ -501,13 +501,13 @@ void st_pool_ui_open(u8 *menu)
     UI_OPAQUE(view+0x38,1);
     /* Both primary and secondary tables retain the complete two-word C++
      * offset/RTTI header: native dynamic_cast reads the primary header too. */
-    for(i=0;i<45;i++) ui_table[i]=((const u32 *)0x40240DECu)[i];
+    for(i=0;i<45;i++) ui_table[i]=((const u32 *)0x4024110cu)[i];
     ui_table[2]=(u32)st_pool_ui_dispose;
     ui_table[2+0x64/4]=(u32)st_pool_row_selected;
     *(u32 **)view=ui_table+2;
     /* Copy only raw immutable vtable entries into our own table, retaining its
      * offset-to-top and RTTI header. The native list remains otherwise intact. */
-    for(i=0;i<19;i++) ui_view_table[i]=((const u32 *)0x40240EA0u)[i];
+    for(i=0;i<19;i++) ui_view_table[i]=((const u32 *)0x402411c0u)[i];
     ui_view_table[2+2]=(u32)st_pool_ui_key;
     ui_view_table[2+4]=(u32)st_pool_ui_draw;
     /* Native idle/lifetime methods remain untouched. Streaming refill uses
@@ -556,7 +556,7 @@ u32 st_pool_ui_pre_event(void *app,const u8 *ev)
         if(!(ui_combo_keys&bit)) return 0;
         ui_combo_keys&=~bit;
     }
-    ((u32 (*)(void *,const void *))0x401012D4u)(ui_manager,ev);
+    ((u32 (*)(void *,const void *))0x40101498u)(ui_manager,ev);
     st_pool_ui_report[7]++;
     return 1;
 }

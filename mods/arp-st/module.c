@@ -35,7 +35,7 @@ struct arp_chord_record {arp_u32 event;int interval[3];unsigned int count;};
 static volatile struct arp_chord_record arp_chord_ring[ARP_TRACKS][4] DATA={{{0}}};
 static volatile struct arp_chord_record arp_chord_prep[ARP_TRACKS] DATA={{0}};
 static unsigned char arp_chord_next[ARP_TRACKS] DATA={0};
-#define ARP_PREP_EVENT(t) (0x444e2438u+(t)*0x50u)
+#define ARP_PREP_EVENT(t) (0x444e3438u+(t)*0x50u)
 static void chord_trig(const arp_u32 *a,arp_u32 event)
 {
     arp_u32 track=a[0];unsigned int i,count;int interval[3];
@@ -63,7 +63,7 @@ static void chord_trig(const arp_u32 *a,arp_u32 event)
 static unsigned int chord_take(arp_u32 track,const arp_u32 *e,int *interval)
 {
     volatile struct arp_chord_record *r=0;unsigned int i,count;
-    const volatile unsigned char *sequence=*(const volatile unsigned char *const volatile *)0x43bd7430u;
+    const volatile unsigned char *sequence=*(const volatile unsigned char *const volatile *)0x43bd8430u;
     for(i=0;i<4;i++)if(arp_chord_ring[track][i].event==(arp_u32)e)r=&arp_chord_ring[track][i];
     if(!r && arp_chord_prep[track].event)r=&arp_chord_prep[track];
     if(!r)return sequence?st_chord_intervals(sequence+track*ST_CHORD_TRACK_BYTES,ST_CHORD_STEPS,interval):0;
@@ -74,14 +74,14 @@ static unsigned int chord_take(arp_u32 track,const arp_u32 *e,int *interval)
     r->event=0;return count;
 }
 static const volatile arp_u32 *held_notes(unsigned int track)
-{return (const volatile arp_u32 *)(0x4553f6e0u+track*0x2e18u);}
+{return (const volatile arp_u32 *)(0x455406e0u+track*0x2e18u);}
 static int arp_native(arp_u32,const arp_u32 *,arp_u32 *);
 static void arp_trig_sync(void *);
 static int arp_trig_layout(const arp_u32 *,arp_u32 *);
 static int queue(arp_u32 *e,arp_u32 time)
 {
-    const volatile arp_u32 *b=*(const volatile arp_u32 **)0x444de434u;
-    if(!*(const volatile arp_u32 *)0x444de43cu){
+    const volatile arp_u32 *b=*(const volatile arp_u32 **)0x444df434u;
+    if(!*(const volatile arp_u32 *)0x444df43cu){
         /* Native allocation spins on exhaustion: never call it without a
          * free bucket or an existing non-immediate bucket at this timestamp. */
         while(b && (b[0] || b[1]!=time))b=(const volatile arp_u32 *)b[4];
@@ -95,7 +95,7 @@ static void release(arp_u32 *e){ARP_EVENT_FREE(e);}
 static const struct arp_runtime_api arp_native_api={allocate,copy,release,queue};
 static int eligible(arp_u32 track)
 {
-    arp_u32 kit=*(const volatile arp_u32 *)0x43bd743cu;
+    arp_u32 kit=*(const volatile arp_u32 *)0x43bd843cu;
     const unsigned char *owner;unsigned int i;
     if(track>=ARP_TRACKS || !kit || (*(const volatile unsigned short *)(kit+0x1550u)&(1u<<track)))return 0;
     owner=(const unsigned char *)arp_host->native_dispatch(ST_NATIVE_OWNERS,0);
@@ -182,14 +182,14 @@ static void arp_frame(void)
 {
     arp_u32 begin,tempo,sequence,kit,pending=arp_running;unsigned int track;
     if(!pending)return;
-    sequence=*(const volatile arp_u32 *)0x43bd7430u;kit=*(const volatile arp_u32 *)0x43bd743cu;
-    begin=*(const volatile arp_u32 *)0x800046ecu;tempo=*(const volatile arp_u32 *)0x402d7010u;
+    sequence=*(const volatile arp_u32 *)0x43bd8430u;kit=*(const volatile arp_u32 *)0x43bd843cu;
+    begin=*(const volatile arp_u32 *)0x800046ecu;tempo=*(const volatile arp_u32 *)0x402d7360u;
     while(pending){
         struct arp_runtime *r;
         track=arp_first_track(pending);pending&=pending-1;
         r=&arp_voice[track];
         if(sequence!=arp_sequence[track] || kit!=arp_kit[track] || tempo<3600 || tempo>36000 ||
-           (!arp_live[track] && *(const volatile arp_u32 *)0x43bd73bcu!=1)) {stop_locked(track);continue;}
+           (!arp_live[track] && *(const volatile arp_u32 *)0x43bd83bcu!=1)) {stop_locked(track);continue;}
         if(arp_live[track] && arp_keyboard_sync(&r->selector,held_notes(track))<=0){stop_locked(track);continue;}
         if((int)(r->clock.next-(begin+2*tempo))<0 && !eligible(track)){stop_locked(track);continue;}
         {
@@ -232,12 +232,12 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
                (e[1]!=1 && e[1]!=2) || !eligible(track))return 0;
             fresh=e[1]==1 && e[6]<128 &&
                 (!arp_live[track] || !(arp_voice[track].selector.mask[e[6]>>5]&(1u<<(e[6]&31))));
-            restore_sound(track,e[11]?e[11]:e[10]?e[10]:*(const volatile arp_u32 *)0x43bd743cu+0x2a+track*0x123u);
+            restore_sound(track,e[11]?e[11]:e[10]?e[10]:*(const volatile arp_u32 *)0x43bd843cu+0x2a+track*0x123u);
             if(!arp_parameters[track].mode)return 0;
             if(arp_live[track]) {
                 held=arp_keyboard_sync(&arp_voice[track].selector,held_notes(track));
                 if(held<0 || (e[1]==1 &&
-                   ((e[11] && e[11]!=*(const volatile arp_u32 *)0x444842d0u) ||
+                   ((e[11] && e[11]!=*(const volatile arp_u32 *)0x444852d0u) ||
                     (e[9]&0x30201u)!=0x10201u))) {stop_locked(track);return 0;}
                 if(!held) {
                     stop_locked(track);
@@ -248,7 +248,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
                  * Native priority may enqueue only the most recent key. */
                 struct arp_selector keys;arp_reset(&keys,arp_generation[track]);
                 held=arp_keyboard_sync(&keys,held_notes(track));
-                if(held<=0 || e[1]!=1 || (e[11] && e[11]!=*(const volatile arp_u32 *)0x444842d0u))return 0;
+                if(held<=0 || e[1]!=1 || (e[11] && e[11]!=*(const volatile arp_u32 *)0x444852d0u))return 0;
                 if(!arp_runtime_live_start(&arp_voice[track],&arp_parameters[track],e,
                     *(const volatile arp_u32 *)0x800046ecu,arp_generation[track])) {
                     if(arp_voice[track].source)stop_locked(track);return 0;
@@ -256,7 +256,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
                 for(i=0;i<sizeof(keys);i++)
                     ((volatile unsigned char *)&arp_voice[track].selector)[i]=((const volatile unsigned char *)&keys)[i];
                 arp_live[track]=1;arp_running|=1u<<track;arp_root_lock[track].mask=0;
-                arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
+                arp_sequence[track]=*(const volatile arp_u32 *)0x43bd8430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd843cu;
             }
             if(fresh)arp_rec_note(track,e[6]);
             /* IMMEDIATE owns a pooled input. As for POLY's consuming handler,
@@ -280,9 +280,9 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
             /* Preserve the root when changing mode or rate. Retiming uses the
              * last emitted beat as the phase origin and never queues in the past. */
             if(!p->mode || (arp_voice[track].source &&
-               (arp_sequence[track]!=*(const volatile arp_u32 *)0x43bd7430u ||
-                arp_kit[track]!=*(const volatile arp_u32 *)0x43bd743cu ||
-                (!arp_live[track] && *(const volatile arp_u32 *)0x43bd73bcu!=1))))stop_locked(track);
+               (arp_sequence[track]!=*(const volatile arp_u32 *)0x43bd8430u ||
+                arp_kit[track]!=*(const volatile arp_u32 *)0x43bd843cu ||
+                (!arp_live[track] && *(const volatile arp_u32 *)0x43bd83bcu!=1))))stop_locked(track);
             else if(arp_voice[track].source && p->speed!=arp_parameters[track].speed){
                 struct arp_clock *c=&arp_voice[track].clock;
                 arp_u32 last=c->next-c->period,now=*(const volatile arp_u32 *)0x800046ecu;
@@ -292,7 +292,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
             for(i=0;i<sizeof(*p);i++)
                 ((volatile unsigned char *)&arp_parameters[track])[i]=((const volatile unsigned char *)p)[i];
             arp_lab_override[track]=!e[4];arp_bound_sound[track]=e[4];
-            arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
+            arp_sequence[track]=*(const volatile arp_u32 *)0x43bd8430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd843cu;
             interest();
             e[5]=1;
         }
@@ -322,7 +322,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
     if(arp_live[track]){*result=1;return 1;}
     /* Stopped/held-step preview is not a running sequence root. Held keyboard
      * input has its own IMMEDIATE lifecycle above. */
-    if(*(const volatile arp_u32 *)0x43bd73bcu!=1){
+    if(*(const volatile arp_u32 *)0x43bd83bcu!=1){
         if(arp_voice[track].source)stop_locked(track);return 0;
     }
     if(e[1]!=1 || !eligible(track)){
@@ -337,7 +337,7 @@ static int arp_native(arp_u32 op,const arp_u32 *a,arp_u32 *result)
         i=arp_runtime_start(&arp_voice[track],p,e,a[2],arp_generation[track],notes?chord:0,notes);
     }
     if(!i)return 0;
-    arp_sequence[track]=*(const volatile arp_u32 *)0x43bd7430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd743cu;
+    arp_sequence[track]=*(const volatile arp_u32 *)0x43bd8430u;arp_kit[track]=*(const volatile arp_u32 *)0x43bd843cu;
     arp_running|=1u<<track;before=arp_voice[track].dropped;
     arp_runtime_frame(&arp_voice[track],p,a[2],a[3],arp_generation[track]);
     /* Pool pressure on the very first output retains the original note. */

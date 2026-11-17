@@ -1,7 +1,14 @@
 # Audio Recorder for Syntakt (1.4)
 
+Desktop OS 1.42 release: **1.4.1**, based on remote main `f48f3ab`.
+Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+
 Version 1.2 consolidates the MAIN idle callback work tested as development
 1.1.1. See [the release mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
 
 Source port of Synfact's recorder, UI, trim, save job, optimized capture and
 normalizer. Requires Syntakt OS 1.41 and **core 1.9.0 / host API 15** with its

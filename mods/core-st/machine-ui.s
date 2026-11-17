@@ -10,7 +10,7 @@ core_machine_dispatch_delta:
         move.l 20(%a6),%d3
         move.l %a2,%d6
         addi.l #148,%d6
-        lea 0x4022d59c,%a4
+        lea 0x4022d83c,%a4
         jmp 0x4003b9c6
 
         .globl core_machine_sample_dial,core_stock_sample_dial

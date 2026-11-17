@@ -24,7 +24,7 @@ int main(int argc,char **argv)
     assert(core_boot_preimages_ok(info));
     at=0x40011e4au-0x40000400u;image[at]^=1;
     assert(!core_boot_preimages_ok(info));image[at]^=1;
-    at=0x40097b04u-0x40000400u;image[at]^=1;
+    at=0x40097b7cu-0x40000400u;image[at]^=1;
     assert(!core_boot_preimages_ok(info));image[at]^=1;
     memset(info,0,sizeof(info));memcpy(info,"system-info-smz-st",19);
     assert(core_boot_preimages_ok(info));assert(!core_boot_preimages_ok(0));

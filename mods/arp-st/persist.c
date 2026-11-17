@@ -10,8 +10,8 @@
 #define KIT 0x1618u
 #define SOUND 0x123u
 #define RECORD 0x107u
-#define KITS 0x41ad5134u
-#define POOL 0x41b93ec9u
+#define KITS 0x41ad6134u
+#define POOL 0x41b94ec9u
 #define SLOT 0x5c00u
 #define CARRIER 0x5ac0u
 #define CARRIER_BYTES 320u
@@ -236,7 +236,7 @@ static int kit_index(arp_u32 record,arp_u32 container,unsigned int *index)
 static struct kit_assoc *kit_remember(arp_u32 record)
 {
     unsigned int i;for(i=0;i<16;i++)if(encoded_kit[i].address==record)break;
-    if(i==16)i=record==0x405ff554u?0:record==0x405fd354u?1:2+(next_kit++%14);
+    if(i==16)i=record==0x40600554u?0:record==0x405fe354u?1:2+(next_kit++%14);
     encoded_kit[i].address=record;
     return &encoded_kit[i];
 }

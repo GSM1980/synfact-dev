@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| OS 1.41: shared audio-track event acceptance, not a private ARP detour.
+| OS 1.42: shared audio-track event acceptance, not a private ARP detour.
 | Site 400a423e: after mute/stale checks, A2 event, A4 resolved Sound,
 | A3 native queue bucket, D2 track, A6 the MAIN IRQ frame.
 | Decline replays exactly MOVE.L 36(A2),D0; MOVEQ #1,D1. Consume reaches
@@ -38,6 +38,6 @@ note_immediate:
 note_stock:
         move.l 36(%a2),%d0
         moveq #1,%d1
-        jmp 0x400a4244
+        jmp 0x400a42bc
 note_consumed:
-        jmp 0x400a471e
+        jmp 0x400a4796

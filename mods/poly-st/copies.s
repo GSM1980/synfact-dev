@@ -47,11 +47,11 @@ poly_scan_key_origin_next:
  move.w (%a0),%d0
  cmpi.l #0x4002ed0a,%d0
  beq.s poly_scan_key_press
- cmpi.l #0x40105408,%d0
+ cmpi.l #0x401055cc,%d0
  beq.s poly_scan_key_press
  cmpi.l #0x4002d602,%d0
  beq.s poly_scan_key_release
- cmpi.l #0x401052c4,%d0
+ cmpi.l #0x40105488,%d0
  beq.s poly_scan_key_release
  subq.l #1,%d1
  bne.s poly_scan_key_origin_next

@@ -7,17 +7,17 @@
 #include <syntakt/modules.h>
 static const struct st_machine_ui_api *services;
 #ifndef FM_POLICY
-#define FM_POLICY ((u32 (*)(u32))0x4007b9b2u)
-#define FM_EVENT_DELTA ((int (*)(void *,u32,u32))0x400f66a2u)
-#define FM_EVENT_PRESSED ((u32 (*)(void *))0x400f66c0u)
-#define FM_INCREMENT ((int (*)(void *,u32,int,void *,u32))0x400f68d2u)
-#define FM_TRIG_HELD ((u32 (*)(void *))0x400c2d2au)
-#define FM_KEY_HELD ((u32 (*)(u32))0x40102d7cu)
+#define FM_POLICY ((u32 (*)(u32))0x4007ba2au)
+#define FM_EVENT_DELTA ((int (*)(void *,u32,u32))0x400f6866u)
+#define FM_EVENT_PRESSED ((u32 (*)(void *))0x400f6884u)
+#define FM_INCREMENT ((int (*)(void *,u32,int,void *,u32))0x400f6a96u)
+#define FM_TRIG_HELD ((u32 (*)(void *))0x400c2dd6u)
+#define FM_KEY_HELD ((u32 (*)(u32))0x40102f40u)
 #endif
 #ifndef FM_SNAP_ARM
-#define FM_SNAP_ARM ((void (*)(void *,u32))0x400f6ad4u)
-#define FM_SNAP_BLOCKED ((u32 (*)(void *,u32))0x400f6b02u)
-#define FM_SNAP_ACTIVE (*(volatile u8 *)0x4060c748u)
+#define FM_SNAP_ARM ((void (*)(void *,u32))0x400f6c98u)
+#define FM_SNAP_BLOCKED ((u32 (*)(void *,u32))0x400f6cc6u)
+#define FM_SNAP_ACTIVE (*(volatile u8 *)0x4060d748u)
 #endif
 /* List item 29: FUNC + encoder snaps HARM to -24/-12/0/+12/+24 (centre 3f00,
  * not TUNE's 4000), MIX to -64/0/+63 and the four RATIO OFFSETs to

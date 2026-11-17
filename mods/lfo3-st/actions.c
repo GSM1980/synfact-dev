@@ -69,7 +69,7 @@ void lfo3_actions_capture(vector *out,void *app,u32 page)
     const projection *p=lfo3_actions_layout(page);u32 *pairs,i,id;void *proxy;u32 *vt;
     out->begin=out->end=out->capacity=0;
     if(!p)return;
-    pairs=((u32 *(*)(u32))0x40103788u)(8*8);
+    pairs=((u32 *(*)(u32))0x4010394cu)(8*8);
     if(!pairs)return;
     out->begin=out->end=(u32)pairs;out->capacity=(u32)pairs+8*8;
     for(i=0;i<8;i++){

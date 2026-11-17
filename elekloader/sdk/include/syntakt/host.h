@@ -8,7 +8,7 @@
 #include "storage.h"
 #include "sample-pool.h"
 /* Init-only MAIN mixer replacement for a stopped-transport preview session.
- * ready() returns 0 or 1. mix has native OS 1.41 mixer C ABI (three words),
+ * ready() returns 0 or 1. mix has native OS 1.42 mixer C ABI (three words),
  * preserves callee saves and owns bus clearing, preview clock and output. */
 struct st_audio_idle_owner {
     int (*ready)(void);
