@@ -565,7 +565,7 @@ def verify(core,bank,out):
     # the steps and OFS/LEN (F); the tail and the indicator (page 3 of 4).
     for x,label in ((33,'MODE'),(59,'SPEED'),(85,'RANGE'),(111,'LEN')):assert ['text',0x443db230,x,27,2,label] in m.rows
     assert ['small',33,40,2,'OFF'] in m.rows and ['small',59,40,2,'1/16'] in m.rows
-    assert ['text',0x443db210,85,39,2,'2'] in m.rows and any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows)
+    assert ['text',0x443db210,85,39,2,'1'] in m.rows and any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows)
     assert ['text',0x443db230,108,20,2,'OFS (E)'] in m.rows and ['text',0x443db230,108,1,2,'16'] in m.rows
     assert m.rows[0]==['shape',0x400f7fb6,20,0,127,53,0] and m.rows[-2:]==[['tail'],['indicator',4,2]]
     assert all(r[0]!='text' or 20<=r[2]<=123 for r in m.rows)
@@ -583,7 +583,7 @@ def verify(core,bank,out):
     m.draw()   # LEN stays the native knob; while it turns its value takes the label's place
     assert any(r[0]=='bitmap' and r[2:]==[111,42,1] for r in m.rows) and ['text',0x443db230,111,27,2,'128'] in m.rows
     assert ['text',0x443db230,111,27,2,'LEN'] not in m.rows
-    assert ['small',33,40,2,'DOWN'] in m.rows and ['small',59,40,2,'1/96'] in m.rows and ['text',0x443db210,85,39,2,'4'] in m.rows
+    assert ['small',33,40,2,'DOWN'] in m.rows and ['small',59,40,2,'1/96'] in m.rows and ['text',0x443db210,85,39,2,'3'] in m.rows
     m.w(m.telemetry,1610);m.call('arp_view_tick',APP);m.draw()   # 1500 blocks later: the label again
     assert ['text',0x443db230,111,27,2,'LEN'] in m.rows and not any(r[-1]=='128' for r in m.rows)
     assert m.key(17,1,200)==1 and m.word(m.sym['arp_selected'])==1

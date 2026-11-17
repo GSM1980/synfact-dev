@@ -64,10 +64,10 @@ int main(void)
     e[2]=12;assert(!arp_runtime_start(&r,&p,e,0,10,0,0) && refs==1);
     e[2]=13;assert(!arp_runtime_start(&r,&p,e,0,10,0,0) && refs==1);
     for(i=0;i<8;i++)assert(!used[i]);
-    /* List item 27: RANGE 4..6 (shown -2..-4) falls by octaves; 0..3 still
-     * climb. A note below 0 is skipped, not wrapped. */
+    /* List item 27: RANGE 4..6 (shown -1..-3) falls by octaves; 0..3 (shown
+     * 0..3) still climb. A note below 0 is skipped, not wrapped. */
     {
-        static const int shown[7]={-4,-3,-2,1,2,3,4};
+        static const int shown[7]={-3,-2,-1,0,1,2,3};
         static const struct {unsigned char mode,range;unsigned int root,slots,count,notes[8];} c[]={
             {2,4,60,4,4,{60,48,60,48}},{3,5,60,6,6,{60,48,36,60,48,36}},
             {1,6,60,8,8,{60,48,36,24,60,48,36,24}},{2,3,60,8,8,{60,72,84,96,60,72,84,96}},
@@ -93,7 +93,7 @@ int main(void)
         for(i=0;i<8;i++)assert(!used[i]);
         p.mode=2;p.range=1;
     }
-    printf("PASS: falling RANGE -2..-4 in TRUE/UP/DOWN/CYCLE, rising 1..4 unchanged, shown order -4..4\n");
+    printf("PASS: falling RANGE -1..-3 in TRUE/UP/DOWN/CYCLE, rising 0..3 unchanged, shown order -3..3\n");
     /* List item 28: SCALE snaps each output to the nearest note of the
      * pattern's scale (the lower one on a tie); no scale, no change. */
     {

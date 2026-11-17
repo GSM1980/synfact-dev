@@ -1,6 +1,6 @@
 # Digitone ARP → Syntakt: experimental source port
 
-Desktop OS 1.42 release: **1.10.5**, based on remote main `f48f3ab`.
+Desktop OS 1.42 release: **1.10.6**, based on remote main `eae3159`.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
 Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
@@ -273,13 +273,15 @@ page before it (the view closes and the native randomizes it).
 Until 1.8 the ARP view drew no page indicator (its Digitone layout used that
 column); 1.8 draws the pages inside the TRIG view, indicator included.
 
-**RANGE goes down too** (list item 27): -4, -3, -2, 1, 2, 3, 4. A falling
-range plays the root octave, then each octave below it (-2: two octaves,
-the root's and the one below). -1 would be 1 again, so it is skipped. Stored
-values 0..3 keep their meaning (1..4); 4, 5, 6 are -2, -3, -4, in the Sound
-metadata and in RANGE p-locks alike, so earlier Sounds and locks read the
-same. An older ARP reading a falling RANGE refuses that Sound's metadata and
-restores OFF. A note below 0 is skipped (a rest), as one above 127 was.
+**RANGE goes down too** (list item 27): -3, -2, -1, 0, 1, 2, 3. RANGE shows
+how many octaves the arpeggio moves from the root: 0 plays the root octave
+only, 1 the root's and the one above, -1 the root's and the one below. Until
+1.10.6 it counted the octaves played, as the Digitone does (1..4 up, -2..-4
+down); only the label changed, not the sound. Stored values 0..3 are 0..3;
+4, 5, 6 are -1, -2, -3, in the Sound metadata and in RANGE p-locks alike,
+so earlier Sounds and locks play as before. An older ARP reading a falling
+RANGE refuses that Sound's metadata and restores OFF. A note below 0 is
+skipped (a rest), as one above 127 was.
 The selector's falling branch costs three instructions per emitted note
 (analog fixture: 685 → 688 for one track, 5,274 → 5,298 for eight).
 
