@@ -38,11 +38,15 @@ class Routes(Core):
     def __init__(self,folder):
         self.hits=[];self.consume=None;self.operation=None;self.mutator=None;self.instructions=0
         super().__init__(folder)
+        masks=self.sym['core:core_native_masks']
+        end=self.sym.get('core:core_native_masks_end',masks+4*12)
+        assert end>masks and (end-masks)%12==0
+        self.native_slots=(end-masks)//12
         self.w(ARGS,0x12345678)
-        for i in range(16):self.u.mem_write(CALLBACK+32*i,bytes.fromhex('70004e75'))
+        for i in range(32):self.u.mem_write(CALLBACK+32*i,bytes.fromhex('70004e75'))
     def code(self,u,pc,size,user):
         self.instructions+=1
-        if CALLBACK<=pc<CALLBACK+16*32 and (pc-CALLBACK)%32==0:
+        if CALLBACK<=pc<CALLBACK+32*32 and (pc-CALLBACK)%32==0:
             op,args,result=self.args(3)
             assert op==self.operation and args==ARGS and result==RESULT
             self.hits.append(pc)
@@ -63,9 +67,9 @@ class Routes(Core):
     def setup(self,entries,registry):
         self.u.mem_write(LIST,pack(*entries,0))
         self.w(self.sym['core:core_native_list'],LIST)
-        slots=list(registry.items());assert len(slots)<=4
+        slots=list(registry.items());assert len(slots)<=self.native_slots
         rows=[(fn,mask,view) for fn,(mask,view) in slots]
-        rows += [(0,0,0)]*(4-len(rows))
+        rows += [(0,0,0)]*(self.native_slots-len(rows))
         self.u.mem_write(self.sym['core:core_native_masks'],b''.join(pack(*x) for x in rows))
         self.w(OUT-4,0xa55a1234);self.w(OUT+24,0x1234a55a)
         self.u.mem_write(OUT,bytes([0xa5])*24)
@@ -90,6 +94,40 @@ class Routes(Core):
 def verify(folder,out):
     m=Routes(folder);rng=random.Random(0x54415);checks=0
     functions=[CALLBACK+32*i for i in range(10)]
+    # The real catalog registers ARP/POLY/Chorus/Playhead before the deferred
+    # LFO3 initializer. Its fifth narrowing must reach both C and assembly.
+    assert m.native_slots==16,m.native_slots
+    entries=functions[:5];m.setup(entries,{})
+    for i in (1,2,3,4,0):m.invoke('core_native_interest_set',entries[i],1<<21 if i else 0)
+    flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
+    assert flags[17]==0,flags.hex()
+    m.dispatch(entries,flags,17,None)
+    m.invoke('core_native_interest_set',entries[0],1<<17)
+    flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
+    m.dispatch(entries,flags,17,None);assert m.hits==entries[:1]
+    # Fill the entire table through the public API and exercise its last
+    # record. A seventeenth callback must retain safe fail-open semantics.
+    entries=[CALLBACK+32*i for i in range(m.native_slots+1)]
+    m.setup(entries,{})
+    for fn in entries[:-1]:m.invoke('core_native_interest_set',fn,0)
+    start=m.sym['core:core_native_masks']
+    saved=bytes(m.u.mem_read(start,m.native_slots*12))
+    m.invoke('core_native_interest_set',entries[-1],0)
+    assert bytes(m.u.mem_read(start,m.native_slots*12))==saved
+    m.w(m.sym['core:core_native_list'],LIST)
+    m.u.mem_write(LIST,pack(*entries[:-1],0))
+    m.invoke('core_native_initialize')
+    assert bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))==bytes(24)
+    m.invoke('core_native_interest_set',entries[-2],1<<9)
+    m.invoke('core_native_page_view_set',entries[-2],0x1234)
+    assert m.word(m.sym['core:core_native_page_view'])==0x1234
+    flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
+    assert flags[9]==128 and flags[17]==0
+    m.dispatch(entries[:-1],flags,9,None)
+    m.u.mem_write(LIST,pack(*entries,0));m.invoke('core_native_initialize')
+    flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
+    assert flags[17]==128
+    m.dispatch(entries,flags,17,None)
     masks=(0,0xffffffff,1<<17,1<<20,1<<4|0x06000000,1<<4|0xff000000,
            1<<9,1<<10,0x600)
     for count in (0,1,2,3,7,8,9,40):
@@ -133,7 +171,8 @@ def verify(folder,out):
     try:m.dispatch(entries,flags,17,None)
     except AssertionError:negative=True
     else:raise AssertionError('corrupt route escaped callback trace oracle')
-    result=dict(ok=True,encoder_cases=256,dispatch_cases=checks,abi=True,
+    result=dict(ok=True,encoder_cases=256,dispatch_cases=checks,abi=True,native_slots=m.native_slots,
+                fifth_subscriber=True,last_slot=True,capacity_overflow_fail_open=True,
                 nested_snapshot=True,negative_control_detected=negative,device_access=False,
                 core_sha256=hashlib.sha256((folder/'main.bin').read_bytes()).hexdigest(),
                 limits=['Subscriber bodies are boundaries; nested mask-update body is real target code.',

@@ -99,3 +99,35 @@ cases with exact state and non-increasing counts. The six MAIN pipeline modes
 Complete idle/native-service/mixer comparisons all meet non-increase gates.
 The changed assembly and native C objects pass ColdFire instruction audits.
 No device access or firmware transfer is performed.
+
+## Core 2.0.2: native-interest capacity
+
+The complete bank contains five native subscribers: LFO3, ARP, POLY, Chorus
+and Playhead. The binder initializes firmware patchers last. ARP, POLY,
+Chorus and Playhead therefore filled the four narrowing records before LFO3
+could register its inactive/page-only mask. The safe overflow behavior left
+LFO3 interested in every operation, defeating its inactive renderer saving.
+
+The private table now holds sixteen records. The assembly search compares
+against its exported C array end, eliminating the separate four-record loop
+constant. No steady-state dispatch instruction is added. Existing routing
+bits, subscriber order, consumption, legacy profiling and the all-operations
+overflow fallback are retained. The 64 KiB reserve and contract 53594605 do
+not change. The verified build uses 65,260 bytes, leaving 276 bytes.
+
+`test_st_native_routes_emu.py` covers the fifth registration, active/inactive
+transitions, the sixteenth record's mask and view, and a seventeenth record
+that must not overwrite the full table and must retain fail-open dispatch.
+Its existing independent encoding/dispatch/ABI/nested-update oracles remain.
+
+`test_st_native_catalog_emu.py` retains all five subscriptions and executes
+real LFO3/ARP/POLY/Playhead initialization, the core binder and public output
+transitions. Chorus DSP/UI construction and the LFO renderer remain explicit
+boundaries. Thirty-nine cases cover inactive, active and neutral output on
+all thirteen tracks. With `--overflow-reference` pointing to core 2.0.1,
+the same bank must reproduce the lost inactive route at initialization.
+
+The full bank and core AUDIO are byte-identical to the 2.0.1 delivery, so a
+hardware comparison needs only the new SYX and the same bank, pattern,
+tempo, sends and UI page. These offline checks do not establish how many
+physical MAIN CPU points the change recovers.

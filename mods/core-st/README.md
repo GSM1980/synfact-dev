@@ -1,4 +1,13 @@
-# Syntakt core 2.0.1
+# Syntakt core 2.0.2
+
+Core **2.0.2** expands native-interest registration from four to sixteen
+subscribers. The complete bank's ARP, POLY, Chorus and Playhead registrations
+previously filled the table before the deferred LFO3 initializer, leaving
+inactive LFO3 on the all-operations fallback. The assembly lookup now uses
+the C table's exported end, so both paths share the same capacity. Subscriber
+order, consumption and overflow fallback remain unchanged. The bank contract
+and all bank/AUDIO bytes are unchanged: update only the core SYX for an A/B.
+See [the regression and scope](../../docs/CORE-MAIN-PERFORMANCE.md#core-202-native-interest-capacity).
 
 Core **2.0.1** defers stock and HZFS waveform computation until a sample's
 waveform UI requests it. Boot allocates no waveform cache and performs no
@@ -18,7 +27,7 @@ See [the memory investigation and validation](../../docs/STOCK-SAMPLE-CORE-OVERL
 Desktop OS 1.42 base release: **2.0.0**, based on remote main `f48f3ab`.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
-Current desktop target: **OS 1.42 / core 2.0.1**.
+Current desktop target: **OS 1.42 / core 2.0.2**.
 See [the port notes](../../docs/OS142-PORT.md).
 
 1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for

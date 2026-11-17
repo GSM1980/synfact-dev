@@ -204,6 +204,10 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         bank_elf=out/'synfact-machines.work/main.elf'
         bank_symbols={s.name for s in elf.Elf.load(bank_elf).symbols}
         if 'lfo3_owned_row_lookup' in bank_symbols:
+            if 'playhead_native' in bank_symbols:
+                run('full native catalog interest capacity (Unicorn)',[
+                    unicorn_python,'-B','tests/test_st_native_catalog_emu.py','--core',out,
+                    '--bank',out/'synfact-machines.smz4','--out',out/'native-catalog.json'])
             reference=previous/'synfact-machines.smz4' if previous else None
             if reference and reference.exists() and 'lfo3_module' in json.loads(
                     Path(str(reference)+'.json').read_text())['modules']:

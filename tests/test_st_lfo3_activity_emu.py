@@ -32,11 +32,11 @@ SAVED=(UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,
 
 
 class Activity(Patchers):
-    def __init__(self,core,bank,break_updates=False):
+    def __init__(self,core,bank,break_updates=False,full_catalog=False):
         self.total=0;self.hits=Counter();self.sr=0x2700;self.break_updates=break_updates
         super().__init__(core,bank)
         for name,init,_ in self.modules:
-            if name in ('ARP EXPERIMENT','POLY'):self.real[init]=name
+            if name in ('ARP EXPERIMENT','POLY') or (full_catalog and name=='PLAYHEAD'):self.real[init]=name
         self.dynamic='lfo3_output_rows' in self.bs
         self.tracked={self.sym['core:core_native']:'dispatch',
                       self.sym['core:core_native_interest_set']:'interest_sets',
@@ -44,13 +44,14 @@ class Activity(Patchers):
                       self.bs.get('lfo3_output_track'):'output_updates'}
         self.event_boundaries={self.bs['lfo3_events_native_'+name] for name in ('apply','clear','restore','fx_restore')}
         self.u.hook_add(UC_HOOK_MEM_WRITE,self.write_hook)
-        # This differential isolates the four LFO3/ARP/POLY/Chorus routes.
-        # Playhead's metadata observer is tested separately with real init;
-        # a fifth observer exceeds the core's four narrowing slots and uses
-        # the documented fail-open route. It must not be represented here
-        # by an uninitialized, all-operations callback in a cost comparison.
+        # Historical cost comparisons isolate four routes. The separate
+        # full-catalog regression retains Playhead and runs its real init.
+        # Chorus DSP/UI construction remains a boundary; register its actual
+        # PAGE_LAYOUT interest before the deferred LFO3 initializer runs.
+        if full_catalog and 'chorus_native' in self.bs:
+            self.call('core_native_interest_set',self.bs['chorus_native'],1<<11)
         for i,(name,init,subscriptions) in enumerate(self.modules):
-            if name=='PLAYHEAD':
+            if name=='PLAYHEAD' and not full_catalog:
                 assert subscriptions==[2,0x101,11],subscriptions
                 self.w(DESCRIPTORS+16*i+12,2)
                 self.modules[i]=(name,init,subscriptions[:2])
@@ -64,7 +65,7 @@ class Activity(Patchers):
             self.call('core_native_interest_set',self.bs['chorus_native'],1<<11)
             route=bytes(self.u.mem_read(self.sym['core:core_native_interest'],24))
             # Pre-optimization LFO3 remains subscribed even with neutral output.
-            assert route[11]&0x88 and route[17]==(0 if self.dynamic else 1),route.hex()
+            assert route[11]&0x88 and route[17]==(0 if self.dynamic else 1),('initial_inactive_route',route.hex())
         assert self.word(self.lfo['hooks_installed'])==1 and self.word(self.lfo['in_sram'])==1
         self.sr=0x2000
         self.w(0x444dc730,POOL)

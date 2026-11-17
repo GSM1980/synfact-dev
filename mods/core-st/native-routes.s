@@ -28,13 +28,12 @@ native_route_callback:
  moveq #-1,%d2
  moveq #0,%d1
  lea core_native_masks,%a4
- moveq #3,%d7
 native_route_lookup:
  cmp.l (%a4),%d0
  beq.s native_route_found
  lea 12(%a4),%a4
- subq.l #1,%d7
- bpl.s native_route_lookup
+ cmpa.l #core_native_masks_end,%a4
+ bcs.s native_route_lookup
  bra.s native_route_type
 native_route_found:
  move.l 4(%a4),%d2

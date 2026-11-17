@@ -8,6 +8,16 @@ actual SYX, the complete bank contract and unchanged core/bank AUDIO. See
 [the port notes](OS142-PORT.md) for the direct 1.42 emulator checks and the
 historical 1.41/donor fixtures that are not current-release validation.
 
+Core 2.0.2's `test_st_native_catalog_emu.py --core BUILD --bank BANK --out JSON`
+retains the complete five-native-subscriber catalog, including real Playhead
+initialization, and checks 39 LFO3 inactive/active/neutral cases. Chorus UI/DSP,
+allocator, mutex and renderer bodies are explicit boundaries. Add
+`--overflow-reference CORE_201` to require the previous four-record core to
+reproduce the lost inactive LFO route. The common regressions run the fixed
+full-catalog case. The route suite also checks all sixteen registration
+records and safe overflow without changing its original dispatch/ABI oracles.
+Neither test measures physical CPU percentages or accesses the device.
+
 Each suite takes its input files from environment variables or arguments. A
 test whose input files are not given is skipped, not passed: say which ran.
 Firmware files never go in this repository.

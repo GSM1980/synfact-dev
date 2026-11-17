@@ -42,7 +42,11 @@ unsigned char core_native_interest[4*NATIVE_WORDS] __attribute__((aligned(4)))=
     {128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,0xff,1,128,128};
 /* Per subscriber: operation mask (host API 5) and page view class (API 6).
  * A full table leaves the newcomer at every operation and view (open). */
-#define NATIVE_SLOTS 4
+/* Cover the bank's sixteen module slots. The assembler uses the exported
+ * array end, so its lookup cannot silently retain an older capacity. */
+#define NATIVE_SLOTS 16
+#define NATIVE_STRING_(n) #n
+#define NATIVE_STRING(n) NATIVE_STRING_(n)
 #define NATIVE_PAGE_OPS ((1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_NAV))
 static struct {u32 fn,mask,view;} native_masks[NATIVE_SLOTS];
 /* PAGE_SYNC/PAGE_NAV reach the dispatcher only for views whose vtable is this
@@ -55,6 +59,7 @@ u32 core_native_page_view;
 #ifdef __mcoldfire__
 /* Private aliases for resident assembly; these add no data or host API. */
 __asm__(".globl core_native_masks\n.set core_native_masks,native_masks\n"
+        ".globl core_native_masks_end\n.set core_native_masks_end,native_masks+" NATIVE_STRING(NATIVE_SLOTS) "*12\n"
         ".globl core_native_list\n.set core_native_list,events+88");
 typedef char native_list_offset[ST_EV_NATIVE==11?1:-1];
 extern u32 core_native_route_fill(unsigned char *,const u32 *);
