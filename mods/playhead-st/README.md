@@ -1,6 +1,6 @@
 # Playhead: step order per track (playhead-st)
 
-Desktop OS 1.42 release: **1.2**.
+Desktop OS 1.42 release: **1.2.1**.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
 **TRK + UP** / **TRK + DOWN** opens a centered mode selector for the active
@@ -134,11 +134,25 @@ test, and otherwise it draws at most 26 pixels.
 
 The selector never runs in the sequencer or audio paths. Its closed DRAW/ENC
 callbacks return at the first state test. It rasterizes its 128x64 masked
-bitmap only on opening, cursor movement or an error, then uses one native
+bitmap initially, when its track title changes or on an error. Cursor moves
+only invert the old and new eight-pixel rows; reopening the same track can
+reuse the cached bitmap. It uses one native
 masked blit per UI frame. There is no heap allocation or periodic job. Its
 two 1 KiB pixel/mask arrays live in the SMZ bank's MAIN allocation. Native
 Bitmap construction, clipping and masked blit are checked against OS 1.42
 in Unicorn; unchanged draws make zero writes to the cached pixels.
+
+UI interactions request composition through `40100966(root + 0x40)`.
+`4016e044()` returns the root owner; the native `ViewController` is embedded
+at +0x40 and its dirty byte is +0x20 from there. Writing `root[0x20]` as 1.2
+did leaves the real compose gate unchanged, so a moved cursor or closed
+selector can wait for an unrelated redraw. The regression now executes the
+native singleton getter and `4010095c` compose gate, preserving a sentinel
+in the unrelated root field. On the interpreter, a cursor redraw takes
+7,113 instructions versus about 49,853 in 1.2; that includes the native blit,
+not the underlying screen's composition or scheduling time. It is not a
+physical latency measurement. Applying and persisting the mode keep their
+existing synchronous semantics.
 
 ## How
 
@@ -271,12 +285,16 @@ It needs no core change and no host API: any bank for the current core
 
 ## Status
 
+- 1.2.1: fixes the actual native redraw request for opening, moving and
+  closing the selector. The test reproduces 1.2's unchanged native gate as a
+  negative control. Thirty-six incremental highlight transitions match full
+  frames, with at most two rows touched per move. Sequencer and persistence
+  sources remain unchanged.
 - 1.2: centered nine-option selector, icons and text, deferred YES commit and
   NO cancel, captured track/kit, cached native bitmap, and input priority over
   the other optional UI modules. Sequencer sources and object code are
   unchanged from 1.1. UI behavior, all nine icons, clipping, native blit,
   cache reuse, context changes, FX track and refusal are checked in Unicorn.
-  Physical UI validation remains for the owner.
 - 1.1: ANCHOR, STUTTER, FOLD and WALK+, four matching pixel icons, assembly
   cache paths and a paired UI copy. Host test: 194,688,000 selections across
   lengths 1..64, thirteen tracks and both scales. Stock Unicorn differential:

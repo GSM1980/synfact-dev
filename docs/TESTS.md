@@ -155,6 +155,13 @@ once, NO cancels, confirming the same mode makes no edit, context changes
 cancel and keys/encoders cannot leak into the underlying view. Native Bitmap
 construction and masked blit execute on the real OS code: all nine icons,
 text regions, centered mask, selection inversion and cached draws are checked.
+The real singleton getter, redraw request and compose gate also execute:
+each open/navigation/confirm/cancel press must set the embedded controller's
+dirty flag without modifying its root owner. Version 1.2 reproduces the
+missing request as a negative control. Incremental cursor updates are compared
+against full frames over 36 transitions and limited to the two affected rows;
+instruction counts include the native blit and exclude underlying native
+screen composition, RTOS scheduling and real kit-mirror IO.
 Then the saving (`persist.c` through the Sound metadata bus): the
 modes in a known kit slot's free tail on KIT_ENCODE and back on KIT_DECODE,
 unknown slots never written, kit copies through a buffer, a changed buffer,

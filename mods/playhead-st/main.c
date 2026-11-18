@@ -58,6 +58,7 @@ typedef unsigned int u32;typedef unsigned char u8;
 #define HEADER_FONT 0x443db1f0u
 #define BITMAP_CTOR ((void (*)(void *,u32,u32,const void *,const void *))0x400f72beu)
 #define BLIT ((void (*)(void *,const void *,int,int,u32))0x400f8f70u)
+#define COMPOSE ((void (*)(void *))0x40100966u) /* ViewController::requestRedraw, not its root owner */
 static u32 taken[4];                    /* releases of presses consumed by this module */
 static struct {u32 open,kit,track,cursor,opening_key,error,dirty;u8 *view;} playhead_selector;
 static const char *const names[PLAYHEAD_MODES]={"FORWARD","REVERSE","PENDULUM","RANDOM","WALK",
@@ -79,9 +80,14 @@ static u32 selector_context(void)
     return main_screen()==playhead_selector.view && playhead_active_kit()==playhead_selector.kit &&
         (app=APP()) && TRACK_INDEX(app+0x30)==playhead_selector.track;
 }
+static void selector_redraw(void)
+{
+    u8 *root=UI();
+    if(root)COMPOSE(root+0x40);          /* native compose gate reads (root+40h)+20h */
+}
 static int playhead_key(void *brain,void *event)
 {
-    u32 key=word(event,12),flags=word(event,16),bit,t,k,refused;u8 *app,*ui;
+    u32 key=word(event,12),flags=word(event,16),bit,t,k,refused;u8 *app;
     (void)brain;
     if(key>=128u)return playhead_selector.open!=0;
     bit=1u<<(key&31u);
@@ -123,7 +129,7 @@ static int playhead_key(void *brain,void *event)
         playhead_selector.opening_key=key;playhead_selector.error=0;
         playhead_selector.dirty=1;playhead_selector.open=1;
     }
-    if((ui=UI()))ui[0x20]=1;            /* existing controller redraw flag; only on UI interaction */
+    selector_redraw();
     return 1;
 }
 /* The icons: one-pixel strokes, centred in the seven rows of the tempo's
@@ -143,6 +149,7 @@ static const struct {u8 width;unsigned short rows[7];} icons[PLAYHEAD_MODES]={
  * is bit 0 of word 1. Build only when the selector changes; one native blit
  * per rendered frame, no allocation, timer or sequencer/audio work. */
 static u32 selector_pixels[256],selector_mask[256],selector_bitmap[8],selector_ready;
+static u32 selector_cached_track,selector_cached_cursor,selector_cached_error;
 static const u8 selector_font[38][5]={
  {7,5,5,5,7},{2,6,2,2,7},{7,1,7,4,7},{7,1,7,1,7},{5,5,7,1,1},
  {7,4,7,1,7},{7,4,7,5,7},{7,1,1,1,1},{7,5,7,5,7},{7,5,7,1,7},
@@ -172,9 +179,27 @@ static void selector_text(u32 x,u32 y,const char *s,u32 ink)
         for(r=0;r<5u;r++)for(c=0;c<3u;c++)if(g[r]&(4u>>c))selector_rect(x+c,y-r,x+c,y-r,ink);
     }
 }
+static void selector_invert_row(u32 mode)
+{
+    u32 x=mode<5u?8u:66u,top=48u-8u*(mode<5u?mode:mode-5u),y0=top-6u,y1=top+1u;
+    u32 w,lo,hi,mask,c;
+    for(w=y0>>5;w<=y1>>5;w++){
+        lo=w==(y0>>5)?y0&31u:0u;hi=w==(y1>>5)?y1&31u:31u;
+        mask=(0xffffffffu>>lo)&(0xffffffffu<<(31u-hi));
+        for(c=x;c<=x+53u;c++)selector_pixels[2*c+w]^=mask;
+    }
+}
 static void selector_render(void)
 {
     u32 i,r,c,bits,w,x,y,ink;char track[7]={'T','R','K',' ',0,0,0};
+    if(selector_ready && selector_cached_track==playhead_selector.track &&
+       selector_cached_error==playhead_selector.error){
+        if(selector_cached_cursor!=playhead_selector.cursor){
+            selector_invert_row(selector_cached_cursor);selector_invert_row(playhead_selector.cursor);
+            selector_cached_cursor=playhead_selector.cursor;
+        }
+        playhead_selector.dirty=0;return;
+    }
     if(!selector_ready){
         for(i=4;i<=123u;i++){selector_mask[2*i]=0x3fffffffu;selector_mask[2*i+1u]=0xfffffffcu;}
         BITMAP_CTOR(selector_bitmap,128,64,selector_pixels,selector_mask);selector_ready=1;
@@ -198,13 +223,15 @@ static void selector_render(void)
         selector_text(x+16u,y-1u,names[i],ink);
     }
     selector_text(30,8,"YES SET NO CANCEL",1);playhead_selector.dirty=0;
+    selector_cached_track=playhead_selector.track;selector_cached_cursor=playhead_selector.cursor;
+    selector_cached_error=playhead_selector.error;
 }
 /* Global DRAW is after native overlays, unlike the contextual header icon. */
 static void playhead_selector_draw(void *bitmap,void *ctrl)
 {
     if(!playhead_selector.open)return;
     if(!selector_context()){
-        playhead_selector.open=0;if(ctrl)((u8 *)ctrl)[0x20]=1;return;
+        playhead_selector.open=0;if(ctrl)COMPOSE(ctrl);return;
     }
     if(playhead_selector.dirty)selector_render();
     BLIT(bitmap,selector_bitmap,0,0,0);
@@ -213,7 +240,7 @@ static int playhead_selector_enc(void *brain,void *event)
 {
     (void)brain;(void)event;
     if(!playhead_selector.open)return 0;
-    if(!selector_context()){playhead_selector.open=0;return 0;}
+    if(!selector_context()){playhead_selector.open=0;selector_redraw();return 0;}
     return 1;
 }
 /* A COW std::string the firmware can read (as syntakt/trig-pages.h's titles):

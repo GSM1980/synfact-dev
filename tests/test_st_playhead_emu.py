@@ -615,13 +615,19 @@ def run_key(stock_path, bank_path):
     m.w32(ui + 0x40 + 0x1c, FAKE + 0x400)
     m.w32(FAKE + 0x400 + 8, screen)
     m.w32(screen, 0x401c849c)
-    state = {'track': 4, 'changed': [], 'held': True, 'writes': 0, 'blits': 0}
+    controller = ui + 0x40
+    # Real singleton getter and native compose gate: root+20h is NOT the
+    # controller's dirty byte. The previous UI double hid this regression.
+    m.w32(0x444e2334, ui)
+    m.w8(ui + 0x20, 0xa5)
+    state = {'track': 4, 'changed': [], 'held': True, 'writes': 0, 'blits': 0, 'instructions': 0}
 
     def hook(uc, at, size, user):
+        state['instructions'] += 1
         if at == 0x400f8f70:
             state['blits'] += 1
         stub = {0x40001980: 0, 0x40001aa2: 0, 0x40102f40: None, 0x4016e9c8: app,
-                0x4001ff74: None, 0x4016e044: ui, 0x40172414: 0}
+                0x4001ff74: None, 0x40172414: 0}
         if at not in stub:
             return
         sp = uc.reg_read(UC_M68K_REG_A7)
@@ -651,7 +657,10 @@ def run_key(stock_path, bank_path):
         assert m.call(sym['playhead_key'], 0, event) == expected, (key, flags)
 
     def press(key):
+        m.w8(controller + 0x20, 0)
         send(key, 1)
+        assert m.call(0x4010095c, controller) & 255 == 1, ('native compose gate not requested', key)
+        assert u.mem_read(ui + 0x20, 1) == b'\xa5', 'root owner must not be modified'
         send(key, 0x10)
 
     def mode(t=4, k=KIT_INDEX):
@@ -660,7 +669,8 @@ def run_key(stock_path, bank_path):
     def draw():
         u.mem_write(pixels, b'\xaa' * 1024)
         state['writes'] = 0
-        m.call(sym['playhead_selector_draw'], bitmap, ui)
+        state['instructions'] = 0
+        m.call(sym['playhead_selector_draw'], bitmap, controller)
         return bytes(u.mem_read(pixels, 1024))
 
     def lit(frame, x, y):
@@ -673,6 +683,8 @@ def run_key(stock_path, bank_path):
     assert draw() == b'\xaa' * 1024 and state['writes'] == state['blits'] == 0
     state['held'] = True
     send(14, 1)
+    assert m.call(0x4010095c, controller) & 255 == 1, 'opening must reach the real compose gate'
+    assert u.mem_read(ui + 0x20, 1) == b'\xa5', 'root owner was clobbered'
     assert field(0) == 1 and field(12) == FORWARDS and mode() == FORWARDS and not state['changed']
     send(14, 9)  # held opening arrow must not navigate or apply
     assert field(12) == FORWARDS
@@ -680,6 +692,7 @@ def run_key(stock_path, bank_path):
     state['held'] = False
     send(2, 0x10, 0)  # TRK began before the modal: its release stays native
     frame = draw()
+    first_draw_cost = state['instructions']
     assert state['writes'] > 0
     # All nine icons, including FORWARD, rendered with selection inversion.
     forward_icon = ['.......', '....x..', '.....x.', 'xxxxxxx', '.....x.', '....x..', '.......']
@@ -700,12 +713,16 @@ def run_key(stock_path, bank_path):
                 assert lit(frame, x, y) == bool(0xaa & (0x80 >> (y % 8)))
     assert all(not lit(frame, x, 3) for x in range(5, 123)), 'footer must not touch the border'
     assert draw() == frame and state['writes'] == 0  # unchanged frame: only one blit
+    cached_draw_cost = state['instructions']
     assert m.call(sym['playhead_selector_enc'], 0, event) == 1
     send(15, 1)
     send(15, 9)  # navigation repeat works after the opener was released
     send(15, 0x10)
     assert field(12) == PENDULUM and mode() == FORWARDS and not state['changed']
     assert draw() != frame and state['writes'] > 0
+    cursor_draw_cost = state['instructions']
+    assert state['writes'] <= 216, 'only the old and new eight-pixel rows may be inverted'
+    assert cursor_draw_cost < first_draw_cost // 3, ('cursor rebuild too expensive', first_draw_cost, cursor_draw_cost)
     press(13)
     assert not field(0) and mode() == FORWARDS and not state['changed']
     assert draw() == b'\xaa' * 1024
@@ -713,6 +730,25 @@ def run_key(stock_path, bank_path):
     state['held'] = True
     press(15); press(12)
     assert not field(0) and mode() == FORWARDS and not state['changed']
+    # The incremental highlight must equal a clean native-rasterized frame
+    # across every mode and the column/end wrap, in both directions.
+    def highlighted(mode_id):
+        expected = bytearray(frame)
+        for current in (0, mode_id) if mode_id else ():
+            x = 8 if current < 5 else 66
+            top = 48-8*(current if current < 5 else current-5)
+            for col in range(x, x+54):
+                for y in range(top-6, top+2):
+                    expected[8*col+y//8] ^= 0x80 >> (y % 8)
+        return bytes(expected)
+    press(14)
+    assert draw() == frame
+    for key in (15, 14):
+        for _ in range(18):
+            press(key)
+            assert draw() == highlighted(field(12)), ('incremental highlight', key, field(12))
+            assert state['writes'] <= 216
+    press(13)
     # Commit each option with YES, once, to the track captured at opening.
     for expected in range(1, 9):
         press(14)
@@ -764,6 +800,11 @@ def run_key(stock_path, bank_path):
     assert field(0) and field(20) == 1 and mode(12) == FORWARDS
     press(13)
     assert not field(0) and len(state['changed']) == n
+    (preview_dir/'latency-validation.json').write_text(json.dumps(dict(
+        native_ui_getter=True, native_compose_gate=True, root_owner_preserved=True,
+        full_draw_instructions=first_draw_cost, cached_draw_instructions=cached_draw_cost,
+        cursor_draw_instructions=cursor_draw_cost, incremental_highlight_cases=36,
+        key_commit_boundary='native kitChanged is doubled; no hardware latency measurement'), indent=2)+'\n')
     return 1
 
 
