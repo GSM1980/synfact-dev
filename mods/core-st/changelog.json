@@ -16,6 +16,11 @@
           "sha": "eae3159",
           "date": "2026-11-17",
           "subject": "Changelogs: core 2.0.1"
+        },
+        {
+          "sha": "3d50e09",
+          "date": "2026-11-17",
+          "subject": "Changelogs: ARP 1.10.6"
         }
       ]
     },

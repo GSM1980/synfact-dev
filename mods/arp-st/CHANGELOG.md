@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.10.6.
 ## 1.10.6 (2026-11-17)
 
 - ARP 1.10.6: RANGE shows the octaves moved (-3..3) (`07c5d2b`, 2026-11-17)
+- Changelogs: ARP 1.10.6 (`3d50e09`, 2026-11-17)
 
 ## 1.10.5 (2026-11-17)
 

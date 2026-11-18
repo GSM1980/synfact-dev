@@ -1,11 +1,16 @@
 # Changelog: POLY
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.6.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.7.
+
+## 1.7 (2026-11-18)
+
+- POLY 1.7: digital slaves keep and restore their own Sounds (`599d8dd`, 2026-11-18)
 
 ## 1.6.1 (2026-11-17)
 
 - move to OS 1.42 (`276667a`, 2026-11-17)
 - Changelogs: move to OS 1.42 (`3c0cdcb`, 2026-11-17)
+- Changelogs: ARP 1.10.6 (`3d50e09`, 2026-11-17)
 
 ## 1.6 (2026-11-14)
 

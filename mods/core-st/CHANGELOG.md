@@ -6,6 +6,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 2.0.1.
 
 - Core 2.0.1: stream stock PCM safely and defer waveforms (`b6406a5`, 2026-11-17)
 - Changelogs: core 2.0.1 (`eae3159`, 2026-11-17)
+- Changelogs: ARP 1.10.6 (`3d50e09`, 2026-11-17)
 
 ## 2.0.0 (2026-11-17)
 
