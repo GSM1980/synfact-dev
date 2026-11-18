@@ -52,11 +52,12 @@ class Activity(Patchers):
             self.call('core_native_interest_set',self.bs['chorus_native'],1<<11)
         for i,(name,init,subscriptions) in enumerate(self.modules):
             if name=='PLAYHEAD' and not full_catalog:
-                assert subscriptions==[2,0x101,11],subscriptions
-                self.w(DESCRIPTORS+16*i+12,2)
-                self.modules[i]=(name,init,subscriptions[:2])
+                assert subscriptions in ([2,0x101,11],[2,0x101,1,3,11]),subscriptions
+                self.w(DESCRIPTORS+16*i+12,len(subscriptions)-1)
+                self.modules[i]=(name,init,subscriptions[:-1])
                 self.expected[11].remove(self.bs['playhead_native'])
         self.run('full')
+        self.lfo_route_bit=self.route_bit('lfo3_native')
         if 'chorus_native' in self.bs:
             # Chorus initialization is a boundary in Patchers. Its real UI
             # initializer (chorus-st/ui.c) restricts this callback to PAGE_LAYOUT;
@@ -65,7 +66,8 @@ class Activity(Patchers):
             self.call('core_native_interest_set',self.bs['chorus_native'],1<<11)
             route=bytes(self.u.mem_read(self.sym['core:core_native_interest'],24))
             # Pre-optimization LFO3 remains subscribed even with neutral output.
-            assert route[11]&0x88 and route[17]==(0 if self.dynamic else 1),('initial_inactive_route',route.hex())
+            assert route[11]&(0x80|self.route_bit('chorus_native')) and route[17]==(
+                0 if self.dynamic else self.lfo_route_bit),('initial_inactive_route',route.hex())
         assert self.word(self.lfo['hooks_installed'])==1 and self.word(self.lfo['in_sram'])==1
         self.sr=0x2000
         self.w(0x444dc730,POOL)
@@ -73,6 +75,10 @@ class Activity(Patchers):
         self.call('lfo3_events_init',self.context,71)
         self.store=self.call('lfo3_owned_lookup',PATTERN+0x3bc5)
         assert self.store
+
+    def route_bit(self,name):
+        index=self.event_list(11).index(self.bs[name])
+        return 1<<index if index<7 else 0x80
 
     def write_hook(self,u,access,at,n,value,user):
         if self.dynamic and at==self.bs['lfo3_output_rows']:
@@ -135,7 +141,7 @@ class Activity(Patchers):
         if self.dynamic:
             assert self.word(self.bs['lfo3_output_rows'])==expected
             route=bytes(self.u.mem_read(self.sym['core:core_native_interest']+17,1))[0]
-            assert bool(route&0x81)==bool(expected),'LFO3 route differs from output rows'
+            assert bool(route&(0x80|self.lfo_route_bit))==bool(expected),'LFO3 route differs from output rows'
         assert self.word(self.bs['modulation_skip_mode'])==2
         for op in (9,10,11):
             assert bytes(self.u.mem_read(self.sym['core:core_native_interest']+op,1))!=b'\0','page route lost'

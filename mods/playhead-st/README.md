@@ -1,10 +1,23 @@
 # Playhead: step order per track (playhead-st)
 
-Desktop OS 1.42 release: **1.1**.
+Desktop OS 1.42 release: **1.2**.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
-**TRK + UP** / **TRK + DOWN**: the active track goes to the next / the
-previous mode of the cycle
+**TRK + UP** / **TRK + DOWN** opens a centered mode selector for the active
+track. All nine modes are visible in two columns, each with its icon and name.
+The highlight starts on the current mode. Release the opening arrow, then
+use **UP / DOWN** (including repeats) to move through the options, wrapping at
+the ends. **YES** applies the highlighted mode to that track and closes the
+selector. **NO** closes it without changing anything. Browsing does not change
+playback or save a kit edit; confirming the current mode also avoids an edit.
+
+The left column contains FORWARD through WALK, the right ANCHOR through
+WALK+. The header names the captured track (`TRK 1`..`TRK 12`, or `FX TRK`).
+Changing the active track, playing kit or opaque native view dismisses the
+selector without applying it. While open, keys and encoders are captured so
+the underlying page cannot be edited. Releases of consumed presses are also
+consumed after closing; a TRK press begun before opening keeps its native
+release.
 
 | mode | a 8-step track plays | in phase with the pattern |
 |---|---|---|
@@ -18,10 +31,9 @@ previous mode of the cycle
 | `FOLD` | 1 8 2 7 3 6 4 5 4 6 3 7 2 8, repeat | no: its cycle is 2 × length − 2 |
 | `WALK+` | 60% one step forwards, 20% stay, 20% one step backwards; wrap at the ends | no |
 
-FORWARD is at most four presses away from any mode. TRK + LEFT / RIGHT are
-not the module's: they stay native. The other tracks keep their modes. A
-popup over the parameter page says `TRK n REVERSE`, `TRK n PENDULUM` …
-(`FX TRK …` for the FX track).
+TRK + LEFT / RIGHT stay native while the selector is closed. The other tracks
+keep their modes. A refused native patch leaves the old mode and keeps the
+selector open with `MODES N/A`; NO still closes it.
 
 Modes belong to the pattern: each pattern has its own thirteen, and changing
 patterns changes them with it. They are saved with the pattern's kit and
@@ -116,10 +128,17 @@ These are instruction counts, not hardware cycles or a measured device CPU
 percentage. The benchmark command is in [docs/TESTS.md](../../docs/TESTS.md).
 
 The LEDs' accessor only reads the cached step in the UI task. The key
-handler runs only on key events and returns at its first compares for every
-key but UP and DOWN. The header icon is drawn on the contextual DRAW after the
+handler runs only on key events. The header icon is drawn on the contextual DRAW after the
 MainScreen view, each time it is drawn, in the UI task: with every track FORWARD the handler returns at its first
 test, and otherwise it draws at most 26 pixels.
+
+The selector never runs in the sequencer or audio paths. Its closed DRAW/ENC
+callbacks return at the first state test. It rasterizes its 128x64 masked
+bitmap only on opening, cursor movement or an error, then uses one native
+masked blit per UI frame. There is no heap allocation or periodic job. Its
+two 1 KiB pixel/mask arrays live in the SMZ bank's MAIN allocation. Native
+Bitmap construction, clipping and masked blit are checked against OS 1.42
+in Unicorn; unchanged draws make zero writes to the cached pixels.
 
 ## How
 
@@ -157,7 +176,7 @@ core's cache sequence. The sequencer runs in an interrupt, so the UI task
 never finds it in the middle of a site. Before the first write the module
 checks each site's stock words and the CRC of the code around them (the
 registers the stubs rely on); if they differ nothing is ever written and the
-popup says `MODES N/A`. The initializer patches nothing, so the core's boot
+selector says `MODES N/A`. The initializer patches nothing, so the core's boot
 gate for stock-code patchers (`mods/core-st/boot-preimages.c`, which LFO3 and
 MODULATION SKIP need because they patch at init) is not involved, and no core
 change is needed.
@@ -218,7 +237,8 @@ A change of mode must also reach what survives a power cycle without a
 project save: the kit's mirror slots. A native edit of a kit ends in
 `KitActive::kitChanged` (`40172250`, its vtable +5Ch), which re-encodes the
 kit into its mirrors (the job "KitActive::updateSingleMirror", `4001082e`).
-After each TRK + UP / DOWN the module calls it for the playing kit, so the
+After YES confirms a different mode the module calls it for the captured
+playing kit, so the
 re-encode reaches KIT_ENCODE and the record. The KitActive object is in the
 project (`40a38b18` + 378d8h, as `40018ece` reaches it) and is used only
 while its vtable (`401c33f4`), its kits (+10h, `41ad5134`) and that vtable
@@ -232,8 +252,10 @@ project that uses modes in any pattern installs them.
 
 ## Building
 
-Any bank, as a module. Put it before `arp-st` (the ARP's own view takes the
-arrows when it is open) and before `modulation-skip-st`, which stays last:
+Any bank, as a module. Put it before the other optional UI modules so its
+modal consumes KEY/ENC before ARP or the recorder can edit a page behind it.
+Machine-owned view subscribers can retain their prefix. Keep LFO3 before ARP
+before POLY, and `modulation-skip-st` last, as in the normal catalog:
 
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
@@ -249,6 +271,12 @@ It needs no core change and no host API: any bank for the current core
 
 ## Status
 
+- 1.2: centered nine-option selector, icons and text, deferred YES commit and
+  NO cancel, captured track/kit, cached native bitmap, and input priority over
+  the other optional UI modules. Sequencer sources and object code are
+  unchanged from 1.1. UI behavior, all nine icons, clipping, native blit,
+  cache reuse, context changes, FX track and refusal are checked in Unicorn.
+  Physical UI validation remains for the owner.
 - 1.1: ANCHOR, STUTTER, FOLD and WALK+, four matching pixel icons, assembly
   cache paths and a paired UI copy. Host test: 194,688,000 selections across
   lengths 1..64, thirteen tracks and both scales. Stock Unicorn differential:

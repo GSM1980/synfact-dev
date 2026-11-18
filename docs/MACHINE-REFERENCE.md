@@ -447,6 +447,15 @@ closed flag at `+30h` is a byte. Provenance and executable checks:
 [TRIG/ARP investigation](TRIG-ARP-MUTE-INVESTIGATION.md) and
 `tests/test_st_arp_native_stack_emu.py`.
 
+OS 1.42's native Bitmap constructor is `400f72be(object, width, height,
+pixels, mask)`; `400f7fb6` fills a clipped rectangle and `400f8f70(dst, src,
+x, y, flags)` blits it. An eight-word owned object can borrow retained pixel
+and mask arrays without heap allocation. For 128x64, each array is 256
+big-endian words: two words per column, with y=0 in bit 31 of the first and
+y=63 in bit 0 of the second. A zero mask bit preserves the destination pixel.
+This layout, clipping and masked blit execute against the supplied 1.42 MAIN
+in `tests/test_st_playhead_emu.py`; Playhead 1.2 caches its selector this way.
+
 Manager push `40100bc2` calls visibility recomputation `40100ade` before
 the new view's attach callback. Visibility calls `4000a0e6`, which composes
 the UI synchronously and reaches the patched `core_tick` call at `4000a220`.

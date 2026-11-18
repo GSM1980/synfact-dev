@@ -148,9 +148,14 @@ one step either way, Anchor alternating step 1 with the remaining steps,
 Stutter repeating every fourth visited step twice, Fold retracing its
 outside-to-centre traversal, and Walk+ with 60/20/20 forward/stay/backward
 probabilities; one step per count for the UI copy, the trig and the
-LEDs. Then TRK + UP / DOWN through the real key handler: the playing kit's
-mode around the cycle and the native `KitActive::kitChanged` called for that
-kit (not for another object). Then the saving (`persist.c` through the Sound metadata bus): the
+LEDs. Then TRK + UP / DOWN through the real key handler: the selector opens
+on the current mode without editing; navigation and repeat do not apply;
+YES commits to the captured track/kit and calls native `KitActive::kitChanged`
+once, NO cancels, confirming the same mode makes no edit, context changes
+cancel and keys/encoders cannot leak into the underlying view. Native Bitmap
+construction and masked blit execute on the real OS code: all nine icons,
+text regions, centered mask, selection inversion and cached draws are checked.
+Then the saving (`persist.c` through the Sound metadata bus): the
 modes in a known kit slot's free tail on KIT_ENCODE and back on KIT_DECODE,
 unknown slots never written, kit copies through a buffer, a changed buffer,
 NEW, PROJECT_NEW, a damaged record, each pattern's own kit, the sites
