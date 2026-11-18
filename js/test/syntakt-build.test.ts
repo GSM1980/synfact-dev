@@ -35,7 +35,20 @@ test('Syntakt builder rejects unpinned and malformed manifests before fetching',
   const data=new TextEncoder().encode('{}'), fetch=async()=>{throw Error('must not fetch')}
   await assert.rejects(buildSyntakt(new Uint8Array(),data,'0'.repeat(64),fetch),/manifest hash mismatch/)
   await assert.rejects(buildSyntakt(new Uint8Array(),data,sha(data),fetch),/Invalid Syntakt manifest/)
+  const pin=(file:string)=>({file,sha256:'0'.repeat(64)})
+  const old=new TextEncoder().encode(JSON.stringify({schema:1,device:'syntakt',os:'1.41',meter:true,
+    mods:[pin('core.elemod'),pin('machines.elemod')],audio:pin('audio.bin'),upper:pin('upper.bin'),symbols:{},
+    mainSha256:'0'.repeat(64),audioSha256:'0'.repeat(64),outputSha256:'0'.repeat(64)}))
+  await assert.rejects(buildSyntakt(new Uint8Array(),old,sha(old),fetch),/Invalid Syntakt manifest/)
 })
+
+test('OS 1.42 core package refuses official OS 1.41 before fetching artifacts',
+  {skip: !process.env.SYNTAKT_PREVIOUS_STOCK || !process.env.SYNTAKT_ARTIFACTS}, async () => {
+    const stock=readFileSync(process.env.SYNTAKT_PREVIOUS_STOCK!)
+    const manifest=readFileSync(join(process.env.SYNTAKT_ARTIFACTS!,'syntakt.json'))
+    await assert.rejects(buildSyntakt(stock,manifest,sha(manifest),async()=>{throw Error('must not fetch')}),
+      /Requires official Syntakt OS 1.42/)
+  })
 
 test('Syntakt core matches an independent desktop reference',
   {skip: !process.env.SYNTAKT_STOCK || !process.env.SYNTAKT_ARTIFACTS || !process.env.SYNTAKT_REFERENCE}, async () => {

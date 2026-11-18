@@ -31,7 +31,7 @@ test('an SMZ artifact with donor bytes needs the donor file, and schema 2',async
   sections:[{name:'',size:0,align:1,data:''},{name:'.data',size:16,align:4,data:'00'.repeat(16)}],
   symbols:[{name:'entry',value:0,size:16,bind:1,section:1}],relocations:[]}],
   donor:{...spec,fills:[{side:'main',object:0,section:1,copies:[[0,'audio',0,4]]}]}})
- const catalog=(schema:number)=>encode({schema,device:'syntakt',os:'1.41',approved:[],
+ const catalog=(schema:number)=>encode({schema,device:'syntakt',os:'1.42',approved:[],
   modules:[{id:'fm',file:'fm.json',sha256:sha(artifact),donor:{title:'FM TONE',device:'digitone-mk1',versions:['1.44']}}]})
  const get=async()=>artifact
  const two=catalog(2),one=catalog(1)

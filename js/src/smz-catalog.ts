@@ -8,7 +8,7 @@ async function build(catalogBytes:Uint8Array, catalogHash:string, selected:strin
   fetch:(name:string)=>Promise<Uint8Array>, requireApproval:boolean, donor?:Uint8Array) {
   if(!/^[0-9a-f]{64}$/.test(catalogHash)||sha(catalogBytes)!==catalogHash)throw Error('SMZ catalog hash mismatch')
   const c=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(catalogBytes))
-  if((c.schema!==1&&c.schema!==2)||c.device!=='syntakt'||c.os!=='1.41'||!Array.isArray(c.modules)||c.modules.length>32||
+  if((c.schema!==1&&c.schema!==2)||c.device!=='syntakt'||c.os!=='1.42'||!Array.isArray(c.modules)||c.modules.length>32||
     c.modules.some((p:any)=>!p||typeof p.id!=='string'||!/^[\w-]+$/.test(p.id)||typeof p.file!=='string'||
       !/^[\w.-]+\.json$/.test(p.file)||!/^[0-9a-f]{64}$/.test(p.sha256))||
     new Set(c.modules.map((p:any)=>p.id)).size!==c.modules.length||new Set(c.modules.map((p:any)=>p.file)).size!==c.modules.length||!Array.isArray(c.approved))

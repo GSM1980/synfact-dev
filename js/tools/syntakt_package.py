@@ -23,8 +23,8 @@ def main():
     report = json.loads((a.reference / 'verification.json').read_text(encoding='utf-8'))
     core = json.loads(a.core.read_text(encoding='utf-8-sig'))
     target = core.get('target', {})
-    if core.get('id') != 'core' or target.get('device') != 'syntakt' or str(target.get('os')) != '1.41':
-        raise ValueError('core must target Syntakt 1.41')
+    if core.get('id') != 'core' or target.get('device') != 'syntakt' or str(target.get('os')) != '1.42':
+        raise ValueError('core must target Syntakt 1.42')
     if not all(report['protected_sections'][str(i)]['stock'] for i in (1, 2, 4, 5, 6, 8)):
         raise ValueError('reference protected-section verification failed')
     symbols = report['audio']['symbols']
@@ -45,7 +45,7 @@ def main():
         data = b''
         (a.out / 'audio-upper.bin').write_bytes(data)
         upper = {'file': 'audio-upper.bin', 'sha256': hashlib.sha256(data).hexdigest()}
-    manifest = {'schema': 1, 'device': 'syntakt', 'os': '1.41', 'coreVersion': core['version'],
+    manifest = {'schema': 1, 'device': 'syntakt', 'os': '1.42', 'coreVersion': core['version'],
                 'contract': CONTRACT,
                 'meter': a.meter, 'mods': mods, 'audio': audio, 'upper': upper, 'symbols': symbols,
                 'mainSha256': report['output']['main']['sha256'],
