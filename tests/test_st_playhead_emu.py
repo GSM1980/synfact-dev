@@ -259,7 +259,7 @@ def run(stock_path, bank_path):
     return n
 
 
-FORWARDS, BACKWARDS, PENDULUM, RANDOM, WALK = range(5)
+FORWARDS, BACKWARDS, PENDULUM, RANDOM, WALK, ANCHOR, STUTTER, FOLD, WALK_PLUS = range(9)
 
 
 def run_modes(stock_path, bank_path):
@@ -299,6 +299,21 @@ def run_modes(stock_path, bank_path):
             assert L == 1 and b == 0 or (b - a) % L in (1, L - 1), (t, L, a, b)
         if L > 2:
             assert len(set(got)) > 2
+        anchor = [0] if L == 1 else [v for j in range(1, L) for v in (0, j)]
+        assert play(ANCHOR, 6 * L) == [anchor[i % len(anchor)] for i in range(6 * L)]
+        fold = [v for pair in zip(range(L), reversed(range(L))) for v in pair][:L]
+        fold += fold[-2:0:-1]
+        assert play(FOLD, 6 * L) == [fold[i % len(fold)] for i in range(6 * L)]
+        assert play(STUTTER, 10 * L) == [(i // 5 * 4 + min(i % 5, 3)) % L for i in range(10 * L)]
+        got = play(WALK_PLUS, 400 * L)
+        assert got[0] == 0
+        if L > 2:
+            moves = [(b - a) % L for a, b in zip(got, got[1:])]
+            assert set(moves) == {0, 1, L - 1}
+            # Broad bounds verify forward gravity without pinning a PRNG stream.
+            assert .5 < moves.count(1) / len(moves) < .7
+            assert .12 < moves.count(0) / len(moves) < .28
+            assert .12 < moves.count(L - 1) / len(moves) < .28
         # A count that is not the next one starts again from it (pendulum: up).
         m.call(sym['playhead_seq_set'], KIT_INDEX, t, PENDULUM)
         for k in range(3):
@@ -308,35 +323,52 @@ def run_modes(stock_path, bank_path):
         assert m.call(step, t, L + 2, PATTERN, 1) == L + 2           # past the length: as it is
         m.call(sym['playhead_seq_set'], KIT_INDEX, t, FORWARDS)
         n += 1
-    # Through the stubs as one step of the sequencer runs them, pendulum on track 4.
-    t, L = 4, lengths[4]
-    m.call(sym['playhead_seq_set'], KIT_INDEX, t, PENDULUM)
-    m.call(sym['playhead_seq_set'], KIT_INDEX, 12, RANDOM)
-    shown = []
-    for i in range(3 * L):
-        k = i % L
-        m.w8(LAST + t, (k - 1) % L if i else 0)
-        m.w8(STEP + t, k)
-        regs = {r: 0 for r in D + A}
-        regs[D[0]] = 13
-        m.run(0x4008d1de, 0x4008d24a, regs)                          # the tick's copy, after the advance
-        ui = m.u.mem_read(UI_STEP + t, 1)[0]
-        regs = {r: 0 for r in D + A}
-        regs.update({D[0]: PATTERN, D[6]: t, A[6]: STEP + t, D[5]: 0x5555})
-        _, stack = m.run(0x4008cf78, 0x4008cf80, regs)              # the trig at tick 0
-        assert struct.unpack_from('>I', stack, 0)[0] == ui, (i, ui)
-        m.w8(LAST + t, k)
-        shown.append(m.call(0x4008b7ac, t))                           # the LEDs, a step later
-        assert shown[-1] == ui
-    cycle = list(range(L)) + list(range(L - 2, 0, -1))
-    assert shown == [cycle[i % len(cycle)] for i in range(3 * L)], shown
+    # Real tick-copy, all three trig sites and LEDs agree for every new mode,
+    # including the two-step case where previous and next counts coincide.
+    for t in (4, 2):
+        L = lengths[t]
+        for mode in (PENDULUM, ANCHOR, STUTTER, FOLD, WALK_PLUS):
+            m.call(sym['playhead_seq_set'], KIT_INDEX, t, mode)
+            shown = []
+            for i in range(6 * L):
+                k = i % L
+                m.w8(LAST + t, (k - 1) % L if i else 0)
+                m.w8(STEP + t, k)
+                regs = {r: 0 for r in D + A}
+                regs[D[0]] = 13
+                m.run(0x4008d1de, 0x4008d24a, regs)
+                ui = m.u.mem_read(UI_STEP + t, 1)[0]
+                if i:
+                    assert m.u.mem_read(UI_LAST + t, 1)[0] == shown[-1]
+                # Six native ticks per ordinary sixteenth: the remaining
+                # tick copies must hit the pair cache without advancing.
+                before_ui = bytes(m.u.mem_read(UI_LAST, 26))
+                for _ in range(5):
+                    m.run(0x4008d1de, 0x4008d24a, regs)
+                    assert bytes(m.u.mem_read(UI_LAST, 26)) == before_ui
+                regs = {r: 0 for r in D + A}
+                regs.update({D[0]: PATTERN, D[6]: t, A[6]: STEP + t, D[5]: 0x5555})
+                for site in (0x4008cf78, 0x4008cf8c):
+                    _, stack = m.run(site, site + 8, regs)
+                    assert struct.unpack_from('>I', stack, 0)[0] == ui, (mode, i, ui)
+                regs.update({D[2]: t, A[0]: PATTERN, D[0]: k})
+                _, stack = m.run(0x4008c27c, 0x4008c286, regs)
+                assert struct.unpack_from('>I', stack, 8)[0] == ui, (mode, i, ui)
+                m.w8(LAST + t, k)
+                shown.append(m.call(0x4008b7ac, t))
+                assert shown[-1] == ui
+            m.call(sym['playhead_seq_set'], KIT_INDEX, t, FORWARDS)
     return n
 
 
 ICONS = {BACKWARDS: [".......", "..x....", ".x.....", "xxxxxxx", ".x.....", "..x....", "......."],
          PENDULUM: [".........", "..x...x..", ".x.....x.", "xxxxxxxxx", ".x.....x.", "..x...x..", "........."],
          RANDOM: [".xxxxx.", "x.....x", "x.x.x.x", "x..x..x", "x.x.x.x", "x.....x", ".xxxxx."],
-         WALK: ["....xx.", ".......", ".xx....", ".......", "....xx.", ".......", ".xx...."]}
+         WALK: ["....xx.", ".......", ".xx....", ".......", "....xx.", ".......", ".xx...."],
+         ANCHOR: ["...x...", "..xxx..", "...x...", "...x...", "x..x..x", ".x.x.x.", "..xxx.."],
+         STUTTER: [".......", "x.x.x..", "x.x.xx.", "x.x.xxx", "x.x.xx.", "x.x.x..", "......."],
+         FOLD: ["x.....x", ".x...x.", "..x.x..", "...x...", "..x.x..", ".x...x.", "x.....x"],
+         WALK_PLUS: [".xx......", "......x..", "...xx..x.", ".....xxxx", ".xx....x.", "......x..", "...xx...."]}
 FAKE = 0x51000000          # the UI controller, the MainScreen, the app, a font
 
 
@@ -380,7 +412,8 @@ def run_header(stock_path, bank_path):
     for bpm, digits in ((120, 3), (75, 2), (300, 3)):
         m.w32(0x402d7360, bpm * 120)
         width = 6 * (digits + 2) - 1
-        for t, mode in ((0, BACKWARDS), (3, PENDULUM), (5, RANDOM), (12, WALK), (7, FORWARDS)):
+        for mode in range(9):
+            t = 12 if mode % 2 else 0
             m.call(sym['playhead_seq_set'], KIT_INDEX, 1, PENDULUM)           # keeps the sites in
             m.call(sym['playhead_seq_set'], KIT_INDEX, t, mode)
             state.update(track=t, fills=[])
@@ -472,8 +505,10 @@ def run_persist(stock_path, bank_path):
 
     m.song(1, 16, [16] * TRACKS)
     want = [0] * 13
-    want[3], want[12] = PENDULUM, WALK
-    for t in (3, 12):
+    want[:9] = range(9)
+    want[3], want[9] = PENDULUM, RANDOM
+    want[12] = WALK
+    for t in range(TRACKS):
         assert m.call(sym['playhead_seq_set'], 7, t, want[t]) == 0
     assert installed()
     # Encode into a known slot: the record.
@@ -498,6 +533,15 @@ def run_persist(stock_path, bank_path):
     u.mem_write(slot(7) + RECORD + 6, b'\x01')
     meta(KIT_DECODE, kit(9), slot(7), CONTAINER)
     assert modes(9) == [0] * 13
+    # A well-checksummed unknown ID is refused; legacy 0..4 still decode.
+    for ids, expected in (([9] + want[1:], [0] * 13), ([t % 5 for t in range(13)], [t % 5 for t in range(13)])):
+        record = bytearray(rec)
+        record[4:17] = bytes(ids)
+        struct.pack_into('>I', record, 20, fnv(record[:20]))
+        u.mem_write(slot(7) + RECORD, bytes(record))
+        meta(KIT_DECODE, kit(9), slot(7), CONTAINER)
+        assert modes(9) == expected
+    meta(NEW, kit(9), 0, KIT_BYTES)
     # Copies: live to live, live to a buffer and back, a changed buffer.
     meta(COPY, kit(10), kit(7), KIT_BYTES)
     assert modes(10) == want
@@ -590,11 +634,16 @@ def run_key(stock_path, bank_path):
     press(15)
     assert mode() == FORWARDS and state['changed'][-1] == (kit_active, KIT_INDEX, 0)
     press(15)
-    assert mode() == WALK                                       # around the cycle
+    assert mode() == WALK_PLUS                                  # around the cycle
     m.w32(kit_active + 16, 0)                                   # not the stock object: no call
     n = len(state['changed'])
     press(14)
     assert mode() == FORWARDS and len(state['changed']) == n
+    for expected in range(1, 9):
+        press(14)
+        assert mode() == expected
+    press(14)
+    assert mode() == FORWARDS
     return 1
 
 
@@ -607,7 +656,7 @@ def main():
     print(f'PASS: playhead-st step sites: {n} cases forwards equal stock, backwards mirrored; '
           'sites in and out; a changed context refused')
     n = run_modes(a.stock, a.bank)
-    print(f'PASS: playhead-st modes on {n} tracks: pendulum, random and walk as specified, '
+    print(f'PASS: playhead-st modes on {n} tracks: all nine modes as specified, '
           'one step per count for the UI copy, the trig and the LEDs')
     run_key(a.stock, a.bank)
     print('PASS: playhead-st keys: TRK + UP / DOWN around the cycle on the playing kit, '

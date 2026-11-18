@@ -88,8 +88,18 @@ static void patch(u32 on)
  * last counts and their steps are kept, so every later ask for them (the trig,
  * the LEDs, live recording) gets the same step. A count that is not the next
  * one (a start, a resync, a pattern change) starts the mode again from it. */
-struct playhead_track {u8 count,step,last_count,last_step;signed char dir;u8 valid,kit,mode;};
-static struct playhead_track tracks[16];
+/* 16-byte stride and these offsets are shared with the assembly fast path.
+ * A cache miss still uses this canonical selector. IRQ updates finish before
+ * the UI task resumes; setters invalidate under the existing IRQ exclusion. */
+struct playhead_track {u8 count,step,last_count,last_step;signed char dir;
+    u8 valid,kit,mode,length,phase,next_count,pad;u32 kit_address;};
+_Static_assert(sizeof(struct playhead_track)==16,"assembly track stride");
+_Static_assert(__builtin_offsetof(struct playhead_track,valid)==5 &&
+    __builtin_offsetof(struct playhead_track,length)==8 &&
+    __builtin_offsetof(struct playhead_track,next_count)==10 &&
+    __builtin_offsetof(struct playhead_track,kit_address)==12,"assembly track offsets");
+struct playhead_track playhead_tracks[16];
+#define tracks playhead_tracks
 static u32 seed=0x2545f491u;
 static u32 random32(void)
 {u32 x=seed;x^=x<<13;x^=x>>17;x^=x<<5;return seed=x;}
@@ -103,6 +113,8 @@ static u32 start(u32 mode,struct playhead_track *s,u32 j,u32 n)
 {
     seed^=*(const volatile u32 *)0x43bcc3a4u;if(!seed)seed=1;   /* the native clock */
     s->dir=j+1u>=n?-1:1;
+    s->phase=mode==PLAYHEAD_ANCHOR?1:0;
+    if(mode==PLAYHEAD_ANCHOR || mode==PLAYHEAD_FOLD){s->dir=1;return 0;}
     return mode==PLAYHEAD_RANDOM?below(n):j;
 }
 static u32 next(u32 mode,struct playhead_track *s,u32 n)
@@ -111,7 +123,36 @@ static u32 next(u32 mode,struct playhead_track *s,u32 n)
     if(n<=1u)return 0;
     if(q>(int)n-1)q=(int)n-1;                   /* a length made shorter */
     if(mode==PLAYHEAD_RANDOM)return below(n);
-    if(mode==PLAYHEAD_WALK)return (u32)(q+(random32()&0x10000u?1:(int)n-1))%n;
+    if(mode==PLAYHEAD_WALK){
+        if(random32()&0x10000u)return (u32)q+1u<n?(u32)q+1u:0u;
+        return q?(u32)q-1u:n-1u;
+    }
+    if(mode==PLAYHEAD_WALK_PLUS){
+        u32 r=random32()>>16;
+        /* Exactly the same buckets as (r*5)>>16, without a multiply. */
+        if(r<39322u)return (u32)q+1u<n?(u32)q+1u:0u;
+        return r<52429u?(u32)q:q?(u32)q-1u:n-1u;
+    }
+    if(mode==PLAYHEAD_ANCHOR){
+        if(q)return 0;
+        q=s->phase;
+        s->phase=(u8)((u32)q+1u<n?(u32)q+1u:1u);
+        return (u32)q;
+    }
+    if(mode==PLAYHEAD_STUTTER){
+        /* Every fourth visited step is played twice on the native grid. */
+        s->phase=(u8)(s->phase<4u?s->phase+1u:0u);
+        if(s->phase==4u)return (u32)q;
+        return (u32)q+1u<n?(u32)q+1u:0u;
+    }
+    if(mode==PLAYHEAD_FOLD){
+        /* Bounce through ranks 0..n-1; map ranks to alternating ends. */
+        int rank=(int)s->phase+s->dir;
+        if(rank>=(int)n-1){rank=(int)n-1;s->dir=-1;}
+        else if(rank<=0){rank=0;s->dir=1;}
+        s->phase=(u8)rank;
+        return rank&1?n-1u-(u32)rank/2u:(u32)rank/2u;
+    }
     q+=s->dir;                                  /* PLAYHEAD_PENDULUM: no end twice */
     if(q>=(int)n-1){q=(int)n-1;s->dir=-1;}
     else if(q<=0){q=0;s->dir=1;}
@@ -132,25 +173,43 @@ static u32 pattern_kit(const u8 *pattern)
     if(pattern==*(const u8 *const volatile *)0x43bd8438u)return playhead_kit_index(*(const volatile u32 *)0x43bd8444u);
     return PLAYHEAD_KITS;
 }
+/* Already-resolved cache: called once for a new count, directly from the
+ * register-ABI fast path too. No kit division or metadata revalidation. */
+u32 playhead_advance(struct playhead_track *s,u32 j)
+{
+    u32 n=s->length,p=s->valid && j==s->next_count?next(s->mode,s,n):start(s->mode,s,j,n);
+    s->last_count=s->valid?s->count:(u8)j;s->last_step=s->valid?s->step:(u8)p;
+    s->valid=0;s->count=(u8)j;s->step=(u8)p;
+    s->next_count=(u8)(j+1u<n?j+1u:0u);s->valid=1;
+    return p;
+}
 u32 playhead_step(u32 t,u32 j,const u8 *pattern,u32 compute)
 {
     u32 k,mode,n,p;struct playhead_track *s;
-    if(t>=PLAYHEAD_TRACKS || !pattern || (k=pattern_kit(pattern))>=PLAYHEAD_KITS ||
-       !(mode=playhead_modes[k][t]))return j;
+    if(t>=PLAYHEAD_TRACKS || !pattern || (k=pattern_kit(pattern))>=PLAYHEAD_KITS)return j;
+    mode=playhead_modes[k][t];
     n=track_length(pattern,t);
     if(j>=n)return j;
-    if(mode==PLAYHEAD_BACKWARDS)return n-1u-j;
     s=&tracks[t];
-    if(s->valid && (s->kit!=k || s->mode!=mode))s->valid=0;  /* another pattern or mode */
+    if(mode<=PLAYHEAD_BACKWARDS){
+        p=mode?n-1u-j:j;
+        if(compute){
+            s->valid=0;s->kit=(u8)k;s->mode=(u8)mode;s->length=(u8)n;
+            s->kit_address=PLAYHEAD_KIT_BASE+k*PLAYHEAD_KIT_BYTES;s->valid=2;
+        }
+        return p;
+    }
+    if(s->valid && (s->kit!=k || s->mode!=mode || s->length!=n))s->valid=0;
     if(s->valid){
         if(j==s->count)return s->step;
-        if(j==s->last_count)return s->last_step;
+        /* With length 2 the previous count is also the next count. Only
+         * the sequencer may advance it; UI reads must retain the old step. */
+        if(j==s->last_count && (!compute || j!=s->next_count))return s->last_step;
         if(!compute)return s->step;
     }else if(!compute)return j;
-    p=s->valid && j==(s->count+1u)%n?next(mode,s,n):start(mode,s,j,n);
-    s->last_count=s->count;s->last_step=s->step;
-    s->count=(u8)j;s->step=(u8)p;s->kit=(u8)k;s->mode=(u8)mode;s->valid=1;
-    return p;
+    s->kit=(u8)k;s->mode=(u8)mode;s->length=(u8)n;
+    s->kit_address=PLAYHEAD_KIT_BASE+k*PLAYHEAD_KIT_BYTES;
+    return playhead_advance(s,j);
 }
 /* The sites go in when some kit has a mode, and out when none has. */
 static u32 sites_wanted(void)

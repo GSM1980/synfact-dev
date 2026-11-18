@@ -44,12 +44,95 @@ playhead_peek:
         lea -16(%sp),%sp
         movem.l %d0/%a0-%a1,(%sp)
         moveq #0,%d0
-        bra.s 1f
+        bra.s playhead_fast
 playhead_mirror:
         lea -16(%sp),%sp
         movem.l %d0/%a0-%a1,(%sp)
         moveq #1,%d0
-1:      move.l %d0,-(%sp)               | compute
+playhead_fast:
+        move.l %d0,12(%sp)             | compute; unused fourth save slot
+        cmpi.l #13,%d7
+        bcc.w playhead_slow
+        move.l %d7,%d0
+        lsl.l #4,%d0                   | 16-byte state, no multiply/divide
+        lea playhead_tracks,%a1
+        adda.l %d0,%a1
+        tst.b 5(%a1)                   | published cache
+        beq.w playhead_slow
+        cmpa.l 0x43bd8430,%a0
+        beq.s playhead_current
+        cmpa.l 0x43bd8438,%a0
+        bne.w playhead_slow
+        move.l 0x43bd8444,%d0
+        bra.s playhead_cached_kit
+playhead_current:
+        move.l 0x43bd843c,%d0
+playhead_cached_kit:
+        cmp.l 12(%a1),%d0
+        bne.w playhead_slow
+        mvz.b 6(%a1),%d0
+        lsl.l #4,%d0
+        add.l %d7,%d0
+        lea playhead_modes,%a0
+        mvz.b (%a0,%d0.l),%d0
+        movea.l 4(%sp),%a0
+        cmp.b 7(%a1),%d0               | also safe for a raw mode-table edit
+        bne.w playhead_slow
+        tst.l %d0
+        beq.w playhead_fast_done        | FORWARD: no length or step work
+        adda.l #0x20000,%a0
+        tst.b 0x1379(%a0)
+        beq.s playhead_pattern_length
+        movea.l 4(%sp),%a0
+        move.l #0x499,%d0
+        mulu.l %d7,%d0
+        adda.l %d0,%a0
+        mvz.w 969(%a0),%d0
+        bra.s playhead_cached_length
+playhead_pattern_length:
+        mvz.w 0x1374(%a0),%d0
+playhead_cached_length:
+        cmp.b 8(%a1),%d0
+        bne.s playhead_slow
+        cmp.l %d0,%d1
+        bcc.s playhead_fast_done        | outside the track: native count
+        btst #1,5(%a1)                 | valid 2: stateless reverse
+        beq.s playhead_cached_step
+        subq.l #1,%d0                  | REVERSE, entirely in registers
+        sub.l %d1,%d0
+        move.l %d0,%d1
+        bra.s playhead_fast_done
+playhead_cached_step:
+        cmp.b (%a1),%d1
+        beq.s playhead_same_step
+        cmp.b 2(%a1),%d1
+        bne.s playhead_new_count
+        tst.l 12(%sp)
+        beq.s playhead_previous_step
+        cmp.b 10(%a1),%d1              | two-step next/previous ambiguity
+        beq.s playhead_advance_count
+playhead_previous_step:
+        mvz.b 3(%a1),%d1
+        bra.s playhead_fast_done
+playhead_same_step:
+        mvz.b 1(%a1),%d1
+        bra.s playhead_fast_done
+playhead_new_count:
+        tst.l 12(%sp)
+        beq.s playhead_same_step        | a peek never chooses a new step
+playhead_advance_count:
+        move.l %d1,-(%sp)
+        move.l %a1,-(%sp)
+        jsr playhead_advance
+        addq.l #8,%sp
+        move.l %d0,%d1
+playhead_fast_done:
+        movem.l (%sp),%d0/%a0-%a1
+        lea 16(%sp),%sp
+        rts
+playhead_slow:
+        movea.l 4(%sp),%a0
+        move.l 12(%sp),-(%sp)          | compute
         move.l %a0,-(%sp)               | the pattern
         move.l %d1,-(%sp)               | the count
         move.l %d7,-(%sp)               | the track
@@ -122,6 +205,91 @@ playhead_trig_c:
 playhead_ui_copy:
         lea -16(%sp),%sp
         movem.l %d1/%d7/%a0/%a1,(%sp)
+        | Most ticks do not advance a step. Validate its metadata once and
+        | copy both cached indices, instead of resolving the same kit twice.
+        cmp.l 0x43bd8430,%d4
+        bne.w playhead_ui_slow
+        move.l %d0,%d7
+        lsl.l #4,%d7
+        lea playhead_tracks,%a1
+        adda.l %d7,%a1
+        tst.b 5(%a1)
+        beq.w playhead_ui_slow
+        move.l 12(%a1),%d1
+        cmp.l 0x43bd843c,%d1
+        bne.w playhead_ui_slow
+        mvz.b 6(%a1),%d7
+        lsl.l #4,%d7
+        add.l %d0,%d7
+        lea playhead_modes,%a0
+        mvz.b (%a0,%d7.l),%d1
+        cmp.b 7(%a1),%d1
+        bne.w playhead_ui_slow
+        tst.l %d1
+        beq.w playhead_ui_forward
+        movea.l %d4,%a0
+        adda.l #0x20000,%a0
+        tst.b 0x1379(%a0)
+        beq.s playhead_ui_pattern_length
+        movea.l %d4,%a0
+        move.l #0x499,%d7
+        mulu.l %d0,%d7
+        adda.l %d7,%a0
+        mvz.w 969(%a0),%d7
+        bra.s playhead_ui_length
+playhead_ui_pattern_length:
+        mvz.w 0x1374(%a0),%d7
+playhead_ui_length:
+        cmp.b 8(%a1),%d7
+        bne.w playhead_ui_slow
+        btst #1,5(%a1)
+        bne.s playhead_ui_reverse
+        mvz.b (%a5),%d1
+        cmp.l %d7,%d1
+        bcc.w playhead_ui_slow
+        cmp.b (%a1),%d1
+        bne.w playhead_ui_slow
+        mvz.b (%a6),%d1
+        cmp.l %d7,%d1
+        bcc.w playhead_ui_slow
+        cmp.b (%a1),%d1
+        beq.s playhead_ui_same
+        cmp.b 2(%a1),%d1
+        bne.w playhead_ui_slow
+        mvz.b 3(%a1),%d1
+        bra.s playhead_ui_cached
+playhead_ui_same:
+        mvz.b 1(%a1),%d1
+playhead_ui_cached:
+        movea.l 12(%sp),%a0
+        move.b %d1,(%a0,%d0.l)
+        move.b 1(%a1),(%a4)+
+        addq.l #1,%a5
+        addq.l #1,%a6
+        bra.w playhead_ui_done
+playhead_ui_reverse:
+        mvz.b (%a6)+,%d1
+        cmp.l %d7,%d1
+        bcc.s 1f
+        neg.l %d1
+        add.l %d7,%d1
+        subq.l #1,%d1
+1:      movea.l 12(%sp),%a0
+        move.b %d1,(%a0,%d0.l)
+        mvz.b (%a5)+,%d1
+        cmp.l %d7,%d1
+        bcc.s 2f
+        neg.l %d1
+        add.l %d7,%d1
+        subq.l #1,%d1
+2:      move.b %d1,(%a4)+
+        bra.s playhead_ui_done
+playhead_ui_forward:
+        movea.l 12(%sp),%a1
+        move.b (%a6)+,(%a1,%d0.l)
+        move.b (%a5)+,(%a4)+
+        bra.s playhead_ui_done
+playhead_ui_slow:
         move.l %d0,%d7
         movea.l %d4,%a0
         moveq #0,%d1
@@ -133,6 +301,7 @@ playhead_ui_copy:
         move.b (%a5)+,%d1
         bsr.w playhead_mirror
         move.b %d1,(%a4)+               | the UI's step[t]
+playhead_ui_done:
         movem.l (%sp),%d1/%d7/%a0/%a1
         lea 16(%sp),%sp
         movea.l %d7,%a1

@@ -1,6 +1,6 @@
 # Playhead: step order per track (playhead-st)
 
-Desktop OS 1.42 release: **1.0.1**, based on remote main `f48f3ab`.
+Desktop OS 1.42 release: **1.1**.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
 **TRK + UP** / **TRK + DOWN**: the active track goes to the next / the
@@ -13,8 +13,12 @@ previous mode of the cycle
 | `PENDULUM` | 1 2 … 8 7 … 2, again from 1; no end twice | no: its cycle is 2 × length − 2 |
 | `RANDOM` | any step, chosen at each step | no |
 | `WALK` | one step to the left or to the right at random, around the ends | no |
+| `ANCHOR` | 1 2 1 3 1 4 1 5 1 6 1 7 1 8, repeat | no: its cycle is 2 × (length − 1) |
+| `STUTTER` | 1 2 3 4 4 5 6 7 8 8, repeat | no: every fourth visited step plays twice |
+| `FOLD` | 1 8 2 7 3 6 4 5 4 6 3 7 2 8, repeat | no: its cycle is 2 × length − 2 |
+| `WALK+` | 60% one step forwards, 20% stay, 20% one step backwards; wrap at the ends | no |
 
-FORWARD is at most two presses away from any mode. TRK + LEFT / RIGHT are
+FORWARD is at most four presses away from any mode. TRK + LEFT / RIGHT are
 not the module's: they stay native. The other tracks keep their modes. A
 popup over the parameter page says `TRK n REVERSE`, `TRK n PENDULUM` …
 (`FX TRK …` for the FX track).
@@ -29,7 +33,9 @@ until a restart.
 While the active track is not FORWARD, its mode's icon is in the header,
 two pixels left of the metronome: a thin arrow to the left (REVERSE), a thin
 arrow both ways (PENDULUM), a die showing five (RANDOM), steps left and right
-(WALK). All are one-pixel strokes, centred on the tempo's digits, dark on the
+(WALK), an anchor (ANCHOR), repeated bars and a play tip (STUTTER), a fold
+from the edges to the centre and back (FOLD), and steps with a right arrow
+(WALK+). All are one-pixel strokes, centred on the tempo's digits, dark on the
 lit header, with no box. Popups and modals cover it. FORWARD shows
 nothing, so the header is stock.
 
@@ -51,18 +57,65 @@ does not follow the one before (a start, a resync, a pattern change) starts
 them again from it. RANDOM and WALK draw from a xorshift generator mixed with
 the native clock at each start.
 
+ANCHOR always starts at step 1, then alternates it with steps 2 through the
+track's length. FOLD starts at step 1, alternates the remaining outermost
+steps until the centre, then retraces that exact path; neither turnaround
+endpoint is played twice. Both restart that traversal on a resync or a mode
+change, including when selected mid-pattern. A one-step track stays on 1.
+
+STUTTER starts at the current stock count and repeats every fourth visited
+step once before advancing: two plays total. The interval and repeat count
+are fixed. Repetitions occupy normal sequencer steps, retaining the native
+tempo and microtiming; they are not subdivisions within a step. Its phase
+continues across the native loop, so a seven-step track plays
+`1 2 3 4 4 5 6 7 1 1 2 …`. WALK+ uses the same nearest-neighbour wrap as
+WALK, adding a forward bias and the possibility of staying. Its average
+movement is +0.4 steps per tick; individual random runs can still move
+backwards or stay for several ticks. It does not impose a forced advance.
+
+Every stateful mode resets its phase and cached steps if the track length
+changes. Repeated reads of one native count keep the same chosen step;
+two-step tracks can advance when the previous count is also the next count.
+
 ## What it costs
 
 Nothing while every track is FORWARD: the sequencer's code is the stock code.
 The five sites go in with the first track in another mode and come out with
-the last one. While they are in, the MAIN sequencer interrupt does, for each
-FORWARD track, about 17 more instructions once per step (the trig) and about
-30 once per tick (the UI's copy of the step; 24 ticks a quarter note). A
-track in another mode adds a call to `playhead_step` (C, a few dozen
-instructions) per step and two per tick. At 120 BPM with every track in a
-mode that is under 100 000 instructions a second, well under a tenth of a
-percent of MAIN, and nothing in the audio paths. The LEDs' accessor adds a
-few instructions per track each time the UI reads it, in the UI task. The key
+the last one. All work stays on MAIN; nothing runs in an audio render path.
+
+The register-ABI helpers in `seq-direction.s` handle cached steps, FORWARD
+and REVERSE directly, with no C call or kit division. The UI copy validates
+the metadata once for both indices on ticks without an advance. A new count
+calls `playhead_advance` with the already-resolved state, avoiding a second
+kit lookup. The canonical `playhead_step` handles cold state, kit/mode/length
+changes and resyncs. Sixteen-byte track state needs a shift rather than a
+stride multiply. Wrapped neighbours, the next native count and the stutter
+phase use comparisons instead of division. WALK+ uses exact integer PRNG
+thresholds matching the original 60/20/20 buckets, without multiplication.
+No EMAC instruction is needed or used; its complete context is preserved.
+
+Measured by analog-emu's `cfbench` interpreter, comparing the initial C
+implementation of these nine modes with the optimized bank, 16-step track:
+
+| path | reference instructions | optimized instructions |
+|---|---:|---:|
+| UI copy, cached tick, ANCHOR / STUTTER / FOLD / WALK+ | about 186 | about 57 |
+| UI copy, FORWARD after initialization | 112 | 32 |
+| UI copy, REVERSE after initialization | 144 | 53 |
+| Cached step helper, stateful mode | 81 | 44 |
+| ANCHOR advance helper, average | 133 | 108 |
+| STUTTER advance helper, average | 142 | 120 |
+| FOLD advance helper, average | 150 | 127 |
+| WALK+ advance helper, average | 153 | 123 |
+
+Probe overhead is subtracted. Cold starts cost more (for example ANCHOR's
+step helper: 119 to 140 instructions), while initializing the reusable cache.
+The comparison covers all modes, lengths 2/16/64, pattern/track scales and
+the FX track, with identical outputs and preserved C ABI/EMAC context.
+These are instruction counts, not hardware cycles or a measured device CPU
+percentage. The benchmark command is in [docs/TESTS.md](../../docs/TESTS.md).
+
+The LEDs' accessor only reads the cached step in the UI task. The key
 handler runs only on key events and returns at its first compares for every
 key but UP and DOWN. The header icon is drawn on the contextual DRAW after the
 MainScreen view, each time it is drawn, in the UI task: with every track FORWARD the handler returns at its first
@@ -138,7 +191,10 @@ Each pattern's kit is encoded into a 1600h-byte slot of the project (and of
 the native save and reload buffers). The native codec uses [0, 14d2h) of the
 slot and LFO3 [14e0h, 15d0h); the modes take 24 bytes of the free tail at
 15e0h: `PLH1`, the thirteen modes (0 FORWARD, 1 REVERSE, 2 PENDULUM,
-3 RANDOM, 4 WALK), three zero bytes and an FNV-1a hash of those 20 bytes. A
+3 RANDOM, 4 WALK, 5 ANCHOR, 6 STUTTER, 7 FOLD, 8 WALK+), three zero bytes
+and an FNV-1a hash of those 20 bytes. The record layout and original mode IDs
+are unchanged; old records load as before. Older Playhead versions reject
+records containing the new IDs and fall back to FORWARD. A
 kit with every track FORWARD has no record (24 zero bytes). The stock
 firmware never reads the tail, so a project saved here opens on a stock unit,
 and a project without the record (or with a damaged one) opens with every
@@ -193,6 +249,16 @@ It needs no core change and no host API: any bank for the current core
 
 ## Status
 
+- 1.1: ANCHOR, STUTTER, FOLD and WALK+, four matching pixel icons, assembly
+  cache paths and a paired UI copy. Host test: 194,688,000 selections across
+  lengths 1..64, thirteen tracks and both scales. Stock Unicorn differential:
+  2,968 original-site cases plus all modes, all three trig sites, repeated
+  native tick copies, LEDs, saved records, keys and 24 header cases.
+  analog-emu: 3,888 identical outputs against the initial C implementation,
+  27 cost cases, callee-save and full EMAC preservation, broken-hook negative
+  control. Complete bank built and parsed on OS 1.42/core 2.0.3; native/common
+  regressions pass. Full-catalog initialization and 39 LFO activity cases
+  pass separately. No physical-device validation or transfer performed.
 - Build 2 (reverse, four sites) on the unit: backwards from the last step,
   the sound right, but the trig LEDs' playhead went forwards: they read the
   accessor `4008b734`.

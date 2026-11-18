@@ -129,12 +129,13 @@ toolchain they need, and the emulator checks.
 
 ```bash
 python tests/test_units.py        # needs nothing; always run it
+python -B tests/test_st_playhead.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" # Windows x86; no firmware
 python tests/test_st_fm_recipe.py --digitone Digitone_and_Digitone_Keys_OS1.44.syx   # FM TONE's recipe
 python -B tests/test_st_playhead_emu.py --bank <bank with playhead-st> --stock "$SYNTAKT_STOCK"   # Unicorn
 ```
 
 `test_st_playhead_emu.py` runs the stock sequencer code at playhead-st's five
-sites in Unicorn with the module's real `reverse_seq_set` and stubs: the two
+sites in Unicorn with the module's real `playhead_seq_set` and stubs: the two
 trig pushes (`4008cf00`, `4008cf14`), the mid-pattern trig push (`4008c204`),
 a whole tick's UI copy loop (`4008d166..d1d2`) and the accessor of the step
 the trig LEDs show (`4008b734`). Forwards equal to stock,
@@ -142,18 +143,47 @@ registers, pushed arguments and memory; backwards the step mirrored to
 `length - 1 - step` (a step at or past the length as it is), in both length
 modes and every track; the sites in with the first backwards track, out with the last;
 a changed context refused with nothing written. Then the other modes through
-`reverse_step`: pendulum without an end twice, random over every step, walk
-one step either way, one step per count for the UI copy, the trig and the
+`playhead_step`: pendulum without an end twice, random over every step, walk
+one step either way, Anchor alternating step 1 with the remaining steps,
+Stutter repeating every fourth visited step twice, Fold retracing its
+outside-to-centre traversal, and Walk+ with 60/20/20 forward/stay/backward
+probabilities; one step per count for the UI copy, the trig and the
 LEDs. Then TRK + UP / DOWN through the real key handler: the playing kit's
 mode around the cycle and the native `KitActive::kitChanged` called for that
 kit (not for another object). Then the saving (`persist.c` through the Sound metadata bus): the
 modes in a known kit slot's free tail on KIT_ENCODE and back on KIT_DECODE,
 unknown slots never written, kit copies through a buffer, a changed buffer,
 NEW, PROJECT_NEW, a damaged record, each pattern's own kit, the sites
-following the modes. Then the header icon (`reverse_draw`, DRAW | VIEW, on a fake MainScreen,
+following the modes. Then the header icon (`playhead_draw`, DRAW | VIEW, on a fake MainScreen,
 the stock tempo split): each mode's pixels inverted, two columns left of
 the metronome and centred on rows 56..62, for three tempos, nothing else, and nothing for FORWARD, another view's
 layer or a MainScreen not on top.
+
+`test_st_playhead.py` compiles the production step selector for the Windows
+x86 host with explicit native RAM and patch-write doubles. It exercises all
+nine modes over lengths 1..64, thirteen tracks and both scale modes, repeated
+reads, native wraps, mode starts and length changes, including the two-step
+cache ambiguity. It needs no stock file. The five original preimages are
+provided and their context CRC is deliberately bypassed in this host test;
+only the stock Unicorn differential verifies those firmware boundaries.
+
+`test_st_playhead_cfbench.py` executes the real bank's register-ABI step
+helpers and UI-copy hook on analog-emu's ColdFire interpreter. It compares
+outputs against a bank built from the initial implementation, counts start,
+advance, cached and peek instructions, and verifies C callee saves and the
+entire EMAC context. The UI fixture supplies the native registers and an RTS
+at its continuation; the stock differential independently checks that hook
+inside the real native loop. Six tick copies per step exercise the paired
+cache. Counts exclude the measured probe overhead and are not hardware cycles.
+
+```bash
+python -B tests/test_st_playhead_cfbench.py --reference-bank <reference bank> \
+    --bank <optimized bank> --cfbench "$CFBENCH" --out out/<new benchmark folder>
+```
+
+This uses the same `SGDK_BIN`, `ELEKLOADER_CROSS` and `GCC_EXEC_PREFIX` as bank
+builds, and needs no stock firmware. A baseline with the new modes is required
+for a nine-mode comparison.
 
 ### Recorder MAIN LR stereo capture
 

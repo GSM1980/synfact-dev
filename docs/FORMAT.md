@@ -5,6 +5,13 @@ contract `0x53594605` in the existing word at offset 64. Older and untagged
 banks are rejected before execution. This changes compatibility, not the disk
 layout or `.elemod` format. See [SMZ4](../mods/core-st/SMZ4.md).
 
+Playhead 1.1 extends the mode IDs accepted in its existing per-kit `PLH1`
+record: 0..4 retain their meanings; 5 ANCHOR, 6 STUTTER, 7 FOLD and 8 WALK+.
+Its 24-byte layout, reserved bytes and checksum remain unchanged. Old records
+still load; older Playhead decoders reject a record with IDs 5..8 and use
+FORWARD. This is module-owned kit metadata, not an SMZ4 or `.elemod` change.
+See [Playhead saving](../mods/playhead-st/README.md#saving).
+
 A `.elemod` is a JSON file. How to make one is [ADAPTING.md](ADAPTING.md).
 Every mod names its **target**: the stock release it was made for, by hash.
 

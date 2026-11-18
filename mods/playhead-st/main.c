@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * playhead-st: the order the active track plays its steps in. TRK + UP / DOWN
  * the next / the previous mode of the cycle FORWARD (stock), REVERSE,
- * PENDULUM, RANDOM, WALK: forwards is at most two presses away. TRK + LEFT /
+ * PENDULUM, RANDOM, WALK, ANCHOR, STUTTER, FOLD, WALK+. TRK + LEFT /
  * RIGHT stay native. Modes belong to the pattern: each pattern's kit keeps
  * its tracks' modes, saved and loaded with it (persist.c).
  *
@@ -56,7 +56,8 @@ typedef unsigned int u32;typedef unsigned char u8;
 #define TEXT_WIDTH ((int (*)(u32,int,const void *))0x400f9482u)    /* font, -1, a std::string */
 #define HEADER_FONT 0x443db1f0u
 static u32 taken;                       /* bit k: the press of key 14+k (UP, DOWN) was taken */
-static const char *const names[PLAYHEAD_MODES]={"FORWARD","REVERSE","PENDULUM","RANDOM","WALK"};
+static const char *const names[PLAYHEAD_MODES]={"FORWARD","REVERSE","PENDULUM","RANDOM","WALK",
+    "ANCHOR","STUTTER","FOLD","WALK+"};
 static u32 word(const void *p,u32 at){return *(const u32 *)((const u8 *)p+at);}
 /* The MainScreen when it is the highest opaque view (UI controller +40h,
  * node +1Ch), else 0. */
@@ -117,7 +118,11 @@ static const struct {u8 width;unsigned short rows[7];} icons[PLAYHEAD_MODES]={
     {7,{0x000,0x010,0x020,0x07f,0x020,0x010,0x000}},   /* REVERSE: an arrow to the left */
     {9,{0x000,0x044,0x082,0x1ff,0x082,0x044,0x000}},   /* PENDULUM: an arrow both ways */
     {7,{0x03e,0x041,0x055,0x049,0x055,0x041,0x03e}},   /* RANDOM: a die's five */
-    {7,{0x006,0x000,0x030,0x000,0x006,0x000,0x030}}};  /* WALK: steps, left and right */
+    {7,{0x006,0x000,0x030,0x000,0x006,0x000,0x030}},   /* WALK: steps, left and right */
+    {7,{0x008,0x01c,0x008,0x008,0x049,0x02a,0x01c}},   /* ANCHOR: ring, shank and flukes */
+    {7,{0x000,0x054,0x056,0x057,0x056,0x054,0x000}},   /* STUTTER: repeated bars and play */
+    {7,{0x041,0x022,0x014,0x008,0x014,0x022,0x041}},   /* FOLD: outside to centre and back */
+    {9,{0x0c0,0x004,0x032,0x00f,0x0c2,0x004,0x030}}};  /* WALK+: footsteps and right arrow */
 /* A COW std::string the firmware can read (as syntakt/trig-pages.h's titles):
  * length, capacity, a count of -1 (leaked: never written), then the text. */
 static struct {u32 length,capacity;int count;char text[8];} tempo_text={0,7,-1,{0}};

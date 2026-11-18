@@ -1,5 +1,12 @@
 # How to adapt your mod to the Syntakt
 
+Playhead 1.1 appends ANCHOR/STUTTER/FOLD/WALK+ as saved mode IDs 5..8 in
+the module's existing `PLH1` kit record. Existing IDs 0..4 and the record layout
+are retained. A newer record containing these modes falls back to FORWARD
+with an older module. Module authors must preserve the kit-tail ownership
+listed in [MACHINE-REFERENCE.md](MACHINE-REFERENCE.md); see
+[Playhead](../mods/playhead-st/README.md#saving) for the codec and behavior.
+
 This guide is for people and for coding agents. Every step has a command
 and the output that means it worked; the last sections map every refusal to
 its fix and give a definition of done. The format itself is
