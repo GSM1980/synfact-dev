@@ -8,6 +8,8 @@ the C table's exported end, so both paths share the same capacity. Subscriber
 order, consumption and overflow fallback remain unchanged. The bank contract
 and all bank/AUDIO bytes are unchanged: update only the core SYX for an A/B.
 See [the regression and scope](../../docs/CORE-MAIN-PERFORMANCE.md#core-202-native-interest-capacity).
+The owner confirmed on 2026-11-18 that this restores the lost MAIN CPU headroom;
+the possible extra saving has not been quantified.
 
 Core **2.0.1** defers stock and HZFS waveform computation until a sample's
 waveform UI requests it. Boot allocates no waveform cache and performs no

@@ -131,3 +131,7 @@ The full bank and core AUDIO are byte-identical to the 2.0.1 delivery, so a
 hardware comparison needs only the new SYX and the same bank, pattern,
 tempo, sends and UI page. These offline checks do not establish how many
 physical MAIN CPU points the change recovers.
+
+Hardware validation reported by the owner on 2026-11-18: the lost MAIN CPU
+headroom was recovered with core 2.0.2, with a possible additional improvement.
+No exact before/after percentage was supplied, so no numerical saving is claimed.
