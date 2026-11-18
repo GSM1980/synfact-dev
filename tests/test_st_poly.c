@@ -218,14 +218,18 @@ static void play_modes(void)
 
 static void copy_on_change(void)
 {
-    T i,n,args[3]={0},result=0;B removed[0x123],working[0x754+13*0x7c];
+    T i,n,args[3]={0},result=0;B own[3*0x123],working[0x754+13*0x7c];
+    const B *row=(const B *)0x800021ccu,*type=(const B *)0x80002f50u;
     reset();*(T *)0x800030b8=(T)KIT;
     for(i=0;i<0x123;i++)KIT[0x2a+i]=(B)(i*3);KIT[0x2a+0xa2]=65;
     memset(KIT+0x2a+0x123,0x55,0x123*3);
+    for(i=1;i<=3;i++)KIT[0x2a+i*0x123+0xa2]=(B)(70+i);
+    memcpy(own,KIT+0x2a+0x123,sizeof own);
+    /* 1.7: joining publishes the master's Sound; the slaves' saved Sounds
+     * in the KIT are never written. */
     assert(poly_record_write(0,1,3));
-    assert(!memcmp(KIT+0x2a,KIT+0x2a+0x123,0x123));
-    assert(!memcmp(KIT+0x2a,KIT+0x2a+2*0x123,0x123));
-    assert(KIT[0x2a+3*0x123]==0x55);
+    assert(!memcmp(own,KIT+0x2a+0x123,sizeof own));
+    for(i=1;i<3;i++)assert(!memcmp(row+i*0x8e,KIT+0x2a,0x8e) && type[i]==65);
     poly_copy_ui();assert(!poly_copy_pending);n=publishes;
     assert(poly_mode_write(0,1));
     args[0]=(T)working;memset(working,0x73,sizeof working);
@@ -239,12 +243,46 @@ static void copy_on_change(void)
     /* An edit is propagated after the native UI setter has finished. */
     assert(poly_sound_write_allowed(0) && poly_copy_pending);
     KIT[0x2a+20]^=0x7f;poly_copy_ui();assert(!poly_copy_pending && publishes==n+2);
-    assert(!memcmp(KIT+0x2a,KIT+0x2a+0x123,0x123));n=publishes;
+    for(i=1;i<3;i++)assert(!memcmp(row+i*0x8e,KIT+0x2a,0x8e));
+    assert(!memcmp(own,KIT+0x2a+0x123,sizeof own));n=publishes;
     assert(poly_record_write(0,1,4));assert(publishes==n+1); /* only new voice */
-    poly_copy_ui();memcpy(removed,KIT+0x2a+3*0x123,0x123);n=publishes;
-    assert(poly_record_write(0,1,2));poly_copy_ui();assert(publishes==n); /* no restore */
-    assert(!memcmp(removed,KIT+0x2a+3*0x123,0x123));
-    assert(poly_record_write(0,0,2));poly_copy_ui();assert(publishes==n);
+    assert(!memcmp(row+3*0x8e,KIT+0x2a,0x8e) && type[3]==65);
+    poly_copy_ui();n=publishes;
+    /* Shrinking and disabling publish each removed voice's own Sound. */
+    assert(poly_record_write(0,1,2));poly_copy_ui();assert(publishes==n+2);
+    for(i=2;i<=3;i++)assert(!memcmp(row+i*0x8e,KIT+0x2a+i*0x123,0x8e) && type[i]==70+i);
+    assert(!memcmp(row+0x8e,KIT+0x2a,0x8e) && type[1]==65);
+    assert(poly_record_write(0,0,2));poly_copy_ui();assert(publishes==n+3);
+    assert(!memcmp(row+0x8e,KIT+0x2a+0x123,0x8e) && type[1]==71);
+    assert(!memcmp(own,KIT+0x2a+0x123,sizeof own));
+}
+
+/* 1.7: digital slave notes bind the master's kit Sound, as analog ones do,
+ * so a slave's own saved Sound never sounds while it is a voice. */
+static void digital_event_sounds(void)
+{
+    T voices,k,kind,e[20],time,sound=(T)KIT+0x2a,explicit_sound=(T)KIT+0x1580;
+    for(voices=2;voices<=4;voices++) {
+        reset();
+        assert(poly_record_write(0,1,voices));
+        for(k=0;k<voices;k++) {
+            memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=0;e[3]=2;e[6]=60+k;
+            poly_test_origin=1;native_immediate(e);
+            assert(queued==1 && queue[0][2]==k && queue[0][10]==(k?sound:0));drain();
+        }
+        for(kind=1;kind<=2;kind++) {
+            memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=0;e[3]=kind;e[6]=60;
+            *(T *)0x402d5aacu=0;poly_test_origin=0;native_immediate(e);
+            assert(queued==voices);
+            for(k=0;k<voices;k++)assert(queue[k][10]==(k?sound:0));drain();
+        }
+        *(T *)0x402d5aacu=0xffffffffu;
+        memset(e,0,sizeof e);e[0]=1;
+        assert(poly_trig(0,SEQ,(T)KIT,0,e,&time) && poly_sequence_enqueue(e,time));
+        for(k=0;k<queued;k++)assert(queue[k][10]==(queue[k][2]?sound:0));drain();
+        memset(e,0,sizeof e);e[11]=explicit_sound;poly_voice_target(e,0,1);
+        assert(!e[10] && e[11]==explicit_sound);
+    }
 }
 
 static void topology(void)
@@ -303,7 +341,7 @@ static void groups_and_notes(void)
         assert(poly_header_load(header,bad));for(n=0;n<7;n++)assert(!header[0x21+n]);
         memcpy(header,copy,256);poly_header_reset(header,1);assert(valid(header+0x21));
         poly_header_reset(header,0);for(n=0;n<7;n++)assert(!header[0x21+n]);
-        assert(poly_record_write(0,0,v));assert(publishes==v-1);for(n=0;n<8;n++)assert(poly_owner_map[n]==n);
+        assert(poly_record_write(0,0,v));assert(publishes==2*(v-1));for(n=0;n<8;n++)assert(poly_owner_map[n]==n);
     }
     reset();assert(poly_record_write(0,1,2));live(60,1,2);live(62,1,2);live(64,1,2);
     assert(queued==3 && queue[2][2]==0);drain();live(60,2,1);assert(!queued);
@@ -357,7 +395,7 @@ static void sequence_voices(void)
     {T e[20]={1},i;
      assert(poly_trig(0,SEQ,(T)KIT,1,e,&time)==e && poly_sequence_enqueue(e,time) && queued==2);
      assert(queue[0][2]==1 && queue[0][6]==60 && queue[1][2]==2 && queue[1][6]==63);
-     for(i=0;i<2;i++)assert(!queue[i][10]);drain();}
+     for(i=0;i<2;i++)assert(queue[i][10]==(T)KIT+0x2a);drain();}
     /* First step after STOP: voices 0 and 1 prepared, next notes go to 2, 3, 0. */
     reset();assert(poly_record_write(0,1,4));SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;
     SEQ[0x2c0+0x40]=67;
@@ -685,7 +723,7 @@ static void analog_event_sounds(void)
         }
         for(k=8;k<=10;k++)assert(KIT[0x2a+k*0x123+0xa2]==8+k-8);
     }
-    memset(e,0,sizeof e);poly_voice_target(e,0,1);assert(!e[10] && !e[11]);
+    memset(e,0,sizeof e);poly_voice_target(e,0,1);assert(e[10]==(T)KIT+0x2a && !e[11]);
 }
 
 int main(void)
@@ -701,7 +739,7 @@ int main(void)
      ui.host=&services;assert(poly_initialize(&api));ui.version=7;assert(!poly_initialize(&api));
      h.version=8;h.native_interest=interest_mock;h.native_page_view=page_view_mock;
      ui.host=&h;assert(!poly_initialize(&api));}
-    play_codec();play_modes();copy_on_change();topology();groups_and_notes();sequence_voices();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();
+    play_codec();play_modes();copy_on_change();topology();groups_and_notes();sequence_voices();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();digital_event_sounds();
     puts("PASS: analog event/Sound/UI regressions and 110592 mixed topology/mode/record cases; 108 POLY topologies, 2/3/4 voices, live/chord/sequence paths, stealing/off, rollback, CRC persistence, MIDI suspension, page/controls/slave guards, native interest by group state");
     return 0;
 }

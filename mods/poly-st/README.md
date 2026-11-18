@@ -1,6 +1,6 @@
-# POLY for Syntakt (1.6)
+# POLY for Syntakt (1.7)
 
-Desktop OS 1.42 release: **1.6.1**, based on remote main `f48f3ab`.
+Desktop OS 1.42 release: **1.7**, based on remote main `3d50e09`.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
 Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
@@ -20,6 +20,17 @@ digital tracks. With host API 6 (core 0.12.13+) its page notifications are
 limited to the TRIG ParameterView.
 
 ## Operation
+
+1.7: digital slaves keep their own Sounds, as analog slaves always did.
+Joining a group no longer overwrites a slave's saved Sound with the master's:
+its voice takes the master's Sound by publication only, and every note routed
+to it binds the master's kit Sound. Shrinking, disabling or suspending the group
+publishes each removed slave's own Sound again, so turning POLY off gives the
+tracks back their sounds, also after saving, reloading or changing patterns.
+Projects saved by earlier versions with POLY on already hold the master's copy
+in their slaves; there is nothing older to restore for them. No work is added
+per audio block: master edits now publish instead of copying 291 bytes twice
+per slave, and a slave note stores one Sound pointer.
 
 1.6: MAIN sync, shared publication, setup Sound copies, prepared statics and
 keyboard-origin scanning use bounded integer fast paths. Voice allocation,
@@ -95,11 +106,10 @@ Slaves show TRACK IN / SLAVE MODE and block parameter edits, page mutations,
 machine selection and Sound writes according to the reference. Of the keys,
 a slave blocks only the other parameter pages (TRIG, SYN, FLTR, AMP, LFO):
 FUNC, TRK, the trigs and the rest pass, so TRK + trig selects another track
-with the keyboard open. Digital slaves' saved
-Sounds are overwritten with the master's parameters when the voices join.
-Leaving or shrinking a group releases pending voices and keeps the copied
-Sounds. Analog slaves retain their saved Sounds and restore them when the group
-shrinks, suspends or disables. Sequences remain separate.
+with the keyboard open. Slaves, digital (since 1.7) and analog, retain their
+saved Sounds: their voices play the master's Sound while grouped, and leaving
+or shrinking a group releases pending voices and restores each removed slave's
+own Sound. Suspension and disabling restore them too. Sequences remain separate.
 A group containing a MIDI-mode track is
 suspended while its saved topology remains available for audio mode.
 
@@ -135,11 +145,13 @@ recorder's private draw bridge. KEY pre/post subscribers share the same list.
 All lists and assembly operands publish in one existing IRQ exclusion, so a
 render callback cannot observe an unbound native transaction list.
 
-POLY 0.6 installs the master's complete native Sound (291 bytes and LFO3's
-shadow record) when a voice joins the group. Increasing VOICES only sets up new
-slaves; decreasing/disabling does not restore anything. Master Sound edits mark
-a pending bit in the existing native setter gate; the UI task propagates the
-completed edit once, through native Sound copy/publication, outside the audio IRQ.
+POLY 0.6 installed a copy of the master's complete native Sound (291 bytes and
+LFO3's shadow record) in each joining voice. Since 1.7 the voice publishes the
+master's Sound instead; LFO3 takes that source's shadow record, and the slave's
+own record and shadow stay as saved. Increasing VOICES only sets up new slaves;
+decreasing/disabling publishes the removed slaves' own Sounds. Master Sound
+edits mark a pending bit in the existing native setter gate; the UI task
+publishes the completed edit to the slaves once, outside the audio IRQ.
 Reload/paste keys also queue that propagation. The task flush has a null fast
 path with no record comparisons. Configuration changes prepare sequencer Sounds
 immediately; the UI copy completes their live KIT/shadow metadata.
@@ -233,7 +245,7 @@ Branch: `perf/mlfo-publication`. This is an SMZ-only update.
 
 The user validated 0.7 at MAIN 91% POLY / 93% M.LFO with three voices and PLAY.
 Version 0.8 integrates that work with main's physically verified analog POLY
-and keyboard Sound fix. Digital setup/edit copying remains destructive; analog
+and keyboard Sound fix. Digital setup/edit copying remained destructive until 1.7; analog
 setup/restore and note Sound ownership retain their original semantics. Analog
 masters expose A/B only. Digital PLAY never indexes an analog track.
 

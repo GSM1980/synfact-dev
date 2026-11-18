@@ -276,14 +276,17 @@ complete configuration/keyboard/sequencer scenarios and shutdown, preserving
 state, native notes, pools and refcounts. Accepted-root staging and parent UI
 origin are disclosed inputs; sequencer batches enter the real core ENQUEUE
 dispatcher. `tools/bench_st_poly_helpers.py` checks fixed-copy canaries at
-all byte alignments, exact stack-census reads, and 120 queue admission cases.
+all byte alignments (the Sound record copy only in banks before POLY 1.7),
+exact stack-census reads, and 120 queue admission cases.
 `tools/bench_st_poly_keyboard.py` preserves already-correct stock/core analog
 master-Sound routing in both banks without changing the historical test's
 requirement for a broken-bank negative control. Counts are instructions,
 not hardware cycles or MAIN percentages. See
 [POLY MAIN performance](POLY-MAIN-PERFORMANCE.md) for commands and limits.
 
-The shared-lock probe in `test_st_poly_copy_events_emu.py` asserts the pinned
+`test_st_poly_copy_events_emu.py` checks that POLY 1.7's UI flush publishes
+the master's Sound to each slave and never writes the slaves' own records.
+Its shared-lock probe asserts the pinned
 LFO3 backend's exported context size and uses its 36-byte event rows, retaining
 all exact native/sparse lock values and ownership assertions.
 

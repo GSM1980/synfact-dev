@@ -15,9 +15,10 @@ core 1.8.0, and other modules are unchanged. No device access is used.
 - Publication uses six-register MOVEM bursts for aligned parameter/auxiliary
   rows. The 142-byte rows retain halfword accesses whenever either endpoint
   is not four-byte aligned. Padding bytes 101..103 and 123 remain untouched.
-- The 291-byte raw setup Sound copy uses post-increment byte batches, safe
-  for every source/destination byte alignment. UI Sound edits retain native
-  memcpy and the LFO3 metadata backend.
+- The 291-byte raw setup Sound copy used post-increment byte batches, safe
+  for every source/destination byte alignment; UI Sound edits used native
+  memcpy and the LFO3 metadata backend. POLY 1.7 removes both copies: voice
+  setup and edits only publish the master's Sound, so slaves keep their own.
 - Aligned 80-byte prepared-event statics use a fixed twenty-long copy.
   These are native statics, with no change to pooled-event ownership.
 - The keyboard-origin census is an integer leaf scanning the same 1,024

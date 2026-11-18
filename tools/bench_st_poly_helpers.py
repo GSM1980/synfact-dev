@@ -40,6 +40,8 @@ def copies(bank):
     rows = []
     for length, symbol, alignments in ((291, 'poly_copy_record', range(4)),
                                         (80, 'poly_copy_static_event', (0,))):
+        if symbol not in m.sym:
+            continue  # POLY 1.7 publishes slave Sounds and links no record copy
         for sa in alignments:
             for da in alignments:
                 src, dst = WORK + 0x104 + sa, WORK + 0x804 + da

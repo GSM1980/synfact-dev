@@ -29,23 +29,24 @@
     "core 1.4: provider query 31 exposes only NOT2..NOT4 for POLY TRIG randomize",
     "TRIG pages shared with ARP (list item 37, syntakt/trig-pages.h): POLY sets only its third page; the indicator counts every page",
     "page 3 descriptor with the title Polyphonic mode on its page (header), also outside page actions",
-    "1.6: integer-only MAIN fast sync using existing locked caches; aligned MOVEM publication; bounded raw Sound/event copies; leaf keyboard-origin census; local scalar/held-note loop simplification; native queue, synthesis, EMAC, AUDIO and core unchanged"
+    "1.6: integer-only MAIN fast sync using existing locked caches; aligned MOVEM publication; bounded raw Sound/event copies; leaf keyboard-origin census; local scalar/held-note loop simplification; native queue, synthesis, EMAC, AUDIO and core unchanged",
+    "1.7: digital slaves keep their own saved Sounds: voice setup and master edits publish the master's Sound (no record copies), slave notes bind the master's kit Sound, removed voices publish their own Sound again"
   ],
   "local_sha256": {
     "main.c": "6684fd831132896f89d0a2c7b0d29759c7a04486c7a48bd7fd35455629392248",
     "poly_core.c": "a0e6c585224b55933d27d92d26ef5a6ccc3c0c99873045fb2b18793ade677028",
-    "poly_event.c": "7ee471184419ef874fb4990067424731a2f7eb4382ac943940d6fd3295f4892f",
+    "poly_event.c": "6aef3c280532e40accf908d643732b8b18f9faefd9c494a3420344186ab43241",
     "poly_groups.c": "9d873f431e780f7201cc90edb8c60e2ec745e3543151bc256cd1ddc3cbdfc63b",
     "poly_pattern.c": "c503a5afda21197951d627f849378a7a5b2e60bf7b16e843e1b6c852035669d1",
-    "poly_sequence.c": "f2b8e37db8558fbdd89a2cc392cc0eef4a1d51b5afdce85e40401ba46c43e70c",
+    "poly_sequence.c": "9b6f469ca8e471663079d8f4d961112f33ae289d77daab105989855dfeb429c6",
     "poly_publication.c": "55671a510144abef6a1acc5f292a1192896841672b4adafd4e454ff9af9d4220",
     "poly_ui.c": "c349a67300acdf49bcfbadcffa7eced62ede0199ed17bd4f9bcf620d6dcf0319",
     "publication.s": "9c95e3bcc66fdfa89b5009a4a88bc749b2a7abb8d3941a16a4504936f9145d39",
     "poly_codec.c": "62cf3ca5e409f1e2b6624fa4d7a4abbe4bdf27a35319d165310a29d0c4f6a222",
     "poly_play.c": "dc71f514af45dc27afc79fb853d039e5eca113e00d645b9258d62b6f1fc6ad13",
-    "poly_copy.c": "ec5eb539e11efc860eea204c37699a1bec7de3e6cc36ce3c9dff455211901df0",
+    "poly_copy.c": "48c8e9bf6f19c36af70925d89b3b3e62d0261c9f5b76875f79eac09c493d5d5d",
     "sync.s": "1217a57bb488ccce2cd3f3e890c5f42b05e457ceec9123f7b021ce5cda5783ae",
-    "copies.s": "d7b71ee0cd549078374537d3154f2400f8956a492a647033e9304694693b8fec"
+    "copies.s": "ab128c77906d16036b9a3213c41904b00e3534a97eff4bf4ba1abd38ed4494a6"
   },
   "local_sha256_eol": "lf",
   "os": "1.42",

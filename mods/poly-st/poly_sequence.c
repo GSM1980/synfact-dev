@@ -170,12 +170,14 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
         /* Same release request as a native machine change. The next MAIN
          * render consumes these countdowns, preserving its gate semantics. */
         native_release_track(i,0x7fffu);
-        /* Destructive setup: copy new voices, never restore removed voices.
-         * A PLAY-only change or a decrease makes no new base Sound copy. */
-        if(i<8) {
-            if(owners[i]<i && (owners[i]!=poly_seq_config.owners[i] || sequence!=poly_seq_config.sequence))
+        /* Non-destructive setup, digital and analog alike: a new voice
+         * publishes its master's Sound; a removed voice (shrink, disable, MIDI
+         * suspension) publishes its own saved Sound again. A PLAY-only change
+         * publishes nothing. Analog new voices publish below. */
+        if(owners[i]<i) {
+            if(i<8 && (owners[i]!=poly_seq_config.owners[i] || sequence!=poly_seq_config.sequence))
                 poly_copy_group(i,owners[i]);
-        }else if(poly_seq_config.owners[i]<i && owners[i]==i) {
+        }else if(poly_seq_config.owners[i]<i) {
             u32 kit=*(volatile u32 *)0x43bd843cu;
             if(kit)native_publish_sound((const volatile u8 *)(kit+0x2au+i*0x123u),i);
         }

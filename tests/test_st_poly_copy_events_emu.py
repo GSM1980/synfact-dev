@@ -1,4 +1,4 @@
-"""Production destructive Sound copies and shared native p-lock application.
+"""Production slave Sound publication (1.7: no copies) and shared native p-lock application.
 
 Uses the real native Sound memcpy/LFO3 metadata backend and publication engine.
 Model/mutex/allocator boundaries come from the existing publication fixture.
@@ -26,6 +26,8 @@ def copy_probe(native,bank):
     source=LIVE+0x2a;values=[0x7800,0x300,0x4000,0x2f00,0x200,0,0x100,0x6000]
     r.u.mem_write(source,bytes((i*3)&255 for i in range(0x123)))
     r.u.mem_write(source+0xa2,b'\x41');r.record(r.sym['kit_shadow'],values)
+    # The slaves' own saved Sounds, which POLY 1.7 must never write.
+    own=b'\x55'*(2*0x123);r.u.mem_write(source+0x123,own)
     r.publish(source,0)
     # Install the same native memcpy entry that LFO3's initializer installs.
     r.u.mem_write(0x40115f78,struct.pack('>HI',0x4ef9,r.sym['lfo3_memcpy_entry']))
@@ -46,9 +48,8 @@ def copy_probe(native,bank):
         u.reg_write(UC_M68K_REG_A7,sp+4);u.reg_write(UC_M68K_REG_PC,ret)
     r.u.hook_add(UC_HOOK_CODE,pub)
     r.write(pending,6);r.call('poly_copy_ui',[])
-    assert published==[(source+0x123,1),(source+2*0x123,2)]
+    assert published==[(source,1),(source,2)] and r.read(source+0x123,2*0x123)==own
     for sound,t in published:
-        assert r.read(sound,0x123)==r.read(source,0x123)
         r.publish(sound,t)
         assert r.read(ENGINE+528+16*t,16)==r.read(ENGINE+528,16)
     n=len(published);r.call('poly_copy_ui',[]);assert len(published)==n
@@ -57,8 +58,10 @@ def copy_probe(native,bank):
     values[7]=0x5000;r.record(r.sym['kit_shadow'],values);r.publish(source,0)
     r.write(pending,6);r.call('poly_copy_ui',[])
     for sound,t in published[n:]:
+        assert sound==source
         r.publish(sound,t);assert r.read(ENGINE+528+16*t,16)==r.read(ENGINE+528,16)
-    return dict(sound_copies=4,shadow_records=True,no_idle_copies=True)
+    assert r.read(source+0x123,2*0x123)==own
+    return dict(sound_publications=4,sound_copies=0,slave_sounds_kept=True,shadow_records=True,no_idle_copies=True)
 
 def lock_probe(native,bank):
     r=Run(native,bank);r.u.mem_map(0x45500000,0x20000)
