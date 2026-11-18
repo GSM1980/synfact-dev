@@ -1,10 +1,15 @@
 # Changelog: Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.2.
+
+## 1.2 (2026-11-18)
+
+- Playhead 1.2: select track modes in a cached modal with explicit confirm (`57f84e0`, 2026-11-18)
 
 ## 1.1 (2026-11-18)
 
 - Playhead 1.1: add four modes and icons with optimized MAIN step paths (`a43f350`, 2026-11-18)
+- Changelogs: Playhead 1.1 (`1c99e3d`, 2026-11-18)
 
 ## 1.0.1 (2026-11-17)
 
