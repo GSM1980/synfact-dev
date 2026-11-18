@@ -1,8 +1,19 @@
 {
   "id": "playhead-st",
   "title": "Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
-  "latest": "1.2",
+  "latest": "1.2.1",
   "entries": [
+    {
+      "version": "1.2.1",
+      "date": "2026-11-18",
+      "commits": [
+        {
+          "sha": "4a9012f",
+          "date": "2026-11-18",
+          "subject": "Playhead 1.2.1: request native composition from the actual UI controller"
+        }
+      ]
+    },
     {
       "version": "1.2",
       "date": "2026-11-18",
@@ -11,6 +22,11 @@
           "sha": "57f84e0",
           "date": "2026-11-18",
           "subject": "Playhead 1.2: select track modes in a cached modal with explicit confirm"
+        },
+        {
+          "sha": "477202b",
+          "date": "2026-11-18",
+          "subject": "Changelogs: Playhead 1.2"
         }
       ]
     },
