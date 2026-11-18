@@ -1,4 +1,13 @@
-# Syntakt core 2.0.3
+# Syntakt core 2.1.0
+
+Core **2.1.0** stops a running sequencer and selects reduced MAIN mixing while
+the native project workers save, load, initialize, rename, copy/paste, clear
+or delete projects. This works without the recorder module or an open recorder.
+The full calculation returns on the next block after completion, including an
+error return; transport stays stopped. The host ABI, bank contract and AUDIO
+are unchanged, so existing OS 1.42 banks work with this core-only update.
+See [project operations and MAIN CPU](../../docs/PROJECT-OPERATIONS-CPU.md)
+for the worker boundaries, block lifetime and offline validation.
 
 Core **2.0.3** routes the selected-track model's long-label lookup through the
 existing machine/module parameter provider (query 20). Chorus parameter modals

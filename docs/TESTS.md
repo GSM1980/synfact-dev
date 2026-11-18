@@ -2,6 +2,13 @@
 
 # Tests
 
+Core 2.1.0: `test_st_project_operations.py BUILD --emulate` checks the nine
+project worker routes and 324 linked lifecycle/ABI cases, with native workers
+and STOP doubled. `test_st_project_idle_cfbench.py --build BUILD --cfbench
+CFBENCH --out OUT` executes the real OS 1.42 reduced output/USB/EMAC path,
+including no-recorder operation and a missing-clear negative control. See
+[Project operations and MAIN CPU](PROJECT-OPERATIONS-CPU.md).
+
 Current desktop builds target OS 1.42. `tests/test_st_os142.py --stock STOCK
 --build BUILD --previous-build REFERENCE_141` checks 218 stock preimages and four Playhead CRC contexts, the
 actual SYX, the complete bank contract and unchanged core/bank AUDIO. See

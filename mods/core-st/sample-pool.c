@@ -245,7 +245,9 @@ const void *core_pool_boot_page(u32 ordinal,u32 *wire)
 static void sleep(void){CORE_POOL_SLEEP(500);}
 int core_pool_ready(void)
 {return state && state->boot_finished && !state->fault && !core_pool_busy && *(volatile u32 *)0x43bdd824u;}
-static int send(u32 cmd,u32 dst,u32 len,const u8 *data,u32 bytes)
+/* Keep one foreground mailbox implementation in the resident core. GCC's
+ * constant-argument clone duplicated its entire retry/timeout protocol. */
+__attribute__((noinline,noclone)) static int send(u32 cmd,u32 dst,u32 len,const u8 *data,u32 bytes)
 {
     volatile u32 *m=(void *)0x10000800u;u32 i,seq,sum,attempt,status;
     seq=state->seq%65535+1;state->seq=seq;

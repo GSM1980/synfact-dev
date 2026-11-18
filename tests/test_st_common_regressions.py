@@ -76,6 +76,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     for name in ('common_hooks','destination_hooks','syn_page_hook','new_project_hook'):
         run(name,[sys.executable,'tests/test_st_'+name+'.py',out])
     run('stock/native fast paths',[sys.executable,'tests/test_st_fast_paths.py',out])
+    run('project operation scopes',[sys.executable,'tests/test_st_project_operations.py',out])
     skipped=[]
     if synfact:
         run('FM source/cache/UI/ratio',[sys.executable,'tests/test_st_fm.py','--bank',
@@ -179,6 +180,8 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     # The linked core's own safe-boot record writes, executed (core 1.7.1): the
     # path core 1.7 crashed on at its first trial boot. Needs Unicorn.
     if unicorn_python:
+        run('project operation lifecycle (Unicorn)',[
+            unicorn_python,'-B','tests/test_st_project_operations.py',out,'--emulate'])
         run('64-slot stock streaming and release (Unicorn)',[
             unicorn_python,'-B','tests/test_st_stock_stream_emu.py',
             '--core',out,'--out',out/'stock-stream.json'])

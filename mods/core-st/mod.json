@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -53,7 +53,8 @@
     "native-routes.s",
     "audio-idle.c",
     "audio-idle.s",
-    "machine-global-labels.s"
+    "machine-global-labels.s",
+    "project-operations.s"
   ],
   "defsym": {
     "DRAWALL": "0x40100992",
@@ -730,6 +731,60 @@
       "stock": "4feffff448d71c00",
       "op": "jmp",
       "target": "core_fx_decode"
+    },
+    {
+      "addr": "0x4005d83a",
+      "stock": "203c40059f9e",
+      "op": "keep2",
+      "target": "core_project_new"
+    },
+    {
+      "addr": "0x4005a486",
+      "stock": "203c4005a6f8",
+      "op": "keep2",
+      "target": "core_project_rename"
+    },
+    {
+      "addr": "0x4005a558",
+      "stock": "203c4005a788",
+      "op": "keep2",
+      "target": "core_project_copy"
+    },
+    {
+      "addr": "0x4005a606",
+      "stock": "203c4005a7aa",
+      "op": "keep2",
+      "target": "core_project_paste"
+    },
+    {
+      "addr": "0x4005a6a6",
+      "stock": "203c4005a7d0",
+      "op": "keep2",
+      "target": "core_project_clear"
+    },
+    {
+      "addr": "0x4005d20e",
+      "stock": "203c4005a828",
+      "op": "keep2",
+      "target": "core_project_clear_many"
+    },
+    {
+      "addr": "0x4005d3b6",
+      "stock": "203c4005a8a2",
+      "op": "keep2",
+      "target": "core_project_delete_many"
+    },
+    {
+      "addr": "0x4005b662",
+      "stock": "203c4005ba50",
+      "op": "keep2",
+      "target": "core_project_save"
+    },
+    {
+      "addr": "0x4005d9dc",
+      "stock": "203c4005bafa",
+      "op": "keep2",
+      "target": "core_project_load"
     }
   ],
   "collections": {

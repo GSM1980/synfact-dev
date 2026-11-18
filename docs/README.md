@@ -17,6 +17,9 @@ and change with the code, so a commit's docs match its code.
 - **[Syntakt builds](SYNTAKT-BUILD.md)**: the flags and the exact commands for
   the core SYX, the SMZ4 bank, the regressions and the emulator checks.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
+- **[Project operations and MAIN CPU](PROJECT-OPERATIONS-CPU.md)**: stopped
+  transport and reduced MAIN mixing during project commands, independently of
+  the recorder, with automatic restoration when the worker returns.
 - **[Native sample/core overlap](STOCK-SAMPLE-CORE-OVERLAP.md)**: valid stock
   samples, the original MAIN collision and the streamed 64-slot fix.
 - **[Unused-module MAIN work](IDLE-MAIN-PERFORMANCE.md)**: idle dispatch,
