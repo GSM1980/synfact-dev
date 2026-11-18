@@ -53,8 +53,8 @@
     {
       "slug": "playhead-st",
       "id": "playhead-st",
-      "title": "Playhead: step order per track (reverse, pendulum, random, walk)",
-      "latest": "1.0.1",
+      "title": "Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
+      "latest": "1.1",
       "path": "mods/playhead-st"
     },
     {

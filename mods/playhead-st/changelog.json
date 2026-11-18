@@ -1,12 +1,28 @@
 {
   "id": "playhead-st",
-  "title": "Playhead: step order per track (reverse, pendulum, random, walk)",
-  "latest": "1.0.1",
+  "title": "Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
+  "latest": "1.1",
   "entries": [
+    {
+      "version": "1.1",
+      "date": "2026-11-18",
+      "commits": [
+        {
+          "sha": "a43f350",
+          "date": "2026-11-18",
+          "subject": "Playhead 1.1: add four modes and icons with optimized MAIN step paths"
+        }
+      ]
+    },
     {
       "version": "1.0.1",
       "date": "2026-11-17",
       "commits": [
+        {
+          "sha": "c0e44f9",
+          "date": "2026-11-18",
+          "subject": "Changelogs: POLY 1.7"
+        },
         {
           "sha": "276667a",
           "date": "2026-11-17",
