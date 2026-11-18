@@ -11,6 +11,21 @@
           "sha": "e07cef9",
           "date": "2026-11-18",
           "subject": "Core 2.0.2: retain native interest filters with the full Playhead bank"
+        },
+        {
+          "sha": "53ad639",
+          "date": "2026-11-18",
+          "subject": "Changelogs: core 2.0.2 native interest capacity"
+        },
+        {
+          "sha": "dff9f54",
+          "date": "2026-11-18",
+          "subject": "Record hardware validation of core 2.0.2 MAIN CPU recovery"
+        },
+        {
+          "sha": "c5bbe1a",
+          "date": "2026-11-18",
+          "subject": "Clarify core 2.0.2 validation with the latest ARP and POLY releases"
         }
       ]
     },

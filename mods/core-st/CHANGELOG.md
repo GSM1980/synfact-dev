@@ -5,6 +5,9 @@ Generated from git history by `tools/changelog.py`. Latest version: 2.0.2.
 ## 2.0.2 (2026-11-18)
 
 - Core 2.0.2: retain native interest filters with the full Playhead bank (`e07cef9`, 2026-11-18)
+- Changelogs: core 2.0.2 native interest capacity (`53ad639`, 2026-11-18)
+- Record hardware validation of core 2.0.2 MAIN CPU recovery (`dff9f54`, 2026-11-18)
+- Clarify core 2.0.2 validation with the latest ARP and POLY releases (`c5bbe1a`, 2026-11-18)
 
 ## 2.0.1 (2026-11-17)
 
