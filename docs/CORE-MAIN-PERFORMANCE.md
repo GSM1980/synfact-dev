@@ -127,7 +127,7 @@ boundaries. Thirty-nine cases cover inactive, active and neutral output on
 all thirteen tracks. With `--overflow-reference` pointing to core 2.0.1,
 the same bank must reproduce the lost inactive route at initialization.
 
-The full bank and core AUDIO are byte-identical to the 2.0.1 delivery, so a
+The bank used for the original CPU A/B and core AUDIO are byte-identical to the 2.0.1 delivery, so a
 hardware comparison needs only the new SYX and the same bank, pattern,
 tempo, sends and UI page. These offline checks do not establish how many
 physical MAIN CPU points the change recovers.
@@ -135,3 +135,8 @@ physical MAIN CPU points the change recovers.
 Hardware validation reported by the owner on 2026-11-18: the lost MAIN CPU
 headroom was recovered with core 2.0.2, with a possible additional improvement.
 No exact before/after percentage was supplied, so no numerical saving is claimed.
+
+Integration with main also retains the independently published ARP 1.10.6 and
+POLY 1.7 changes. The integration bank includes those versions; they are not
+required to apply this core-only fix. Recompiling the integrated core produces
+the exact SYX that passed the owner's hardware CPU comparison.

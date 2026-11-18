@@ -6,7 +6,8 @@ previously filled the table before the deferred LFO3 initializer, leaving
 inactive LFO3 on the all-operations fallback. The assembly lookup now uses
 the C table's exported end, so both paths share the same capacity. Subscriber
 order, consumption and overflow fallback remain unchanged. The bank contract
-and all bank/AUDIO bytes are unchanged: update only the core SYX for an A/B.
+and core AUDIO are unchanged. This core-only fix works with the existing
+contract-05 bank: update only the core SYX for a CPU A/B.
 See [the regression and scope](../../docs/CORE-MAIN-PERFORMANCE.md#core-202-native-interest-capacity).
 The owner confirmed on 2026-11-18 that this restores the lost MAIN CPU headroom;
 the possible extra saving has not been quantified.
