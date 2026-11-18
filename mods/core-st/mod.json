@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -52,7 +52,8 @@
     "machine-randomize.s",
     "native-routes.s",
     "audio-idle.c",
-    "audio-idle.s"
+    "audio-idle.s",
+    "machine-global-labels.s"
   ],
   "defsym": {
     "DRAWALL": "0x40100992",
@@ -70,6 +71,12 @@
     "ST_CONTEXT_EVENTS": "1"
   },
   "sites": [
+    {
+      "addr": "0x40013730",
+      "stock": "4feffff448d7040c",
+      "op": "jmp",
+      "target": "core_machine_global_parameter_long_label"
+    },
     {
       "addr": "0x40083026",
       "stock": "700423c041bb32b0",

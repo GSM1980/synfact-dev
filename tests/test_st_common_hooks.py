@@ -106,13 +106,14 @@ def verify(folder):
     assert cleanup['op']=='bytes' and cleanup['stock']=='4a0367082f0b4ebafbaa588f420017400022'
     assert cleanup['new']=='4200174000224a0367082f0b4ebafba4588f'
     assert read(0x401010f0,18)==bytes.fromhex(cleanup['new'])
-    assert len(manifest['sites'])==109 and len(manifest['collections'])==16   # final sender release
+    assert read(0x40013730,8)==jump('core_machine_global_parameter_long_label')+bytes.fromhex('4e71')
+    assert len(manifest['sites'])==110 and len(manifest['collections'])==16   # sender release plus selected-model labels
     assert read(0x40083026,8)==jump('core_pool_sender_done',0x4eb9)+bytes.fromhex('4e71')
     assert read(address('core_pool_sender_done'),16)==(
         jump('core_pool_boot_release',0x4eb9)+bytes.fromhex('700423c041bb32b04e75'))
     assert read(address('core_pool_blob'),12)==(
         jump('core_pool_prepare',0x4eb9)+bytes.fromhex('4ef940082e9c'))
-    assert len({s['addr'] for s in manifest['sites']})==109
+    assert len({s['addr'] for s in manifest['sites']})==110
     assert read(0x400a5046,6)==jump('core_audio_idle_mix',0x4eb9)
     # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
     # `storage`, files.c `io`) has read, write and sectors, each a code address.
@@ -123,6 +124,6 @@ def verify(folder):
         assert words[0]==address('fw_mmc_read') and words[1]==address('fw_mmc_write'),(name,[hex(w) for w in words])
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize, deferred UI cleanup, stock sender release; eMMC accessor tables complete; 109 sites, 16 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize, deferred UI cleanup, stock sender release; eMMC accessor tables complete; 110 sites, 16 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])

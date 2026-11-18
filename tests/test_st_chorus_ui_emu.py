@@ -1,4 +1,4 @@
-"""The chorus's controls on the real core 1.2 MAIN image, in Unicorn.
+"""The chorus's controls on the real OS 1.42 core MAIN image, in Unicorn.
 
 Loads a core build's main.bin with its resident and a bank with chorus-st,
 runs the module's real controls init (provider registration, the five site
@@ -8,8 +8,8 @@ UI calls them: labels, formats and cached records through the core's hooks
 provider (kit/get/set) on a Kit's FX record, page 25's layout, REVERB's page
 vector and draw, AMP's send drawing branch, the dials, and the FX record
 codec through the core's notifications. Stock IDs keep the stock answers.
-Native string construction, allocation, page drawing and blits are recorded
-stubs; no complete view, boot or physical display is modeled.
+Selected-model IO, native string construction, allocation, page drawing and
+blits are recorded stubs; no complete view, boot or physical display is modeled.
 
   "$PY" -B tests/test_st_chorus_ui_emu.py \\
       --core out/core-st-X.Y.Z-name/main.bin --bank <bank with chorus-st>
@@ -30,9 +30,10 @@ BASE, BANK, SP, RET = 0x40000400, 0x47000000, 0x48010000, 0x4f000000
 W, KIT, VIEW, FRAME, HEAP = 0x49000000, 0x49002000, 0x49006000, 0x49007000, 0x49008000
 CHORUS_ID, CHORUS_UI, SEND = 0x403, 0x4ea, 72
 NAMES = ['DPTH', 'SPD', 'HPF', 'WDTH', 'DEL', 'REV', 'VOL']
+LONG_NAMES = ['Depth', 'Speed', 'High-pass', 'Width', 'Delay Send', 'Reverb Send', 'Mix Volume']
 SLOTS = [0x1a, 0x24, 0x27, 0x29, 0x2a, 0x37, 0x46]
-STUBS = {0x401bf082: 'string', 0x40103788: 'new', 0x40103794: 'free', 0x4003a244: 'page_draw',
-         0x400f70fa: 'bitmap', 0x400f8dac: 'blit', 0x40011e7c: 'stock_dial', 0x40042ce8: 'stock_reverb_draw'}
+STUBS = {0x401bf31e: 'string', 0x4010394c: 'new', 0x40103958: 'free', 0x4003a244: 'page_draw',
+         0x400f72be: 'bitmap', 0x400f8f70: 'blit', 0x40011e7c: 'stock_dial', 0x40042ce8: 'stock_reverb_draw'}
 CALLEE = [UC_M68K_REG_D2, UC_M68K_REG_D3, UC_M68K_REG_D4, UC_M68K_REG_D5, UC_M68K_REG_D6, UC_M68K_REG_D7,
           UC_M68K_REG_A2, UC_M68K_REG_A3, UC_M68K_REG_A4, UC_M68K_REG_A5, UC_M68K_REG_A6]
 
@@ -84,6 +85,13 @@ class Machine:
         self.u.reg_write(UC_M68K_REG_PC, self.word(sp))
 
     def code(self, u, pc, n, _):
+        if pc in (0x4016e9c8, 0x40018458, 0x4001fdfe):
+            self.ret(0); return  # application/model selection boundary
+        if pc == 0x4000c7e2:
+            self.ret(1); return  # selected model uses the global Kit
+        if pc == 0x4000d94a and hasattr(self, 'label_filter'):
+            if self.word(self.u.reg_read(UC_M68K_REG_A7)+8) in (90, 100):
+                self.ret(self.label_filter); return  # special filter-label value
         name = STUBS.get(pc)
         if not name:
             return
@@ -142,9 +150,9 @@ def test_sites(m, stock):
         assert m.read(at, 6) == struct.pack('>HI', 0x4ef9, m.sym[entry]), hex(at)
         assert stock.read(at, 6) != m.read(at, 6)
     # AMP: E-H of both layouts are CHO, DEL, REV, PAN; VOL on the second page's E
-    for at in (0x41b9f61c, 0x41b9f648):
+    for at in (0x41ba061c, 0x41ba0648):
         assert struct.unpack('>4I', m.read(at, 16)) == (SEND, 78, 79, 80)
-    assert m.word(0x41b9f674) == 81 and m.word(0x41b9f6a0) == 81
+    assert m.word(0x41ba0674) == 81 and m.word(0x41ba06a0) == 81
     strings = [args[1] for name, args in m.log if name == 'string']
     assert [m.string(a) for a in strings] == ['CHO', 'Chorus']
     print('PASS: five sites, AMP layouts and page strings installed')
@@ -153,23 +161,48 @@ def test_sites(m, stock):
 def test_metadata(m, stock):
     for i, name in enumerate(NAMES):
         assert m.string(m.call(0x40012b24, 0, CHORUS_ID + i)) == name
-        assert m.string(m.call(0x4007bb6a, CHORUS_ID + i, 0x4080)) == ('64.50' if i in (0, 1, 4, 5) else '64')
-        assert m.call(0x4007b9b2, CHORUS_ID + i) == stock.call(0x4007b9b2, 0x13)          # cached record
-        assert m.call(0x400a636a, CHORUS_ID + i) == CHORUS_UI + i                          # engine -> UI
-        assert m.call(0x400a634e, CHORUS_UI + i) == CHORUS_ID + i                          # UI -> engine
+        assert m.string(m.call(0x40011a82, W, CHORUS_ID + i)) == LONG_NAMES[i]
+        actual = m.string(m.call(0x40013730, W, CHORUS_ID + i))
+        assert actual == LONG_NAMES[i], (name, actual)
+        assert m.string(m.call(0x4007bbe2, CHORUS_ID + i, 0x4080)) == ('64.50' if i in (0, 1, 4, 5) else '64')
+        assert m.call(0x4007ba2a, CHORUS_ID + i) == stock.call(0x4007ba2a, 0x13)          # cached record
+        assert m.call(0x400a63e2, CHORUS_ID + i) == CHORUS_UI + i                          # engine -> UI
+        assert m.call(0x400a63c6, CHORUS_UI + i) == CHORUS_ID + i                          # UI -> engine
         # native range check 400123e6 (the relative edit's bound): module IDs pass
         # the core's 1.2 bound (0x478) and use the provider's range
         assert m.call(0x400123e6, W, CHORUS_ID + i, 0x7f00) & 0xff and m.call(0x400123e6, W, CHORUS_ID + i, 0) & 0xff
         assert not m.call(0x400123e6, W, CHORUS_ID + i, 0x7f01) & 0xff
         assert not m.call(0x400123e6, W, 0x479, 0) & 0xff                                    # past the module range
     assert m.string(m.call(0x40012b24, 0, SEND)) == 'CHO'
-    assert m.string(m.call(0x4007bb6a, SEND, 0x4080)) == '64'
-    assert m.call(0x4007b9b2, SEND) == stock.call(0x4007b9b2, 78)
+    assert m.string(m.call(0x4007bbe2, SEND, 0x4080)) == '64'
+    assert m.call(0x4007ba2a, SEND) == stock.call(0x4007ba2a, 78)
     # every other stock ID answers as on the core without the chorus
     for pid in [i for i in range(0, 0x1f9) if i != SEND]:
-        for fn, args in ((0x40012b24, (0, pid)), (0x4007b9b2, (pid,))):
+        for fn, args in ((0x40012b24, (0, pid)), (0x4007ba2a, (pid,))):
             assert m.call(fn, *args) == stock.call(fn, *args), (hex(fn), pid)
     print('PASS: labels, formats, cached records and UI IDs of the seven settings and CHO; %d stock IDs unchanged' % 0x1f8)
+
+
+def test_popup_labels(m, stock):
+    # The selected-track model's vtable overrides the base lookup. Restore its
+    # exact stock prologue in the comparison machine to test the new hook.
+    assert m.word(0x401c3e28) == 0x40013730
+    stock.u.mem_write(0x40013730, bytes.fromhex('4feffff448d7040c'))
+    assert m.string(m.call(0x40013730, W, SEND)) == 'Chorus Send'
+    for mode in (0, 0x600):
+        m.label_filter = stock.label_filter = mode
+        for pid in range(0x1f9):
+            if pid == SEND:
+                continue
+            assert m.call(0x40013730, W, pid) == stock.call(0x40013730, W, pid), pid
+    # No provider claims these extended IDs: retain the native fallback.
+    for pid in (0x402, CHORUS_ID+7, 0xffffffff):
+        assert m.call(0x40013730, W, pid) == stock.call(0x40013730, W, pid)
+    m.w(m.cs['core:core_machine_active'], 0)
+    for pid in (SEND, CHORUS_ID, CHORUS_ID+6):
+        assert m.call(0x40013730, W, pid) == stock.call(0x40013730, W, pid)
+    m.w(m.cs['core:core_machine_active'], 1)
+    print('PASS: selected-model popup labels; stock/filter labels, unclaimed IDs and inactive core match native')
 
 
 def kit(m, words=None):
@@ -212,7 +245,7 @@ def test_codec(m):
 
 
 def test_pages(m):
-    layout = m.call(0x4007b9d0, 25)
+    layout = m.call(0x4007ba48, 25)
     assert struct.unpack('>8I', m.read(layout + 8, 32)) == (CHORUS_ID, CHORUS_ID + 1, CHORUS_ID + 2, CHORUS_ID + 3,
                                                             0, CHORUS_ID + 4, CHORUS_ID + 5, CHORUS_ID + 6)
     for cap in (8, 4):                                     # room for page 25, or a new vector
@@ -279,6 +312,7 @@ def main():
     init(m)
     test_sites(m, stock)
     test_metadata(m, stock)
+    test_popup_labels(m, stock)
     test_values(m)
     test_codec(m)
     test_pages(m)

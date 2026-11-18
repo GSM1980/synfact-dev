@@ -3,7 +3,7 @@
 # Tests
 
 Current desktop builds target OS 1.42. `tests/test_st_os142.py --stock STOCK
---build BUILD --previous-build REFERENCE_141` checks 217 stock preimages and four Playhead CRC contexts, the
+--build BUILD --previous-build REFERENCE_141` checks 218 stock preimages and four Playhead CRC contexts, the
 actual SYX, the complete bank contract and unchanged core/bank AUDIO. See
 [the port notes](OS142-PORT.md) for the direct 1.42 emulator checks and the
 historical 1.41/donor fixtures that are not current-release validation.
@@ -17,6 +17,20 @@ reproduce the lost inactive LFO route. The common regressions run the fixed
 full-catalog case. The route suite also checks all sixteen registration
 records and safe overflow without changing its original dispatch/ABI oracles.
 Neither test measures physical CPU percentages or accesses the device.
+
+ARP 1.10.7: `test_st_arp_native_stack_emu.py` checks edits beneath permanent
+mute in both opening orders and on both pages, plus track changes before a tick,
+cancelled step holds, native navigation and other-window ownership. The same
+native-stack cases also run through retained/reentrant view fixtures.
+Core 2.0.3: `test_st_chorus_ui_emu.py` targets OS 1.42 and checks selected-model
+popup labels for every Chorus control, stock/filter labels and native fallbacks,
+in addition to metadata, values, codecs, pages and dials.
+The 2.0.3 validation with Unicorn 2.1.4 also found CPU exceptions in the broad
+`test_st_arp_view_emu.py` (the long-gate `arp_frame` case) and
+`test_st_patchers_emu.py` (`probe_modulation`, native PC `40097b3e`). Both
+failures reproduce on the unmodified remote-main build; these two suites are
+not counted as passes. The focused ARP/mute/reentrant, Chorus UI, safe-boot,
+native ABI/mixer and full-catalog cases run separately.
 
 Each suite takes its input files from environment variables or arguments. A
 test whose input files are not given is skipped, not passed: say which ran.

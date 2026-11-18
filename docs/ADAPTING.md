@@ -109,6 +109,15 @@ sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
 
+### Syntakt core 2.0.3: selected-model parameter labels
+
+The selected-track model's native long-label override now queries the same
+machine registry and module provider (query 20, `{model, engine_id}`) as the
+base model. Providers return a long-name string through `value`; an unhandled
+query retains the native implementation, including its filter-mode labels.
+This fixes Chorus parameter modals without a Chorus-only hook. Host ABI and
+SMZ4 contract `0x53594605` are unchanged.
+
 ### Syntakt core 2.0.1: streamed samples and deferred waveforms
 
 Call UI API `wave_idle(slot, budget)` only for a visible waveform. It polls

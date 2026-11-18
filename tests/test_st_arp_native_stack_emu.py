@@ -129,6 +129,33 @@ def verify(core, bank, machine=NativeStackMachine):
     return cases
 
 
+def covered_encoder_edits(m, page):
+    """Mute owns trig keys/LEDs while visible ARP knobs still edit their page."""
+    settings = m.sym['arp_ui_parameters']
+    if page:
+        old = [m.lane(i) for i in range(4)]
+        for knob in range(1, 5):
+            assert m.encoder(knob, 1) == 1
+            assert m.lane(knob-1) == (old[knob-1] if old[knob-1] else 64)+1, (knob, old)
+            assert m.encoder(knob, -1) == 1
+            assert m.lane(knob-1) == (old[knob-1] if old[knob-1] else 64)
+        assert m.encoder(5, 1) == 1 and m.read(settings+5, 1) == b'\x01'
+        assert m.encoder(5, -1) == 1 and m.read(settings+5, 1) == b'\x00'
+    else:
+        for knob, offset in ((1, 0), (2, 1), (3, 2), (4, 3), (5, 8+m.word(m.sym['arp_selected'])), (6, 4)):
+            old = m.read(settings+offset, 1)[0]
+            delta = -1 if knob == 6 else 1
+            assert m.encoder(knob, delta) == 1
+            assert m.read(settings+offset, 1)[0] == old+delta, (knob, old)
+            assert m.encoder(knob, -delta) == 1
+            assert m.read(settings+offset, 1)[0] == old
+    before = m.read(settings, 24), [m.lane(i) for i in range(4)]
+    for knob in (7, 8):
+        assert m.encoder(knob, 1) == 1
+    assert before == (m.read(settings, 24), [m.lane(i) for i in range(4)])
+    m.leds = {}; m.arp_leds(); assert not m.leds
+
+
 def mute_first_cases(core,bank,machine=NativeStackMachine):
     cases=[]
     for track,poly in ((0,False),(0,True),(8,False),(9,True),(11,True)):
@@ -148,6 +175,7 @@ def mute_first_cases(core,bank,machine=NativeStackMachine):
             assert m.draw_walk[-1]==MUTE,m.draw_walk
             m.arp_leds();assert not m.leds
             assert m.key(27,1,30)==0 and m.key(27,16,31)==0
+            covered_encoder_edits(m, initial_page)
             m.remove_mute();m.call('arp_view_tick',APP)
             assert m.stack()[-1]==ROOT+16 and m.allocs==1
             assert m.word(m.sym['arp_page'])==initial_page
@@ -164,11 +192,45 @@ def mute_first_cases(core,bank,machine=NativeStackMachine):
             m.push_mute();assert m.stack()[-2:]==[ROOT+16,MUTE]
             assert m.texts()==before_cover
             m.leds={};m.arp_leds();assert not m.leds
+            covered_encoder_edits(m, initial_page)
             m.remove_mute();m.call('arp_view_tick',APP)
             assert m.allocs==1 and m.word(m.word(APP+0x5c)+8)==MAIN
             cases.append(dict(track=track+1,poly=poly,page=initial_page,
                               mute_first_draws_below_and_restores_keyboard=True))
     return cases
+
+
+def covered_routing_cases(core, bank):
+    # A mute/track switch can arrive before the next tick. Edit the newly
+    # selected Sound, preserving the previous track and the visible subpage.
+    for page in (0, 1):
+        m = InvestigationMachine(core, bank); m.start(chord=bool(page))
+        m.enter_mute(); m.track = 1; m.pages([2, 3]); m.w(PARAM+0x90, 0)
+        old = m.read(m.track_address('arp_parameters', 0), 24)
+        assert m.encoder(2, 1) == 1
+        assert m.word(m.sym['arp_track']) == 1
+        assert m.word(m.sym['arp_ui_sound']) == 0x43000000+0x2a+0x123
+        assert m.word(m.sym['arp_page']) == page and m.index() == 2+page
+        assert m.read(m.track_address('arp_parameters', 0), 24) == old
+        if page:
+            assert m.lane(1) == 65
+        else:
+            assert m.read(m.sym['arp_ui_parameters']+1, 1) == b'\x0a'
+    m = InvestigationMachine(core, bank); m.start()
+    assert m.key(27, 1, 40) == 1
+    m.enter_mute(); assert m.encoder(1, 1) == 1
+    assert m.read(m.sym['arp_ui_parameters'], 1) == b'\x01'
+    assert m.read(m.sym['arp_ui_parameters']+11, 1) == b'\x00'
+    assert m.key(27, 16, 41) == 1
+    # Native page navigation while covered must be adopted by the first turn.
+    m = InvestigationMachine(core, bank); m.start(); m.enter_mute()
+    m.native_trig(); assert m.encoder(2, 1) == 1 and m.lane(1) == 65
+    # An unrelated transparent window still blocks ARP's edits.
+    m.stack_top(m.word(MAIN+0xc0))
+    before = m.read(m.sym['arp_ui_parameters'], 24), [m.lane(i) for i in range(4)]
+    m.encoder(1, 1)
+    assert before == (m.read(m.sym['arp_ui_parameters'], 24), [m.lane(i) for i in range(4)])
+    return dict(selected_track=True, cancelled_steps=True, native_page=True, other_windows=True)
 
 
 if __name__ == '__main__':
@@ -178,7 +240,8 @@ if __name__ == '__main__':
     p.add_argument('--mute-before',type=Path)
     a = p.parse_args()
     result = dict(ok=True,cases=verify(a.core,a.bank),
-                  mute_first=mute_first_cases(a.core,a.bank),device_access=False)
+                  mute_first=mute_first_cases(a.core,a.bank),
+                  covered_routing=covered_routing_cases(a.core,a.bank),device_access=False)
     for old in a.before:
         m = NativeStackMachine(a.core,old)
         assert m.key(0x13,1,0) == 0 and not m.word(m.sym['arp_view'])

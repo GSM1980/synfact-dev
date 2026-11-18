@@ -1,4 +1,13 @@
-# Syntakt core 2.0.2
+# Syntakt core 2.0.3
+
+Core **2.0.3** routes the selected-track model's long-label lookup through the
+existing machine/module parameter provider (query 20). Chorus parameter modals
+therefore show their names instead of `Error`. The native override at
+`40013730` (vtable slot `401c3e28`) retains its original handling whenever no
+provider answers, including the special filter labels for parameters 92/102.
+No host ABI, bank contract, parameter storage or DSP changes are introduced.
+`tests/test_st_chorus_ui_emu.py` checks the actual linked entry, all seven
+Chorus labels, CHO, stock/filter labels, unclaimed IDs and inactive-core fallback.
 
 Core **2.0.2** expands native-interest registration from four to sixteen
 subscribers. The complete bank's ARP, POLY, Chorus and Playhead registrations
@@ -30,7 +39,7 @@ See [the memory investigation and validation](../../docs/STOCK-SAMPLE-CORE-OVERL
 Desktop OS 1.42 base release: **2.0.0**, based on remote main `f48f3ab`.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
-Current desktop target: **OS 1.42 / core 2.0.2**.
+Current desktop target: **OS 1.42 / core 2.0.3**.
 See [the port notes](../../docs/OS142-PORT.md).
 
 1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for

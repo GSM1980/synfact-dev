@@ -1,11 +1,18 @@
 # Chorus
 
 Desktop OS 1.42 release: **1.2.1**, based on remote main `f48f3ab`.
-Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+Use core 2.0.3 or later and the matching bank (SMZ4 contract `0x53594605`).
 
 Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
 new bank; older hardware measurements below refer to the previous OS. See
 [the port notes](../../docs/OS142-PORT.md).
+
+Core 2.0.3 fixes the parameter modal showing `Error = value`: the selected-track
+model has its own long-label lookup, which now uses the core's existing
+parameter provider. All seven controls show their names (Depth, Speed,
+High-pass, Width, Delay Send, Reverb Send, Mix Volume); CHO shows Chorus Send.
+No Chorus DSP or parameter-storage change is needed. The OS 1.42 UI emulator
+suite checks these names, native fallbacks and the existing page/value paths.
 
 Synfact's chorus on the Syntakt's MAIN mixer. Each track sends through its
 CHO control (the Sound's dormant Digitone chorus send, parameter 72); the

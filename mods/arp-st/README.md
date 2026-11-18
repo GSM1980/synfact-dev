@@ -1,10 +1,24 @@
 # Digitone ARP → Syntakt: experimental source port
 
-Desktop OS 1.42 release: **1.10.6**, based on remote main `eae3159`.
+Desktop OS 1.42 release: **1.10.7**.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
 Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
 See [the port notes](../../docs/OS142-PORT.md).
+
+## Editing beneath permanent mute (1.10.7)
+
+Encoders keep editing the displayed ARP or chord page while permanent mute is
+open, in either opening order. Mute retains the trig keys and LEDs. Other
+windows still block ARP editing. A turn adopts native page navigation and the
+selected track before editing, including a track change before the next tick;
+held ARP steps are cancelled so they cannot redirect the first turn to OFS.
+
+`tests/test_st_arp_native_stack_emu.py` checks both opening orders, both pages,
+all active knobs, digital/analog tracks with/without POLY, navigation, track
+changes, cancelled holds and unrelated-window ownership. The native-stack cases
+also run in the retained/reentrant view suites. Encoder travel and model IO
+remain explicit emulator boundaries; physical panel validation is pending.
 
 ## Publish the selected page before native composition (1.10.4)
 

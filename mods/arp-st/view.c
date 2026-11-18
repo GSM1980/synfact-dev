@@ -282,6 +282,16 @@ static int arp_foreground(void)
     if(!arp_view || !arp_manager || arp_view[0x30])return 0;
     return arp_stack_top(arp_manager)==arp_view;
 }
+/* Permanent mute covers the keyboard, but leaves TRIG's parameter controls
+ * available. Other windows retain exclusive encoder ownership. */
+static int arp_encoder_active(void *app)
+{
+    arp_u8 *top;
+    if(arp_foreground())return 1;
+    if(!app || !arp_view || !arp_manager || arp_view[0x30] || arp_top(app)!=arp_main)return 0;
+    top=arp_stack_top(arp_manager);
+    return top && top==*(arp_u8 **)(arp_main+0x230) && view_word(top,0)==0x401c92b0u;
+}
 static void arp_forget(void *v)
 {
     if(v==arp_view){arp_cancel_steps();arp_view=arp_manager=arp_main=0;arp_proxy=0;arp_ui_sound=0;arp_lock_mode=0;arp_length_show=0;
@@ -646,6 +656,29 @@ static void arp_randomize(void)
     }
     arp_dirty();
 }
+/* Bind parameter edits to the selected track even while mute owns the keys.
+ * Encoders also synchronize here before the next periodic UI tick. */
+static int arp_sync_track(void)
+{
+    if(arp_main && view_word(arp_main,0xa4)){
+        arp_u32 track=UI_CALL(0x4001ff74u,arp_u32 (*)(void *))(*(void **)(arp_main+0xa4));
+        if(track!=arp_track){
+            arp_u8 *parameter=*(arp_u8 **)(arp_main+0xc0);void *proxy=0;arp_u32 sound=0;
+            if(track<ARP_TRACKS && eligible(track) && parameter && view_word(parameter,0)==0x401c9a9cu){
+                proxy=((void *(*)(void *,arp_u32,int))(*(arp_u32 **)parameter)[0xc4/4])(parameter,0x60u,-1);
+                sound=proxy_sound(proxy);
+            }
+            if(!sound){arp_trig_close(0);return 0;}
+            arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;arp_cancel_steps();arp_enc_reset();
+            arp_ui_read_settings(sound,track,&arp_ui_parameters);arp_length_show=0;arp_dirty();
+            if(arp_lock_mode)arp_lock_read();
+            /* A track switch rebuilds the native vector. Only this transition
+             * carries the current ARP subpage over to the new track. */
+            if(arp_trig_view(arp_main)){arp_trig_sync(parameter);arp_trig_page(arp_page);}
+        }
+    }
+    return 1;
+}
 static void arp_view_tick(void *controller)
 {
     arp_u32 now=arp_host->machine_telemetry[0];int foreground;(void)controller;
@@ -662,23 +695,7 @@ static void arp_view_tick(void *controller)
     }
     if(!arp_view)return; /* no view also means no held steps or LEN popup */
     foreground=arp_foreground();
-    if(foreground && arp_main && view_word(arp_main,0xa4)){
-        arp_u32 track=UI_CALL(0x4001ff74u,arp_u32 (*)(void *))(*(void **)(arp_main+0xa4));
-        if(track!=arp_track){
-            arp_u8 *parameter=*(arp_u8 **)(arp_main+0xc0);void *proxy=0;arp_u32 sound=0;
-            if(track<ARP_TRACKS && eligible(track) && parameter && view_word(parameter,0)==0x401c9a9cu){
-                proxy=((void *(*)(void *,arp_u32,int))(*(arp_u32 **)parameter)[0xc4/4])(parameter,0x60u,-1);
-                sound=proxy_sound(proxy);
-            }
-            if(!sound){arp_trig_close(0);return;}
-            arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;arp_cancel_steps();arp_enc_reset();
-            arp_ui_read_settings(sound,track,&arp_ui_parameters);arp_length_show=0;arp_dirty();
-            if(arp_lock_mode)arp_lock_read();
-            /* A track switch rebuilds the native vector. Only this transition
-             * carries the current ARP subpage over to the new track. */
-            if(arp_trig_view(arp_main)){arp_trig_sync(parameter);arp_trig_page(arp_page);}
-        }
-    }
+    if(arp_encoder_active(arp_brain) && !arp_sync_track())return;
     if(foreground){
         arp_u8 *trig=arp_trig_view(arp_main);
         unsigned int before=arp_lock_mode,step=arp_lock_step;
@@ -695,8 +712,9 @@ static int arp_view_encoder(void *app,const void *event)
 {
     arp_u32 knob=view_word(event,12);
     int steps;
-    if(!arp_foreground())return arp_trig_page_shown(app);
-    if(!arp_follow_page())return 0;
+    if(!arp_encoder_active(app))return arp_trig_page_shown(app);
+    if(!arp_foreground() && arp_steps_held)arp_cancel_steps();
+    if(!arp_sync_track() || !arp_follow_page())return 0;
     arp_lock_sync();
     if(arp_page){
         /* 1.8: NOTE, NOT2..NOT4 on A..D; SCALE on E. NOTE uses the native

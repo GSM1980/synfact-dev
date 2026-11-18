@@ -65,7 +65,7 @@ def verify(folder,synfact=None):
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
     native_sites=[s for s in manifest['sites'] if s.get('target','').startswith('core_native_')]
-    assert len(native_sites)==14 and len(manifest['sites'])==109 and len(manifest['collections'])==16
+    assert len(native_sites)==14 and len(manifest['sites'])==110 and len(manifest['collections'])==16
     cleanup=next(s for s in manifest['sites'] if s['addr']=='0x401010f0')
     assert cleanup['op']=='bytes' and read(0x401010f0,18)==bytes.fromhex('4200174000224a0367082f0b4ebafba4588f')
     assert any(s['addr']=='0x400a5046' and s['target']=='core_audio_idle_mix' for s in manifest['sites'])
