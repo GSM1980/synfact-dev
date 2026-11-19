@@ -117,6 +117,19 @@ sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
 
+### Syntakt core 2.3: sample-pool memory snapshot and capacity preflight
+
+Sample-pool API 2 appends `memory(struct st_pool_memory *)` to the API 1
+prefix. Check `host->version >= 11` and `host->pool->version >= 2` before
+calling it from a task/UI callback. `bytes[128]` contains each loaded slot's
+PCM span (stereo includes both channels); `used` counts unique 2 KiB extents
+referenced by slots 65..128 only. `total` comes from the current AUDIO layout,
+excluding stock PCM, service code and stack. No disk IO or allocation occurs.
+Runtime sync checks the whole requested allocation, including aliases and
+fragmentation, before changing AUDIO. Capacity failure returns `-2` from
+`sync` and `-6` from the existing rollback-capable `host->pool_apply`.
+The host ABI prefix and SMZ4 contract `0x53594606` remain unchanged.
+
 ### Syntakt core 2.2: a 4 MiB bank window, the pool above AUDIO's page
 
 The bank's AUDIO section may be up to 4 MiB (sample store pages `4000..47ff`,
@@ -450,7 +463,7 @@ independent groups must keep advancing when analog groups coexist.
 
 
 Host API 11 appends `const struct st_sample_pool_api *pool` at byte 88,
-retaining every earlier offset. The pool service version is 1. It supplies
+retaining every earlier offset. The original pool service version is 1. It supplies
 validation/sync/cached names, preview start/refill/release and one optional
 menu/progress UI provider. Native hooks, storage, PCM streaming/mixing and
 project references remain in core. A bank-owned Sample Manager uses existing

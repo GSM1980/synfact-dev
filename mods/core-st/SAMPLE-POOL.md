@@ -1,4 +1,4 @@
-# Project sample pool and Sample Manager (core 2.0.1)
+# Project sample pool and Sample Manager (core 2.3)
 
 The core owns the 128-position pool, its project record, storage, preview and
 MAIN/AUDIO transport. From core 0.13.0 the optional sample-manager-st SMZ module
@@ -157,6 +157,15 @@ Runtime loads show byte progress while the task streams PCM; no disk IO or
 allocation happens in the audio interrupt. Insufficient space and transfer
 failures are reported. The previous project record is restored on failure;
 an uncertain receiver timeout quarantines further reuse until reboot.
+
+Core 2.3 dry-runs all requested allocations before sending any retire/load
+command. Page padding, shared sample aliases and fragmentation use the same
+first-fit rules as the transfer. Capacity rejection therefore transfers no
+samples, including when a batch would fit its first file but fail later.
+Sample-pool API 2's `memory` snapshot supplies actual loaded PCM spans and a
+project budget for slots 65..128 only; shared extents count once, rounded to
+2 KiB. Stock 1..64 never contributes to that budget. The total is the core
+2.2 high-zone capacity, 66,711,552 bytes (63.62 MiB).
 
 ## Runtime protocol and public machine API
 

@@ -169,12 +169,17 @@ s32 st_pool_live_sync(const u16 *before)
     for(i=0;i<SLOTS;i++)if(now[i] && now[i]!=before[i])n++;
     if(pool_ui && pool_ui->begin)pool_ui->begin(n);
     result=core_pool_sync();
-    if(result!=1){core_pool_write(WORKING_PROJECT,before);core_pool_sync();}
+    if(result!=1){
+        core_pool_write(WORKING_PROJECT,before);
+        /* Capacity preflight has not touched AUDIO. Re-syncing the old
+         * record could retry an earlier missing sample; leave PCM alone. */
+        if(result!=-2)core_pool_sync();
+    }
     if(pool_ui && pool_ui->end)pool_ui->end();
     return result==-2?-6:result;
 }
-const struct st_sample_pool_api core_sample_pool_api={1,core_pool_valid,core_pool_sync,core_pool_cached_name,
-    manager_preview,manager_refill,manager_preview_release,bind_pool_ui};
+const struct st_sample_pool_api core_sample_pool_api={2,core_pool_valid,core_pool_sync,core_pool_cached_name,
+    manager_preview,manager_refill,manager_preview_release,bind_pool_ui,core_pool_memory};
 char *core_pool_format(u32 id,u32 raw)
 {
     const struct core_machine_def *m;static char formatted[37];u16 entries[SLOTS];u32 index,i,code;u8 *fs;

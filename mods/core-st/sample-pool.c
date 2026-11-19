@@ -117,6 +117,17 @@ static void entry(u32 slot,u32 frames,u32 pointer,u32 channels)
 {state->frames[slot]=frames;state->pointer[slot]=frames?pointer:0;state->channels[slot]=channels==2?2:1;}
 static u32 bytes_of(u32 slot){return 2*state->channels[slot]*state->frames[slot];}
 static u32 channels_of(const struct st_sample_entry *e){return (e->flags&ST_HZ_STEREO) && !(e->frames&1)?2:1;}
+CORE_HOT void core_pool_memory(struct st_pool_memory *out)
+{
+    u32 i,j;out->used=0;out->total=CORE_POOL_END-CORE_POOL_PCM;
+    for(i=0;i<128;i++){
+        out->bytes[i]=state?bytes_of(i):0;
+        if(!state || i<CORE_POOL_STOCK_SLOTS || !state->frames[i] || state->pointer[i]<CORE_POOL_PCM)continue;
+        for(j=CORE_POOL_STOCK_SLOTS;j<i;j++)
+            if(state->frames[j] && state->pointer[j]==state->pointer[i])break;
+        if(j==i)out->used+=(bytes_of(i)+2047)&~2047u;
+    }
+}
 static void account(void)
 {
     u32 i,j,used=0;for(i=0;i<128;i++)if(state->frames[i] && state->pointer[i]>=CORE_POOL_PCM){
@@ -279,6 +290,37 @@ static u32 allocate(u32 bytes)
     }while(again);return at;
 }
 struct stream {u8 buffer[992];u32 used,dst,total,done;};
+/* Dry-run the same first-fit allocation/order as sync, including holes,
+ * aliases and page padding. Refuse before RETIRE/BEGIN can change AUDIO. */
+static int preflight(struct st_hzfs *fs,int *opened)
+{
+    u32 pointer[128],bytes[128],i,j,n,at,end,again;u16 code[128];
+    struct st_sample_entry e;
+    for(i=0;i<128;i++){
+        code[i]=state->wanted[i]==state->code[i]?state->code[i]:0;
+        pointer[i]=code[i]?state->pointer[i]:0;
+        bytes[i]=code[i]?((bytes_of(i)+2047)&~2047u):0;
+    }
+    for(i=0;i<128;i++)if(state->wanted[i] && !code[i]){
+        n=state->wanted[i];
+        if(n<=64){code[i]=n;pointer[i]=state->stock_pointer[n-1];bytes[i]=0;continue;}
+        for(j=0;j<128;j++)if(code[j]==n && bytes[j])break;
+        if(j<128){code[i]=n;pointer[i]=pointer[j];bytes[i]=bytes[j];continue;}
+        if(!*opened){*opened=core_hzfs_open(fs,&core_hzfs_native_io)==1;if(!*opened)return -1;}
+        if(!find_file(fs,n&0x7fff,&e) || !e.frames)return -1;
+        if(e.frames>(CORE_POOL_END-CORE_POOL_PCM)/2)return -2;
+        n=(2*e.frames+2047)&~2047u;at=CORE_POOL_PCM;
+        do{
+            again=0;if(n>CORE_POOL_END-at)return -2;
+            for(j=0;j<128;j++)if(bytes[j] && pointer[j]>=CORE_POOL_PCM){
+                end=pointer[j]+bytes[j];
+                if(at<end && pointer[j]<at+n){at=end;again=1;}
+            }
+        }while(again);
+        code[i]=state->wanted[i];pointer[i]=at;bytes[i]=n;
+    }
+    return 1;
+}
 static int flush(struct stream *s)
 {
     u32 i,n=(s->used+3)&~3u;if(!n)return 0;
@@ -310,6 +352,7 @@ int core_pool_sync(void)
      if(m[0]==0x48543133u && seq && (m[6]>>16)!=seq){core_pool_busy=0;return -1;}}
     core_pool_query_owner=0;
     core_pool_read(PROJECT,state->wanted);
+    result=preflight(&fs,&opened);if(result!=1)goto done;
     for(i=0;i<128;i++)if(state->wanted[i]!=state->code[i]){
         if(send(4,i,0,0,0)!=1){result=-1;goto done;}
         entry(i,0,0,1);state->code[i]=0;state->names[i][0]=0;

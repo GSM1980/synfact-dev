@@ -101,6 +101,12 @@ static u8 *hz_load(u32 *length)
 #ifndef QSTR_INIT
 #define QSTR_INIT ((void *(*)(void *,const char *,void *))0x401bf31eu)
 #endif
+#ifndef UI_FONT
+#define UI_FONT ((void *(*)(void *))0x400f9478u)
+#define UI_TEXT ((void (*)(void *,void *,s32,s32,u32,const char *))0x400f8b68u)
+#define UI_FILL ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)
+#define UI_NATIVE_DRAW ((void (*)(void *,void *))0x400faa2eu)
+#endif
 #ifndef UI_ROOT
 #define UI_ROOT (*(u8 *volatile *)0x444e2334u)
 #endif
@@ -151,6 +157,7 @@ static u32 ui_fine_step DATA = 0;
 static u32 ui_loading DATA = 0, ui_progress_done DATA = 0, ui_progress_total DATA = 0;
 static u32 ui_progress_count DATA = 0, ui_progress_percent DATA = 101;
 static char ui_progress_label[40] DATA = {0};
+static struct st_pool_memory ui_memory DATA = {0};
 
 u32 st_pool_ui_report[8] DATA = {0};
 
@@ -161,6 +168,48 @@ static void text_set(char *dst,const char *src,u32 max)
 static void number3(char *dst,u32 n)
 {
     dst[0]='0'+(n/100)%10; dst[1]='0'+(n/10)%10; dst[2]='0'+n%10;
+}
+/* Display MiB as MB, with two decimals, without floating point or bytes*100
+ * overflow for the expanded AUDIO pool. Return the trailing NUL. */
+static char *memory_mb(char *dst,u32 bytes)
+{
+    char digits[10];u32 n=bytes>>20,frac=((bytes&0xfffffu)*100u+0x80000u)>>20,k=0;
+    if(frac==100){n++;frac=0;}
+    do{digits[k++]='0'+n%10;n/=10;}while(n);
+    while(k)*dst++=digits[--k];
+    *dst++='.';*dst++='0'+frac/10;*dst++='0'+frac%10;*dst=0;return dst;
+}
+static void memory_refresh(void){core_pool_memory(&ui_memory);}
+/* Native ASCII font metrics (400f9482/400f9584): inter-glyph gap of one
+ * pixel, optional signed width table at +8. No QString allocation in draw. */
+static u32 text_width(const void *font,const char *s)
+{
+    const u32 *f=font;const signed char *widths=(const signed char *)f[2];u32 w=0;
+    while(*s){u32 c=(u8)*s++;if(w)w++;w+=widths && widths[c]?widths[c]:f[0];}return w;
+}
+static u32 row_width(void){return *(u32 *)(ui_view+0x1a0)-13u;}
+static u32 row_size(const struct row_capture *c,char *s)
+{
+    const u8 *e;u32 bytes,code;
+    if(c->kind==ROW_SLOT){
+        st_pool_read(WORKING_PROJECT,st_pool_now);if(!st_pool_now[c->code])return 0;
+        bytes=ui_memory.bytes[c->code];
+    }else if(c->kind==ROW_FILE){
+        code=ui_codes[c->code];if(library_folder(code))return 0;
+        e=hz_find(ui_index,ui_index_len,code&~HZ_FLAG);if(!e)return 0;
+        bytes=be32(e+16);if(bytes>0x7fffffffu)return 0;bytes*=2;
+    }else return 0;
+    text_set(memory_mb(s,bytes),"MB",2);return 1;
+}
+static void row_truncate(char *text,const struct row_capture *c)
+{
+    char size[16];void *font;u32 n=0,limit;
+    if(!ui_view || !row_size(c,size))return;
+    font=UI_FONT(ui_view+0x94);limit=row_width()-text_width(font,size)-3;
+    if(text_width(font,text)<=limit)return;
+    while(text[n])n++;
+    /* Keep the slot prefix; shorten only the sample name. */
+    do{if(n>4)n--;text_set(text+n,"...",3);}while(n>4 && text_width(font,text)>limit);
 }
 static void row_name(char *text,u32 code);
 static void preview_stop(void);
@@ -193,7 +242,7 @@ s32 st_pool_ui_add(u32 code)
     for(j=0;j<SLOTS;j++) before[j]=st_pool_now[j];
     for(i=STOCK_SLOTS;i<SLOTS;i++) if(!st_pool_now[i]) {
         st_pool_now[i]=(u16)code; st_pool_write(WORKING_PROJECT,st_pool_now);
-        preview_stop();result=st_pool_live_sync(before);
+        preview_stop();result=st_pool_live_sync(before);memory_refresh();
         if(result!=1) { ui_message(result==-6?"AUDIO FULL":"LOAD FAILED");return result; }
         st_pool_ui_report[1]++; ui_message("ADDED - SAVE PROJECT"); return (s32)i+1;
     }
@@ -209,7 +258,7 @@ s32 st_pool_ui_remove(u32 slot)
     if(!st_pool_now[slot]) { ui_message("SLOT EMPTY"); return 0; }
     for(j=0;j<SLOTS;j++) before[j]=st_pool_now[j];
     st_pool_now[slot]=0; st_pool_write(WORKING_PROJECT,st_pool_now);
-    preview_stop();result=st_pool_live_sync(before);
+    preview_stop();result=st_pool_live_sync(before);memory_refresh();
     if(result!=1) { ui_message("REMOVE FAILED");return result; }
     st_pool_ui_report[2]++; ui_message("REMOVED - SAVE PROJECT"); return 1;
 }
@@ -231,10 +280,30 @@ static u32 ui_foreground(void)
  * The native framebuffer cursor must be updated after each LCD buffer swap. */
 void st_pool_ui_draw(u8 *iface,void *ctx)
 {
-    u32 width;void *font;
-    ((void (*)(void *,void *))0x400faa2eu)(iface-0x38,ctx);
+    u32 width,i,n,limit;void *font;char memory[32],status[44],*p;
+    UI_NATIVE_DRAW(iface-0x38,ctx);
+    font=UI_FONT(ui_view+0x94);
+    /* 128-pixel LCD: a two-line right-hand block keeps the full title and
+     * Project MEM readable. Native lists reserve six rows below y=49. */
+    UI_FILL(ctx,0,49,127,63,0);
+    UI_TEXT(ctx,font,2,58,0xffffffffu,"SAMPLE MANAGER");
+    UI_TEXT(ctx,font,126-text_width(font,"Project MEM"),58,0xffffffffu,"Project MEM");
+    memory[0]='(';p=memory_mb(memory+1,ui_memory.used);*p++='/';
+    p=memory_mb(p,ui_memory.total);text_set(p,") MB",4);
+    width=text_width(font,memory);
+    UI_TEXT(ctx,font,126-width,50,0xffffffffu,memory);
+    /* ui_message used to replace the centered native title. Keep errors and
+     * action/preview feedback visible beside the meter's second line. */
+    for(i=0;ui_status[i] && ui_status[i]=="SAMPLE MANAGER"[i];i++){}
+    if(ui_status[i] || "SAMPLE MANAGER"[i]){
+        text_set(status,ui_status,39);limit=121-width;
+        if(text_width(font,status)>limit){
+            for(n=0;status[n];n++){}
+            do{if(n)n--;text_set(status+n,"...",3);}while(n && text_width(font,status)>limit);
+        }
+        UI_TEXT(ctx,font,2,50,0xffffffffu,status);
+    }
     if(!ui_loading) return;
-    font=((void *(*)(void *))0x400f9478u)(ui_view+0x94);
     ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)(ctx,1,1,126,19,0);
     ((void (*)(void *,void *,s32,s32,u32,const char *))0x400f8b68u)(ctx,font,3,12,0xFFFFFFFFu,ui_progress_label);
     ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)(ctx,2,2,125,7,1);
@@ -278,7 +347,7 @@ static void st_pool_ui_progress_bytes(u32 bytes)
     percent=ui_progress_total?100u*ui_progress_done/ui_progress_total:0;
     if(percent!=ui_progress_percent) { ui_progress_percent=percent;progress_paint(); }
 }
-static void st_pool_ui_progress_end(void) { ui_loading=0;ui_redraw(); }
+static void st_pool_ui_progress_end(void) { ui_loading=0;memory_refresh();ui_redraw(); }
 
 s32 st_pool_ui_preview(u32 code)
 {
@@ -330,6 +399,7 @@ void *st_pool_item_label(void *ret,const struct fn_capture *fn)
         if(s) number3(text,s); else { text[0]='-';text[1]='-';text[2]='-'; }
         text[3]=' '; row_name(text+4,ui_codes[c->code]);
     }
+    if(c)row_truncate(text,c);
     QSTR_INIT(ret,text,&alloc); return ret;
 }
 /* Native C++ uses A0 for the return address of a nontrivial QString value. */
@@ -372,6 +442,15 @@ static u32 st_pool_row_selected(void *view,u32 row)
 }
 static const u32 sample_menu_pixels[12]=SAMPLE_MENU_ICON_COLUMNS;
 static const u32 sample_menu_mask[12]=SAMPLE_MENU_ICON_MASK;
+/* The native item's third callback runs after its label, at the same x/y,
+ * before the native XOR selection rectangle (400f59ec..400f5a8c). */
+void st_pool_row_size_draw(const struct fn_capture *fn,void *item,void *ctx,s32 x,s32 y)
+{
+    char size[16];void *font;const struct row_capture *c=fn->data;(void)item;
+    if(!c || !row_size(c,size))return;
+    font=UI_FONT(ui_view+0x94);
+    UI_TEXT(ctx,font,x+row_width()-text_width(font,size),y,0xffffffffu,size);
+}
 void st_pool_menu_icon_draw(const struct fn_capture *fn,void *item,void *ctx,s32 x,s32 y)
 {
     u32 bitmap[8];
@@ -388,9 +467,11 @@ static void add_row(u8 *view,u32 kind,u32 code,u8 *menu)
     struct fn_capture label={&c,0,row_manager,st_pool_label_invoker};
     struct fn_capture action={&c,0,row_manager,row_action};
     struct fn_capture icon={&c,0,row_manager,(void *)st_pool_menu_icon_draw};
+    struct fn_capture size={&c,0,row_manager,(void *)st_pool_row_size_draw};
     struct fn_capture empty={0,0,0,0}; u8 *item=MALLOC(0x54);
     if(!heap_ok(item)) return;
-    UI_ITEM_INIT(item,&label,&action,kind==ROW_OPEN?&icon:&empty,&empty,-1,8);
+    UI_ITEM_INIT(item,&label,&action,kind==ROW_OPEN?&icon:
+        kind==ROW_SLOT || (kind==ROW_FILE && !library_folder(ui_codes[code]))?&size:&empty,&empty,-1,8);
     ((void (*)(void *,void *))(*(u32 **)view)[2])(view,item);
 }
 static void rebuild_list(void)
@@ -430,7 +511,7 @@ static void apply_selection(void)
         }
     }
     if(n) {
-        st_pool_write(WORKING_PROJECT,st_pool_now);result=st_pool_live_sync(before);
+        st_pool_write(WORKING_PROJECT,st_pool_now);result=st_pool_live_sync(before);memory_refresh();
         st_pool_read(WORKING_PROJECT,st_pool_now);n=0;
         for(i=0;i<SLOTS;i++) if(before[i]!=st_pool_now[i]) n++;
         st_pool_ui_report[ui_mode?1:2]+=n;
@@ -494,6 +575,12 @@ void st_pool_ui_open(u8 *menu)
     *(u32 *)root=0x401c9910u; put32(root+4,1);put32(root+8,1);
     view=root+16; *(u8 **)(root+12)=view;
     UI_THREE_INIT(view,"SAMPLE MANAGER",128,1,1,1);
+    /* Native viewport/visible-count fields: root draws an eight-pixel title
+     * above its viewport; side panes have no title. All start rows at y=42. */
+    *(u32 *)(view+0x84)=15;
+    *(u32 *)(view+0x1a4)=56;*(u32 *)(view+0x1c)=6;
+    *(u32 *)(view+0x1c0+0x1a4)=48;*(u32 *)(view+0x1c0+0x1c)=6;
+    *(u32 *)(view+0x380+0x1a4)=48;*(u32 *)(view+0x380+0x1c)=6;
     /* Wider owned action pane fits REMOVE FROM POOL in the native small font.
      * Native three-pane draw reads the list viewport at +198/+1a0. */
     *(u32 *)(view+0x380+0x198)=49;
@@ -515,6 +602,7 @@ void st_pool_ui_open(u8 *menu)
     *(u32 **)(view+0x38)=ui_view_table+2;
     ui_view=view;ui_mode=1;ui_count=0;ui_combo_keys=0;ui_yes_down=0;ui_fine_step=0;
     if(st_pool_read(WORKING_PROJECT,st_pool_now)!=1) st_pool_write(WORKING_PROJECT,st_pool_now);
+    memory_refresh();
     ui_index=hz_load(&ui_index_len);
     ui_folder=0;
     n=ui_index?be32(ui_index+12)+st_hz_folder_count(ui_index)+1:1;

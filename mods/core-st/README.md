@@ -1,4 +1,12 @@
-# Syntakt core 2.2.0
+# Syntakt core 2.3.0
+
+Core **2.3.0** appends a task/UI memory snapshot to sample-pool API 2, keeping
+the API 1 prefix. It reports PCM bytes for each loaded slot and the unique,
+page-aligned extents referenced by slots 65..128, against the core 2.2 AUDIO
+capacity (66,711,552 bytes). Stock slots 1..64 use a separate budget.
+Runtime sync dry-runs the complete allocation before retiring or streaming
+any sample. An insufficient or fragmented AUDIO pool rejects the whole edit;
+the existing live-apply wrapper restores the project record.
 
 Core **2.2.0** reorganizes AUDIO's sample store mapping
 ([docs/AUDIO-MEMORY-MAP.md](../../docs/AUDIO-MEMORY-MAP.md)):

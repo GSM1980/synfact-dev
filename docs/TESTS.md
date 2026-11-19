@@ -2,6 +2,22 @@
 
 # Tests
 
+Sample Manager 1.3 / core 2.3: native-host manager/pool tests cover the expanded
+63.62 MiB budget, protected slots, mono/stereo sizes, unique page extents,
+fragmentation, exact fits and capacity rejection before any AUDIO command.
+The compiled UI additionally executes against OS 1.42's real list, font,
+QString, bitmap and selection routines (allocation/synchronization, core
+services and manager attachment are fixture boundaries):
+
+```bash
+python tests/test_st_manager_draw_emu.py --stock "$SYNTAKT_STOCK" \
+    --bank out/<build>/synfact-machines.smz4 --out out/<build>/manager-preview
+```
+
+It checks the two-line header, six-row scrolling, folder labels, stereo/mono
+sizes, ellipsis and the right column's pixel positions, and writes two optional
+LCD PNGs plus an AUDIO FULL error capture. It does not access a device or model LCD timing.
+
 Core 2.1.2: the registry regression (`tests/test_core_st_machines.c`) includes
 module-only banks (LFO3 metadata with and without a second provider), no-bank
 fallback, empty-directory/lane safety and allocation failure/recovery. It uses

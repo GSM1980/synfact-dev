@@ -71,7 +71,8 @@ and `memcpy` calls, which the freestanding core does not have).
 - A function of those files that a tick, a draw, a key, an encoder or a native
   path calls is marked `CORE_HOT` (`__attribute__((optimize("O3")))`) and keeps
   `-O3`: the pool's cursor tick, sample source, name, channels, cursor, cached
-  name, wave storage, code-used, readiness, validity, empty, stock-changed; the
+  name, wave storage, code-used, readiness, validity, empty, stock-changed,
+  memory snapshot; the
   bank's auto-confirm tick; the sample write guard. GCC does not inline a
   function compiled at another level, so a hot function that calls a cold
   helper now calls it instead of inlining it (a few bytes either way).

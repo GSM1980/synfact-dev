@@ -20,13 +20,14 @@ static const struct st_machine_host_api *host;
 #define manager_preview host->pool->preview
 #define manager_refill host->pool->refill
 #define manager_preview_release host->pool->release
+#define core_pool_memory host->pool->memory
 #include "ui.c"
 static void menu(void *m){st_pool_ui_menu(m);}
 static const struct st_pool_ui_callbacks callbacks={1,menu,st_pool_ui_progress_begin,st_pool_ui_progress_end,manager_file,manager_progress};
 static int manager_key(void *app,void *ev){return st_pool_ui_pre_event(app,ev);}
 static int initialize(const struct st_smz_api *api)
 {
-    if(!api || api->version<1 || !api->ui || api->ui->version<5 || !api->ui->host || api->ui->host->version<11 || !api->ui->host->pool || api->ui->host->pool->version!=1)return 1;
+    if(!api || api->version<1 || !api->ui || api->ui->version<5 || !api->ui->host || api->ui->host->version<11 || !api->ui->host->pool || api->ui->host->pool->version<2 || !api->ui->host->pool->memory)return 1;
     host=api->ui->host;return !host->pool->bind_ui(&callbacks);
 }
 static const struct st_smz_subscription subscriptions[]={
