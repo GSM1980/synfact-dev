@@ -14,7 +14,7 @@ typedef pool_u8 u8;typedef pool_u16 u16;typedef pool_u32 u32;
 #define PROJECT ((u8 *)0x40653514u)
 /* CPU2 is byte-identical in 1.41/1.42. This is an AUDIO address, not MAIN. */
 #define STOCK_AUDIO 0x4004f750u
-#define WIRE_FIRST 0x4162u
+#define WIRE_FIRST 0x8001u  /* core 2.2: CORE_POOL_AUDIO is page 8001 */
 #define IMAGE_MAGIC 0x454c5031u
 extern void *fw_malloc(u32);extern void fw_free(void *);
 extern int fw_mmc_read(u32,u32,void *);

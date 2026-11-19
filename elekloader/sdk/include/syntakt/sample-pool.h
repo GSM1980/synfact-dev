@@ -24,9 +24,11 @@ void core_pool_stock_changed(pool_u32 address);
 #define CORE_POOL_OFFSET 0xf0u
 #define CORE_POOL_RECORD 0x110u
 #define CORE_POOL_HZ 0x8000u
-#define CORE_POOL_AUDIO 0x42100750u
+/* Core 2.2: sample store pages 8001..ff40, above AUDIO's own page 8000; the 64
+ * KiB below 48000000 are the AUDIO stack's (docs/AUDIO-MEMORY-MAP.md). */
+#define CORE_POOL_AUDIO 0x4404ff50u
 #define CORE_POOL_PCM (CORE_POOL_AUDIO+4096u)
-#define CORE_POOL_END 0x4404f750u
+#define CORE_POOL_END 0x47feff50u
 #define CORE_POOL_MAGIC 0x45505331u
 extern const unsigned char core_pool_image[];
 extern unsigned int core_pool_boot_pages,core_pool_busy;

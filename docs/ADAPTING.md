@@ -13,8 +13,9 @@ its fix and give a definition of done. The format itself is
 [FORMAT.md](FORMAT.md). Current source builds target Syntakt OS 1.42; historical
 address examples below are from 1.41. Use the current manifests and SDK headers
 for addresses, and [OS142-PORT.md](OS142-PORT.md) for the port and validation.
-Core 2.0 requires SMZ4 feature 16 and exact contract `0x53594605`; rebuild every
-bank, including banks containing only modules. Untagged and 1.41 banks are refused.
+Core 2.0 requires SMZ4 feature 16 and an exact contract: `0x53594606` from core
+2.2 (`0x53594605` for 2.0 and 2.1); rebuild every bank, including banks
+containing only modules. Untagged, 1.41 and older-contract banks are refused.
 
 Most Syntakt mods are machines or modules in the core's SMZ4 bank: the
 "Syntakt core" sections below describe its services, and
@@ -115,6 +116,18 @@ These are the events the Syntakt's core shares with elekloader's cores
 sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
+
+### Syntakt core 2.2: a 4 MiB bank window, the pool above AUDIO's page
+
+The bank's AUDIO section may be up to 4 MiB (sample store pages `4000..47ff`,
+`4204f750..4244f750`; 723,120 bytes before). The sample pool moved to the top of
+the sample store mapping: the service at `4404ff50`, its PCM at
+`44050f50..47feff50` (63.62 MiB), the 64 KiB below `48000000` left to the AUDIO
+stack ([AUDIO-MEMORY-MAP.md](AUDIO-MEMORY-MAP.md)). A machine reaches the pool
+only through `st_machine_sample()` and `st_machine_sample_channels()`
+(`<syntakt/machines.h>`), which now finds the channel table through the AUDIO
+ABI directory: never name a pool address. The contract is `0x53594606`: banks
+built for 2.0/2.1 inline the old pool address and are refused; rebuild them.
 
 ### Syntakt core 2.0.3: selected-model parameter labels
 

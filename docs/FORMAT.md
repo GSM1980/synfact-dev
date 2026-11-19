@@ -1,7 +1,8 @@
 # The .elemod format
 
 For Syntakt core 2.0's separate SMZ4 banks, OS 1.42 requires feature 16 and
-contract `0x53594605` in the existing word at offset 64. Older and untagged
+a contract ID in the existing word at offset 64: `0x53594606` from core 2.2
+(`0x53594605` for 2.0 and 2.1). An AUDIO section may be up to 4 MiB from 2.2. Older and untagged
 banks are rejected before execution. This changes compatibility, not the disk
 layout or `.elemod` format. See [SMZ4](../mods/core-st/SMZ4.md).
 

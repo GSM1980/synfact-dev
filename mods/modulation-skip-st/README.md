@@ -1,7 +1,7 @@
 # Skip native modulation per track
 
 Desktop OS 1.42 release: **1.2.5**, based on remote main `f48f3ab`.
-Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
 See [the port notes](../../docs/OS142-PORT.md).

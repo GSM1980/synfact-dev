@@ -64,7 +64,7 @@ This native path is not a direct eMMC-to-AUDIO stream.
 HZFS long samples use a different path. `core_pool_prepare` plans extents,
 and `core_pool_boot_page` reads eMMC on demand into small MAIN scratch
 buffers as the sender requests pages. Those samples are streamed to
-AUDIO's separate `42101750..4404f750` PCM region; complete long samples are
+AUDIO's separate `42101750..4404f750` PCM region (`44050f50..47feff50` from core 2.2); complete long samples are
 not accumulated in MAIN. Runtime HZFS loads likewise stream through the
 checked DATA/COMMIT protocol.
 

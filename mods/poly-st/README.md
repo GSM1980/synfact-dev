@@ -1,7 +1,7 @@
 # POLY for Syntakt (1.7)
 
 Desktop OS 1.42 release: **1.7**, based on remote main `3d50e09`.
-Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
 new bank; older hardware measurements below refer to the previous OS. See

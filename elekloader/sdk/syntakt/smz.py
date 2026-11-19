@@ -21,9 +21,9 @@ from ...devices.syntakt import DEVICE
 import hashlib
 
 ABI=0x454c0001
-CONTRACT=0x53594605  # OS 1.42 native addresses; mods/core-st/smz.h
+CONTRACT=0x53594606  # OS 1.42 native addresses; mods/core-st/smz.h
 AUDIO=0x4204f750
-AUDIO_MAX=0x42100000-AUDIO
+AUDIO_MAX=0x400000   # core 2.2: 4 MiB, pages 4000..47ff
 MAIN_MAX=0x200000
 MAX_PARAMS=32
 STORED_PARAMS=28

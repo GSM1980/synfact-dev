@@ -1,0 +1,12 @@
+{
+  "id": "high-memory-probe-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "High memory probe", "category": "Synth", "author": "GSM1980",
+  "description": "Test only: checks that nothing writes AUDIO 4404ff50..47ff0000 and measures how deep the AUDIO stack goes.",
+  "device": "syntakt", "os": "1.42", "sources": ["main.c"], "cflags": ["-fno-jump-tables"],
+  "smz": {
+    "machines": [{"descriptor": "high_memory_probe_st", "ui": "high_memory_probe_ui",
+                  "update": "high_probe_update", "render": "high_probe_render"}],
+    "features": ["machine-ui-v1"],
+    "audio": {"sources": ["audio.c"]}
+  }
+}

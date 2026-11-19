@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -857,7 +857,7 @@
       "project:0xf0..0x200",
       "settings:SAMPLE MANAGER",
       "sound:SAMPLE MANAGER",
-      "audio:0x42100750..0x4404f750",
+      "audio:0x4404ff50..0x47feff50",
       "drive:/mod-status:read-only",
       "ui:sample-manager:three-pane",
       "main-mix:sample-preview"

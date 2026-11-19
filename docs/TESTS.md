@@ -83,6 +83,10 @@ receiver. `tests/test_core_st_trial_boot.c` (the regressions' `trial-boot`)
 checks the loader's side: MAIN's part in a block of its own, the AUDIO section
 intact in the file until the release, and the whole file kept when that block
 cannot be allocated.
+Core 2.2: `tests/test_st_pool_service.c` (the regressions' `pool-service`) maps the
+pool's new addresses and checks that the AUDIO companion installs the service at
+`4404ff50`, publishes its descriptors and writes the channel table into the ABI
+directory, and that a corrupt or misplaced service publishes nothing.
 Disk, heap, semaphore, notification and mailbox delivery are boundaries, not a full
 RTOS boot or hardware validation. The host project-pool fixture additionally
 covers empty/oversized headers, missing disk, read/allocation failures, exact

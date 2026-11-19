@@ -129,13 +129,13 @@ int main(void)
     for(i=0;i<64;i++)stock_lengths[i]=4;
     memset(PROJECT,0,512);core_pool_read(PROJECT,entries);entries[64]=0x8001;core_pool_write(PROJECT,entries);
     core_pool_prepare();assert(core_pool_boot_pages==4 && state && state->files==1);
-    page=core_pool_boot_page(0,&wire);assert(wire==0x4164 && !memcmp(page,sample+64,2048));
+    page=core_pool_boot_page(0,&wire);assert(wire==0x8003 && !memcmp(page,sample+64,2048));
     assert(core_pool_boot_page(0,&wire)==page); /* sender retry */
-    page=core_pool_boot_page(1,&wire);assert(wire==0x4165 && !memcmp(page,sample+64+2048,152));
+    page=core_pool_boot_page(1,&wire);assert(wire==0x8004 && !memcmp(page,sample+64+2048,152));
     for(i=152;i<2048;i++)assert(!page[i]);
-    page=core_pool_boot_page(2,&wire);assert(wire==0x4162 && rd(page)==IMAGE_MAGIC);
+    page=core_pool_boot_page(2,&wire);assert(wire==0x8001 && rd(page)==IMAGE_MAGIC);
     assert(rd(page+8)==adler(state->image+12,4096-12));
-    page=core_pool_boot_page(3,&wire);assert(wire==0x4163);
+    page=core_pool_boot_page(3,&wire);assert(wire==0x8002);
     assert(rd(state->image+0xc00+64*8)==1100 && rd(state->image+0xc04+64*8)==CORE_POOL_PCM);
     assert(state->frames[0]==4 && state->pointer[0]==STOCK_AUDIO+4);
     assert(core_pool_report[2]==1);

@@ -8,7 +8,8 @@ from .. import build as sdk,elf
 from .audio import audit,audit_functions
 from ...devices.syntakt import DEVICE
 
-BASE=0x42100750
+BASE=0x4404ff50   # core 2.2: sample store page 8001 (docs/AUDIO-MEMORY-MAP.md)
+END=0x47feff50    # the end of page ff40: the PCM ends here, 64 KiB below the AUDIO stack
 TABLE=BASE+0xc00
 # Core 1.8: one channel-count byte per slot, below the descriptor table, and
 # its header record {454c4801, address} at +40 (machines.h).
@@ -34,7 +35,7 @@ def build(out):
     if len(code)>CHANNELS-BASE-64:raise ValueError('generic AUDIO pool core exceeds its owned code page')
     image=bytearray(4096)
     struct.pack_into('>8I',image,0,0x454c5031,4096,0,symbols['audio_pool_receive'],
-                     0x454c5001,128,BASE+4096,0x4404f750)
+                     0x454c5001,128,BASE+4096,END)
     struct.pack_into('>2I',image,32,0x454c4301,symbols['audio_pool_cursor'])
     struct.pack_into('>2I',image,40,0x454c4801,CHANNELS)
     image[CHANNELS-BASE:CHANNELS-BASE+128]=bytes([1])*128

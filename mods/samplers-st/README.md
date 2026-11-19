@@ -1,7 +1,12 @@
 # SP sample machines 1.5
 
-Desktop OS 1.42 release: **1.5.1**, based on remote main `f48f3ab`.
-Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+Desktop OS 1.42 release: **1.5.2**.
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+
+1.5.2 is the rebuild for core 2.2, whose pool moved above AUDIO's own page: a
+stereo sample's channel count now comes through the AUDIO ABI directory
+(`st_machine_sample_channels`, `<syntakt/machines.h>`) instead of the old fixed
+pool address. Nothing else changes.
 
 Version 1.5 includes all MAIN stereo optimizations below. Their 1.4.x numbers
 were development iterations, consolidated into one release step from 1.4.

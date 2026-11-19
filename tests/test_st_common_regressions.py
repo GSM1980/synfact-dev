@@ -39,6 +39,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         'project-pool':['tests/test_st_pool.c','mods/core-st/crc.c','mods/core-st/hzfs.c'],
         'sample-manager':['tests/test_st_manager.c','mods/core-st/crc.c'],
         'audio-pool':['tests/test_st_pool_receiver.c'],
+        'pool-service':['tests/test_st_pool_service.c'],   # not "install": Windows asks to elevate such names
         'parameter-transport':['tests/test_st_parameters.c'],
         'sampler-audio':['tests/test_st_samplers.c',*[str(p.relative_to(ROOT)) for p in
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],

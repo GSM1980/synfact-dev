@@ -107,7 +107,7 @@ def verify(stock_path, folder, previous=None):
     bank = folder / 'synfact-machines.smz4'
     raw = bank.read_bytes()
     assert struct.unpack_from('>I', raw, 24)[0] & 16
-    assert struct.unpack_from('>I', raw, 64)[0] == 0x53594605
+    assert struct.unpack_from('>I', raw, 64)[0] == 0x53594606   # core 2.2: the pool moved, the bank window grew
     modules = json.loads(bank.with_suffix('.smz4.json').read_text())
     assert modules['machines'] == [66, 67, 68, 69, 65]
     assert set(modules['modules']) == {

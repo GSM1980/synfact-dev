@@ -1,4 +1,25 @@
-# Syntakt core 2.1.2
+# Syntakt core 2.2.0
+
+Core **2.2.0** reorganizes AUDIO's sample store mapping
+([docs/AUDIO-MEMORY-MAP.md](../../docs/AUDIO-MEMORY-MAP.md)):
+
+- The SMZ4 bank's AUDIO section may be up to **4 MiB** (`4204f750..4244f750`,
+  pages `4000..47ff`; 723,120 bytes before), room for new AUDIO code.
+- The sample pool moved above AUDIO's own page (`4404f750..4404ff50`): the
+  service at `4404ff50` (page `8001`), its PCM at `44050f50..47feff50` (pages
+  `8003..ff40`): **63.62 MiB** of long samples (31.30 MiB before). The 64 KiB
+  below `48000000` stay the AUDIO stack's.
+- `4244f750..4404f750` (pages `4800..7fff`, 28 MiB) is free for later use.
+- Machines find the pool's channel table through the AUDIO ABI directory's
+  fourth word (`40040f5c`, written once the service is installed), so a bank no
+  longer names a pool address. Bank contract **`0x53594606`**: banks built for
+  2.0/2.1 inline the old address and are refused; rebuild every bank.
+
+The native receiver writes each MAIN page at `4004f750 + index * 2048` with a
+16-bit index it does not bound; the stock firmware references nothing above
+`4404f980` (`tools/study_st_audio_memory.py`). That the high zone stays free on
+the unit, and how deep the AUDIO stack goes, is checked by
+`tools/probes/high-memory-probe-st`.
 
 Core **2.1.2** initializes the shared parameter registry for banks containing
 only modules, with zero machines. LFO3 alone or with ARP receives its labels,
@@ -77,9 +98,9 @@ The 64 KiB resident reserve, bank contract and AUDIO firmware remain unchanged.
 See [the memory investigation and validation](../../docs/STOCK-SAMPLE-CORE-OVERLAP.md).
 
 Desktop OS 1.42 base release: **2.0.0**, based on remote main `f48f3ab`.
-Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
-Current desktop target: **OS 1.42 / core 2.1.1**.
+Current desktop target: **OS 1.42 / core 2.2.0**.
 See [the port notes](../../docs/OS142-PORT.md).
 
 1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for

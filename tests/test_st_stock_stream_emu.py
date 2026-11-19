@@ -163,7 +163,7 @@ def run_case(folder, frames, machine_pages=0, service=True):
     u.emu_start(0x40082f90, RET, count=2000000000)
     assert len(kicks) == total_pages, (len(kicks), total_pages)
     assert kicks == list(range(stock_pages))+list(range(0x4000, 0x4000+machine_pages))+(
-        [0x4162, 0x4163] if service else [])
+        [0x8001, 0x8002] if service else [])   # core 2.2: the service at page 8001
     assert scratch in freed and freed.count(scratch) == 1
     if machine_pages:  # freed once, after its last page reached the mailbox (the receiver's copy checks it)
         assert freed.count(bank_file) == 1
@@ -181,7 +181,7 @@ def run_case(folder, frames, machine_pages=0, service=True):
         # the rest; AUDIO must receive the builder's image (checksum, channel bytes
         # and descriptors are MAIN's, rewritten at the last pages).
         template = (folder/'pool-audio'/'core-pool.bin').read_bytes()
-        received = bytes(audio.mem_read(0x42100750, 4096))
+        received = bytes(audio.mem_read(0x4404ff50, 4096))
         assert received[:8] == template[:8] and received[12:0xb80] == template[12:0xb80]
         assert struct.unpack('>I', received[8:12])[0] == zlib.adler32(received[12:]) & 0xffffffff
     for address, code in executable.items():
@@ -198,7 +198,7 @@ def run_case(folder, frames, machine_pages=0, service=True):
         offset += 4
         assert (actual_n, actual_p) == (n, STOCK_AUDIO+offset), (slot, actual_n, hex(actual_p))
         if service:
-            pool_n, pool_p = struct.unpack('>II', audio.mem_read(0x42101350+8*slot, 8))
+            pool_n, pool_p = struct.unpack('>II', audio.mem_read(0x44050b50+8*slot, 8))
             assert (pool_n, pool_p) == (n, STOCK_AUDIO+offset if n else 0)
         offset += 2*n
     if service:

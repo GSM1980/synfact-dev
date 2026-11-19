@@ -8,7 +8,9 @@ An optional module uses bounded event subscriptions, never a file-supplied
 firmware patch plan. Transfers, storage and project/sample loading work without
 an SMZ. Missing or invalid files are skipped silently.
 
-Core 2.0 targets OS 1.42 and requires feature 16 with contract `0x53594605`.
+Core 2.0 targets OS 1.42 and requires feature 16 with contract `0x53594605`;
+core 2.2 requires `0x53594606` (the bank window grew to 4 MiB and the pool moved:
+a bank built for 2.0/2.1 inlines the old pool address, see SAMPLE-POOL.md).
 The disk layout and checksums are unchanged. Both older contract IDs and
 untagged banks are rejected before relocation or module initialization, because
 their MAIN code can contain OS 1.41 addresses. Build a new bank with the local
@@ -106,11 +108,13 @@ then linked machine code/data/state. Update/render must be even and inside the
 code portion, with the same type set as MAIN. The complete section is padded
 to 2048-byte pages with zeros; the final page ends exactly at EOF.
 
-The AUDIO base is **4204f750h**, reserved through **42100000h**. This is inside
+The AUDIO base is **4204f750h**, reserved through **4244f750h** (core 2.2: 4 MiB,
+sample store pages `4000..47ff`; through `42100000h` before). This is inside
 the native 64 MiB sample store, beyond the stock first-half sample maximum;
 the 64 sample descriptors do not own this extension. MAIN allocation (envelope,
 relocations and image) is capped at **2 MiB**; the AUDIO section is capped at
-**723120 bytes**. The storage endpoint still accepts 16 MiB, but unsupported
+**4 MiB** (723,120 bytes before core 2.2). A bank therefore fits a 8 MiB storage
+slot. The storage endpoint still accepts 16 MiB, but unsupported
 banks are skipped. Allocation uses native malloc/free, retaining a 512 KiB
 reserve during setup for the native sample builder. Allocation failure skips
 the bank. No new RAM is inferred from zeros or missing references.

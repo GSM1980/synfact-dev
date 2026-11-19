@@ -1,7 +1,7 @@
 # Playhead: step order per track (playhead-st)
 
 Desktop OS 1.42 release: **1.2.1**.
-Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 **TRK + UP** / **TRK + DOWN** opens a centered mode selector for the active
 track. All nine modes are visible in two columns, each with its icon and name.

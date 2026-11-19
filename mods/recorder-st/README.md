@@ -1,7 +1,7 @@
 # Audio Recorder for Syntakt (1.4)
 
 Desktop OS 1.42 release: **1.4.1**, based on remote main `f48f3ab`.
-Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 Version 1.2 consolidates the MAIN idle callback work tested as development
 1.1.1. See [the release mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).

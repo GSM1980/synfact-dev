@@ -4,7 +4,7 @@
  */
 typedef unsigned int u32;typedef unsigned char u8;
 #define BASE 0x4204f750u
-#define LIMIT (0x42100000u-BASE)
+#define LIMIT 0x400000u            /* core 2.2: 4 MiB (smz.h) */
 #ifndef FRAME_TAG
 #define FRAME_TAG (*(const volatile u8 *)0x800081a9u)
 #define PARAM_BANK(tag) ((const volatile u32 *)(0xc00u+(((tag)&1)<<9)))
@@ -19,6 +19,14 @@ extern u8 audio_machine_types[];
  * unreceived row is no default (FM ratio offsets 0 silence the carrier). */
 static u32 *extended;
 static u32 pool_ready,accepted;
+/* Core 2.2: the pool service at sample store page 8001, past AUDIO's own page
+ * 8000 (docs/AUDIO-MEMORY-MAP.md); its tables as sdk/syntakt/pool_audio.py builds it. */
+#define POOL_BASE 0x4404ff50u
+#define POOL_CHANNELS (POOL_BASE+0xb80u)
+#define POOL_TABLE (POOL_BASE+0xc00u)
+#ifndef AUDIO_POOL_DIRECTORY
+#define AUDIO_POOL_DIRECTORY ((volatile u32 *)0x40040f50u)  /* {454c5001, audio_pool_sample, 128, channels} */
+#endif
 static u8 row_type[8];
 /* Entries reached through the fixed ABI directory live in the upper
  * reserve (sdk/syntakt/audio.py UPPER); the main reserve keeps the rest. */
@@ -26,15 +34,18 @@ static u8 row_type[8];
 #define UPPER __attribute__((section(".text.upper")))
 #endif
 UPPER const void *audio_pool_sample(u32 slot)
-{return pool_ready && slot<128?(const void *)(0x42101350u+8*slot):0;}
+{return pool_ready && slot<128?(const void *)(POOL_TABLE+8*slot):0;}
 static void pool_install(void)
 {
-    const u32 *h=(const u32 *)0x42100750u;const u8 *p=(const u8 *)h+12;
+    const u32 *h=(const u32 *)POOL_BASE;const u8 *p=(const u8 *)h+12;
     u32 a=1,b=0,i;
-    if(h[0]!=0x454c5031u || h[1]!=4096 || (h[3]&1) || h[3]<0x42100790u || h[3]>=0x42101350u)return;
+    if(h[0]!=0x454c5031u || h[1]!=4096 || (h[3]&1) || h[3]<POOL_BASE+64u || h[3]>=POOL_TABLE)return;
     for(i=12;i<4096;i++){a+=*p++;if(a>=65521)a-=65521;b+=a;if(b>=65521)b-=65521;}
     if((b<<16|a)!=h[2])return;
     audio_machine_flush((void *)h,4096);pool_ready=h[3];
+    /* Core 2.2: machines find the channel table through the ABI directory
+     * (machines.h st_machine_sample_channels), never at a fixed address. */
+    AUDIO_POOL_DIRECTORY[3]=POOL_CHANNELS;
 }
 UPPER const unsigned short *audio_machine_params(const void *params)
 {

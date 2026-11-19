@@ -103,15 +103,20 @@ AUDIO byte layout. Native AUDIO receives them at `4004f750`, unchanged between
 resident relocation, larger core reserve or native heap expansion. See
 [the investigation, fix and emulator checks](../../docs/STOCK-SAMPLE-CORE-OVERLAP.md).
 
-The PCM region is **`42101750..4404f750` on AUDIO**, about 31.30 MiB. The first
-4 KiB at `42100750` hold the generic service code and 128 PCM descriptors.
-The SMZ machine region ends at `42100000`, below these allocations. Native
-stock PCM/descriptor regions remain independent. Files are deduplicated by
+From core 2.2 the PCM region is **`44050f50..47feff50` on AUDIO**, 63.62 MiB
+(66,711,552 bytes; 31.30 MiB at `42101750..4404f750` before). The 4 KiB below
+it, at `4404ff50`, hold the generic service code and 128 PCM descriptors. Both
+are above AUDIO's own page (`4404f750..4404ff50`: its variables and stock sample
+table, which no page may overwrite) and end 64 KiB below the AUDIO stack's top
+(`48000000`). [docs/AUDIO-MEMORY-MAP.md](../../docs/AUDIO-MEMORY-MAP.md) has
+the whole map. Native stock PCM/descriptor regions remain independent. Files are deduplicated by
 id within a loaded pool and are not silently cropped. A file must fit in
 available contiguous PCM RAM; the disk filesystem itself has a larger capacity.
 
-Pages use the native sample-store mapping. The service begins at wire index
-`4162`, with PCM from `4164`. These map exactly to `42100750` and `42101750`.
+Pages use the native sample-store mapping (`4004f750 + index * 2048`, a 16-bit
+index the native receiver does not bound). The service begins at wire index
+`8001`, with PCM from `8003` to `ff40`. These map exactly to `4404ff50`,
+`44050f50` and the end `47feff50`.
 The service's metadata/code pages are sent last, after sample CRC validation.
 No bootloader, bootstrap, updater, vector or native copy/clear routine changes.
 
@@ -255,10 +260,13 @@ whole body is planned, streamed, CRC-checked and copied to AUDIO as before.
 What changes is the descriptor:
 
 - On AUDIO a slot's `{frames, pcm}` counts frame **pairs** for a stereo
-  sample, and the channel table at `421012d0` (one byte per slot, 1 or 2)
-  says 2. The pool service header has `{454c4801, 421012d0}` at `42100778`;
-  machines read it with `st_machine_sample_channels(slot)` (machines.h). A
-  machine that ignores it plays the first half of the data as mono.
+  sample, and the channel table (one byte per slot, 1 or 2) says 2. The
+  table is at service + `0xb80` (`44050ad0` from core 2.2); the core writes its
+  address into the AUDIO ABI directory's fourth word (`40040f5c`) once the
+  service is installed, and machines read it with
+  `st_machine_sample_channels(slot)` (machines.h), never at a fixed address.
+  The service header still has `{454c4801, table}` at +40. A machine that
+  ignores the count plays the first half of the data as mono.
 - COMMIT (3) and ALIAS (5) carry the channel count in bit 8 of the slot.
   COMMIT checks the extent against `2 * channels * frames`; ALIAS of a stereo
   extent must name stereo, and stock PCM is mono only. Overlap checks use each
