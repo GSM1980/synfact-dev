@@ -1,10 +1,15 @@
 # Changelog: SY MnM
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.5.1.
+Generated from git history by `tools/changelog.py`. Latest version: 0.6.0.
+
+## 0.6.0 (2026-11-19)
+
+- feat(digimono): replace FM+ with De-Pattern and cut render instructions by 64 percent (`c9f7174`, 2026-11-19)
 
 ## 0.5.1 (2026-11-19)
 
 - Rename Digi Mono to SY MnM and preserve TYPE on SYN reload (`e9a6dd4`, 2026-11-19)
+- Update core 2.3.2 and SY MnM 0.5.1 changelogs (`a171405`, 2026-11-19)
 
 ## 0.5.0 (2026-11-19)
 
