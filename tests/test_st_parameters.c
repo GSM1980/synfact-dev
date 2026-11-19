@@ -53,6 +53,7 @@ static void audio_restart(void){memset(values,0,sizeof values);extended=values;a
 static u32 effective(u32 t,u32 owner,u32 index)
 {
     u32 slot=test_slots[index],n;int v;
+    if(index>=8 && index<24 && param[index].alias==ST_MACHINE_CONFIG_PARAMETER)return mirror(owner)[slot];
     if(!slot)return mirror(owner)[0];                    /* None destination: unmodulated */
     if(slot!=0x11 && slot!=0x18)return working(t)[slot];
     v=mirror(owner)[slot];
@@ -260,7 +261,22 @@ int main(void)
      audio_machine_receive();offered(6,6);
      working(6)[8]=0x4000;SNAP();g=FRAME_TAG;working(6)[0x37]^=0x100;
      core_machine_snapshot(0);assert(FRAME_TAG==g);}                             /* depth 0: not routed */
-    puts("PASS: cadence (4-block edits, trig and routed-LFO blocks), 20000 randomized blocks vs oracle, never-received rows withheld, 8xFM boot, stable values without FPGA writes/reads, "
+    /* Configuration controls cannot inherit old LFO/Sound-modulation/lock
+     * values from the effective working row. Test every extended pair half,
+     * shared POLY owners, and ordinary modulation after removing the marker. */
+    GATE=1;use_owners=1;test_owners[3]=0;
+    for(t=0;t<8;t++)set_type(t,65);
+    for(i=8;i<24;i++){
+        u32 slot=test_slots[i];param[i].alias=ST_MACHINE_CONFIG_PARAMETER;
+        for(t=0;t<8;t++){mirror(t)[slot]=0x1000+t;working(t)[slot]=0x5000+t;working(t)[4]=slot<<8;working(t)[8]=0x6000;}
+        SNAP();audio_machine_receive();for(t=0;t<8;t++)offered(t,t==3?0:t);
+        g=FRAME_TAG;
+        for(t=0;t<8;t++)working(t)[slot]^=0x100;
+        SNAP();assert(FRAME_TAG==g); /* effective modulation alone is ignored */
+        mirror(0)[slot]^=0x200;SNAP();audio_machine_receive();offered(3,0); /* explicit saved edit follows owner */
+        param[i].alias=0;SNAP();audio_machine_receive();for(t=0;t<8;t++)offered(t,t==3?0:t);
+    }
+    puts("PASS: unmodulated configuration controls 8..23, POLY owner mirroring, legacy routed values ignored, ordinary modulation restored; cadence (4-block edits, trig and routed-LFO blocks), 20000 randomized blocks vs oracle, never-received rows withheld, 8xFM boot, stable values without FPGA writes/reads, "
          "LFO slots/clamps, locks and retirement, stale-row-only rewrites, checksum retry, torn headers, "
          "lagging frames, 600-generation wrap, mask/type/owner changes, ready gate, receiver restart, "
          "stock/FM transitions");

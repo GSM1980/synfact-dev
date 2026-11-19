@@ -19,7 +19,7 @@ Checked by the core's parser (`mods/core-st/smz.c`) before anything runs.
 | parameter short label | printable ASCII, at most 8 characters |
 | parameter long label | printable ASCII, at most 63 characters |
 | `min`, `max`, `default` | 16-bit. `min <= default <= max` and `max <= 0xffff` |
-| parameter alias | at most `0x1f8` |
+| parameter alias | at most `0x1f8`; core 2.3.1 also accepts `ST_MACHINE_CONFIG_PARAMETER` at indices 8..23 only |
 | `borrow` | must be 44 (the stock SYN presentation template) |
 | `category` | 1 to 14 |
 | `rank` | 0 to 127 |
@@ -90,6 +90,7 @@ aliases in use:
 | `0x1f1` | TUNE: the native TUNE dial, with its FUNC snap | TUNE controls. Do not put a start position on it: it reads -64 to +64 |
 | `0x1f2` | SAMP: the project sample slot | sample slot controls. Randomize never draws it (`docs/ADAPTING.md`) |
 | `0x1f7` | OVER: the stock OVER dial | overdrive controls that keep the stock behaviour |
+| `0xfffffffe` | `ST_MACHINE_CONFIG_PARAMETER`, scalar editor (`0x13`) | core 2.3.1 / host API 17: saved configuration at indices 8..23; zero modulation flags and unmodulated Sound mirror sent to AUDIO |
 
 Any other alias value is not listed in the repository.
 

@@ -7,15 +7,15 @@
 #include <syntakt/host.h>
 #include "types.h"
 #include "mono2k/ens-ui.h"
+#include "picker.h"
 
 #ifndef DM_VALUE
 #define DM_VALUE(view,id,locked) ((st_u32 (*)(void *,st_u32,unsigned char *))0x40039160u)(view,id,locked)
 #endif
 static char dm_label[8][9] = {"TUNE", "UNIL", "UNIW", "UNIX", " ", "SUBX", "SUB1", "SUB2"};
 static st_u32 dm_shown = DM_DEFAULT_TYPE;
-static st_u32 dm_layout[16] = {
-    0,1,2,3,0xffffffffu,5,6,7,
-    DM_TYPE_CONTROL,0xffffffffu,0xffffffffu,0xffffffffu,0xffffffffu,0xffffffffu,0xffffffffu,0xffffffffu
+static st_u32 dm_layout[8] = {
+    0,1,2,3,0xffffffffu,5,6,7
 };
 static const struct core_machine_param dm_controls[9] = {
     {dm_label[0],"TUNE",0,0x7f00,0x4000,0x1f1},
@@ -26,7 +26,7 @@ static const struct core_machine_param dm_controls[9] = {
     ST_MACHINE_PARAM(dm_label[5],dm_label[5],0,0x7f00,0),
     ST_MACHINE_PARAM(dm_label[6],dm_label[6],0,0x7f00,0),
     ST_MACHINE_PARAM(dm_label[7],dm_label[7],0,0x7f00,0),
-    ST_MACHINE_PARAM("TYPE","MONOMACHINE TYPE",0,(DM_TYPES-1u)<<8,DM_DEFAULT_TYPE<<8)
+    {"TYPE","MONOMACHINE TYPE",0,(DM_TYPES-1u)<<8,DM_DEFAULT_TYPE<<8,ST_MACHINE_CONFIG_PARAMETER}
 };
 const struct core_machine_def dm_monomachine={71,9,"SY MONOMACHINE","MONO","SYN",dm_controls,ST_MACHINE_NO_INIT,44,10,16};
 
@@ -48,31 +48,33 @@ static int dm_idle(const struct st_machine_ui_api *api,const struct core_machine
 {
     unsigned char locked=0;
     (void)api;(void)m;(void)page;
-    return dm_select_type(dm_clamp_type(DM_VALUE(view,DM_ENGINE+DM_TYPE_CONTROL,&locked)&65535u));
+    int changed=dm_picker_idle(view);
+    return dm_select_type(dm_clamp_type(DM_VALUE(view,DM_ENGINE+DM_TYPE_CONTROL,&locked)&65535u)) | changed;
 }
-/* The list's own Sound model supplies TYPE, even without opening SYN first.
- * UI query 32 only: do not hide runtime flags or change saved destinations. */
+/* The list's own Sound model supplies TYPE. TYPE itself is configuration:
+ * never a modulation destination, including when no model is supplied. */
 static int dm_destination_query(st_u32 q,st_u32 *args,void *model,st_u32 *value)
 {
     st_u32 index,t,*vt;
     if(q!=ST_PARAMETER_UI_DEST_FLAGS || args[0]<DM_ENGINE ||
-       (index=args[0]-DM_ENGINE)>DM_TYPE_CONTROL || !model)return 0;
+       (index=args[0]-DM_ENGINE)>DM_TYPE_CONTROL)return 0;
+    if(index==DM_TYPE_CONTROL){*value=0;return 1;}
+    if(!model)return 0;
     vt=*(st_u32 **)model;
     t=dm_clamp_type(((st_u32 (*)(void *,st_u32))vt[0x28/4])(model,DM_ENGINE+DM_TYPE_CONTROL)&65535u);
     dm_select_type(t);
-    *value=index==DM_TYPE_CONTROL || dm_labels[t][index][0]?0xe00u:0;
+    *value=dm_labels[t][index][0]?0xe00u:0;
     return 1;
 }
-static int dm_destination_init(const struct st_smz_api *api)
+int dm_destination_init(const struct st_smz_api *api)
 {
     if(!api || api->version<1 || !api->ui || api->ui->version<5 ||
-       !api->ui->host || api->ui->host->version<16)return 1;
+       !api->ui->host || api->ui->host->version<17)return 1;
     api->ui->host->parameter_provider(dm_destination_query);
     return 0;
 }
-const struct st_smz_module dm_destination_module={
-    "MONO DESTINATIONS",dm_destination_init,ST_MACHINE_NO_CALLBACK,0
-};
+static void dm_draw(const struct st_machine_ui_api *api,const struct core_machine_def *m,void *view,void *bitmap,st_u32 page)
+{(void)api;(void)m;(void)page;dm_picker_draw(view,bitmap);}
 /* Labels in LFO destinations are the same live strings as on SYN. */
 static char dm_text[20];
 static char *dm_number(char *p,int n)
@@ -128,6 +130,6 @@ static const char *dm_format(const struct st_machine_ui_api *api,const struct co
     dm_number(dm_text,(int)v);return dm_text;
 }
 const struct st_machine_ui dm_ui = {
-    DM_TYPE,2,dm_layout,ST_MACHINE_NO_CALLBACK,dm_idle,
+    DM_TYPE,1,dm_layout,dm_draw,dm_idle,
     ST_MACHINE_NO_CALLBACK,dm_format,ST_MACHINE_NO_CALLBACK
 };

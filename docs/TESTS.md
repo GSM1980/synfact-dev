@@ -309,6 +309,21 @@ missed: the hidden E position must reappear for every seven-parameter engine.
 It also alternates destination queries for two different Sound models without
 opening SYN, checks every TYPE's visibility, unchanged runtime flags/storage,
 module-provider fallback and rejection of older host APIs.
+Version 0.5 adds `test_st_digimono_picker.c`: the real one-page UI and shared
+subtype helper, twelve names, hidden TYPE, YES/NO/encoder routing, recording
+guards, late defaults, track/model changes, preserved knobs and wrapping ticks.
+`test_st_digimono_picker_emu.py BUILD --out OUTPUT` runs the linked ColdFire
+picker and actual native Bitmap construction/fill, writing PBM previews of all
+twelve name boxes and the selector. Native UI/model/get/edit boundaries are
+explicit doubles; a complete native selector/undo/modal lifecycle is not
+emulated. The original MD work is imported read-only with snapshot hashes.
+See [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md).
+Core 2.3.1's transport fixture also tests `ST_MACHINE_CONFIG_PARAMETER` for
+every extended index 8..23, both packed halves, independent/shared POLY owners,
+legacy modulated working values versus raw stored edits, and restoration of
+ordinary modulation after clearing the marker. TYPE flags are zero in native
+metadata and it is absent from LFO/Sound destination lists; other synthesis
+flags and common destinations remain unchanged.
 
 The runner also runs `test_st_mono2k.py`. It verifies pinned MONO2K hashes and
 deterministic extraction; the generated tables at 44.1 kHz match upstream and

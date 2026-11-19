@@ -1,4 +1,4 @@
-# SY MONOMACHINE 0.4.0
+# SY MONOMACHINE 0.5.0
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
@@ -7,13 +7,26 @@ ENS, SID-6581 and the three FM+ types come from Inigo Hernandez's
 These are clean-room interpretations of the Monomachine, **not**
 the original Monomachine DSP or a claim of identical sound. MACRO is excluded.
 
-SYN 1 has eight positions: TUNE and seven engine parameters. Unused positions
-are empty. SYN 2 has TYPE; it selects a voice for the **next trigger**, including
-a parameter-locked trigger. TUNE and the seven values remain shared across
-types: changing TYPE never resets a Sound or its locks. Init Sound is SAW.
-Save/load, locks, undo, modulation and page navigation use the existing core.
+SYN has one page with eight positions: TUNE and seven engine parameters.
+Unused positions are empty. TYPE stays in its existing Sound slot but has no
+dial. Double-tap SYN, highlight **SY MONOMACHINE**, then press **YES** to open
+**CHOOSE A TYPE**. Encoders or UP/DOWN select a subtype; YES loads the machine
+with that subtype, NO returns to the native machine list. FUNC+UP/DOWN jumps
+seven rows. The twelve TYPE values and all existing saved Sounds keep their IDs.
 
-**Requires OS 1.42 and this branch's core 2.3.0 with host API 16.**
+Arriving at a Digi Mono SYN page, switching tracks or loading a subtype shows
+its name in a bordered box for about one second. Old views left on SYN 2 are
+clamped to the single current page. TUNE and the seven values remain shared
+across types: the subtype helper changes only TYPE. Init Sound is still SAW.
+Replacing a different machine follows the core's ordinary defaults first.
+Save/load, locks, undo, modulation and page navigation use the existing core.
+Audio still changes generator on the next trigger; the selector never creates
+a TYPE lock while a trig is held or live recording is active. TYPE is no longer
+available in LFO or Sound Setup destinations. Old routes/locks aimed at TYPE
+are ignored by the new core's AUDIO projection; the saved ID and data remain
+intact. TUNE and the parameters actually used by each subtype are modulable.
+
+**Requires OS 1.42 and this branch's core 2.3.1 with host API 17.**
 Version 0.4.0 integrates remote main's OS/memory contract and preserves the
 0.3.1 AUDIO generators. Rebuild the bank and core together; older 1.41 banks
 are not compatible with the current core contract. The stopped-transport
@@ -30,12 +43,20 @@ Core 1.8.0 leaves SAW's initial seven-position layout fixed even though labels
 change. TUNE is always A; the seven engine parameters occupy B..H when used.
 
 Version 0.1.2 also removes unused engine controls from native LFO 1/2/3 and
-Sound-modulation destination lists. TUNE, TYPE and the common targets stay
+Sound-modulation destination lists. TUNE and the common targets stay
 available. The list reads TYPE from its own Sound model, so changing tracks
 without opening SYN first works too. Saved destinations, parameter IDs and
-runtime capability flags are unchanged; a hidden route is not rewritten.
-The bank's UI-only `MONO DESTINATIONS` module requires host API 16 and refuses
-an older core. It adds no event subscription or AUDIO work.
+runtime capability flags of the synthesis controls are unchanged. TYPE is the
+exception in 0.5: a saved configuration value, never a modulation destination.
+The bank's UI-only **MONO TYPE SELECTOR** module combines the destination
+provider with five UI subscriptions. It adds no AUDIO oscillator work or new
+hook. Its symbol remains `dm_destination_module`, keeping the normal bank's
+module count and order. Install core 2.3.1 as well: its generic configuration
+marker blocks old TYPE modulation routes without altering other parameters.
+The implementation comes from the unfinished Machinedrum worktree; only its
+MAIN selection/name-box mechanism is adapted, with exact snapshot hashes in
+`picker-provenance.json`. The other agent's worktree is untouched. See
+[`SUBTYPE-PICKER.md`](../../docs/SUBTYPE-PICKER.md) for reuse and test scope.
 
 | TYPE | A | B | C | D | E | F | G | H |
 |---|---|---|---|---|---|---|---|---|
@@ -65,7 +86,7 @@ at 61..63, equal-tempered steps within +/-12 semitones and just 3:2, 4:3,
 5:4 and 6:5 ratios, with matching labels. POLY SIN retains +/-36 semitones;
 POLY SIN EDEP/ESPD center at 64. PW uses the engine's full range (64 = 50%),
 including on ENS/CHORDS; the Digitakt UI's half-range remap is not used.
-CHRD is the chord selector, leaving TYPE unambiguous on SYN 2.
+CHRD remains the chord selector; TYPE is chosen through the machine list.
 
 Useful starting patches (A..H in the table above, `-` means unused):
 

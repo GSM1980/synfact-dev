@@ -68,6 +68,9 @@ and change with the code, so a commit's docs match its code.
 
 ## Versions and changes
 
+- **[Machine subtype selector](SUBTYPE-PICKER.md)**: the reusable MAIN-only
+  list and brief subtype name box, adapted from the unfinished MD prototype.
+
 - **Changelogs** of the Syntakt core and every Syntakt mod: `mods/<mod>/CHANGELOG.md`
   (for people) and `mods/<mod>/changelog.json` (for the website). Each version lists
   its commits. `changelog/index.json` gives the latest version of each mod.

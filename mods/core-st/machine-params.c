@@ -79,8 +79,10 @@ static __attribute__((noinline)) void publish_block(u32 trigs)
         bits=row[0]^type;row[0]=type;
         /* Pairs of contiguous slots: plain loads, no per-value lookup. */
         for(j=0;j<words && j<8;j++){
-            w=(u32)working[0x36+2*j]<<16;
-            if(9+2*j<n)w|=working[0x37+2*j];
+            w=(u32)(m->parameter[8+2*j].alias==ST_MACHINE_CONFIG_PARAMETER?
+                    mirror[0x36+2*j]:working[0x36+2*j])<<16;
+            if(9+2*j<n)w|=m->parameter[9+2*j].alias==ST_MACHINE_CONFIG_PARAMETER?
+                    mirror[0x37+2*j]:working[0x37+2*j];
             bits|=row[1+j]^w;row[1+j]=w;
         }
         if(words>8){                         /* n >= 25: indices 24..27 */

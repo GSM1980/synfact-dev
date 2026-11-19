@@ -127,5 +127,7 @@ struct st_machine_host_api {
     const struct st_audio_idle_owner *volatile *audio_idle;
     /* Host API 16 adds no field: UI-only destination query 32. API 15's
      * stopped-transport mixer owner and its ABI offset remain unchanged. */
+    /* Host API 17 adds no field: extended configuration controls with alias
+     * ST_MACHINE_CONFIG_PARAMETER are unmodulated and not destinations. */
 };
 #endif

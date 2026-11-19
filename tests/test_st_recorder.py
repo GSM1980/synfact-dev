@@ -50,7 +50,7 @@ def verify(folder,synfact=None):
     assert struct.unpack('>I',read(ui+44,4))[0]==s['core:core_pool_sample_channels']
     names=('core_hzfs_native_io','core_hzfs_open','core_hzfs_close','core_crc_update',
            'core_pool_read','core_pool_write','core_pool_ready','st_pool_live_sync','st_pool_preview_stop','core_event_view')
-    assert read(host,44)==struct.pack('>11I',16,*[s['core:'+name] for name in names])   # host API 16, prefix retained
+    assert read(host,44)==struct.pack('>11I',17,*[s['core:'+name] for name in names])   # host API 17, prefix retained
     assert struct.unpack('>I',read(host+100,4))[0]==s['core:core_audio_idle_owner']
     assert read(s['core:core_high_written'],2)==bytes.fromhex('4e75')
     # The existing native close notification is conditional on a valid

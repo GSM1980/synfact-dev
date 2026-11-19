@@ -229,6 +229,14 @@ The linker places, in the area the claiming mod frees, every DSP section
 the payload's words in the image. Nothing else about the build changes: a
 set of mods without DSP code links to the same bytes as before.
 
+Syntakt core 2.3.1 / host API 17 reserves parameter alias `0xfffffffe`
+(`ST_MACHINE_CONFIG_PARAMETER`) for saved configuration controls at indices
+8..23. Their runtime destination flags are zero and MAIN sends the stored
+Sound value to AUDIO, bypassing the modulated working value. Other indices
+and other out-of-range aliases remain invalid. Descriptor size, SMZ4 ABI,
+feature bits and the stored Sound layout are unchanged; banks using this
+marker require core 2.3.1 or later. See [ADAPTING](ADAPTING.md).
+
 ## The hook bus (Digitakt mk1, Digitone mk1, Digitakt II, Analog Rytm MKII)
 
 This is a convention between mods for these devices, not a rule of the

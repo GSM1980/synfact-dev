@@ -1012,6 +1012,30 @@ def test_os142_bank_allows_only_declared_optional_modules():
         else:raise AssertionError('accepted unexpected OS 1.42 module composition')
 
 
+def test_digimono_picker_module_has_only_the_declared_ui_events():
+    import hashlib,struct
+    from pathlib import Path
+    from st_bank_modules import check_digimono_module
+    path=Path(HERE).parent/'mods/digimono-st/picker.c'
+    raw=bytearray(256);raw[32:32+19]=b'MONO TYPE SELECTOR\0'
+    report={'main_bytes':256,'source_sha256':{str(path):hashlib.sha256(path.read_bytes()).hexdigest()}}
+    struct.pack_into('>4I',raw,0,32,100,128,5)
+    for i,e in enumerate((0,2,3,0x101,1)):struct.pack_into('>II',raw,128+8*i,e,200+2*i)
+    check_digimono_module(report,raw,0,0)
+    for offset,value in ((12,0),(12,6),(128,5),(136,0x102),(140,201),(144,11),(132,256)):
+        bad=bytearray(raw);struct.pack_into('>I',bad,offset,value)
+        try:check_digimono_module(report,bad,0,0)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unexpected picker event/ABI')
+    bad=bytearray(raw);bad[32]=ord('X')
+    try:check_digimono_module(report,bad,0,0)
+    except AssertionError:pass
+    else:raise AssertionError('accepted unknown picker')
+    try:check_digimono_module(dict(report,source_sha256={}),raw,0,0)
+    except AssertionError:pass
+    else:raise AssertionError('accepted picker without pinned source')
+
+
 def test_digimono_audio_change_keeps_every_other_engine_identical():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_audio_change

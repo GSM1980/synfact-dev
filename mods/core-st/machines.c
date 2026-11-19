@@ -174,7 +174,7 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     case ST_LOCAL:*value=slots[index];break;
     case ST_OWNER:case ST_VALID_OWNER:*value=m->type;break;
     case ST_ENGINE_UI:*value=ui(m)+index;break;
-    case ST_FLAGS:*value=0xe00;break;
+    case ST_FLAGS:*value=p->alias==ST_MACHINE_CONFIG_PARAMETER?0:0xe00;break;
     case ST_LABEL:*value=(u32)p->label;break;
     case ST_LONG_LABEL:*value=(u32)p->name;break;
     case ST_RANGE:
@@ -184,9 +184,10 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     case ST_FORMAT:{const char *text=core_machine_format(id,args[1]);
         if(text){*value=(u32)text;break;}}
         /* fall through */
-    case ST_CACHED:args[0]=p->alias;return 0;
+    case ST_CACHED:args[0]=p->alias==ST_MACHINE_CONFIG_PARAMETER?0x13u:p->alias;return 0;
     case ST_ENCODER_CACHED:
-        i=core_machine_policy(id);args[0]=i==CORE_SMZ_NONE?p->alias:i;return 0;
+        i=core_machine_policy(id);args[0]=i==CORE_SMZ_NONE?
+            (p->alias==ST_MACHINE_CONFIG_PARAMETER?0x13u:p->alias):i;return 0;
     case ST_SLOT_ENGINE:
         /* Slot 0 is the native None destination (engine 0x13, "---"): LFO and
          * Sound Setup lists and defaults use it. A control stored there is

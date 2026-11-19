@@ -51,10 +51,11 @@ static void check_view(u8 *view,unsigned kind)
     static const unsigned counts[DM_TYPES]={1,4,7,8,8,8,6,8,8,8,8,8};
     unsigned seen=0,i;u32 old,args[2],value;
     *(u32 *)(view+0x100)=kind<<8;
-    /* TYPE is changed on SYN 2, then return to SYN 1 on the same view. */
+    /* A saved view that used SYN 2 is clamped to the only SYN page. TYPE
+     * remains in the Sound, outside every knob/action layout. */
     *(u32 *)(view+0x90)=1;dm_idle(0,&dm_monomachine,view,1);
-    assert(core_machine_nav(view,0)==DM_ENGINE+8);
-    for(i=1;i<8;i++)assert(core_machine_nav(view,i)==0);
+    assert(core_machine_nav(view,0)==DM_ENGINE);
+    assert(*(u32 *)(view+0x90)==0);
     *(u32 *)(view+0x90)=0;
     old=core_machine_action_begin(view);
     for(i=0;i<8;i++){
@@ -93,7 +94,8 @@ static void check_destinations(void)
     ui.version=5;ui.host=&host;host.parameter_provider=core_parameter_provider_set;
     host.version=14;assert(dm_destination_init(&api));assert(!core_parameter_providers[0]);
     host.version=15;assert(dm_destination_init(&api));assert(!core_parameter_providers[0]);
-    host.version=16;assert(!dm_destination_init(&api));
+    host.version=16;assert(dm_destination_init(&api));assert(!core_parameter_providers[0]);
+    host.version=17;assert(!dm_destination_init(&api));
     core_parameter_provider_set(module_flags);
     vt[0x28/4]=(u32)model_get;
     for(unsigned round=0;round<3;round++)for(unsigned t=0;t<DM_TYPES;t++){
@@ -103,12 +105,12 @@ static void check_destinations(void)
             unsigned type=m?other:t;
             /* No SYN idle call: the popup's own model determines visibility. */
             for(index=0;index<=8;index++){
-                u32 expected=index==8 || dm_labels[type][index][0]?0xe00:0;
+                u32 expected=index<8 && dm_labels[type][index][0]?0xe00:0;
                 args[0]=DM_ENGINE+index;
                 assert(core_machine_query(ST_UI_DEST_FLAGS,args,&model[m],&value) && value==expected);
                 assert(dm_shown==type);
                 reads=model_reads;
-                assert(core_machine_query(ST_FLAGS,args,0,&value) && value==0xe00);
+                assert(core_machine_query(ST_FLAGS,args,0,&value) && value==(index==8?0:0xe00));
                 assert(model_reads==reads); /* runtime never consults current UI/Sound */
                 assert(core_machine_query(ST_LOCAL,args,0,&value) && value==core_machine_slot(index));
             }
@@ -118,6 +120,9 @@ static void check_destinations(void)
     args[0]=ST_MODULE_ID;
     assert(core_machine_query(ST_UI_DEST_FLAGS,args,model,&value) && value==0x200);
     args[0]=DM_ENGINE;assert(core_machine_query(ST_UI_DEST_FLAGS,args,0,&value) && value==0xe00);
+    args[0]=DM_ENGINE+8;assert(core_machine_query(ST_UI_DEST_FLAGS,args,0,&value) && !value);
+    assert(!core_machine_query(ST_CACHED,args,0,&value) && args[0]==0x13u);
+    args[0]=DM_ENGINE+8;assert(!core_machine_query(ST_ENCODER_CACHED,args,0,&value) && args[0]==0x13u);
 }
 int main(void)
 {
@@ -138,6 +143,6 @@ int main(void)
     check_view(views[0],3);assert(core_machine_nav(views[0],1)==DM_ENGINE+1);
     check_destinations();
     fw_free(*(void **)(views[0]+0x7c));fw_free(*(void **)(views[1]+0x7c));
-    puts("PASS: real core/Digi Mono pages and destinations: 12 types/two models, no SYN dependency, hidden UI targets, stable runtime flags/storage, module fallback, API gating and native LEVEL");
+    puts("PASS: real core/Digi Mono page and destinations: hidden TYPE, old SYN2 clamped, 12 types/two models, hidden UI targets, stable runtime flags/storage, module fallback, API gating and native LEVEL");
     return 0;
 }

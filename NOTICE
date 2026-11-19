@@ -76,6 +76,14 @@ The new DSP, extraction script and combined AUDIO adapter are GPL-3.0-only;
 the combined SY MONOMACHINE bank uses GPL-3.0-only with MIT notices retained.
 No original Monomachine firmware is included or needed.
 
+Machine subtype selector
+------------------------
+elekloader/sdk/include/syntakt/subtype-picker.h adapts the GPL-2.0-or-later
+MAIN UI and original small glyphs from the uncommitted Synfact MD prototype.
+The source snapshot hashes and base revision are retained in
+mods/digimono-st/picker-provenance.json; docs/SUBTYPE-PICKER.md describes the
+adaptation. No mdkit/Machinedrum DSP or firmware is imported by this UI work.
+
 Monomachine reference bench
 --------------------------
 tools/monomachine-reference/ builds an offline driver against Monomodule

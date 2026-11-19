@@ -625,7 +625,20 @@ that model's getter; do not use the last visible SYN page's global state.
 Only the native builder `4001471c` flags call (return `400147a0`, A5=model)
 uses this query; runtime flags remain query 21. A declined filter falls back
 to the original flags/provider behavior. No new field, serialized feature,
-patch site or event is added. Digi Mono's init-only module requires API 16.
+patch site or event is added. Digi Mono 0.1.2 required API 16; its subtype
+selector in 0.5.0 requires API 17 for the configuration marker below.
+
+## Syntakt: saved configuration controls (core 2.3.1)
+
+Core 2.3.1 / host API 17 also supports saved configuration controls: an extended
+parameter at index 8..23 can use alias `ST_MACHINE_CONFIG_PARAMETER` from
+`syntakt/machines.h`. It has no modulation flags and uses the ordinary native scalar editor;
+the MAIN sender publishes the owner's unmodulated Sound mirror for that word.
+Old effective LFO/Sound routes and locks cannot change its AUDIO value.
+Explicit edits and codec storage retain the ordinary ID/slot. Only use this
+marker with API 17 or newer; require it in the module initializer. Ordinary
+controls keep their effective working values. Digi Mono uses it for hidden
+TYPE; see [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md).
 
 ## Syntakt: live SYN slot maps (core 1.8.1)
 

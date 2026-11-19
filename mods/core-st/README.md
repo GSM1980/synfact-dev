@@ -1,4 +1,11 @@
-# Syntakt core 2.3.0
+# Syntakt core 2.3.1
+
+Core **2.3.1** / host API 17 adds saved configuration controls for machine
+indices 8..23 through `ST_MACHINE_CONFIG_PARAMETER`. They have no modulation
+destinations and MAIN sends their stored Sound values, ignoring effective
+LFO/Sound Setup routes and locks. Digi Mono uses this for its hidden TYPE.
+Other controls keep their effective values. The alias is validated before
+loading a bank; serialized layouts, hook sites and AUDIO code are unchanged.
 
 Core **2.3.0** appends a task/UI memory snapshot to sample-pool API 2, keeping
 the API 1 prefix. It reports PCM bytes for each loaded slot and the unique,
@@ -131,6 +138,16 @@ See [core MAIN performance](../../docs/CORE-MAIN-PERFORMANCE.md) for complete-ca
 counts, compatibility, startup checks and hardware measurement limits.
 
 ## Model-specific destination lists (host API 16)
+
+Core 2.3.1 / host API 17 adds `ST_MACHINE_CONFIG_PARAMETER` for saved
+configuration values in extended controls 8..23. The marker uses the existing
+alias field, without changing descriptor geometry or storage. Such a control
+has no modulation flags and keeps the native scalar editor. The MAIN sender
+publishes its owning Sound's unmodulated mirror, blocking old LFO/Sound/lock
+projections. Native
+edits still store the same control. Digi Mono TYPE is the first user; the
+selector itself stays entirely in the bank. No additional hook or AUDIO
+oscillator code is added. See [SUBTYPE-PICKER.md](../../docs/SUBTYPE-PICKER.md).
 
 Host API 16 adds parameter-provider query 32 without extending the API record.
 API 15 retains main's stopped-transport mixer owner and its original ABI.

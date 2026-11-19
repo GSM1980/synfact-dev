@@ -80,7 +80,8 @@ int main(void)
 {
     int32_t out[34],other[32];int16_t expected[32];unsigned cases=0;
     assert(dm_monomachine.type==71 && dm_monomachine.params==9);
-    assert(dm_ui.type==71 && dm_ui.pages==2 && dm_layout[8]==8);
+    assert(dm_ui.type==71 && dm_ui.pages==1);
+    for(unsigned i=0;i<8;i++)assert(dm_layout[i]!=DM_TYPE_CONTROL);
     for(unsigned kind=0;kind<DM_TYPES;kind++) {
         unsigned raw=kind<<8;
         dm_idle(0,&dm_monomachine,&raw,0);

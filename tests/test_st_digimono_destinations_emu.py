@@ -46,7 +46,7 @@ class Destination(Core):
         self.w(self.sym['core:core_machine_ui_definitions'],BANK+struct.unpack_from('>I',raw,28)[0])
         directory,count=struct.unpack_from('>II',raw,40)
         assert self.invoke(self.sym['core:core_machine_bind'],BANK+directory,count)==1
-        self.u.mem_write(API,struct.pack('>2I',1,self.sym['core:core_machine_ui_api']))
+        self.u.mem_write(API,struct.pack('>2I',2,self.sym['core:core_machine_ui_api']))
         module=self.bank_symbols['dm_destination_module']
         assert self.invoke(self.word(module+4),API)==0
         assert self.word(self.sym['core:core_parameter_providers'])==self.bank_symbols['dm_destination_query']
@@ -101,10 +101,10 @@ def verify(folder):
         for mask in (0x600,0xe00,0x200):
             ids=machine.targets(kind,mask)
             selected=[i-ENGINE for i in ids if ENGINE<=i<=ENGINE+8]
-            assert sorted(selected)==list(ACTIVE[kind])+[8],(kind,hex(mask),selected)
+            assert sorted(selected)==list(ACTIVE[kind]),(kind,hex(mask),selected)
             assert len(ids)==len(set(ids))
             # The native relative selector must skip hidden controls too;
-            # SIN moves directly from TUNE to TYPE, rather than blank rows.
+            # TYPE is absent; SIN offers TUNE only within its machine block.
             ordered=[i for i in ids if ENGINE<=i<=ENGINE+8]
             saved=bytes(machine.u.mem_read(SOUND,172))
             for first,second in zip(ordered,ordered[1:]):
@@ -118,9 +118,9 @@ def verify(folder):
                 if common is None:common=other
                 else:assert common==other,'non-machine targets changed with TYPE'
             for index in range(9):
-                assert machine.invoke(0x400a66e2,ENGINE+index,a5=PROXY)==0xe00,'runtime flags filtered'
+                assert machine.invoke(0x400a66e2,ENGINE+index,a5=PROXY)==(0 if index==8 else 0xe00),'incorrect runtime flags'
             cases+=1
-    print('PASS:',cases,'native destination lists and relative selectors: all 12 TYPEs, LFO1/2/3 masks, no blanks, unchanged common targets/Sound/runtime flags; real model getter, sorting, core and bank')
+    print('PASS:',cases,'native destination lists and relative selectors: all 12 TYPEs, LFO1/2/3 masks, TYPE excluded, no blanks, unchanged common targets/Sound; real model getter, sorting, core and bank')
 
 
 if __name__=='__main__':

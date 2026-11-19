@@ -90,7 +90,14 @@ its private allocation until reboot to avoid dangling references.
 Each parameter record is 24 bytes:
 `{short_label*, long_label*, raw_min, raw_max, raw_default, native_formatter_alias}`.
 Labels are bounded ASCII, min/default/max are unsigned 16-bit raw values in order,
-and the alias is an existing native engine descriptor ID (0..1f8h). Values are
+and the alias is an existing native engine descriptor ID (0..1f8h). Core 2.3.1
+(host API 17) also permits `fffffffeh` (`ST_MACHINE_CONFIG_PARAMETER`) at
+indices 8..23 only: a saved configuration control with zero modulation flags,
+the ordinary native scalar editor and stored Sound values sent to AUDIO instead of
+modulated working values. Existing routes/locks cannot change its AUDIO value.
+Banks using this marker must require host API 17 in their initializer; older
+cores reject the descriptor before initialization. Other aliases above `1f8h`
+and the marker at other indices remain invalid. Values are
 not assumed to be whole Q8 units. The initial generic SYN presentation borrows
 template type 44. From core 0.7.5, the descriptor may select any native OS 1.41
 menu category **1..14**; zero and values above 14 are rejected before activation.

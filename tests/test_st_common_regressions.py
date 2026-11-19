@@ -269,6 +269,11 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     if 'dm_destination_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
         if unicorn_python:run('Digi Mono native destination lists (Unicorn)',[unicorn_python,'-B','tests/test_st_digimono_destinations_emu.py',out])
         else:skipped.append('Digi Mono native destination lists: supply --unicorn-python')
+        if any(Path(p).as_posix().endswith('/mods/digimono-st/picker.c') for p in
+               json.loads((out/'synfact-machines.smz4.json').read_text())['source_sha256']):
+            if unicorn_python:run('Digi Mono linked subtype selector (Unicorn)',[
+                unicorn_python,'-B','tests/test_st_digimono_picker_emu.py',out,'--out',out/'picker-emu'])
+            else:skipped.append('Digi Mono subtype selector: supply --unicorn-python')
     assert json.loads((out/'lint.json').read_text())['ok']
     checks.append({'name':'lint','ok':True})
     (out/'validation.json').write_text(json.dumps({'ok':True,'checks':checks,'skipped':skipped,

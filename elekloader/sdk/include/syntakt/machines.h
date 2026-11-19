@@ -54,6 +54,11 @@ static __inline__ const unsigned short *st_machine_extended(const void *params)
     return ((const unsigned short *(*)(const void *))api[1])(params);
 }
 struct core_machine_param {const char *label,*name;st_u32 min,max,initial,alias;} __attribute__((aligned(4)));
+/* Host API 17: extended controls 8..23 may use this alias for a saved
+ * configuration value. No modulation destination; AUDIO receives the owner's
+ * unmodulated Sound mirror, even with an old route/lock in the working row.
+ * Explicit UI edits and the codec retain the ordinary ID and Sound slot. */
+#define ST_MACHINE_CONFIG_PARAMETER 0xfffffffeu
 struct core_machine_def {
     st_u32 type,params;const char *name,*short_name,*group;
     const struct core_machine_param *parameter;

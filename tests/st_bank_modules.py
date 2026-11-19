@@ -40,6 +40,25 @@ def object_for_symbol(report, symbol):
     return found[0]
 
 
+def check_digimono_module(report,raw,entry,image):
+    """Accept the historical destination provider or the exact TYPE picker."""
+    name,init,subs,n=struct.unpack_from('>4I',raw,entry)
+    title=raw[image+name:raw.index(0,image+name)]
+    assert init<report['main_bytes'] and not init&1
+    if title==b'MONO DESTINATIONS':
+        assert subs==0xffffffff and n==0
+    else:
+        assert title==b'MONO TYPE SELECTOR'
+        assert n==5 and subs+8*n<=report['main_bytes'] and not subs&3
+        picker=[(Path(p),h) for p,h in report['source_sha256'].items()
+                if Path(p).as_posix().endswith('/mods/digimono-st/picker.c')]
+        assert len(picker)==1
+        assert hashlib.sha256(picker[0][0].read_bytes()).hexdigest()==picker[0][1]
+        events=[struct.unpack_from('>II',raw,image+subs+8*i) for i in range(n)]
+        assert [event for event,fn in events]==[0,2,3,0x101,1]
+        assert all(fn<report['main_bytes'] and not fn&1 for event,fn in events)
+
+
 def check_bank_modules(report, raw, allowed):
     """Keep order/count checks; accept the new sampler prefix and legacy banks.
 
@@ -80,9 +99,7 @@ def check_bank_modules(report, raw, allowed):
                    for name in report['source_sha256']), 'Digi Mono provider source not pinned'
         image=80+4*struct.unpack_from('>I',raw,56)[0]
         at=image+directory+16*modules.index('dm_destination_module')
-        name,init,subs,n=struct.unpack_from('>4I',raw,at)
-        assert raw[image+name:raw.index(0,image+name)]==b'MONO DESTINATIONS'
-        assert init<report['main_bytes'] and not init&1 and subs==0xffffffff and n==0
+        check_digimono_module(report,raw,at,image)
     if 'sp_sampler_input_module' not in modules:return
     assert any(Path(name).as_posix().endswith('/mods/samplers-st/input.c')
                for name in report['source_sha256']), 'sampler input source not pinned'
