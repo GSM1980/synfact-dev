@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
   "title": "SY MONOMACHINE",
-  "latest": "0.3.1",
+  "latest": "0.4.0",
   "entries": [
+    {
+      "version": "0.4.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "ca7e95d",
+          "date": "2026-11-19",
+          "subject": "Document Digi Mono 0.4.0 OS 1.42 and API 16 integration"
+        }
+      ]
+    },
     {
       "version": "0.3.1",
       "date": "2026-11-17",
@@ -11,6 +22,11 @@
           "sha": "04c943f",
           "date": "2026-11-17",
           "subject": "Calibrate ENS PW and WAVE laws against independent harmonic responses"
+        },
+        {
+          "sha": "9f0bb11",
+          "date": "2026-11-17",
+          "subject": "Record Digi Mono 0.3.1 control calibration release"
         }
       ]
     },

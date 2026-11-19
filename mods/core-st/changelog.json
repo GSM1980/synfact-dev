@@ -11,6 +11,11 @@
           "sha": "ce91a3b",
           "date": "2026-11-19",
           "subject": "Improve Sample Manager sizes, project memory and atomic capacity checks"
+        },
+        {
+          "sha": "ca7e95d",
+          "date": "2026-11-19",
+          "subject": "Document Digi Mono 0.4.0 OS 1.42 and API 16 integration"
         }
       ]
     },

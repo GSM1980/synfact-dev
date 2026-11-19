@@ -1,10 +1,15 @@
 # Changelog: SY MONOMACHINE
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.3.1.
+Generated from git history by `tools/changelog.py`. Latest version: 0.4.0.
+
+## 0.4.0 (2026-11-19)
+
+- Document Digi Mono 0.4.0 OS 1.42 and API 16 integration (`ca7e95d`, 2026-11-19)
 
 ## 0.3.1 (2026-11-17)
 
 - Calibrate ENS PW and WAVE laws against independent harmonic responses (`04c943f`, 2026-11-17)
+- Record Digi Mono 0.3.1 control calibration release (`9f0bb11`, 2026-11-17)
 
 ## 0.3.0 (2026-11-11)
 

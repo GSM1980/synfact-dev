@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 2.3.0.
 ## 2.3.0 (2026-11-19)
 
 - Improve Sample Manager sizes, project memory and atomic capacity checks (`ce91a3b`, 2026-11-19)
+- Document Digi Mono 0.4.0 OS 1.42 and API 16 integration (`ca7e95d`, 2026-11-19)
 
 ## 2.2.0 (2026-11-19)
 
