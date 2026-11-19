@@ -18,6 +18,114 @@ static locks_t *queued(u32 lock)
 }'''
 
 
+ROW_LOOKUP = '''
+/* Resolve the same first (lowest-track) match as thirteen owned_lookup calls.
+ * Each owner is inspected once. Ties retain live/object-list/temporary order;
+ * TRACK clipboard owners remain excluded, as in matrix_cell. No pointer memo
+ * or writer-side bookkeeping is introduced. Unsigned subtraction also handles
+ * the original candidate matrix wrapping below zero. */
+static u32 event_row(u32 address,u32 first,u32 count,u32 *index)
+{
+    u32 off=address-first,i=off/PATTERN,t,base;
+    off-=i*PATTERN;
+    if(i>=count) return 13;
+    if(!off && address && address>=first) {*index=i;return 0;}
+    t=off/ROW;base=address-t*ROW;
+    if(t>=13 || off!=t*ROW || !base || base<first) return 13;
+    *index=i;return t;
+}
+store_t *lfo3_owned_row_lookup(u32 address,u32 *track)
+{
+    context_t *c=lfo3_owned_context;old_context_t *old=lfo3_pattern_context;
+    object_t *o;store_t *best=0;u32 limit=13,t,i,off;
+    if(c) {
+        if(c->patterns) {
+            t=event_row(address,c->patterns+MATRIX,128,&i);
+            if(t<limit) {best=&c->live[i].store;limit=t;if(!t) goto found;}
+        }
+        for(o=c->objects;o;o=o->next) if(o->kind!=TRACK) {
+            t=event_row(address,payload(o)+MATRIX,o->count,&i);
+            if(t<limit) {best=&o->cells[i].store;limit=t;if(!t) goto found;}
+        }
+    } else if(old && old->patterns) {
+        t=event_row(address,old->patterns+MATRIX,128,&i);
+        if(t<limit) {best=&old->live[i];limit=t;if(!t) goto found;}
+    }
+    if(old) for(i=0;i<8;i++) if(old->temporary[i].matrix) {
+        off=address-old->temporary[i].matrix;t=off/ROW;
+        if(t<limit && off==t*ROW) {
+            best=&old->temporary[i].store;limit=t;if(!t) break;
+        }
+    }
+found:
+    if(best) *track=limit;
+    return best;
+}
+'''
+
+
+def event_hot_paths(name, text):
+    """Keep generated event optimizations reproducible from the pinned donor."""
+    if name == 'owned.c':
+        assert 'lfo3_owned_row_lookup' not in text
+        return text + ROW_LOOKUP
+    if name != 'events.c':
+        return text
+    old = 'extern void *lfo3_owned_lookup(u32);'
+    assert text.count(old) == 1
+    text = text.replace(old, old+'\nextern void *lfo3_owned_row_lookup(u32,u32 *);')
+    old = '''    for(t=0;t<13;t++) {
+        u32 base=matrix-t*0x2447u;void *s=lfo3_owned_lookup(base);
+        if(s) {q->mask=lfo3_locks_apply(s,t,step,&q->record.v[0]);break;}
+    }'''
+    new = '''    {
+        void *s=lfo3_owned_row_lookup(matrix,&t);
+        if(s) q->mask=lfo3_locks_apply(s,t,step,&q->record.v[0]);
+    }'''
+    assert text.count(old) == 1
+    text = text.replace(old, new)
+    # Keep all payload bytes and halfword access order, even with mask zero.
+    # No extra guard, wider alignment requirement or overlap assumption.
+    old = 'if(q) for(i=0;i<16;i++) c->active[track].record.v[i]=q->record.v[i];'
+    new = 'if(q) {\n' + ''.join(
+        f'            c->active[track].record.v[{i}]=q->record.v[{i}];\n'
+        for i in range(16)) + '        }'
+    assert text.count(old) == 1
+    text = text.replace(old, new).replace(
+        'u32 i,result=lfo3_events_native_apply', 'u32 result=lfo3_events_native_apply')
+    text = text.replace('extern u32 lfo3_active_locks;',
+        'extern u32 lfo3_active_locks;\nextern void lfo3_output_track(u32),lfo3_output_reset(void);')
+    old = 'for(i=0;i<13;i++) {start_locks[i].mask=0;c->active[i].mask=0;for(j=0;j<16;j++) c->active[i].record.v[j]=0;}'
+    assert text.count(old) == 1
+    text = text.replace(old, old+'\n    lfo3_output_reset();')
+    text = text.replace('u32 result=lfo3_events_native_apply', 'u32 previous,result=lfo3_events_native_apply')
+    old = '        c->active[track].mask=q ? q->mask : 0;'
+    assert text.count(old) == 1
+    text = text.replace(old, '        previous=c->active[track].mask;\n'+old)
+    old = '''        if(c->active[track].mask) lfo3_active_locks|=1u<<track;
+        else lfo3_active_locks&=~(1u<<track);'''
+    assert text.count(old) == 1
+    text = text.replace(old, '''        if(previous!=c->active[track].mask) {
+            if(c->active[track].mask) lfo3_active_locks|=1u<<track;
+            else lfo3_active_locks&=~(1u<<track);
+        }''')
+    old = '            c->active[track].record.v[15]=q->record.v[15];\n        }'
+    assert text.count(old) == 1
+    text = text.replace(old, old+'\n        if((previous|c->active[track].mask)&0x88u)lfo3_output_track(track);')
+    old = '''{if(lfo3_events_context && track<13) {
+        lfo3_events_context->active[track].mask=0;lfo3_active_locks&=~(1u<<track);}}'''
+    assert text.count(old) == 1
+    text = text.replace(old, '''{if(lfo3_events_context && track<13) {
+        u32 previous=lfo3_events_context->active[track].mask;
+        if(!previous)return;
+        lfo3_events_context->active[track].mask=0;lfo3_active_locks&=~(1u<<track);
+        if(previous&0x88u)lfo3_output_track(track);}}''')
+    old = 'for(i=0;i!=8;i++)out[i]=q->record.v[8+i];'
+    new = '\n    '.join(f'out[{i}]=q->record.v[{8+i}];' for i in range(8))
+    assert text.count(old) == 1
+    return text.replace(old, new).replace('locks_t *q;u32 i,mask;', 'locks_t *q;u32 mask;')
+
+
 def play_start_locks(text):
     start = text.index('static locks_t *queued(u32 lock)')
     end = text.index('\n}\n', start) + 2

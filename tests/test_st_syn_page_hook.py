@@ -23,7 +23,7 @@ def verify(folder):
         assert raw[:2] in (b'\x4e\xba',b'\x61\x00') and at+2+int.from_bytes(raw[2:4],'big',signed=True)==target
         return 4
     entry=s['core:core_machine_synth_parameter'];stock=s['core:core_stock_synth_parameter']
-    assert read(0x400a6178,10)==jump(entry)+b'\x4e\x71'*2
+    assert read(0x400a61f0,10)==jump(entry)+b'\x4e\x71'*2
     # No bank or native ID reaches the exact stock replay without a C query.
     fast=(struct.pack('>HIHh',0x4ab9,s['core:core_machine_active'],0x6700,stock-(entry+8))+
           struct.pack('>HHHIHh',0x202f,4,0x0c80,0x1f9,0x6500,stock-(entry+22)))
@@ -39,12 +39,12 @@ def verify(folder):
     tail=bytes.fromhex('202f0008222f000c0c8140038dc2660270002057226f00044fef000c4e75')
     assert read(at,len(tail))==tail;at+=len(tail)
     assert miss_target==at and read(at,10)==bytes.fromhex('2057226f00044fef000c')
-    assert read(stock,16)==bytes.fromhex('222f00040c81000001f9')+jump(0x400a6182)
+    assert read(stock,16)==bytes.fromhex('222f00040c81000001f9')+jump(0x400a61fa)
     assert audit(read(entry,stock+16-entry),entry)>0
     # The unchanged native resolver calls the SYN classifier, branches on zero
     # straight to return(input-ID), and only nonzero enters source_layout(type).
-    assert read(0x40038dba,14)==bytes.fromhex('2f0a4eb9400a6178588f4a80676e')
-    assert read(0x40038df2,6)==bytes.fromhex('4eb94007b9ea')
+    assert read(0x40038dba,14)==bytes.fromhex('2f0a4eb9400a61f0588f4a80676e')
+    assert read(0x40038df2,6)==bytes.fromhex('4eb94007ba62')
     assert read(0x40038e36,12)==bytes.fromhex('200a4cee0c0cffc44e5e4e75')
     for pc,ins in cf.disassemble_lengths(read(entry,stock-entry),entry,entry,stock):
         if ins.flow in (cf.F_BRA,cf.F_BSR,cf.F_BCC) and ins.flow!=cf.F_BSR:

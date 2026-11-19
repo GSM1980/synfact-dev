@@ -100,9 +100,9 @@ class Cpu:
 
 # ---- A: the core's stubs -------------------------------------------------------------
 STUB_LIST, SUB_A, SUB_B, TABLE = DATA + 0x8000, DATA + 0x8100, DATA + 0x8200, DATA + 0x9000
-STOCK = {'track': (0x4008f3a0, 'ae000900ae810900', 0x4008f3a8),
-         'delay': (0x4008f828, '4eb940096890', 0x40096890),
-         'reverb': (0x4008f952, '4eb940096e3c', 0x40096e3c)}
+STOCK = {'track': (0x4008f418, 'ae000900ae810900', 0x4008f420),
+         'delay': (0x4008f8a0, '4eb940096908', 0x40096908),
+         'reverb': (0x4008f9ca, '4eb940096eb4', 0x40096eb4)}
 
 
 def link_stubs(folder):
@@ -204,6 +204,7 @@ def stub_case(code, symbols, kind, subscribers, rnd):
             assert call[1] == TABLE and struct.unpack('>I', bytes(c.uc.mem_read(TABLE + 192, 4)))[0] == mute
     else:
         assert len(calls) == len(subscribers)
+    return dict(instructions_including_emac_fixture=c.count,track=values[3],subscribers=len(subscribers))
 
 
 def test_stubs(folder, rnd):
@@ -235,7 +236,7 @@ def build_v56(folder, digitone):
     if dev.key != 'digitone-mk1' or rel.version != '1.44':
         raise SystemExit('--digitone must be the Digitone OS 1.44')
     native = types.ModuleType('chorus_native')
-    native.BASE, native.STATE_BEGIN, native.HPF = 0x40000400, 0x8000cbc8, 0x40234204
+    native.BASE, native.STATE_BEGIN, native.HPF = 0x40000400, 0x8000cbc8, 0x402344a4
     native.source = lambda: parsed.section(3)
     sys.modules['chorus_native'] = native
     spec = importlib.util.spec_from_file_location('chorus24_kernels_v56', V56 / 'chorus24_kernels.py')
@@ -275,80 +276,132 @@ def wrap(x):
     return (x + 2**31) % 2**32 - 2**31
 
 
+PCM = [0x80003d50 + 128 * k if k < 8 else 0x80003950 + 128 * (k - 8) for k in range(12)]
+# MACSR = 0xa0 (saturating fractional, as ev_delay_in leaves it), all four accumulators clear.
+EMAC_CLEAR = bytes.fromhex('a93c000000a07000a100a300a500a700')
+
+
+def kernel(c, fn, state, **regs):
+    """A kernel of hot.s/kernels.s: A6 = the state block, other inputs in registers."""
+    snippet(c, EMAC_CLEAR)
+    for name, value in regs.items():
+        c.uc.reg_write(getattr(sys.modules['unicorn.m68k_const'], 'UC_M68K_REG_' + name.upper()), value & 0xffffffff)
+    c.uc.reg_write(UC_M68K_REG_A6, state)
+    return c.call(fn)
+
+
 def test_kernels(bank, rnd):
+    """chorus-st 1.2's kernels, called on the DDR state block (the SRAM copies are the same bytes)."""
     image, s = load_bank(bank)
     c = Cpu(); c.map(BANK_BASE, image)
-    buf, out, aux = DATA + 0x2000, DATA + 0x3000, DATA + 0x4000
+    c.uc.mem_write(s['chorus_sync'], b'\x4e\x75')
+    c.call(s['chorus_place']); c.call(s['chorus_dsp_reset'])
+    st, ring, inp, up, wet = s['chorus_ddr_state'], s['chorus_ring'], s['chorus_in'], s['chorus_up'], s['chorus_wet']
     worst = {}
-    # mono send mix: dst = sat(-sum gain*x) per sample, gains stepping before each sample
+    # The mono send mix: the records from target/current gains (chorus_k_build), then the
+    # stable or ramping kernel: dst = sat(-sum gain*x), gains stepping (t - c) >> 5 a sample.
     for case in range(60):
         n, ramp = rnd.randrange(1, 13), rnd.random() < 0.5
-        srcs = [[rnd.randrange(-2**31, 2**31) if case % 7 == 0 else rnd.randrange(-2**28, 2**28) for _ in range(32)]
-                for _ in range(n)]
-        gains = [rnd.randrange(-2**31, 2**31) for _ in range(n)]
-        steps = [rnd.randrange(-2**25, 2**25) if ramp else 0 for _ in range(n)]
-        for k in range(n):
-            c.write(buf + 128 * k, srcs[k])
-        c.write(aux, [buf + 128 * k for k in range(n)], 'I'); c.write(aux + 64, gains); c.write(aux + 128, steps)
-        c.call(s['chorus24_mix'], out, aux, aux + 64, aux + 128, n, int(ramp))
-        got, g, expect = c.read(out, 32), list(gains), []
+        tracks = sorted(rnd.sample(range(12), n))
+        srcs = {k: [rnd.randrange(-2**31, 2**31) if case % 7 == 0 else rnd.randrange(-2**28, 2**28) for _ in range(32)]
+                for k in tracks}
+        target = [0] * 12; current = [0] * 12; mask = 0
+        for k in tracks:
+            target[k] = rnd.randrange(-2**31, 2**31)
+            current[k] = target[k] - (rnd.randrange(-2**26, 2**26) if ramp else rnd.randrange(32))
+            current[k] = wrap(current[k]); mask |= 1 << k
+            c.write(PCM[k], srcs[k])
+        c.write(st, target + current); c.write(st + 96, [mask, mask], 'I')
+        kernel(c, s['chorus_k_build'], st, d7=mask)
+        moving = c.read(st + 116, 1)[0] != 0                           # S_RAMP
+        kernel(c, s['chorus_k_mixr' if moving else 'chorus_k_mixs'], st)
+        got, expect = c.read(inp + 96, 32), []
         for i in range(32):
             acc = 0
-            for k in range(n):
-                if ramp:
-                    g[k] = wrap(g[k] + steps[k])
-                acc -= g[k] * srcs[k][i]
+            for k in tracks:
+                step = (target[k] - current[k]) >> 5 if moving else 0
+                acc -= wrap(current[k] + (i + 1) * step) * srcs[k][i]
             expect.append(clamp(acc >> 31))
         worst['mix'] = max(worst.get('mix', 0), max(abs(x - y) for x, y in zip(got, expect)))
-        assert worst['mix'] <= n + 1, (case, worst)
-        if ramp:
-            assert list(c.read(aux + 64, n)) == g, 'ramped gains not written back'
-    # decimator: y[j] = sum c_k x[2j - p_k], coefficients Q30
+        assert worst['mix'] <= n + 1, (case, n, moving, worst)
+        assert list(c.read(st + 48, 12)) == target, 'current gains are not the targets'
+        if any(((target[k] - current[k]) >> 5) for k in tracks) != moving:
+            raise AssertionError('ramp flag')
+        recs = c.read(st + 268, 42)                                    # S_REC: the pointers came back
+        groups = (n + 3) // 4
+        first = 4 * groups - n
+        slots = [(g, j) for g in range(groups) for j in range(first if g == 0 else 0, 4)]
+        for (g, j), k in zip(slots, tracks):
+            assert recs[14 * g + 4 + j] & 0xffffffff == PCM[k], ('record pointer', g, j)
+    # The decimator: y[j] = sum c_k x[2j - p_k] (Q30), into the ring at write_pos.
     positions = json.loads((ROOT / 'mods/chorus-st/design.json').read_text())['decimator']['positions']
     coeff = c.read(s['chorus24_decimator_coeffs'], 16)
     for case in range(40):
         x = ([rnd.randrange(-2**28, 2**28) for _ in range(56)] if case < 32 else
              [(-2**31 if (i + case) % 3 else 2**31 - 1) for i in range(56)])
-        c.write(buf, x)
-        c.call(s['chorus24_decimate'], buf + 96, out, s['chorus24_decimator_coeffs'], aux)
+        w = 16 * rnd.randrange(16)
+        c.write(inp, x); c.write(st + 216, [w])
+        kernel(c, s['chorus_k_dec'], st)
         expect = [clamp(round(sum(coeff[k] * x[24 + 2 * j - positions[k]] for k in range(16)) / 2**30))
                   for j in range(16)]
-        worst['decimate'] = max(worst.get('decimate', 0), max(abs(a - b) for a, b in zip(c.read(aux, 16), expect)))
+        worst['decimate'] = max(worst.get('decimate', 0), max(abs(a - b) for a, b in zip(c.read(ring + 4 * w, 16), expect)))
     assert worst['decimate'] <= 10, worst
-    # HPF: y = d2 (x - x') + d1 y', d2 = d1/2 + 1/2
-    for case in range(40):
-        d1 = c.read(s['chorus24_hpf24'] + 4 * rnd.randrange(128), 1)[0]
-        state = [rnd.randrange(-2**27, 2**27), rnd.randrange(-2**27, 2**27)]
-        x = [rnd.randrange(-2**28, 2**28) for _ in range(16)]
-        c.write(buf, x); c.write(aux, state)
-        c.call(s['chorus24_hpf'], buf, aux, d1)
-        d2 = (d1 >> 1) + 2**30
-        xp, y, expect = state[0], state[1], []
-        for v in x:
-            y = clamp((d2 * (v - xp) + d1 * y) >> 31); xp = v; expect.append(y)
-        got = c.read(buf, 16)
-        worst['hpf'] = max(worst.get('hpf', 0), max(abs(a - b) for a, b in zip(got, expect)))
-        assert c.read(aux, 2) == (x[-1], got[-1])
-    assert worst['hpf'] <= 4, worst
-    # two-tap delay: each tap moves linearly from its node to the next over 16 frames
-    for case in range(40):
-        ring = [rnd.randrange(-2**29, 2**29) for _ in range(257)]
-        ring[256] = ring[0]
+    # The two-tap delay: each tap moves linearly from its node to the next over 16 frames.
+    # Small steps take the fast loop, a sample a sample or more 1.1's loop (chorus24_delay):
+    # both must equal 1.1's loop, and an oracle.
+    out2 = DATA + 0x3000
+    for case in range(120):
+        r = [rnd.randrange(-2**29, 2**29) for _ in range(256)]
+        c.write(ring, r + r[:48])
         w = 16 * rnd.randrange(16)
-        nodes = [rnd.randrange(100 << 22, 200 << 22) for _ in range(4)]
-        c.write(buf, ring); c.write(aux, nodes)
-        c.call(s['chorus24_delay'], out, buf, aux, w)
-        got = c.read(out, 32)
+        big = case % 4 == 3
+        nodes = []
+        for ch in (0, 1):
+            a0 = rnd.randrange(100 << 22, 200 << 22)
+            d = rnd.randrange(-2**28, 2**28) if big else rnd.choice((rnd.randrange(-2**26 + 16, 2**26 - 16),
+                                                                     rnd.randrange(-2**22, 2**22), 2**26 - 16, -2**26))
+            nodes += [a0, max(60 << 22, min(240 << 22, a0 + d))]
+        c.write(st + 200, nodes); c.write(st + 216, [w])
+        kernel(c, s['chorus_k_delay'], st)
+        got = c.read(up + 64, 32)
+        c.write(DATA + 0x4000, nodes)
+        c.call(s['chorus24_delay'], out2, ring, DATA + 0x4000, w)
+        assert c.read(out2, 32) == got, ('delay differs from 1.1', case, nodes)
         for ch in (0, 1):
             pos, step = nodes[2 * ch], (nodes[2 * ch + 1] - nodes[2 * ch]) >> 4
             for f in range(16):
                 pos += step
                 idx, frac = (w + f - (pos >> 22)) & 255, (pos & 0x3fffff) / 2**22
-                # V56's weighting: (1 - frac) on ring[idx + 1], frac on ring[idx]
-                e = clamp(round(2 * ((1 - frac) * ring[idx + 1] + frac * ring[idx])))
+                e = clamp(round(2 * ((1 - frac) * r[(idx + 1) & 255] + frac * r[idx])))
                 worst['delay'] = max(worst.get('delay', 0), abs(got[2 * f + ch] - e))
     assert worst['delay'] <= 8, worst
-    print('B: kernels against oracles, max error in Q31 units: %s: PASS' % worst)
+    # The reconstructor: odd frames the halfband's eight taps, even frames a copy; fused,
+    # each output returned at once (bus + g x wet, as chorus_k_ret on the wet).
+    cu = c.read(s['chorus24_up_coeffs'], 8)
+    bus = DATA + 0x5000
+    for case in range(40):
+        u = [rnd.randrange(-2**30, 2**30) if case % 5 else rnd.choice((-2**31, 2**31 - 1)) for _ in range(48)]
+        c.write(up, u)
+        kernel(c, s['chorus_k_up'], st, a1=0)
+        got = c.read(wet, 64)
+        for j in range(16):
+            for ch in (0, 1):
+                e = clamp(round(sum(cu[k] * u[2 * (8 + j - k) + ch] for k in range(8)) / 2**31))
+                worst['upsample'] = max(worst.get('upsample', 0), abs(got[4 * j + ch] - e))
+                assert got[4 * j + 2 + ch] == u[2 * (8 + j - 3) + ch], 'identity phase'
+        g = rnd.randrange(-2**31, 2**31)
+        b0 = [rnd.randrange(-2**31, 2**31) for _ in range(64)]
+        c.write(bus, b0)
+        kernel(c, s['chorus_k_ret'], st, a1=bus, d0=g)
+        separate = c.read(bus, 64)
+        for i in range(64):
+            assert abs(separate[i] - clamp(b0[i] + ((g * got[i]) >> 31))) <= 1, 'stable return'
+        c.write(bus, b0)
+        kernel(c, s['chorus_k_up'], st, a1=bus, d0=g)
+        assert c.read(bus, 64) == separate, ('fused return differs', case)
+    assert worst['upsample'] <= 8, worst
+    print('B: kernels against oracles, max error in Q31 units: %s; delay = 1.1\'s loop, '
+          'fused return = wet + return: PASS' % worst)
 
 
 def hot(c, s, fields):
@@ -421,29 +474,39 @@ def test_chain(bank, digitone, folder, rnd, blocks):
 
 
 def test_span(bank):
-    """hot.c's code, copied to SRAM, keeps no PC-relative reference outside itself."""
+    """hot.s's and kernels.s's spans, copied to SRAM, keep no PC-relative reference outside themselves."""
     e = elf.Elf.load(bank.parent / (bank.stem + '.work') / 'main.elf')
     s = {x.name: x.value for x in e.symbols if x.name}
-    lo, hi = s['chorus_hot_c'], s['chorus_hot_c_end']
+    spans = {'hot.s': ('chorus_hot_c', 'chorus_hot_c_end'), 'kernels.s': ('chorus_hot_code', 'chorus_hot_code_end')}
+    inside = lambda name: any(s[lo] <= s[name] < s[hi] for lo, hi in spans.values())
     for name in ('chorus_hot_sends', 'chorus_hot_before_delay', 'chorus_hot_before_reverb', 'chorus_hot_master_return'):
-        assert lo <= s[name] < hi, name
-    dump = subprocess.run([PREFIX + 'objdump', '-d', '--start-address=%d' % lo, '--stop-address=%d' % hi,
-                           str(bank.parent / (bank.stem + '.work') / 'main.elf')],
-                          capture_output=True, text=True, check=True).stdout
-    relative = 0
-    for line in dump.splitlines():
-        m = re.search(r'\t(j\w+|b\w+|lea|pea|move\w*)\s.*%pc@\(([0-9a-f]+)', line) or \
-            re.search(r'\t(b\w+|bra\w*|jbsr)\s+([0-9a-f]+) <', line)
-        if m:
-            target = int(m.group(2), 16)
-            relative += 1
-            assert lo <= target < hi, line
+        assert s['chorus_hot_c'] <= s[name] < s['chorus_hot_c_end'], name
+    for name in ('chorus_k_mixs', 'chorus_k_dec', 'chorus_k_delay', 'chorus_k_up', 'chorus_k_ret', 'chorus_k_mod'):
+        assert inside(name), name + ' runs every active block: in an SRAM span'
+    report = []
+    for file, (begin, end) in spans.items():
+        lo, hi = s[begin], s[end]
+        dump = subprocess.run([PREFIX + 'objdump', '-d', '--start-address=%d' % lo, '--stop-address=%d' % hi,
+                               str(bank.parent / (bank.stem + '.work') / 'main.elf')],
+                              capture_output=True, text=True, check=True).stdout
+        relative = 0
+        for line in dump.splitlines():
+            m = re.search(r'\t(j\w+|b\w+|lea|pea|move\w*)\s.*%pc@\(([0-9a-f]+)', line) or \
+                re.search(r'\t(b\w+|bra\w*|jbsr)\s+([0-9a-f]+) <', line)
+            if m:
+                target = int(m.group(2), 16)
+                relative += 1
+                assert lo <= target < hi, (file, line)
+        report.append('%s %d bytes, %d PC-relative references' % (file, hi - lo, relative))
+    size = int(re.search(r'STATE_SIZE,(\d+)', (ROOT / 'mods/chorus-st/state.inc').read_text()).group(1))
+    assert 0x800077c0 + size + s['chorus_hot_c_end'] - s['chorus_hot_c'] <= 0x80008000,         'the state and hot.s outgrew the first SRAM window'
+    assert 0x8000fc20 + s['chorus_hot_code_end'] - s['chorus_hot_code'] <= 0x8000ff94, 'kernels.s outgrew the second'
     lfo3 = ''
     if 'lfo3_render' in s:                                  # a full bank: LFO3's kernel still fits before the chorus
         n = s['lfo3_render_end'] - s['lfo3_render']
         assert n <= 0x800077c0 - 0x80007340, 'LFO3 kernel %d bytes outgrew its SRAM window' % n
         lfo3 = ', LFO3 kernel %d of 1152 bytes' % n
-    print('D: hot.c span %d bytes, %d PC-relative references, all inside%s: PASS' % (hi - lo, relative, lfo3))
+    print('D: %s, all inside; both fit their SRAM windows%s: PASS' % ('; '.join(report), lfo3))
 
 
 def test_reference(bank, reference, rnd, blocks):

@@ -59,22 +59,25 @@ def verify(folder,synfact=None):
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
     names+=['core_parameter_provider_set','core_native','core_sample_pool_api']
-    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',15,*[address(n) for n in names])
+    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',16,*[address(n) for n in names])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
-    native_sites=[s for s in manifest['sites'] if s['target'].startswith('core_native_')]
-    assert len(native_sites)==14 and len(manifest['sites'])==106 and len(manifest['collections'])==16
-    assert any(s['addr']=='0x400a423e' and s['target']=='core_native_note_accept' for s in native_sites)
+    native_sites=[s for s in manifest['sites'] if s.get('target','').startswith('core_native_')]
+    assert len(native_sites)==14 and len(manifest['sites'])==119 and len(manifest['collections'])==16
+    cleanup=next(s for s in manifest['sites'] if s['addr']=='0x401010f0')
+    assert cleanup['op']=='bytes' and read(0x401010f0,18)==bytes.fromhex('4200174000224a0367082f0b4ebafba4588f')
+    assert any(s['addr']=='0x400a5046' and s['target']=='core_audio_idle_mix' for s in manifest['sites'])
+    assert any(s['addr']=='0x400a42b6' and s['target']=='core_native_note_accept' for s in native_sites)
     for site in native_sites:
         assert read(int(site['addr'],16),6)==struct.pack('>HI',0x4eb9 if site['op']=='jsr' else 0x4ef9,address(site['target']))
     # Complete stock entry prefixes/replays retain the native register masks.
     for name,head,target in [
-        ('trig','4fefffc848d77cfc',0x4008b88a),
-        ('header_load','4feffff448d70c04',0x400a79d4),
-        ('header_reset','206f00044a88',0x400b36d4)]:
+        ('trig','4fefffc848d77cfc',0x4008b902),
+        ('header_load','4feffff448d70c04',0x400a7a4c),
+        ('header_reset','206f00044a88',0x400b374c)]:
         assert read(address('core_stock_'+name),len(bytes.fromhex(head))+6)==bytes.fromhex(head)+struct.pack('>HI',0x4ef9,target)
     for name,prefix,target in [
         ('sound_set','4e56ffd848d704fc',0x4001330c),
@@ -84,7 +87,7 @@ def verify(folder,synfact=None):
     # Both shared native kernels use the exact imported guard logic, while
     # their external PC-relative dependencies are assembled as local bridges.
     imported=json.loads((mod/'imported/provenance.json').read_text())
-    assert imported['stock_sha256']=='8e2488f462c4a5656396a895f113bcd415e9900fa8709340dccf45d4cb9ed19e'
+    assert imported['stock_sha256']=='ded3c59fdb909eb9e2c3307b30a486452c8fa6947b12c14e0ce35a187b7f37c1'
     assert hashlib.sha256((mod/'imported/kernels.s').read_bytes()).hexdigest()==imported['kernel_sha256']
     work=folder/'synfact-machines.work';e=elf.Elf.load(work/'main.elf');section=e.section('.image')
     sy={s.name:s for s in e.symbols if s.name}
@@ -99,16 +102,16 @@ def verify(folder,synfact=None):
         else:raise AssertionError('accepted relaxed native kernel: '+label)
     def bank_read(name,size):return section.data[sy[name].value:sy[name].value+size]
     # Pure POLY replays stock directly; shared groups retain the audited guards.
-    for name,prefix,target in [('poly_mod_all','4fefffc448d77cfc',0x40097b04),
-                               ('poly_native_all','4fefffc048d77cfc',0x4011926e)]:
+    for name,prefix,target in [('poly_mod_all','4fefffc448d77cfc',0x40097b7c),
+                               ('poly_native_all','4fefffc048d77cfc',0x40119432)]:
         assert bank_read(name,14)==bytes.fromhex(prefix)+struct.pack('>HI',0x4ef9,target)
     # Compare every imported instruction byte against stock's preserved body,
     # replacing only the three guards and external PC-relative dependencies.
-    native=bytearray(read(0x40119266,0x326));native[:8]=bytes.fromhex('4fefffc048d77cfc')
+    native=bytearray(read(0x4011942a,0x326));native[:8]=bytes.fromhex('4fefffc048d77cfc')
     native[26:34]=struct.pack('>HIH',0x4ef9,linked['poly_native_lfo_guard'],0x4e71)
     native[0x240:0x244]=struct.pack('>Hh',0x4eba,linked['poly_random_bridge']-(linked['poly_native_shared']+0x242))
     assert bank_read('poly_native_shared',len(native))==native
-    modulation=bytearray(read(0x40097afc,0x11e));modulation[:8]=bytes.fromhex('4fefffc448d77cfc')
+    modulation=bytearray(read(0x40097b74,0x11e));modulation[:8]=bytes.fromhex('4fefffc448d77cfc')
     for off,target in [(0x28,'poly_mod_first_guard'),(0x62,'poly_mod_second_guard')]:
         modulation[off:off+10]=struct.pack('>HIHH',0x4ef9,linked[target],0x4e71,0x4e71)
     for off in [0x24,0x32]:

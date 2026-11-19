@@ -6,7 +6,7 @@ const encode=(v:unknown)=>new TextEncoder().encode(JSON.stringify(v))
 const artifact=encode({id:'module',version:'1.0',samplePool:false,machines:[],modules:['entry'],audio:[],main:[{
  sections:[{name:'',size:0,align:1,data:''},{name:'.data',size:16,align:4,data:'00000000000000000000000000000000'}],
  symbols:[{name:'entry',value:0,size:16,bind:1,section:1}],relocations:[]}]})
-const cat=()=>({schema:1,device:'syntakt',os:'1.41',modules:[{id:'module',file:'module.json',sha256:sha(artifact)}],approved:[] as any[]})
+const cat=()=>({schema:1,device:'syntakt',os:'1.42',modules:[{id:'module',file:'module.json',sha256:sha(artifact)}],approved:[] as any[]})
 const get=async()=>artifact
 
 test('SMZ selection requires a pinned, approved result and rejects changes',async()=>{
@@ -21,4 +21,9 @@ test('SMZ selection requires a pinned, approved result and rejects changes',asyn
  await assert.rejects(buildSmzSelection(pinned,sha(pinned),['module'],async()=>Uint8Array.of(42)),/artifact hash mismatch/)
  c.approved[0].sha256='0'.repeat(64);const bad=encode(c)
  await assert.rejects(buildSmzSelection(bad,sha(bad),['module'],get),/differs from validated bank/)
+})
+
+test('OS 1.41 catalogs are rejected before fetching objects',async()=>{
+ const old=encode({...cat(),os:'1.41'})
+ await assert.rejects(buildSmzCandidate(old,sha(old),['module'],async()=>{throw Error('must not fetch')}),/Invalid SMZ catalog/)
 })

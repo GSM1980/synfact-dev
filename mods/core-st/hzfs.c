@@ -5,6 +5,7 @@
  */
 #include "hzfs.h"
 #include "crc.h"
+#include "cold.h"
 typedef unsigned int u32;typedef unsigned char u8;
 #define CHUNK 4096u
 static u32 rd(const u8 *p){return (u32)p[0]<<24|(u32)p[1]<<16|(u32)p[2]<<8|p[3];}

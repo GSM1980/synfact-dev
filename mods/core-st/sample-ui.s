@@ -18,4 +18,4 @@ core_main_mix_table:
         lea 20(%sp),%sp
         pea -296(%a6)
         pea 0x8000e0f0
-        jmp 0x4008fb0e
+        jmp 0x4008fb86

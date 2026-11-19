@@ -455,3 +455,46 @@ extern u32 lfo3_owned_clear_page_body(u32 model,u32 undo);
 u32 lfo3_owned_clear_page(u32 model,u32 undo){u32 result;lfo3_writer_enter();result=lfo3_owned_clear_page_body(model,undo);lfo3_writer_leave();return result;}
 extern u32 lfo3_owned_clear_track_action_body(u32 model,u32 undo);
 u32 lfo3_owned_clear_track_action(u32 model,u32 undo){u32 result;lfo3_writer_enter();result=lfo3_owned_clear_track_action_body(model,undo);lfo3_writer_leave();return result;}
+
+/* Resolve the same first (lowest-track) match as thirteen owned_lookup calls.
+ * Each owner is inspected once. Ties retain live/object-list/temporary order;
+ * TRACK clipboard owners remain excluded, as in matrix_cell. No pointer memo
+ * or writer-side bookkeeping is introduced. Unsigned subtraction also handles
+ * the original candidate matrix wrapping below zero. */
+static u32 event_row(u32 address,u32 first,u32 count,u32 *index)
+{
+    u32 off=address-first,i=off/PATTERN,t,base;
+    off-=i*PATTERN;
+    if(i>=count) return 13;
+    if(!off && address && address>=first) {*index=i;return 0;}
+    t=off/ROW;base=address-t*ROW;
+    if(t>=13 || off!=t*ROW || !base || base<first) return 13;
+    *index=i;return t;
+}
+store_t *lfo3_owned_row_lookup(u32 address,u32 *track)
+{
+    context_t *c=lfo3_owned_context;old_context_t *old=lfo3_pattern_context;
+    object_t *o;store_t *best=0;u32 limit=13,t,i,off;
+    if(c) {
+        if(c->patterns) {
+            t=event_row(address,c->patterns+MATRIX,128,&i);
+            if(t<limit) {best=&c->live[i].store;limit=t;if(!t) goto found;}
+        }
+        for(o=c->objects;o;o=o->next) if(o->kind!=TRACK) {
+            t=event_row(address,payload(o)+MATRIX,o->count,&i);
+            if(t<limit) {best=&o->cells[i].store;limit=t;if(!t) goto found;}
+        }
+    } else if(old && old->patterns) {
+        t=event_row(address,old->patterns+MATRIX,128,&i);
+        if(t<limit) {best=&old->live[i];limit=t;if(!t) goto found;}
+    }
+    if(old) for(i=0;i<8;i++) if(old->temporary[i].matrix) {
+        off=address-old->temporary[i].matrix;t=off/ROW;
+        if(t<limit && off==t*ROW) {
+            best=&old->temporary[i].store;limit=t;if(!t) break;
+        }
+    }
+found:
+    if(best) *track=limit;
+    return best;
+}

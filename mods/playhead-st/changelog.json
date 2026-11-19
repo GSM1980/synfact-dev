@@ -1,0 +1,113 @@
+{
+  "id": "playhead-st",
+  "title": "Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
+  "latest": "1.2.1",
+  "entries": [
+    {
+      "version": "1.2.1",
+      "date": "2026-11-18",
+      "commits": [
+        {
+          "sha": "2b37c65",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.1"
+        },
+        {
+          "sha": "84d9065",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.2"
+        },
+        {
+          "sha": "53ac728",
+          "date": "2026-11-19",
+          "subject": "Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06)"
+        },
+        {
+          "sha": "4a9012f",
+          "date": "2026-11-18",
+          "subject": "Playhead 1.2.1: request native composition from the actual UI controller"
+        },
+        {
+          "sha": "9db6680",
+          "date": "2026-11-18",
+          "subject": "Changelogs: Playhead 1.2.1"
+        }
+      ]
+    },
+    {
+      "version": "1.2",
+      "date": "2026-11-18",
+      "commits": [
+        {
+          "sha": "57f84e0",
+          "date": "2026-11-18",
+          "subject": "Playhead 1.2: select track modes in a cached modal with explicit confirm"
+        },
+        {
+          "sha": "477202b",
+          "date": "2026-11-18",
+          "subject": "Changelogs: Playhead 1.2"
+        }
+      ]
+    },
+    {
+      "version": "1.1",
+      "date": "2026-11-18",
+      "commits": [
+        {
+          "sha": "a43f350",
+          "date": "2026-11-18",
+          "subject": "Playhead 1.1: add four modes and icons with optimized MAIN step paths"
+        },
+        {
+          "sha": "1c99e3d",
+          "date": "2026-11-18",
+          "subject": "Changelogs: Playhead 1.1"
+        }
+      ]
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "c0e44f9",
+          "date": "2026-11-18",
+          "subject": "Changelogs: POLY 1.7"
+        },
+        {
+          "sha": "276667a",
+          "date": "2026-11-17",
+          "subject": "move to OS 1.42"
+        },
+        {
+          "sha": "3c0cdcb",
+          "date": "2026-11-17",
+          "subject": "Changelogs: move to OS 1.42"
+        },
+        {
+          "sha": "3d50e09",
+          "date": "2026-11-17",
+          "subject": "Changelogs: ARP 1.10.6"
+        }
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-16",
+      "commits": [
+        {
+          "sha": "9dd0e4d",
+          "date": "2026-11-16",
+          "subject": "Playhead 1.0: step order per track (reverse, pendulum, random, walk)"
+        },
+        {
+          "sha": "c60f324",
+          "date": "2026-11-16",
+          "subject": "Changelogs: Playhead 1.0"
+        }
+      ]
+    }
+  ],
+  "slug": "playhead-st"
+}

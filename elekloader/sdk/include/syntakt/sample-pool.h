@@ -17,14 +17,18 @@ pool_u32 core_pool_code_used(pool_u32 code);
 void core_pool_wave_begin(pool_u32 code,pool_u32 frames,pool_u32 channels);
 void core_pool_wave_feed(const pool_u8 *,pool_u32);
 void core_pool_wave_finish(pool_u32);
+int core_pool_wave_storage(pool_u32 slot,pool_u32 out[5]);
+void core_pool_stock_changed(pool_u32 address);
 #define CORE_POOL_SLOTS 128u
 #define CORE_POOL_STOCK_SLOTS 64u
 #define CORE_POOL_OFFSET 0xf0u
 #define CORE_POOL_RECORD 0x110u
 #define CORE_POOL_HZ 0x8000u
-#define CORE_POOL_AUDIO 0x42100750u
+/* Core 2.2: sample store pages 8001..ff40, above AUDIO's own page 8000; the 64
+ * KiB below 48000000 are the AUDIO stack's (docs/AUDIO-MEMORY-MAP.md). */
+#define CORE_POOL_AUDIO 0x4404ff50u
 #define CORE_POOL_PCM (CORE_POOL_AUDIO+4096u)
-#define CORE_POOL_END 0x4404f750u
+#define CORE_POOL_END 0x47feff50u
 #define CORE_POOL_MAGIC 0x45505331u
 extern const unsigned char core_pool_image[];
 extern unsigned int core_pool_boot_pages,core_pool_busy;
@@ -36,6 +40,9 @@ void core_pool_write(pool_u8 *,const pool_u16 *);
 void core_pool_empty(pool_u8 *);
 void core_pool_created(void);
 void core_pool_prepare(void);
+extern pool_u32 core_pool_stock_bytes;
+const void *core_pool_stock_page(pool_u32 ordinal);
+void core_pool_boot_release(void);
 const void *core_pool_boot_page(pool_u32 ordinal,pool_u32 *wire);
 int core_pool_sync(void);
 int core_pool_cached_name(pool_u32 code,char *out);
@@ -54,6 +61,12 @@ struct st_pool_ui_callbacks {
     void (*file)(unsigned int,unsigned int,unsigned int);
     void (*progress)(unsigned int,unsigned int);
 };
+/* Task/UI snapshot: actual PCM bytes per slot; used counts unique AUDIO page
+ * extents referenced by slots 65..128 only. Stock PCM has its own budget. */
+struct st_pool_memory {
+    pool_u32 used,total,bytes[CORE_POOL_SLOTS];
+};
+void core_pool_memory(struct st_pool_memory *);
 struct st_sample_pool_api {
     unsigned int version;
     int (*valid)(const unsigned char *);
@@ -63,6 +76,8 @@ struct st_sample_pool_api {
     void (*refill)(void);
     void (*release)(void);
     int (*bind_ui)(const struct st_pool_ui_callbacks *);
+    /* API 2 appends this service, preserving the API 1 prefix. */
+    void (*memory)(struct st_pool_memory *);
 };
 extern const struct st_sample_pool_api core_sample_pool_api;
 void core_pool_ui_reset(void);

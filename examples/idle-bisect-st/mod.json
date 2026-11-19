@@ -1,0 +1,5 @@
+{
+  "id": "idle-bisect-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "Idle MAIN diagnostic", "device": "syntakt", "os": "1.41",
+  "sources": ["main.c"], "smz_module": {"descriptor": "st_idle_diag_module"}
+}

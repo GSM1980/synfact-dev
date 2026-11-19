@@ -20,14 +20,14 @@ def verify(folder):
     def calls(ins,target):return [(pc,i) for pc,i in ins if i.flow in (cf.F_BSR,cf.F_JSR) and i.target==address(target)]
     # The parallel encoder patch is gone; the native editor calls the one
     # shared metadata entry, with its original policy call and return PC.
-    assert read(0x4003b96c,6)==bytes.fromhex('4eb94007b9b2')
-    assert read(0x4007b9b2,6)==jump('core_machine_cached_parameter')
+    assert read(0x4003b96c,6)==bytes.fromhex('4eb94007ba2a')
+    assert read(0x4007ba2a,6)==jump('core_machine_cached_parameter')
     for name in ('core_machine_encoder_policy','core_machine_custom_encoder','core_machine_custom_key','profiles','st_pool_ui_idle'):
         assert 'core:'+name not in sym
     b,ins=body('core_machine_cached_parameter','core_stock_cached_parameter')
     assert len(calls(ins,'core_event_view'))==0 # metadata no longer dispatches input
     assert bytes.fromhex('72100c804003b972') in b and bytes.fromhex('72172f01') in b
-    assert read(address('core_stock_cached_parameter'),16)==bytes.fromhex('222f00040c81000001f94ef94007b9bc')
+    assert read(address('core_stock_cached_parameter'),16)==bytes.fromhex('222f00040c81000001f94ef94007ba34')
     b,ins=body('core_machine_page_nav_37d9e','core_stock_page_nav_37d9e')
     assert len(calls(ins,'core_event_view'))==0 # base resolver is metadata only
     b,ins=body('core_machine_editor_resolve','core_machine_page_op_385dc')
@@ -43,8 +43,8 @@ def verify(folder):
     assert bytes.fromhex('0c8040044cc6') in b and bytes.fromhex('0c8040044ce6') in b
     assert len(calls(ins,'core_machine_view_layout'))==1
     assert read(0x40044cc4,4)==bytes.fromhex('4e934fef') and read(0x40044ce4,4)==bytes.fromhex('4e934fef')
-    assert read(0x400c3294,2) # existing firmware selector predicate, no patch
-    assert address('fw_parameter_selecting')==0x400c3294
+    assert read(0x400c3340,2) # existing firmware selector predicate, no patch
+    assert address('fw_parameter_selecting')==0x400c3340
     # One collection each. Global dispatch skips its view-context entries;
     # global handlers keep their old signatures and do not run a second time.
     for name in ('core_draw_table','core_enc_table','core_key_table'):
@@ -71,9 +71,9 @@ def verify(folder):
         else:assert len(route)==2 and len(original)==1 and route[0][0]<original[0][0]<route[1][0]
         if event==2:assert struct.pack('>HH',0x4878,event) in b
     b=read(address('core_view_draw'),64)
-    assert read(0x40100830,6)==jump('core_view_draw')
+    assert read(0x401009f4,6)==jump('core_view_draw')
     assert struct.pack('>HI',0x4eb9,address('core_event_view')) in b
-    assert bytes.fromhex('2f0c4e9526534ef940100836') in b
+    assert bytes.fromhex('2f0c4e9526534ef9401009fa') in b
     manifest=json.loads(Path('mods/core-st/mod.json').read_text())
     # Extend the EXISTING slot lookup only inside stock's machine-default loop.
     b,ins=body('core_machine_slot_to_engine','core_stock_slot_to_engine')
@@ -87,22 +87,36 @@ def verify(folder):
     assert read(0x400391a8,8)==jump('core_preview_selected')+bytes.fromhex('4e71')
     b,ins=body('core_preview_selected','core_preview_selected_end')
     assert b.endswith(bytes.fromhex('4ef94003921e')) and not calls(ins,'core_preview_selected')
-    assert not any(i.flow==cf.F_JSR and i.target in (0x40103788,0x40103794) for pc,i in ins)
-    assert read(0x400a423e,6)==jump('core_native_note_accept')
+    assert not any(i.flow==cf.F_JSR and i.target in (0x4010394c,0x40103958) for pc,i in ins)
+    assert read(0x400a42b6,6)==jump('core_native_note_accept')
     # 1.2: the mixer's FX-send events and the FX record codec
-    assert read(0x4008f3a0,8)==jump('core_track_send')+bytes.fromhex('4e71')
-    assert read(0x4008f828,6)==jump('core_delay_in',0x4eb9)
-    assert read(0x4008f952,6)==jump('core_reverb_in',0x4eb9)
+    assert read(0x4008f418,8)==jump('core_track_send')+bytes.fromhex('4e71')
+    assert read(0x4008f8a0,6)==jump('core_delay_in',0x4eb9)
+    assert read(0x4008f9ca,6)==jump('core_reverb_in',0x4eb9)
     b,ins=body('core_track_send','core_delay_in')
-    assert b.startswith(bytes.fromhex('ae000900ae810900')) and b.count(bytes.fromhex('4ef94008f3a8'))==2
-    assert read(0x400a6d96,8)==jump('core_fx_encode')+bytes.fromhex('4e71')
-    assert read(0x400a6d2e,8)==jump('core_fx_decode')+bytes.fromhex('4e71')
+    assert b.startswith(bytes.fromhex('ae000900ae810900')) and b.count(bytes.fromhex('4ef94008f420'))==2
+    assert read(0x400a6e0e,8)==jump('core_fx_encode')+bytes.fromhex('4e71')
+    assert read(0x400a6da6,8)==jump('core_fx_decode')+bytes.fromhex('4e71')
     # 1.4 (randomize, list item 22): parameter list, SYN view randomize, Kit owner, Kit setter
     for at,name in ((0x400146bc,'core_machine_parameter_list'),(0x40044972,'core_machine_syn_randomize'),
-                    (0x400a61fa,'core_machine_kit_owner'),(0x40013516,'core_native_kit_set')):
+                    (0x400a6272,'core_machine_kit_owner'),(0x40013516,'core_native_kit_set')):
         assert read(at,6)==jump(name),name
-    assert len(manifest['sites'])==106 and len(manifest['collections'])==16   # core_mod_info: 1.0; mixer events: 1.2
-    assert len({s['addr'] for s in manifest['sites']})==106
+    # 1.8.2: keep new deferred closes raised by synchronous UI composition.
+    cleanup=next(s for s in manifest['sites'] if int(s['addr'],16)==0x401010f0)
+    assert cleanup['op']=='bytes' and cleanup['stock']=='4a0367082f0b4ebafbaa588f420017400022'
+    assert cleanup['new']=='4200174000224a0367082f0b4ebafba4588f'
+    assert read(0x401010f0,18)==bytes.fromhex(cleanup['new'])
+    assert read(0x40013730,8)==jump('core_machine_global_parameter_long_label')+bytes.fromhex('4e71')
+    assert len(manifest['sites'])==119 and len(manifest['collections'])==16   # nine project callback literals
+    assert read(0x40083026,8)==jump('core_pool_sender_done',0x4eb9)+bytes.fromhex('4e71')
+    # 2.1.1: the sender's end also returns the bank's file (its AUDIO section) to the heap.
+    assert read(address('core_pool_sender_done'),22)==(
+        jump('core_pool_boot_release',0x4eb9)+jump('core_machine_audio_release',0x4eb9)+
+        bytes.fromhex('700423c041bb32b04e75'))
+    assert read(address('core_pool_blob'),12)==(
+        jump('core_pool_prepare',0x4eb9)+bytes.fromhex('4ef940082e9c'))
+    assert len({s['addr'] for s in manifest['sites']})==119
+    assert read(0x400a5046,6)==jump('core_audio_idle_mix',0x4eb9)
     # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
     # `storage`, files.c `io`) has read, write and sectors, each a code address.
     # Core 1.7's boot table had a null write: the first trial boot jumped to 0.
@@ -112,6 +126,6 @@ def verify(folder):
         assert words[0]==address('fw_mmc_read') and words[1]==address('fw_mmc_write'),(name,[hex(w) for w in words])
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize; eMMC accessor tables complete; 106 sites, 16 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, note acceptance, mixer events, FX codec, randomize, deferred UI cleanup, stock sender release; eMMC accessor tables complete; 110 sites, 16 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])

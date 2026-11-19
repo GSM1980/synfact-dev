@@ -209,7 +209,7 @@ static void sam_editor_draw(void *ctx)
         sam_draw_loupe(ctx,sam_loupe_side-1u);
     if(sam_save_phase || (sam_save_message[0] && sam_save_message[0]!='S')) {
         WAVE_FILL(ctx,5,24,122,42,0);
-        WAVE_TEXT(ctx,(void *)0x443da210u,64,33,2,"%s",sam_save_phase?"SAVING":sam_save_message);
-        if(sam_save_phase){sam_frame_text(value,sam_save_total?sam_save_pos*100u/sam_save_total:0);WAVE_TEXT(ctx,(void *)0x443da210u,64,25,2,"%s%%",value);}
+        WAVE_TEXT(ctx,(void *)0x443db210u,64,33,2,"%s",sam_save_phase?"SAVING":sam_save_message);
+        if(sam_save_phase){sam_frame_text(value,sam_save_total?sam_save_pos*100u/sam_save_total:0);WAVE_TEXT(ctx,(void *)0x443db210u,64,25,2,"%s%%",value);}
     }
 }

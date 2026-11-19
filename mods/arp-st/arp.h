@@ -14,12 +14,13 @@ struct arp_settings {
     unsigned short enabled;
     signed char offset[16];
 };
-/* RANGE (list item 27): 0..3 climb 1..4 octaves, as on the Digitone; 4..6
- * fall 2..4 octaves (shown -2..-4; -1 would be 1 again). Stored values 0..3
+/* RANGE (list item 27): 0..3 climb 0..3 octaves above the root; 4..6 fall
+ * 1..3 octaves below it. The label is the octaves moved (0: the root only),
+ * not the Digitone's count of octaves played (1..4). Stored values 0..3
  * keep their meaning, so earlier Sounds and locks read the same. The encoder
- * moves through the shown order -4,-3,-2,1,2,3,4: positions 0..6. */
+ * moves through the shown order -3,-2,-1,0,1,2,3: positions 0..6. */
 #define ARP_RANGE_MAX 6u
-static __inline__ int arp_range_label(unsigned int r){return r<=3?(int)r+1:-(int)(r-2);}
+static __inline__ int arp_range_label(unsigned int r){return r<=3?(int)r:-(int)(r-3);}
 static __inline__ int arp_range_position(unsigned int r){return r<=3?(int)r+3:6-(int)r;}
 static __inline__ unsigned int arp_range_value(int position){return position<3?(unsigned int)(6-position):(unsigned int)(position-3);}
 void arp_activate(struct arp_settings *);

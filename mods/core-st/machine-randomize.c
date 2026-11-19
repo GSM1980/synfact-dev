@@ -19,7 +19,7 @@ extern int core_parameter_provider(u32,u32 *,void *,u32 *);
 /* An 84-byte cached parameter entry. 40014954 reads only the std::function
  * at +52: functor +52 (the clone allocates its own), manager +60 (400744f0)
  * and invoker +64 (40077ee8: uniform in the control's range, whole steps). */
-static const u32 entry[21]={[15]=0x400744f0u,[16]=0x40077ee8u};
+static const u32 entry[21]={[15]=0x40074568u,[16]=0x40077f60u};
 static int drawn(const struct core_machine_def *m,u32 index)
 {return m->parameter[index].alias!=SAMPLE_SLOT_ALIAS;}
 /* 4007b9b2 called from 40014954: the entry, or 0 for the stock path. A bank
@@ -43,12 +43,12 @@ u32 *core_machine_randomize_list(u32 *vector,u32 type)
     u32 *layout=core_machine_randomize_view?core_machine_view_layout(core_machine_randomize_view):0;
     core_machine_randomize_view=0;
     vector[0]=vector[1]=vector[2]=0;
-    ((void (*)(u32 *,u32))0x40173a0au)(vector,8);
+    ((void (*)(u32 *,u32))0x40173bceu)(vector,8);
 #pragma GCC unroll 1
     for(i=0;m && i<(layout?8u:m->params);i++){
         id=layout?layout[2+i]:core_machine_engine(m)+i;
         if(core_machine_parameter(id,&index)==m && drawn(m,index))
-            ((void (*)(u32 *,u32 *))0x40173b40u)(vector,&id);
+            ((void (*)(u32 *,u32 *))0x40173d04u)(vector,&id);
     }
     return vector;
 }

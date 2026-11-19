@@ -19,16 +19,17 @@ static __inline__ const struct st_pool_sample *st_machine_sample(st_u32 slot)
 }
 /* Core 1.8: a slot's channel count, 1 or 2. A stereo sample's PCM is
  * interleaved L, R; frames counts frame PAIRS, so a reader that ignores this
- * reads the first half of the data as mono and never past its end. The
- * pool service header at 42100778 holds {ST_POOL_CHANNELS_MAGIC, table};
- * an older core has no magic: every slot is mono. */
-#define ST_POOL_CHANNELS_MAGIC 0x454c4801u
-#define ST_POOL_CHANNELS ((const volatile unsigned char *)0x421012d0u)
+ * reads the first half of the data as mono and never past its end.
+ * Core 2.2: the table's address is the ABI directory's fourth word, which the
+ * core writes once the pool service is installed (zero until then: every slot
+ * mono). A machine never names where the pool lives, so the pool can move. */
 static __inline__ st_u32 st_machine_sample_channels(st_u32 slot)
 {
-    const volatile st_u32 *h=(const volatile st_u32 *)0x42100778u;
-    if(slot>=128 || h[0]!=ST_POOL_CHANNELS_MAGIC || h[1]!=(st_u32)ST_POOL_CHANNELS)return 1;
-    return ST_POOL_CHANNELS[slot]==2?2:1;
+    const volatile st_u32 *api=(const volatile st_u32 *)0x40040f50u;
+    const volatile unsigned char *table;
+    if(slot>=128 || api[0]!=0x454c5001u || !api[3])return 1;
+    table=(const volatile unsigned char *)api[3];
+    return table[slot]==2?2:1;
 }
 #define ST_MACHINE_CONTROL_CAPACITY 32u
 /* Core 1.2: parameter IDs for modules, after the machines' blocks (types

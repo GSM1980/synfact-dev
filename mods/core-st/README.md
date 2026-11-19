@@ -1,8 +1,139 @@
-# Syntakt core 0.12.22
+# Syntakt core 2.3.0
 
-## Model-specific destination lists (core 1.8.2)
+Core **2.3.0** appends a task/UI memory snapshot to sample-pool API 2, keeping
+the API 1 prefix. It reports PCM bytes for each loaded slot and the unique,
+page-aligned extents referenced by slots 65..128, against the core 2.2 AUDIO
+capacity (66,711,552 bytes). Stock slots 1..64 use a separate budget.
+Runtime sync dry-runs the complete allocation before retiring or streaming
+any sample. An insufficient or fragmented AUDIO pool rejects the whole edit;
+the existing live-apply wrapper restores the project record.
 
-Host API 15 adds parameter-provider query 32 without extending the API record.
+Core **2.2.0** reorganizes AUDIO's sample store mapping
+([docs/AUDIO-MEMORY-MAP.md](../../docs/AUDIO-MEMORY-MAP.md)):
+
+- The SMZ4 bank's AUDIO section may be up to **4 MiB** (`4204f750..4244f750`,
+  pages `4000..47ff`; 723,120 bytes before), room for new AUDIO code.
+- The sample pool moved above AUDIO's own page (`4404f750..4404ff50`): the
+  service at `4404ff50` (page `8001`), its PCM at `44050f50..47feff50` (pages
+  `8003..ff40`): **63.62 MiB** of long samples (31.30 MiB before). The 64 KiB
+  below `48000000` stay the AUDIO stack's.
+- `4244f750..4404f750` (pages `4800..7fff`, 28 MiB) is free for later use.
+- Machines find the pool's channel table through the AUDIO ABI directory's
+  fourth word (`40040f5c`, written once the service is installed), so a bank no
+  longer names a pool address. Bank contract **`0x53594606`**: banks built for
+  2.0/2.1 inline the old address and are refused; rebuild every bank.
+
+The native receiver writes each MAIN page at `4004f750 + index * 2048` with a
+16-bit index it does not bound; the stock firmware references nothing above
+`4404f980` (`tools/study_st_audio_memory.py`). That the high zone stays free on
+the unit, and how deep the AUDIO stack goes, is checked by
+`tools/probes/high-memory-probe-st`.
+
+Core **2.1.2** initializes the shared parameter registry for banks containing
+only modules, with zero machines. LFO3 alone or with ARP receives its labels,
+ranges and editor metadata. The empty registry includes valid directory/lane
+storage before activation (700 bytes of native heap). Startup without a bank
+keeps the registry inactive. The bank format, contract and AUDIO are unchanged.
+
+Core **2.1.1** returns the SMZ4 bank's AUDIO section to MAIN's heap once it is on
+AUDIO. Until 2.1.0 the whole bank file stayed in one heap block until reboot,
+AUDIO section included (108,640 bytes in the normal bank, 711,152 in a bank with
+the MD machine), although
+only the boot page sender reads it. After validation, the bank's MAIN part
+(envelope, relocations, image) is copied into a block of its own before any
+relocation, and is the copy that is relocated and bound. The whole file is freed
+by the sender's completion hook (`40083026`, with the pool's 5 KiB scratch),
+after the last page is in the FPGA mailbox; the native sender never goes back to
+its page state. Without memory for the second block the file stays whole, as
+before. Boot needs the MAIN part twice for a moment. No ABI, bank contract,
+AUDIO layout or page order changes.
+`tests/test_core_st_trial_boot.c` and `tests/test_st_stock_stream_emu.py` check
+the split, the single release and the fallback.
+
+It also frees resident space: the 64 KiB reserve goes from **176 to 11,616 bytes
+free** (with System info). The core's cold files (boot, USB and storage code) are
+compiled with `-Os` through `cold.h`, the one exception to `-O3`
+([SYNTAKT-BUILD.md](../../docs/SYNTAKT-BUILD.md), "The -Os exception"); their
+tick, UI and native-path functions keep `-O3`. And MAIN keeps only the AUDIO pool
+service's header and code (1,576 of its 4,096 bytes, and their length): the boot copy starts
+zeroed and MAIN already rewrote every channel byte, descriptor and the checksum
+before sending it, so AUDIO receives the same image
+(`tests/test_st_stock_stream_emu.py` compares it with the builder's).
+
+Core **2.1.0** stops a running sequencer and selects reduced MAIN mixing while
+the native project workers save, load, initialize, rename, copy/paste, clear
+or delete projects. This works without the recorder module or an open recorder.
+The full calculation returns on the next block after completion, including an
+error return; transport stays stopped. The host ABI, bank contract and AUDIO
+are unchanged, so existing OS 1.42 banks work with this core-only update.
+See [project operations and MAIN CPU](../../docs/PROJECT-OPERATIONS-CPU.md)
+for the worker boundaries, block lifetime and offline validation.
+
+Core **2.0.3** routes the selected-track model's long-label lookup through the
+existing machine/module parameter provider (query 20). Chorus parameter modals
+therefore show their names instead of `Error`. The native override at
+`40013730` (vtable slot `401c3e28`) retains its original handling whenever no
+provider answers, including the special filter labels for parameters 92/102.
+No host ABI, bank contract, parameter storage or DSP changes are introduced.
+`tests/test_st_chorus_ui_emu.py` checks the actual linked entry, all seven
+Chorus labels, CHO, stock/filter labels, unclaimed IDs and inactive-core fallback.
+
+Core **2.0.2** expands native-interest registration from four to sixteen
+subscribers. The complete bank's ARP, POLY, Chorus and Playhead registrations
+previously filled the table before the deferred LFO3 initializer, leaving
+inactive LFO3 on the all-operations fallback. The assembly lookup now uses
+the C table's exported end, so both paths share the same capacity. Subscriber
+order, consumption and overflow fallback remain unchanged. The bank contract
+and core AUDIO are unchanged. This core-only fix works with the existing
+contract-05 bank: update only the core SYX for a CPU A/B.
+See [the regression and scope](../../docs/CORE-MAIN-PERFORMANCE.md#core-202-native-interest-capacity).
+The owner confirmed on 2026-11-18 that this restores the lost MAIN CPU headroom;
+the possible extra saving has not been quantified.
+
+Core **2.0.1** defers stock and HZFS waveform computation until a sample's
+waveform UI requests it. Boot allocates no waveform cache and performs no
+min/max accumulation. The native 2 KiB sender/ACK protocol, PCM bytes and
+5120-byte boot scratch release are unchanged. Lazy UI slices reread bounded
+disk spans, cache completed envelopes in MAIN, and free each temporary buffer.
+HZFS CRC validation during boot remains mandatory. No complete PCM is retained.
+
+It streams native samples from eMMC through 5 KiB of temporary
+MAIN buffers, then frees those buffers at the sender's completion. All 64
+five-second slots retain their native AUDIO layout without overwriting the
+resident core. Exact waveform envelopes are cached on demand after boot.
+The CPU2 base in pool descriptors is corrected to `4004f750`, also on OS 1.42.
+The 64 KiB resident reserve, bank contract and AUDIO firmware remain unchanged.
+See [the memory investigation and validation](../../docs/STOCK-SAMPLE-CORE-OVERLAP.md).
+
+Desktop OS 1.42 base release: **2.0.0**, based on remote main `f48f3ab`.
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+
+Current desktop target: **OS 1.42 / core 2.2.0**.
+See [the port notes](../../docs/OS142-PORT.md).
+
+1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for
+normalization/editing, retaining the 1.8.2 native view cleanup and MAIN routes.
+
+1.8.2 preserves deferred view closes raised by synchronous UI composition
+during native cleanup. It moves the existing request-clear before visibility
+recomputation in the same 18-byte instruction window. No resident space,
+new callback, polling or instruction is added; native close/removal and shared
+ownership stay unchanged. [Patch and native regression](VIEW-CLEANUP.md).
+This fixes mute → ARP → first TRIG → close mute → ARP with bank 1.10.4.
+The correction is in the core SYX; replacing the bank alone does not apply it.
+
+Retained MAIN optimization release: **core 1.8.1**, with an assembly native-service
+wrapper and grouped track-send capture. Native routes, profiling semantics and
+the complete optimized bank are retained; AUDIO is byte-identical to 1.8.0.
+Development labels in the records below are mapped to this single release in
+[the consolidated version table](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+See [core MAIN performance](../../docs/CORE-MAIN-PERFORMANCE.md) for complete-call
+counts, compatibility, startup checks and hardware measurement limits.
+
+## Model-specific destination lists (host API 16)
+
+Host API 16 adds parameter-provider query 32 without extending the API record.
+API 15 retains main's stopped-transport mixer owner and its original ABI.
 Only the native destination builder's flags call (return address `400147a0`
 in OS 1.41, borrowed model in A5) uses this query. A bank may filter a target
 using that model's values. Declined queries retain the normal flags/provider
@@ -82,8 +213,8 @@ See [HZFS.md](HZFS.md) for the disk format, native API and transfer commands.
 
 ## Optional machine bank
 
-At the application startup site `400826a6`, eMMC is ready and neither the
-saved project nor the sample blob has been loaded:
+At the application startup site `4008271e`, eMMC is ready and neither the
+saved project nor stock PCM has been loaded:
 
 1. Ensure/mount the high-zone sample filesystem, then read `/mods` metadata and silently validate the complete SMZ4 bank.
 2. Missing, incompatible, corrupt or unsupported bank: skip all machine
@@ -174,6 +305,14 @@ python tests/test_st_common_regressions.py out/core-st-<ver> --cc "$LLVM_MINGW_B
 
 ## Core services
 
+Core **1.9.0 / host API 15** adds an init-only `audio_idle` owner slot for a
+stopped-transport preview session. The recorder 1.2 uses it after capture:
+render-in observers and native modulation/LFO bodies are skipped, and one
+core-owned call site redirects the native mixer to the bank's preview-only
+replacement. DMA, control frames, CPU2/sample-pool services, native output and
+render-out accounting continue. The previous host ABI prefix is retained.
+See [the implementation and validation](../../docs/RECORDER-AUDIO-PAUSE.md).
+
 | Event | Handler | Context |
 |---|---|---|
 | `ev_tick` | `void f(void *ctrl)` | UI; set byte `ctrl+20h` to request redraw |
@@ -198,7 +337,8 @@ Machine lookups, SYN pages, Sound/lock mapping and parameter transport are gener
 core source; their descriptors and specific MAIN/AUDIO code come only from SMZ4.
 
 The key ID is a 32-bit word at `event+12`, flags at `event+16`. YES=0Ch,
-NO=0Dh, FUNC=1, PAGE=18, trigs=24..39, encoder pushes=40..47, LEVEL push=48.
+NO=0Dh, FUNC=1, TRK=2, UP=14, DOWN=15, LEFT=16, RIGHT=17, PAGE=18,
+trigs=24..39, encoder pushes=40..47, LEVEL push=48.
 Hardware reports press=1, repeat=9, release=10h. Encoder turn IDs are 1..8
 and LEVEL=9, with a signed delta at `event+16`.
 
@@ -872,6 +1012,18 @@ name. API 10's `native_dispatch` is an alias in the same 4-byte slot at offset
 notification helper is shared out of line; its extended controls plus final
 word are copied as one contiguous 34-byte range before notification. This
 keeps the combined core within its unchanged 64 KiB reserve and build flags.
+
+## Core 1.8.1.1: resident startup correction
+
+1.8.1 is withdrawn: its module binder was moved into appended `.boot`, which
+native startup clears, causing V04 at 40347BC2. 1.8.1.1 restores the original
+resident 1.8.0 binder/dispatcher and withdraws route bitsets. All-stock machine
+transport retains its two-read early exit. The builder and target startup
+regression now check residency and execute binding after appended storage is
+cleared. There are 68 bytes free in the unchanged 64 KiB reserve. AUDIO,
+host API and bank format stay unchanged. See
+[idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md) for counts,
+transition checks and hardware A/B limits.
 
 ## Core 1.8.0: stereo tracks and stereo samples
 

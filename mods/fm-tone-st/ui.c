@@ -21,20 +21,20 @@ typedef unsigned char u8;
 #define TYPE ((u32 (*)(void *))0x40030622u)
 #endif
 #ifndef PIX
-#define PIX ((void (*)(void *,s32,s32,u32))0x400f7140u)
+#define PIX ((void (*)(void *,s32,s32,u32))0x400f7304u)
 #endif
 #ifndef FILL
-#define FILL ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7df2u)
+#define FILL ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)
 #endif
 #ifndef RECT
-#define RECT ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7bd6u)
+#define RECT ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7d9au)
 #endif
 #ifndef TEXT
-#define TEXT ((void (*)(void *,void *,s32,s32,u32,const char *,const char *))0x400f8a0cu)
+#define TEXT ((void (*)(void *,void *,s32,s32,u32,const char *,const char *))0x400f8bd0u)
 #endif
 /* Stock AMP.T/FLT.T toggle renderer. Borrows the boot-owned bitmap vector. */
 #ifndef TOGGLE
-#define TOGGLE ((void (*)(void *,u32,void *,s32,s32,u32))0x40070362u)
+#define TOGGLE ((void (*)(void *,u32,void *,s32,s32,u32))0x400703dau)
 #endif
 /*  ECO: page 4 position 8. The state is bit 0 of PHRT's Sound word
  * (0 = ECO, the default; 1 = x2). PHRT values are whole multiples of 0x100. */

@@ -1,0 +1,5 @@
+{
+  "id":"mix-fast-st","version":"0.1","title":"Mix fast: skip zero gain ramps in the stock mix kernels",
+  "device":"syntakt","os":"1.42","license":"GPL-2.0-or-later",
+  "sources":["main.c","kernels.s"],"smz_module":{"descriptor":"mix_fast_module"}
+}

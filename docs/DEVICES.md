@@ -1,5 +1,10 @@
 # The Syntakt's profile
 
+The current desktop core/mod source target is **1.42**. Recognition of 1.41 is
+retained for reference tools. [OS142-PORT.md](OS142-PORT.md) records the new hashes,
+memory bounds, unchanged protected/AUDIO sections and mandatory bank contract.
+The detailed 1.41 measurements below are historical reference facts.
+
 Everything the engine knows about a product is in one profile,
 `elekloader/devices/<device>.py`, registered in `devices/__init__.py`
 (`_all()`). The Syntakt's is `syntakt.py`. The engine comes from elekloader

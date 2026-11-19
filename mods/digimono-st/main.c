@@ -66,7 +66,7 @@ static int dm_destination_query(st_u32 q,st_u32 *args,void *model,st_u32 *value)
 static int dm_destination_init(const struct st_smz_api *api)
 {
     if(!api || api->version<1 || !api->ui || api->ui->version<5 ||
-       !api->ui->host || api->ui->host->version<15)return 1;
+       !api->ui->host || api->ui->host->version<16)return 1;
     api->ui->host->parameter_provider(dm_destination_query);
     return 0;
 }

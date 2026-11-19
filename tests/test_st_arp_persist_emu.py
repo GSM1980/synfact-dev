@@ -12,7 +12,7 @@ from test_st_arp_keyboard_emu import ProducerMachine
 from elekloader.sdk import elf
 
 C1,C2=0x4a000000,0x4a400000
-LIVE,POOL=0x41ad5134,0x41b93ec9
+LIVE,POOL=0x41ad6134,0x41b94ec9
 SOUND,RECORD,KIT,KS,PS=0x123,0x107,0x1618,0x2e0200,0x390204
 DEFAULT=struct.pack('>5BxH16b',0,9,1,30,15,0xffff,*([0]*16))
 
@@ -21,8 +21,18 @@ class Persistence(Machine):
         super().__init__(core,bank);self.call_sr=0x2000;self.call_budget=20000000
         self.u.mem_map(C1,0x800000)
         e=elf.Elf.load(bank.parent/(bank.stem+'.work')/'main.elf')
-        index=next(i for i,s in enumerate(e.symbols) if s.name=='lfo3_tick')
-        host=next(s for s in e.symbols[index:] if s.name=='host')
+        # Local-symbol order changes when GCC reorders functions. Identify
+        # LFO3 main.c by its unique bank, not "the next host after tick"
+        # (which can select Recorder/Sample Manager's unrelated local host).
+        group={};main=None
+        for s in e.symbols:
+            if s.type==elf.STT_FILE:
+                if 'ddr_bank' in group:main=group;break
+                group={}
+            elif s.name:group[s.name]=s
+        if main is None and 'ddr_bank' in group:main=group
+        assert main and 'host' in main
+        host=main['host']
         self.w(BANK+host.value,self.word(self.sym['arp_host']))
         for name,value in [('image_container',C1),('kits_base',LIVE),('pool_base',POOL)]:self.w(self.sym[name],value)
         self.call('lfo3_records_init')
@@ -49,18 +59,18 @@ def verify(core,bank,out):
     cases.append('identical-Sounds-independent; clipboard copy; constructor; free')
     # Original native codecs: storage slots may not overwrite carrier bytes.
     kit=LIVE+3*KIT
-    m.call(0x400b330c,kit)
+    m.call(0x400b3384,kit)
     values=[m.put_settings(kit+0x2a+t*SOUND,mode=1+t%4,seed=t) for t in range(12)]
     lfo_value=struct.pack('>8H',0x4400,0x300,0x4000,0,0x100,0,0,0x2000)
     lfo_row=m.sym['kit_shadow']+3*13*16+2*16
     m.u.mem_write(lfo_row,lfo_value)
     rec=C1+KS+3*0x1600
     canary=bytes([0xa5])*320;m.u.mem_write(m.carrier(C1,3),canary)
-    assert m.call(0x400a787c,rec,kit,0)&255
+    assert m.call(0x400a78f4,rec,kit,0)&255
     assert m.read(m.carrier(C1,3),320)==canary
     shared_pool=m.put_settings(POOL+3*SOUND,mode=4,seed=4)
     shared_record=C1+PS+3*RECORD
-    assert m.call(0x400a7366,shared_record,POOL+3*SOUND,0)&255
+    assert m.call(0x400a73de,shared_record,POOL+3*SOUND,0)&255
     m.call('lfo3_sound_encoded',shared_record,POOL+3*SOUND,1)
     m.call('lfo3_kit_encoded',rec,kit,1)
     carrier=m.read(m.carrier(C1,3),320);assert carrier[:4]==b'APC1'
@@ -68,7 +78,7 @@ def verify(core,bank,out):
     pattern=C1+0x3c0000;slot=C1+0x200+3*0x5c00
     m.u.mem_write(pattern,bytes(0x2138c))
     m.u.mem_write(pattern+0x3bc5,b'\xff'*(0x21360-0x3bc5))
-    assert m.call(0x400a81ec,slot,pattern,0)&255
+    assert m.call(0x400a8264,slot,pattern,0)&255
     assert m.read(m.carrier(C1,3),320)==carrier
     assert m.call('lfo3_pattern_encode',slot,pattern,0)&255
     assert m.read(m.carrier(C1,3),320)==carrier
@@ -81,7 +91,7 @@ def verify(core,bank,out):
     assert m.read(C2+0x3a6000,4)==b'LP\x02\x80'
     m.fresh();m.call('lfo3_records_init')
     copied_rec=C2+KS+3*0x1600
-    assert m.call(0x400a7828,kit,copied_rec)&255
+    assert m.call(0x400a78a0,kit,copied_rec)&255
     m.call('lfo3_kit_decoded',kit,copied_rec,1)
     assert [m.settings(kit+0x2a+t*SOUND) for t in range(12)]==values
     m.call('lfo3_sound_decoded',POOL+3*SOUND,C2+PS+3*RECORD,1)
@@ -106,13 +116,13 @@ def verify(core,bank,out):
     m.call('lfo3_kit_decoded',kit,rec,1)
     cases.append('corrupt project carrier resets OFF; valid carrier restores')
     # Native save/reload Kit buffers need metadata outside their short records.
-    save,reload=0x405ff554,0x405fd354
+    save,reload=0x40600554,0x405fe354
     m.copy(save,rec,0x1600);m.copy(reload,save,0x1600)
     m.meta(6,W+0x6000,reload,0)
     assert [m.settings(W+0x6000+0x2a+t*SOUND) for t in range(12)]==values, [x.hex() for x in [m.settings(W+0x6000+0x2a),values[0],m.read(m.sym['encoded_kit'],32)]]
     # Incremental parameter refresh rewrites one Sound without whole-Kit codec.
     changed=m.put_settings(a,mode=4,seed=4)
-    assert m.call(0x400a7366,save+0x2e+5*RECORD,a,0)&255
+    assert m.call(0x400a73de,save+0x2e+5*RECORD,a,0)&255
     m.call('lfo3_sound_encoded',save+0x2e+5*RECORD,a,1)
     m.meta(6,W+0x6000,save,0)
     expect=list(values);expect[5]=changed
@@ -128,7 +138,7 @@ def verify(core,bank,out):
     encoded,scratch,dest=W+0x8000,W+0x9000,W+0xa000
     m.u.mem_write(encoded-16,b'\xa5'*(16+RECORD+16))
     m.w(m.cs['core:core_parameter_providers'],m.sym['lfo3_parameter_query'])
-    assert m.call(0x400a7366,encoded,a,0)&255
+    assert m.call(0x400a73de,encoded,a,0)&255
     assert m.settings(a)==changed
     assert m.read(encoded-16,16)==b'\xa5'*16 and m.read(encoded+RECORD,16)==b'\xa5'*16
     m.u.mem_write(scratch-16,b'\xa5'*544)
@@ -138,15 +148,15 @@ def verify(core,bank,out):
     assert m.read(scratch-16,16)==b'\xa5'*16 and m.read(scratch+0x13f,512-0x13f+16)==b'\xa5'*(512-0x13f+16)
     m.fresh();m.u.mem_write(scratch,wire+bytes(512-len(wire)))
     m.call('lfo3_s1_loaded',encoded,1,scratch)
-    assert m.call(0x400a6f7e,dest,encoded)&255
+    assert m.call(0x400a6ff6,dest,encoded)&255
     m.call('lfo3_sound_decoded',dest,encoded,1);assert m.settings(dest)==changed
     # +Drive's owning loader calls 400af5f2 after S1, which validates the
     # native record before jumping to the hooked Sound decode.
     m.call('lfo3_s1_loaded',encoded,1,scratch)
-    assert m.call(0x400af5f2,dest,encoded,0)&255
+    assert m.call(0x400af66a,dest,encoded,0)&255
     m.call('lfo3_sound_decoded',dest,encoded,1);assert m.settings(dest)==changed
     m.fresh();m.call('lfo3_s1_loaded',encoded,1,scratch)
-    assert m.call(0x400af5f2,a,encoded,0)&255
+    assert m.call(0x400af66a,a,encoded,0)&255
     assert m.settings(a)==changed
     # Legacy and corrupt Sound records replace stale active settings with OFF.
     for n in [0x107,0x11f]:
@@ -156,7 +166,7 @@ def verify(core,bank,out):
     # Pool Sound row survives clearing metadata just like the Kit rows.
     pool_value=m.put_settings(POOL+7*SOUND,mode=3,seed=7)
     pool_record=C1+PS+7*RECORD
-    assert m.call(0x400a7366,pool_record,POOL+7*SOUND,0)&255
+    assert m.call(0x400a73de,pool_record,POOL+7*SOUND,0)&255
     m.call('lfo3_sound_encoded',pool_record,POOL+7*SOUND,1)
     m.fresh();m.call('lfo3_sound_decoded',POOL+7*SOUND,pool_record,1)
     assert m.settings(POOL+7*SOUND)==pool_value
@@ -177,7 +187,7 @@ def verify(core,bank,out):
     assert m.read(m.carrier(C1,7),4)==bytes(4)
     cases.append('pool reboot; native record binding rejects stock import; NEW PROJECT')
     # Production restoration, with no private experiment configuration/page.
-    native=ProducerMachine(core,bank);pools=native.pool_counts();sound=native.word(0x444842d0)
+    native=ProducerMachine(core,bank);pools=native.pool_counts();sound=native.word(0x444852d0)
     native.u.mem_write(W+0x100,p)
     assert native.call('arp_sound_store',sound,W+0x100)==1
     for note in [60,64,67]:native.key(note)
@@ -196,25 +206,25 @@ def verify(core,bank,out):
     full=Persistence(core,bank);full.call_budget=100000000
     full.w(full.cs['core:core_parameter_providers'],full.sym['lfo3_parameter_query'])   # slot 0 (core 1.2)
     full.w(full.sym['lfo3_bank'],W+0xc000)
-    for at,name in [(0x400a787c,'lfo3_kit_encode_entry'),(0x400a7828,'lfo3_kit_decode_entry')]:
+    for at,name in [(0x400a78f4,'lfo3_kit_encode_entry'),(0x400a78a0,'lfo3_kit_decode_entry')]:
         full.u.mem_write(at,b'\x4e\xf9'+struct.pack('>I',full.sym[name])+b'\x4e\x71')
-    kit7=LIVE+7*KIT;full.call(0x400b330c,kit7)
+    kit7=LIVE+7*KIT;full.call(0x400b3384,kit7)
     full_value=full.put_settings(kit7+0x2a+6*SOUND,mode=4,seed=6)
     full_pool=full.put_settings(POOL+11*SOUND,mode=3,seed=3)
     # 53h = Kit, pool, project header; native pattern records already cached.
     before_serialize=full.count
-    assert full.call('lfo3_serialize_entry',C1,0x40a38b18,0,0x53,W+0xe000)&255
+    assert full.call('lfo3_serialize_entry',C1,0x40a39b18,0,0x53,W+0xe000)&255
     serialize_instructions=full.count-before_serialize
     assert [i for i in range(128) if full.read(full.carrier(C1,i),4)==b'APC1']==[7,11]
     full.fresh()
-    assert full.call(0x400a7828,kit7,C1+KS+7*0x1600)&255
+    assert full.call(0x400a78a0,kit7,C1+KS+7*0x1600)&255
     assert full.settings(kit7+0x2a+6*SOUND)==full_value
-    assert full.call(0x400a6f7e,POOL+11*SOUND,C1+PS+11*RECORD)&255
+    assert full.call(0x400a6ff6,POOL+11*SOUND,C1+PS+11*RECORD)&255
     assert full.settings(POOL+11*SOUND)==full_pool
     # The shutdown working-state writer passes -1 for all project sections.
     # Exercise that exact serializer flag, not only the explicit 53h subset.
     full.call_budget=250000000
-    assert full.call('lfo3_serialize_entry',C2,0x40a38b18,0,0xffffffff,W+0xe000)&255
+    assert full.call('lfo3_serialize_entry',C2,0x40a39b18,0,0xffffffff,W+0xe000)&255
     assert full.read(full.carrier(C2,7),4)==b'APC1'
     assert full.read(full.carrier(C2,11),4)==b'APC1'
     full.fresh()
@@ -227,7 +237,7 @@ def verify(core,bank,out):
     full.u.mem_write(W+0x100,DEFAULT)
     assert full.call('arp_sound_store',kit7+0x2a+6*SOUND,W+0x100)==1
     assert full.call('arp_sound_store',POOL+11*SOUND,W+0x100)==1
-    assert full.call('lfo3_serialize_entry',C1,0x40a38b18,0,0x53,W+0xe000)&255
+    assert full.call('lfo3_serialize_entry',C1,0x40a39b18,0,0x53,W+0xe000)&255
     assert all(full.read(full.carrier(C1,i),4)!=b'APC1' for i in range(128))
     full.fresh()
     full.call('lfo3_kit_decoded',kit7,C1+KS+7*0x1600,1)
@@ -239,7 +249,7 @@ def verify(core,bank,out):
     # survive an encoded slot, an A/B project snapshot and a fresh decode.
     locked=Persistence(core,bank)
     assert locked.call('lfo3_locks_setup')==1
-    pattern=0x40a38b34;matrix=pattern+0x3bc5;encoded_pattern=C1+0x200
+    pattern=0x40a39b34;matrix=pattern+0x3bc5;encoded_pattern=C1+0x200
     locked.u.mem_write(pattern,bytes(0x2138c))
     locked.u.mem_write(matrix,b'\xff'*(0x21360-0x3bc5))
     for track in range(13):locked.u.mem_write(matrix+track*0x2447+0x2400,bytes(71))
@@ -257,7 +267,7 @@ def verify(core,bank,out):
     for param,value in ((8,1),(9,10),(10,2),(11,33)):
         assert locked.call('lfo3_owned_set',store,0,16,param,value,0)==1
     # Install the exact native compressor hook used by the production bank.
-    locked.u.mem_write(0x400a811a,b'\x4e\xf9'+struct.pack('>I',locked.sym['lfo3_pattern_compress'])+b'\x4e\x71')
+    locked.u.mem_write(0x400a8192,b'\x4e\xf9'+struct.pack('>I',locked.sym['lfo3_pattern_compress'])+b'\x4e\x71')
     assert locked.call('lfo3_pattern_encode',encoded_pattern,pattern,0)&255
     locked.w(C1,0xbeefbace);locked.w(C1+4,13);locked.w(C1+0x3a5600,0xbacef00c)
     locked.w(locked.sym['containers'],C2)

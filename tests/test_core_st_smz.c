@@ -56,6 +56,7 @@ int fw_mmc_write(u32 lba,u32 n,const void *in){(void)lba;(void)n;(void)in;assert
 void *fw_malloc(u32 n)
 {allocs++;return allocs==fail_alloc?0:VirtualAlloc((void *)(0x46000000u+0x1000000u*allocs),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
+void *fw_memcpy(void *d,const void *s,u32 n){return memcpy(d,s,n);}
 void core_machine_flush(void *p,u32 n){assert(p && n);}
 int core_machine_bind(const struct core_machine_def *d,u32 n)
 {assert(d && n==expected_count);core_machine_active=bind_ok;return bind_ok;}
@@ -73,6 +74,7 @@ void *fw_lcd_swap(void)
 {u32 t=fw_lcd_front[0];fw_lcd_front[0]=fw_lcd_back[0];fw_lcd_back[0]=t;return (void *)fw_lcd_front[0];}
 static void reset(void)
 {
+    core_machine_audio_release();  /* 2.1.1: the file, until the sender is done */
     if(retained)fw_free(retained);retained=0;core_machine_active=core_machine_pages=0;
     allocs=reads=paints=fail_alloc=fail_load=transitions=preflights=0;bind_ok=stat_result=preflight_ok=1;select_result=fallback_enabled=0;slot_state=0;candidate=0;
     memset(pixels_a,0x55,1024);memset(pixels_b,0xaa,1024);

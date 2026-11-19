@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| Native Data RPC extension points, Syntakt OS 1.41 only. Task context.
+| Native Data RPC extension points, Syntakt OS 1.42 only. Task context.
 | Nontrivial C++ result objects have their return slot in A0.
 | ev_fs_route: int f(router, const std::string *path, Result<FileInfo> *out).
 | ev_fs_write: int f(router, FileInfo *info, Result<Writer> *out).

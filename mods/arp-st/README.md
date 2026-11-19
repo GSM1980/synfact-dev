@@ -1,5 +1,198 @@
 # Digitone ARP → Syntakt: experimental source port
 
+Desktop OS 1.42 release: **1.10.7**.
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+
+Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
+See [the port notes](../../docs/OS142-PORT.md).
+
+## Editing beneath permanent mute (1.10.7)
+
+Encoders keep editing the displayed ARP or chord page while permanent mute is
+open, in either opening order. Mute retains the trig keys and LEDs. Other
+windows still block ARP editing. A turn adopts native page navigation and the
+selected track before editing, including a track change before the next tick;
+held ARP steps are cancelled so they cannot redirect the first turn to OFS.
+
+`tests/test_st_arp_native_stack_emu.py` checks both opening orders, both pages,
+all active knobs, digital/analog tracks with/without POLY, navigation, track
+changes, cancelled holds and unrelated-window ownership. The native-stack cases
+also run in the retained/reentrant view suites. Encoder travel and model IO
+remain explicit emulator boundaries; physical panel validation is pending.
+
+## Publish the selected page before native composition (1.10.4)
+
+Normal opening now selects its target TRIG/ARP page before publishing the
+new view. The fallback path passes its current subpage into the same opening
+routine, so both paths publish a coherent page and view together.
+
+Native manager push calls visibility recomputation, which synchronously calls
+UI compose (`4000a0e6`) and the real core tick before attaching the view.
+Previously the key path still selected the preceding native page then:
+the nested tick closed the new ARP session. 1.10.3's immediate logical close
+therefore left both screen and keyboard absent. Under mute the fallback was
+already on an ARP page, explaining the different behavior on hardware.
+
+`tests/test_st_arp_reentrant_view_emu.py` executes that native compose/core
+tick path and real base View constructor/destructor. It reproduces the blank
+normal opening in 1.10.3, and checks cold entry, both pages, wrap/reopen,
+fallback subpages, both mute orders and retained old owners on digital/analog
+tracks with/without POLY. Only the LCD work after the tick is omitted from
+composition. No new core hooks or periodic work are added.
+
+## Re-entering ARP after mute/TRIG wrap (1.10.3)
+
+Closing an ARP session now clears its logical UI binding immediately, while
+native shared ownership continues to manage the view's lifetime. Previously
+only its destructor cleared `arp_view`. A native callback retaining the old
+view could therefore block a new session after removal: MODE still drew from
+the old binding, but its closed view could not own the blue keyboard. Releasing
+that owner made the keyboard work again.
+
+`tests/test_st_arp_retained_view_emu.py` follows mute → ARP → chord → first
+TRIG → close mute → ARP using native manager key traversal and a real native
+shared-owner copy. It checks blue LEDs through the native LED frame/walk
+before releasing that owner. The later old destructor must preserve the new
+view, settings and a held step; old LED callbacks cannot claim the new keys.
+It rejects 1.10.2 and covers digital/analog tracks with/without POLY. The extra
+reference models a valid callback lifetime; the specific hardware holder is
+not identified. Native cleanup/refcounts are executed, not forced by a mock.
+
+This only changes close/destruction transitions. Core, AUDIO, foreground,
+render and steady UI paths retain the previous behavior and cost gates.
+
+## Mute first, then ARP (1.10.2)
+
+ARP content stays visible whenever its native TRIG page is selected. Mute
+always remains above ARP and owns the trig keyboard while present; closing
+mute exposes the ARP keyboard without another navigation step.
+
+1.10.1 prevented ARP creation if mute was already open, so native navigation
+onto either ARP page left it empty. The tick now creates the transparent ARP
+view below the native PermanentMuteMenuView. Native TRIG still takes both
+key edges. The new view's retained list node is moved beneath mute using
+native unlink/insert under the manager mutex, without changing ownership or
+the highest opaque view. Unrelated windows still block creation.
+
+Foreground, LED, drawing and render callbacks are unchanged. Additional
+work happens only when opening beneath mute. The native-stack regression
+checks both orders, both pages, mute removal, restored step taps, list links
+and native publication/removal on digital/analog tracks with/without POLY;
+`--mute-before` reproduces the blank page on the delivered 1.10.1 bank.
+
+## TRIG pages and mute focus (1.10.1)
+
+This fixes TRIG/ARP page duplication and keyboard ownership on top of the
+current optimized 1.10 sources, preserving the clock, selector, event and
+render optimizations. It adopts the native page index, relinquishes step
+LEDs under mute, cancels held edits while retaining their releases, and
+closes on native parameter-page changes even while covered.
+
+Opening accepts MainScreen and its six normal published children, including
+the transparent layers above TRIG; unrelated windows such as mute still
+block it. The earlier 1.9.1/1.9.2 test deliveries incorrectly rejected those
+normal layers and left ARP inactive. The native stack regression executes
+the original MainScreen publication, manager insertion and drawing, and the
+core contextual DRAW bus, checking both pages and blue step-key response.
+
+The bank uses the current normal configuration, including Chorus 1.2, with
+core 1.8.1 rebuilt from main. Only ARP UI source changes; render instruction
+counts are compared with an unmodified bank from the same main revision.
+See [the investigation](../../docs/TRIG-ARP-MUTE-INVESTIGATION.md),
+`tests/test_st_arp_mute_emu.py` and `tests/test_st_arp_native_stack_emu.py`.
+
+The consolidated MAIN optimization release is **ARP 1.10**. Sections labelled
+1.10 through 1.13 below record local development iterations, all included in
+this single release step from 1.9. See [the mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+
+## Lower idle Sound/event cost (1.13)
+
+Sound settings use six aligned word comparisons and direct published settings
+without supported root locks. MODE p-lock activation precedes the OFF exit.
+Clock, selector, lock and persistence behavior stay unchanged. The core 1.8.1
+callback-routing prototype is withdrawn; 1.8.1.1 keeps the original dispatcher.
+See
+[idle MAIN performance](../../docs/IDLE-MAIN-PERFORMANCE.md).
+
+## Authored selector assembly and track scan (1.12)
+
+The target `arp_next` selector now uses authored integer assembly, while the
+portable C implementation remains for host builds. TRUE/UP/DOWN/CYCL,
+ascending/falling ranges, rests, offsets and complete selector state retain
+the previous behavior. Four fixed UP/DOWN bitmap stages avoid loop overhead
+with sparse chords. ColdFire ISA_C `BITREV` plus `FF1` finds the lowest set
+bit directly, both in the selector and in the running-track scan; track
+processing order is preserved. No EMAC, SRAM or persistent cache is added.
+
+The selector shrinks from 1,808 to 562 bytes. Against 1.11, the eight-track
+callback goes from 1,047 to 1,023 instructions without emission and from
+4,054 to 3,926 in the shown emission block. Full state and ABI match over
+42,604 linked selector calls with no count increases, and the original
+Digitone oracle retains its 11,520 output comparisons. Whole callbacks cover
+changing held notes/locks/tempo, noncontiguous tracks and stop/reconfiguration
+transitions. Hardware MAIN/cache effects remain unmeasured. See
+[ARP MAIN performance](../../docs/ARP-MAIN-PERFORMANCE.md) for evidence.
+
+## MAIN keyboard assembly and folded clock poll (1.11)
+
+`hot.s` returns unchanged held-note sets with sixteen instructions and no
+stack frame (previously 48 instructions and a 248-byte C work frame). Changed
+sets still use the checked C traversal; it reads the old bitmap directly from
+the selector until committing the new one, avoiding a redundant stack copy.
+The runtime folds its clock poll into the caller and uses eight constant-offset
+event-reuse checks. Native clocks, notes, gates, pool ownership and state match.
+
+Against 1.10, the eight-track live callback goes from 1,415 to 1,047 instructions
+without emissions and from 4,582 to 4,054 in the shown emission block. Forty-five
+callback scenarios (330 blocks), 414 clock cases and 193 direct keyboard cases
+have no instruction increases. Code grows moderately; cache timing and physical
+MAIN savings remain to be measured. No EMAC or additional SRAM is used; existing
+sampler/LFO3 placement, core and AUDIO stay intact. See the performance document
+below for evidence and the SRAM/EMAC review.
+
+## MAIN clock and settings cost (1.10)
+
+The per-block callback reads an exact eighteen-entry musical-period table
+instead of dividing `86400000` by the selected denominator and arming a
+temporary clock just to read its period. Clock starts use the same table;
+speed limits, generation validation and phase-preserving speed changes remain.
+
+With no supported root p-locks, the callback reads the published settings
+directly under native exclusion. With locks it builds the same private copy
+and applies the same value validation. There is no persistent parameter cache,
+new synchronization or SRAM allocation. The no-running-ARP exit is unchanged.
+
+In the linked eight-track live fixture, a no-emission callback falls from
+1,798 to 1,415 instructions; an emission callback from 4,965 to 4,582.
+These are instruction counts with explicit native synthesis boundaries,
+not cycles or total MAIN percentages. Core/AUDIO, samplers 1.4.5 and LFO3
+1.4 are unchanged. Hardware validation is pending. See
+[ARP MAIN performance](../../docs/ARP-MAIN-PERFORMANCE.md) for scope,
+whole-state/event comparisons, changing locks/tempo and reproduction.
+
+## Page popups and blue steps (1.9)
+
+**The TRIG presses ARP takes show the page popup.** The native page key
+moves the page and shows "<title> (n/m)" in a popup (`4003c50a`: the view's
+title `40037dd0` into its UI-state object `+6Ch`). ARP moves the page itself
+on three presses: onto the arp page, onto the chord page and, on the release
+of the next one, back to the first TRIG page. Each now shows the same popup
+(`st_trig_popup`, the printf form `400c33d0`): "Arpeggiator (4/5)",
+"Arpeggiator (5/5)", "TRIG (1/5)" with POLY (3/4, 4/4, 1/4 without). NO and
+the parameter page keys close without one, as before. The first page's stock
+title "Trig Parameters" becomes "TRIG" (`st_trig_name_first`, from PAGE_SYNC),
+also when the native page key reaches it.
+
+**ARP's descriptor is found outside page actions.** `st_trig_current` read
+the view manager of the application (`4016e804`, the project); the manager is
+the UI controller's (`4016de80`, `+40h`). Until 1.9 page 3's descriptor was
+ARP's only inside page actions; the popups above read it from the key
+handler.
+
+**Active steps are blue** (palette 14, the user's choice; green, palette 9,
+until 1.8). The palette numbers index the stock RGB table (see the arp steps
+below).
+
 ## Native TRIG pages and SCALE (1.8)
 
 **The two ARP pages look like the other TRIG pages.** They draw inside the
@@ -94,13 +287,15 @@ page before it (the view closes and the native randomizes it).
 Until 1.8 the ARP view drew no page indicator (its Digitone layout used that
 column); 1.8 draws the pages inside the TRIG view, indicator included.
 
-**RANGE goes down too** (list item 27): -4, -3, -2, 1, 2, 3, 4. A falling
-range plays the root octave, then each octave below it (-2: two octaves,
-the root's and the one below). -1 would be 1 again, so it is skipped. Stored
-values 0..3 keep their meaning (1..4); 4, 5, 6 are -2, -3, -4, in the Sound
-metadata and in RANGE p-locks alike, so earlier Sounds and locks read the
-same. An older ARP reading a falling RANGE refuses that Sound's metadata and
-restores OFF. A note below 0 is skipped (a rest), as one above 127 was.
+**RANGE goes down too** (list item 27): -3, -2, -1, 0, 1, 2, 3. RANGE shows
+how many octaves the arpeggio moves from the root: 0 plays the root octave
+only, 1 the root's and the one above, -1 the root's and the one below. Until
+1.10.6 it counted the octaves played, as the Digitone does (1..4 up, -2..-4
+down); only the label changed, not the sound. Stored values 0..3 are 0..3;
+4, 5, 6 are -1, -2, -3, in the Sound metadata and in RANGE p-locks alike,
+so earlier Sounds and locks play as before. An older ARP reading a falling
+RANGE refuses that Sound's metadata and restores OFF. A note below 0 is
+skipped (a rest), as one above 127 was.
 The selector's falling branch costs three instructions per emitted note
 (analog fixture: 685 → 688 for one track, 5,274 → 5,298 for eight).
 
@@ -220,9 +415,9 @@ after allocator rounding), including both families' index.
 ### The arp steps on the trig keys
 
 Outside REC, with the ARP view open, the sixteen trig keys are the arp's
-sixteen steps on every track: steps up to LEN are lit, active ones in one
-colour (palette 9) and muted ones in red (palette 3, the stock note-trig
-colour); keys past LEN are dark. A press selects the step (as LEFT/RIGHT do);
+sixteen steps on every track: steps up to LEN are lit, active ones in blue
+(palette 14; green, palette 9, until 1.8) and muted ones in red (palette 3,
+the stock note-trig colour); keys past LEN are dark. A press selects the step (as LEFT/RIGHT do);
 turning any of A..F while steps are held edits each held step's note (OFS);
 releasing a key without an encoder edit toggles that step. With REC (grid or
 live), or with FUNC, key 2 or key 12h held, the keys and their LEDs stay the
@@ -232,9 +427,11 @@ The LEDs use the stock LED frame (400094f4): the view stack (40100856) offers
 the key LEDs from the top down to each view that is a `LedHandler`, found by
 `dynamic_cast`, and the first setter of an LED wins (40008220). The view is
 therefore a View followed by a LedHandler at `+50h`, described by its own
-`__vmi_class_type_info` as TrackSelect's (401d42ec) describes its own. Palette
-9 for the active steps is a guess from the stock track keys that needs the
-instrument: change `ARP_LED_ACTIVE` in `view.c` if it is not green.
+`__vmi_class_type_info` as TrackSelect's (401d42ec) describes its own. The
+palette numbers index the stock RGB table that `40113c4a` uploads to the
+panel (41 entries of r, g, b from `4024321c`, 6-bit channels): 3 is red
+(`0f 00 00`), 9 green (`00 0f 00`), 14 blue (`00 00 0f`), 20 white.
+`ARP_LED_ACTIVE` in `view.c` is 14.
 
 Checks: `tests/test_st_arp_locks_emu.py` executes compiled storage, LFO3/ARP
 isolation, clone/codec, capacity/reuse, event capture and ARP LEN acceptance.
@@ -482,7 +679,9 @@ All outputs go under ignored `out/`; no MIDI/USB/device access.
   across edits. Checks the note-off flag boundary, not synthesis or audio.
 - `test_st_arp_view_emu.py`: linked TRIG-page opening (1.7: PAGE_SYNC, the
   tick, the page index, TRIG + YES), MODE OFF, A..F limits, steps,
-  modal priority, STOP, close/dispose/reopen and failure passthrough. Stack
+  modal priority, STOP, close/dispose/reopen and failure passthrough; 1.9:
+  the page popups on 4 and 5 pages, digital and analog (the popup `400c33d0`
+  is a double; the descriptors go through the core's PAGE_LAYOUT). Stack
   ownership, allocation, base view ctor/dtor and text rasterization are doubles;
   the native rail constructor executes. Font metrics/maps/pixels (453 and 599
   glyph bytes) and 27x27 rail image/mask compare byte-for-byte to Digitone.

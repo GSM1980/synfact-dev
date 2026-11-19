@@ -11,6 +11,13 @@ extern short *sam_pcm;
 extern u32 sam_last_source,sam_ret_clock,sam_report[8];
 extern s32 sam_ret[2][64];
 extern void ui_sampler_native_tick(void);
+#ifdef __m68k__
+extern void recorder_return_bank(s32 *,s32,s32,s32,s32,u32);
+extern u32 recorder_stereo_pcm(short *,const s32 *,u32,u32 *);
+#endif
+/* Only the IRQ writer and recorder_prime mutate these banks. A zero bank
+ * need not be rewritten every block or added/clipped during PCM capture. */
+static u32 headroom_return_zero[2] DATA={0,0};
 u32 headroom_normalizing_skips DATA=0,headroom_ready_skips DATA=0;
 u32 headroom_armed_quiet_blocks DATA=0;
 u32 headroom_ui_meter_skipped_blocks DATA=0,headroom_ui_meter_samples DATA=0;
@@ -58,6 +65,12 @@ static void __attribute__((noinline)) headroom_returns(u32 mode)
     s32 d0=((left[8]>>15)+1)>>1,r0=((left[9]>>15)+1)>>1;
     s32 d1=((right[8]>>15)+1)>>1,r1=((right[9]>>15)+1)>>1;
     if((d0|r0|d1|r1) && headroom_quiet_returns())d0=r0=d1=r1=0;
+    if(!(d0|r0|d1|r1) && headroom_return_zero[mode?1:0]){sam_ret_clock=sam_clock;return;}
+    headroom_return_zero[mode?1:0]=!(d0|r0|d1|r1);
+#ifdef __m68k__
+    if(d0|r0|d1|r1)recorder_return_bank(sam_ret[mode?1:0],d0,r0,d1,r1,mode);
+    else
+#endif
     if(mode)headroom_direct_bank(sam_ret[1],d0,r0,d1,r1);
     else headroom_fx_bank(sam_ret[0],d0,r0,d1,r1);
     sam_ret_clock=sam_clock;
@@ -144,8 +157,8 @@ static void __attribute__((noinline)) headroom_capture(u32 state)
     }
 }
 
-/* STEREO MAIN (MAIN L+R): both USB main slots, each with its own PRE/POST
- * correction, every block. No mono fast path: the stereo store does it all. */
+/* STEREO MAIN (MAIN L+R): general ARMED/partial/unprimed path. Both USB main
+ * slots retain their own PRE/POST correction on every frame. */
 static void __attribute__((noinline)) headroom_main_stereo(u32 mode,u32 ready,u32 state)
 {
     const volatile s32 *usb=(const volatile s32 *)0x80004760u;
@@ -155,6 +168,42 @@ static void __attribute__((noinline)) headroom_main_stereo(u32 mode,u32 ready,u3
         if(ready){l[i]=headroom_side(l[i],mode?ret[2*i]:-ret[2*i]);r[i]=headroom_side(r[i],mode?ret[2*i+1]:-ret[2*i+1]);}
     }
     sam_stereo_store(l,r,5,state);
+}
+/* A complete RECORDING block with a valid correction bank is already PCM16
+ * after clipping. Store it once; derive both Q31 meters and the take peak
+ * from the same per-channel extrema, avoiding temporary L/R arrays and the
+ * generic store's second traversal/state/limit checks on every frame. */
+static void __attribute__((noinline)) headroom_stereo_record(u32 mode)
+{
+    const s32 *ret=sam_ret[mode?1:0];short *pcm=sam_pcm+2*sam_frames;
+    u32 pl=0,pr=0,peak,old;
+#ifdef __m68k__
+    u32 peaks[2];
+    peak=recorder_stereo_pcm(pcm,ret,(mode?1u:0u)|(headroom_return_zero[mode?1:0]?2u:0u),peaks);
+    pl=peaks[0];pr=peaks[1];
+#else
+    const volatile s32 *usb=(const volatile s32 *)0x80004760u;
+    u32 i,mag;s32 l,r;
+#define STEREO_RECORD_RUN(sign) \
+    for(i=0;i<32;i++) { \
+        l=sam_clip((usb[20*i]>>16) sign ret[2*i]); \
+        r=sam_clip((usb[20*i+1]>>16) sign ret[2*i+1]); \
+        pcm[2*i]=(short)l;pcm[2*i+1]=(short)r; \
+        mag=l<0?0u-(u32)l:(u32)l;if(mag>pl)pl=mag; \
+        mag=r<0?0u-(u32)r:(u32)r;if(mag>pr)pr=mag; \
+    }
+    if(mode){STEREO_RECORD_RUN(+)}else{STEREO_RECORD_RUN(-)}
+#undef STEREO_RECORD_RUN
+    peak=pl>pr?pl:pr;
+#endif
+    if(peak>sam_pcm_peak)sam_pcm_peak=peak;
+    sam_frames+=32;
+    __asm__ volatile("" ::: "memory");
+    if(sam_frames==sam_limit || sam_frames==1440000u)sam_state=4;
+    pl<<=16;pr<<=16;
+    old=sam_last_source==5?sam_peak:0;old-=old?(old>>9)+1u:0;sam_peak=pl>old?pl:old;
+    old=sam_last_source==5?sam_peak_r:0;old-=old?(old>>9)+1u:0;sam_peak_r=pr>old?pr:old;
+    sam_last_source=5;sam_report[1]++;sam_report[5]=5;sam_report[6]=pl>pr?pl:pr;
 }
 /* MAIN PRE/POST, including armed/recording. Freeze source/mode for a take,
  * exactly as the native routine. Other sources use its original body.
@@ -183,7 +232,11 @@ void headroom_tick(void)
     if(take?sam_take_stereo:sam_stereo) {
         if(source!=5){ui_sampler_native_tick();return;}
         sam_clock+=32;ready=sam_ret_clock==sam_clock-32u;
-        headroom_main_stereo(mode,ready,state);headroom_returns(mode);
+        limit=sam_limit<1440000u?sam_limit:1440000u;
+        if(state==2 && ready && sam_pcm && sam_frames<=limit && limit-sam_frames>=32)
+            headroom_stereo_record(mode);
+        else headroom_main_stereo(mode,ready,state);
+        headroom_returns(mode);
         headroom_meter_phase=23;return;
     }
     /* The standby meter has no capture/threshold consumer. Sample at 60 Hz;

@@ -9,24 +9,25 @@
 #include "sample-pool.h"
 #include "crc.h"
 #include <syntakt/machines.h>
+#include "cold.h"
 typedef pool_u8 u8;typedef pool_u16 u16;typedef pool_u32 u32;
-#define PROJECT ((u8 *)0x40652514u)
-#define STOCK_BLOB ((const u8 *)0x4d84f2c5u)
-#define STOCK_BYTES (*(const u32 *)0x4d84f2c1u)
+#define PROJECT ((u8 *)0x40653514u)
+/* CPU2 is byte-identical in 1.41/1.42. This is an AUDIO address, not MAIN. */
 #define STOCK_AUDIO 0x4004f750u
-#define WIRE_FIRST 0x4162u
+#define WIRE_FIRST 0x8001u  /* core 2.2: CORE_POOL_AUDIO is page 8001 */
 #define IMAGE_MAGIC 0x454c5031u
 extern void *fw_malloc(u32);extern void fw_free(void *);
 extern int fw_mmc_read(u32,u32,void *);
 extern u32 fw_mmc_ready[],fw_mmc_sectors[];
 extern u32 core_machine_pages;
+extern const u32 core_pool_image_bytes;  /* 2.1.1: the header and code kept resident (pool_audio.py) */
 struct file_plan {u32 id,first,frames,crc,offset,pages,sum,last,bad,channels;char name[17];};
 struct pool_state {
     u8 image[4096] __attribute__((aligned(16)));
-    u8 page[2048] __attribute__((aligned(16)));
-    u8 read[3072] __attribute__((aligned(16)));
     u16 wanted[128],code[128];
     u32 frames[128],pointer[128],stock_frames[64],stock_pointer[64];
+    u32 first[128],file_crc[128];
+    u8 stock_changed[64];
     u8 channels[128];
     char names[128][17];
     struct file_plan file[128];
@@ -34,18 +35,27 @@ struct pool_state {
     struct st_machine_cursor cursors[8];
 };
 static struct pool_state *state;
+/* TASK-only boot scratch. No aggregate PCM allocation or fixed native blob.
+ * Released after the final native sender memcpy, before the completion kick. */
+struct boot_buffers {u8 page[2048],read[3072];};
+static struct boot_buffers *boot;
+static u32 stock_last=0xffffffffu;
+u32 core_pool_stock_bytes=256;
 u32 core_pool_boot_pages,core_pool_busy,core_pool_query_owner;
 u32 core_pool_report[8]; /* available, planned files, loaded files, missing, bytes, errors, used, free */
 static u8 *saved_record;static u32 saved_valid;
 static u32 rd(const u8 *p){return (u32)p[0]<<24|(u32)p[1]<<16|(u32)p[2]<<8|p[3];}
 static void wr(u8 *p,u32 v){p[0]=v>>24;p[1]=v>>16;p[2]=v>>8;p[3]=v;}
-static void cp(void *d,const void *s,u32 n){u8 *a=d;const u8 *b=s;while(n--)*a++=*b++;}
-static void zero(void *p,u32 n){u8 *q=p;while(n--)*q++=0;}
+/* Task-only copies use the native byte-counted primitives; avoid replicating
+ * large inline copy/clear loops in the resident 64 KiB core. */
+extern void *fw_memcpy(void *,const void *,u32),*fw_memset(void *,int,u32);
+#define cp fw_memcpy
+#define zero(p,n) fw_memset(p,0,n)
 #define crc(c,p,n) core_crc_update(c,p,n)
 static u32 adler(const u8 *p,u32 n)
 {u32 a=1,b=0;while(n--){a+=*p++;if(a>=65521)a-=65521;b+=a;if(b>=65521)b-=65521;}return b<<16|a;}
 int core_pool_available(void){return rd(core_pool_image)==IMAGE_MAGIC && rd(core_pool_image+4)==4096;}
-int core_pool_valid(const u8 *project)
+CORE_HOT int core_pool_valid(const u8 *project)
 {
     const u8 *p=project+CORE_POOL_OFFSET;u32 i,v;
     if(rd(p)!=0x504f4f4c || rd(p+4)!=0x00010080u || rd(p+8)!=~crc(0,p+16,256))return 0;
@@ -65,7 +75,7 @@ void core_pool_write(u8 *project,const u16 *entries)
     wr(p,0x504f4f4c);wr(p+4,0x00010080);wr(p+8,~crc(0,p+16,256));wr(p+12,0);
 }
 extern int core_parameter_provider(u32,u32 *,void *,u32 *);
-void core_pool_empty(u8 *p)
+CORE_HOT void core_pool_empty(u8 *p)
 {u16 e[128];u32 i;for(i=0;i<128;i++)e[i]=i<CORE_POOL_STOCK_SLOTS?i+1:0;
  core_pool_write(p,e);
  {u32 a=(u32)p;core_parameter_provider(27,&a,0,0);}}  /* NEW PROJECT (LFO3) */
@@ -96,7 +106,7 @@ void core_pool_before_save(void *object,u32 slot)
 {
     u8 *cached;
     if(slot>128 || !core_pool_valid(PROJECT))return;
-    cached=((u8 *(*)(void *,u32))0x400c1700u)(object,slot);
+    cached=((u8 *(*)(void *,u32))0x400c17acu)(object,slot);
     if(!cached || (u32)cached<0x40000000u)return;cached+=12;
     if(cached!=PROJECT)cp(cached+CORE_POOL_OFFSET,PROJECT+CORE_POOL_OFFSET,CORE_POOL_RECORD);
 }
@@ -107,6 +117,17 @@ static void entry(u32 slot,u32 frames,u32 pointer,u32 channels)
 {state->frames[slot]=frames;state->pointer[slot]=frames?pointer:0;state->channels[slot]=channels==2?2:1;}
 static u32 bytes_of(u32 slot){return 2*state->channels[slot]*state->frames[slot];}
 static u32 channels_of(const struct st_sample_entry *e){return (e->flags&ST_HZ_STEREO) && !(e->frames&1)?2:1;}
+CORE_HOT void core_pool_memory(struct st_pool_memory *out)
+{
+    u32 i,j;out->used=0;out->total=CORE_POOL_END-CORE_POOL_PCM;
+    for(i=0;i<128;i++){
+        out->bytes[i]=state?bytes_of(i):0;
+        if(!state || i<CORE_POOL_STOCK_SLOTS || !state->frames[i] || state->pointer[i]<CORE_POOL_PCM)continue;
+        for(j=CORE_POOL_STOCK_SLOTS;j<i;j++)
+            if(state->frames[j] && state->pointer[j]==state->pointer[i])break;
+        if(j==i)out->used+=(bytes_of(i)+2047)&~2047u;
+    }
+}
 static void account(void)
 {
     u32 i,j,used=0;for(i=0;i<128;i++)if(state->frames[i] && state->pointer[i]>=CORE_POOL_PCM){
@@ -117,21 +138,29 @@ static void account(void)
 }
 void core_pool_prepare(void)
 {
-    struct st_hzfs fs;struct st_sample_entry e;u32 i,j,pos=0,size=STOCK_BYTES,frames,n,room;
+    struct st_hzfs fs;struct st_sample_entry e;u32 i,j,pos=0,frames,n,room;
     int opened;
-    core_pool_boot_pages=0;if(!core_pool_available() || state)return;
+    if(state)return;
+    core_pool_boot_pages=0;core_pool_stock_bytes=256;stock_last=0xffffffffu;
     state=fw_malloc(sizeof(*state));if(!state){core_pool_report[5]++;return;}
     if((u32)state<0x40000000u){state=0;core_pool_report[5]++;return;}
     zero(state,sizeof(*state));state->last_ordinal=0xffffffffu;
-    cp(state->image,core_pool_image,4096);core_pool_read(PROJECT,state->wanted);
-    if(!core_pool_valid(PROJECT))core_pool_write(PROJECT,state->wanted);
-    /* Parse the already-built NATIVE blob, without rebuilding or changing it. */
-    if(size>0x1fff100u)goto invalid;
+    boot=fw_malloc(sizeof(*boot));
+    if((u32)boot<0x40000000u){boot=0;goto invalid;}
+    /* Preserve the native AUDIO byte layout, including an empty length for
+     * missing/invalid slots. Validate BEFORE planning or writing any PCM. */
     for(i=0;i<64;i++){
-        if(pos>size || size-pos<4)goto invalid;frames=rd(STOCK_BLOB+pos);pos+=4;
-        if(frames>240000u || 2*frames>size-pos)goto invalid;
-        state->stock_frames[i]=frames;state->stock_pointer[i]=STOCK_AUDIO+pos;pos+=2*frames;
+        frames=0;
+        if(!fw_mmc_read((i+8)<<10,512,boot->read) && rd(boot->read)==0x53414d50u){
+            n=rd(boot->read+8);if(n<=240000u)frames=n;
+        }
+        pos+=4;state->stock_frames[i]=frames;state->stock_pointer[i]=STOCK_AUDIO+pos;pos+=2*frames;
     }
+    core_pool_stock_bytes=pos;
+    if(!core_pool_available())return;
+    cp(state->image,core_pool_image,core_pool_image_bytes);  /* the rest stays zero until the service pages */
+    core_pool_read(PROJECT,state->wanted);
+    if(!core_pool_valid(PROJECT))core_pool_write(PROJECT,state->wanted);
     opened=core_hzfs_open(&fs,&core_hzfs_native_io)==1;
     for(i=0;i<128;i++){
         n=state->wanted[i];state->code[i]=n;
@@ -152,19 +181,46 @@ void core_pool_prepare(void)
     core_pool_report[1]=state->files;core_pool_report[4]=state->data_pages*2048;return;
 invalid:fw_free(state);state=0;core_pool_report[5]++;
 }
+/* Sequential stock pages through the unchanged native sender/FPGA handshake.
+ * Retries return the cached page without feeding the envelope twice. */
+const void *core_pool_stock_page(u32 ordinal)
+{
+    u32 at=ordinal*2048,out=0,i,start,offset,n,skip,physical,bytes;
+    if(!boot){zero((void *)0x10000800u,2048);return (const void *)0x10000800u;}
+    if(stock_last==ordinal)return boot->page;
+    stock_last=ordinal;zero(boot->page,2048);
+    for(i=0;i<64 && out<2048;i++){
+        start=state->stock_pointer[i]-STOCK_AUDIO-4;bytes=2*state->stock_frames[i];
+        if(at>=start+4+bytes)continue;
+        offset=at-start;
+        while(offset<4 && out<2048){boot->page[out++]=(u8)(state->stock_frames[i]>>(8*(3-offset)));offset++;at++;}
+        if(offset<4 || out==2048 || !bytes)continue;
+        offset-=4;n=bytes-offset;if(n>2048-out)n=2048-out;
+        skip=(64+offset)&511u;physical=(skip+n+511)&~511u;
+        if(fw_mmc_read(((i+8)<<10)+((64+offset)>>9),physical,boot->read)){
+            zero(boot->read+skip,n);state->stock_changed[i]=1;core_pool_report[5]++;
+        }
+        cp(boot->page+out,boot->read+skip,n);
+        out+=n;at+=n;
+    }
+    return boot->page;
+}
+void core_pool_boot_release(void)
+{struct boot_buffers *p=boot;boot=0;if(p)fw_free(p);}
 /* Sender worker task, before AUDIO voices exist. Page indices use the native
  * sample-store mapping. Metadata/code pages are sent LAST, after file CRCs. */
 const void *core_pool_boot_page(u32 ordinal,u32 *wire)
 {
     struct file_plan *f;u32 j,at,n,skip,bytes,physical,offset,k;
-    if(!state || ordinal>=core_pool_boot_pages)return 0;
+    if(!state || !boot || ordinal>=core_pool_boot_pages)return 0;
     if(ordinal>=state->data_pages){
         if(!state->boot_finished){
             for(j=0;j<128;j++){
                 if(state->wanted[j]&CORE_POOL_HZ){
                     for(k=0;k<state->files;k++)if(state->file[k].id==(state->wanted[j]&0x7fff)){
                         f=state->file+k;if(!f->bad && f->last+1==f->pages && ~f->sum==f->crc)
-                            {entry(j,f->frames/f->channels,CORE_POOL_PCM+f->offset*2048,f->channels);cp(state->names[j],f->name,17);}
+                            {entry(j,f->frames/f->channels,CORE_POOL_PCM+f->offset*2048,f->channels);
+                             state->first[j]=f->first;state->file_crc[j]=f->crc;cp(state->names[j],f->name,17);}
                         break;
                     }
                 }
@@ -177,35 +233,35 @@ const void *core_pool_boot_page(u32 ordinal,u32 *wire)
         }
         j=ordinal-state->data_pages;*wire=WIRE_FIRST+j;return state->image+2048*j;
     }
-    *wire=WIRE_FIRST+2+ordinal;if(state->last_ordinal==ordinal)return state->page;
-    state->last_ordinal=ordinal;zero(state->page,2048);
+    *wire=WIRE_FIRST+2+ordinal;if(state->last_ordinal==ordinal)return boot->page;
+    state->last_ordinal=ordinal;zero(boot->page,2048);
     for(j=0;j<state->files;j++){
         f=state->file+j;if(ordinal<f->offset || ordinal-f->offset>=f->pages)continue;
         offset=ordinal-f->offset;
-        if((!offset && f->last!=0xffffffffu) || (offset && f->last!=offset-1)){f->bad=1;return state->page;}
-        f->last=offset;if(f->bad)return state->page;
+        if((!offset && f->last!=0xffffffffu) || (offset && f->last!=offset-1)){f->bad=1;return boot->page;}
+        f->last=offset;if(f->bad)return boot->page;
         at=offset*2048;bytes=2*f->frames-at;n=bytes<2048?bytes:2048;
         skip=(64+at)&511u;physical=(skip+n+511)&~511u;
-        if(fw_mmc_read((f->first<<10)+((64+at)>>9),physical,state->read)){
-            f->bad=1;core_pool_report[5]++;return state->page;
+        if(fw_mmc_read((f->first<<10)+((64+at)>>9),physical,boot->read)){
+            f->bad=1;core_pool_report[5]++;return boot->page;
         }
         if(!offset){
-            if(rd(state->read)!=0x53414d50u || rd(state->read+8)!=f->frames){f->bad=1;return state->page;}
-            f->sum=crc(0,state->read,64);
-            core_pool_wave_begin(CORE_POOL_HZ|f->id,f->frames/f->channels,f->channels);
+            if(rd(boot->read)!=0x53414d50u || rd(boot->read+8)!=f->frames){f->bad=1;return boot->page;}
+            f->sum=crc(0,boot->read,64);
         }
-        f->sum=crc(f->sum,state->read+skip,n);core_pool_wave_feed(state->read+skip,n);
-        if(offset+1==f->pages)core_pool_wave_finish(~f->sum==f->crc);
-        cp(state->page,state->read+skip,n);return state->page;
-    }return state->page;
+        f->sum=crc(f->sum,boot->read+skip,n);
+        cp(boot->page,boot->read+skip,n);return boot->page;
+    }return boot->page;
 }
 #ifndef CORE_POOL_SLEEP
-#define CORE_POOL_SLEEP ((void (*)(u32))0x40116134u)
+#define CORE_POOL_SLEEP ((void (*)(u32))0x401162f8u)
 #endif
 static void sleep(void){CORE_POOL_SLEEP(500);}
-int core_pool_ready(void)
-{return state && state->boot_finished && !state->fault && !core_pool_busy && *(volatile u32 *)0x43bdc824u;}
-static int send(u32 cmd,u32 dst,u32 len,const u8 *data,u32 bytes)
+CORE_HOT int core_pool_ready(void)
+{return state && state->boot_finished && !state->fault && !core_pool_busy && *(volatile u32 *)0x43bdd824u;}
+/* Keep one foreground mailbox implementation in the resident core. GCC's
+ * constant-argument clone duplicated its entire retry/timeout protocol. */
+__attribute__((noinline,noclone)) static int send(u32 cmd,u32 dst,u32 len,const u8 *data,u32 bytes)
 {
     volatile u32 *m=(void *)0x10000800u;u32 i,seq,sum,attempt,status;
     seq=state->seq%65535+1;state->seq=seq;
@@ -234,6 +290,37 @@ static u32 allocate(u32 bytes)
     }while(again);return at;
 }
 struct stream {u8 buffer[992];u32 used,dst,total,done;};
+/* Dry-run the same first-fit allocation/order as sync, including holes,
+ * aliases and page padding. Refuse before RETIRE/BEGIN can change AUDIO. */
+static int preflight(struct st_hzfs *fs,int *opened)
+{
+    u32 pointer[128],bytes[128],i,j,n,at,end,again;u16 code[128];
+    struct st_sample_entry e;
+    for(i=0;i<128;i++){
+        code[i]=state->wanted[i]==state->code[i]?state->code[i]:0;
+        pointer[i]=code[i]?state->pointer[i]:0;
+        bytes[i]=code[i]?((bytes_of(i)+2047)&~2047u):0;
+    }
+    for(i=0;i<128;i++)if(state->wanted[i] && !code[i]){
+        n=state->wanted[i];
+        if(n<=64){code[i]=n;pointer[i]=state->stock_pointer[n-1];bytes[i]=0;continue;}
+        for(j=0;j<128;j++)if(code[j]==n && bytes[j])break;
+        if(j<128){code[i]=n;pointer[i]=pointer[j];bytes[i]=bytes[j];continue;}
+        if(!*opened){*opened=core_hzfs_open(fs,&core_hzfs_native_io)==1;if(!*opened)return -1;}
+        if(!find_file(fs,n&0x7fff,&e) || !e.frames)return -1;
+        if(e.frames>(CORE_POOL_END-CORE_POOL_PCM)/2)return -2;
+        n=(2*e.frames+2047)&~2047u;at=CORE_POOL_PCM;
+        do{
+            again=0;if(n>CORE_POOL_END-at)return -2;
+            for(j=0;j<128;j++)if(bytes[j] && pointer[j]>=CORE_POOL_PCM){
+                end=pointer[j]+bytes[j];
+                if(at<end && pointer[j]<at+n){at=end;again=1;}
+            }
+        }while(again);
+        code[i]=state->wanted[i];pointer[i]=at;bytes[i]=n;
+    }
+    return 1;
+}
 static int flush(struct stream *s)
 {
     u32 i,n=(s->used+3)&~3u;if(!n)return 0;
@@ -253,8 +340,8 @@ static int sink(void *context,u32 at,u32 bytes,void *data)
 int core_pool_sync(void)
 {
     struct st_hzfs fs;struct st_sample_entry e;struct stream stream;
-    u32 i,j,n,frames,pointer,bytes,ordinal=0,ch;u8 payload[4];int opened=0,result=1;
-    if(!state || !state->boot_finished || state->fault || core_pool_busy || !*(volatile u32 *)0x43bdc824u)return -1;
+    u32 i,j,n,frames,pointer,bytes,ordinal=0,ch,first,checksum;u8 payload[4];int opened=0,result=1;
+    if(!state || !state->boot_finished || state->fault || core_pool_busy || !*(volatile u32 *)0x43bdd824u)return -1;
     if(state->query){volatile u32 *m=(void *)0x10000800u;
         for(i=0;i<200 && m[6]>>16!=state->query;i++)sleep();
         if(m[6]>>16!=state->query)return -1;state->query=0;core_pool_query_owner=0;}
@@ -265,15 +352,17 @@ int core_pool_sync(void)
      if(m[0]==0x48543133u && seq && (m[6]>>16)!=seq){core_pool_busy=0;return -1;}}
     core_pool_query_owner=0;
     core_pool_read(PROJECT,state->wanted);
+    result=preflight(&fs,&opened);if(result!=1)goto done;
     for(i=0;i<128;i++)if(state->wanted[i]!=state->code[i]){
         if(send(4,i,0,0,0)!=1){result=-1;goto done;}
         entry(i,0,0,1);state->code[i]=0;state->names[i][0]=0;
     }
     for(i=0;i<128;i++)if(state->wanted[i] && state->wanted[i]!=state->code[i]){
-        n=state->wanted[i];frames=pointer=0;ch=1;
+        n=state->wanted[i];frames=pointer=first=checksum=0;ch=1;
         if(n<=64){frames=state->stock_frames[n-1];pointer=state->stock_pointer[n-1];}
         else for(j=0;j<128;j++)if(state->code[j]==n && state->frames[j]){
             frames=state->frames[j];pointer=state->pointer[j];ch=state->channels[j];
+            first=state->first[j];checksum=state->file_crc[j];
             cp(state->names[i],state->names[j],17);break;}
         if(frames){
             wr(payload,pointer);if(send(5,i|(ch==2?0x100u:0),frames,payload,4)!=1){result=-1;goto done;}
@@ -289,13 +378,14 @@ int core_pool_sync(void)
             if(core_hzfs_get(&core_hzfs_native_io,n&0x7fff,sink,&stream)!=1 || flush(&stream) ||
                send(3,i|(ch==2?0x100u:0),frames,0,0)!=1){core_pool_wave_finish(0);result=-1;goto done;}
             core_pool_wave_finish(1);
+            first=e.first;checksum=e.crc;
             cp(state->names[i],e.name,16);state->names[i][16]=0;
         }
-        entry(i,frames,pointer,ch);state->code[i]=n;
+        entry(i,frames,pointer,ch);state->code[i]=n;state->first[i]=first;state->file_crc[i]=checksum;
     }
 done:if(opened)core_hzfs_close(&fs);account();core_pool_busy=0;return result;
 }
-int core_pool_cached_name(u32 code,char *out)
+CORE_HOT int core_pool_cached_name(u32 code,char *out)
 {
     u32 i;if(!state)return 0;
     for(i=0;i<128;i++)if(state->code[i]==code && state->names[i][0]){cp(out,state->names[i],17);return 1;}
@@ -310,34 +400,46 @@ void core_pool_after_load(u32 index,u32 ok)
     }
     core_pool_sync();
 }
-u32 core_pool_sample_source(u32 slot,const u8 **pcm,u32 *frames)
+CORE_HOT u32 core_pool_sample_source(u32 slot,const u8 **pcm,u32 *frames)
 {
     u32 code;*pcm=0;*frames=0;if(!state || slot>=128)return 0;
     code=state->code[slot];*frames=state->frames[slot];
-    if(code && code<=64)*pcm=STOCK_BLOB+state->stock_pointer[code-1]-STOCK_AUDIO;
     return *frames?code:0;
 }
 /* Some pool slot names this sample (stock 1..64 or HZ|id), loaded or not yet. */
-u32 core_pool_code_used(u32 code)
+CORE_HOT u32 core_pool_code_used(u32 code)
 {u32 i;if(state)for(i=0;i<128;i++)if(state->code[i]==code)return 1;return 0;}
-u32 core_pool_sample_channels(u32 slot)
+CORE_HOT u32 core_pool_sample_channels(u32 slot)
 {return state && slot<128 && state->frames[slot] && state->channels[slot]==2?2:1;}
-int core_pool_sample_name(u32 slot,char *out)
+/* UI-task lazy waveform source: code, frame pairs, channels, first sector, CRC.
+ * Never lend boot PCM, and never read a stock file changed since AUDIO load. */
+CORE_HOT int core_pool_wave_storage(u32 slot,u32 *out)
+{
+    u32 code;if(!state || boot || core_pool_busy || slot>=128 || !state->frames[slot])return 0;
+    code=state->code[slot];if(!code)return 0;
+    out[0]=code;out[1]=state->frames[slot];out[2]=state->channels[slot];
+    if(code<=64){if(state->stock_changed[code-1])return 0;out[3]=(code+7)<<10;out[4]=0;}
+    else {if(!state->first[slot])return 0;out[3]=state->first[slot]<<10;out[4]=state->file_crc[slot];}
+    return 1;
+}
+CORE_HOT void core_pool_stock_changed(u32 address)
+{if(state && address>=0x400000u && address<0x2400000u)state->stock_changed[(address-0x400000u)>>19]=1;}
+CORE_HOT int core_pool_sample_name(u32 slot,char *out)
 {
     u32 code,i;const u8 *pcm;u32 frames;void *fs;
     code=core_pool_sample_source(slot,&pcm,&frames);if(!code)return 0;
     if(code>64)return core_pool_cached_name(code,out);
-    fs=((void *(*)(void))0x4016f0ceu)();if((u32)fs<0x40000000u)return 0;
+    fs=((void *(*)(void))0x4016f292u)();if((u32)fs<0x40000000u)return 0;
     pcm=(const u8 *)fs+0x12e28+24*(code-1);
     for(i=0;i<16 && pcm[i];i++)out[i]=(char)pcm[i];out[i]=0;return i!=0;
 }
-const struct st_machine_cursor *core_pool_cursor(u32 track,u32 slot)
+CORE_HOT const struct st_machine_cursor *core_pool_cursor(u32 track,u32 slot)
 {
     const struct st_machine_cursor *c;if(!state || track>=8 || slot>=128)return 0;
     c=state->cursors+track;
     return c->frames==state->frames[slot] && c->pointer==state->pointer[slot]?c:0;
 }
-void core_pool_cursor_tick(void)
+CORE_HOT void core_pool_cursor_tick(void)
 {
     volatile u32 *m=(void *)0x10000800u;u32 i,sum,seq,values[32];
     if(!core_pool_ready())return;

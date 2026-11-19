@@ -42,7 +42,7 @@ unsigned int fw_parameter_selecting(void *model){(void)model;return 0;}
 static void init_view(u8 *view)
 {
     memset(view,0,0x110);
-    *(u32 *)view=0x401ca0dcu;*(u32 *)(view+0x88)=0x14;
+    *(u32 *)view=0x401ca37cu;*(u32 *)(view+0x88)=0x14;
     u32 *pages=malloc(8);assert(pages);pages[0]=pages[1]=6;
     *(u32 **)(view+0x7c)=pages;*(u32 **)(view+0x80)=*(u32 **)(view+0x84)=pages+2;
 }
@@ -92,7 +92,8 @@ static void check_destinations(void)
     struct st_smz_api api={2,&ui};
     ui.version=5;ui.host=&host;host.parameter_provider=core_parameter_provider_set;
     host.version=14;assert(dm_destination_init(&api));assert(!core_parameter_providers[0]);
-    host.version=15;assert(!dm_destination_init(&api));
+    host.version=15;assert(dm_destination_init(&api));assert(!core_parameter_providers[0]);
+    host.version=16;assert(!dm_destination_init(&api));
     core_parameter_provider_set(module_flags);
     vt[0x28/4]=(u32)model_get;
     for(unsigned round=0;round<3;round++)for(unsigned t=0;t<DM_TYPES;t++){

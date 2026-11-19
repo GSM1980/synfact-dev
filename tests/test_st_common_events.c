@@ -17,6 +17,8 @@ static int encoder(void *v,void *e,u32 id)
 {assert(v==view && e==node && id==0x21c);enc_calls++;return 1;}
 static int late(void *v,void *e,u32 id){(void)v;(void)e;(void)id;late_calls++;return 1;}
 static void key(void *v,void *e,u32 id){assert(v==view && e==node && !id);key_calls++;}
+static int key_pre(void *v,void *e,u32 id){assert(v==view && e==node && id==1);key_calls++;return 7;}
+static void key_post_other(void *v,void *e,u32 id){assert(v==view && e==node && id==2);key_calls++;}
 static void draw(void *v,void *b,u32 id){assert(v==view && b==ctrl && !id);draw_calls++;}
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
@@ -25,6 +27,7 @@ EV(track_send) EV(delay_in) EV(reverb_in)
 const u32 ev_native[]={0};
 const struct st_machine_ui_api core_machine_ui_api={4};
 void core_machine_input_reset(void){}
+void core_audio_idle_reset(void){}
 void *fw_malloc(u32 n)
 {allocations++;return VirtualAlloc((void *)0x47000000u,n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
@@ -62,11 +65,18 @@ int main(void)
     assert(!core_event_view(ST_EV_KEY,view,node,0) && key_calls==1);
     assert(!core_event_view(ST_EV_DRAW,view,ctrl,0) && draw_calls==1);
     assert(!core_event_view(ST_EV_TICK,view,ctrl,0));
+    {const u32 *saved=events[ST_EV_KEY].list;
+     const u32 phases[]={(u32)raw,(u32)key_post_other|VIEW_ENTRY,
+         (u32)key_pre|VIEW_ENTRY|1u,(u32)late|VIEW_ENTRY|1u,0};
+     events[ST_EV_KEY].list=phases;
+     assert(core_event_view(ST_EV_KEY,view,node,1)==7 && key_calls==2 && !raw_calls && !late_calls);
+     assert(!core_event_view(ST_EV_KEY,view,node,2) && key_calls==3 && !raw_calls && !late_calls);
+     events[ST_EV_KEY].list=saved;}
     /* Live native visible list, foreground gates, stock/unknown views,
      * stationary cursor, opaque overlay, deactivation and view removal. */
     static const u32 syn_pages[2]={6,6};
     *(const u32 **)(view+0x7c)=syn_pages;
-    *(u32 *)view=0x401c8d94u;*(u32 *)(view+0x2c)=1;
+    *(u32 *)view=0x401c9034u;*(u32 *)(view+0x2c)=1;
     *(u32 *)(view+0x88)=0x14;*(u32 *)(view+0x90)=1;
     *(void **)(ctrl+0x1c)=node;*(void **)node=ctrl+0x14;*(void **)(node+8)=view;
     core_machine_tick(ctrl);assert(idles==1 && paints==1);
@@ -83,7 +93,7 @@ int main(void)
     *(void **)overlay=node;core_machine_tick(ctrl);assert(idles==3); /* transparent overlay */
     core_machine_active=0;core_machine_tick(ctrl);assert(idles==3);core_machine_active=1;
     *(void **)(ctrl+0x1c)=ctrl+0x14;core_machine_tick(ctrl);assert(idles==3);
-    assert(allocations==1 && *(u32 *)view==0x401c8d94u); /* no clones/cached view */
+    assert(allocations==1 && *(u32 *)view==0x401c9034u); /* no clones/cached view */
     fw_free((void *)events[ST_EV_DRAW].list);
     puts("PASS: one collection per event; raw/view isolation; encoder consumption; key/draw contexts; tick visibility/lifetime and stationary-wave gates; no idle vptr edits");
     return 0;

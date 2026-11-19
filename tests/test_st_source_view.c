@@ -41,7 +41,7 @@ int main(void)
     u32 i,p,k,id,index,*layout,*old,old_end,old_page,old_alloc,old_resets;
     for(i=0;i<5;i++)u[i].draw=paint;
     core_machine_ui_definitions=u;assert(core_machine_bind(d,5));
-    *(u32 *)view=0x401ca0dc;*(u32 *)(view+0x88)=0x14;*(u32 *)(view+0x6c)=0x1234;
+    *(u32 *)view=0x401ca37c;*(u32 *)(view+0x88)=0x14;*(u32 *)(view+0x6c)=0x1234;
     *(u32 **)(view+0x7c)=malloc(4);**(u32 **)(view+0x7c)=6;
     *(u32 **)(view+0x80)=*(u32 **)(view+0x84)=*(u32 **)(view+0x7c)+1;
     for(i=0;i<5;i++){

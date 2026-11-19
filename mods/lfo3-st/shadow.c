@@ -76,7 +76,7 @@ static u32 container_at(u32 i)
     if(container_scope_callback)return ((u32 (*)(u32))container_scope_callback)(i);
     if(i<CONTAINERS)return containers[i];
     if(i==CONTAINERS)return image_container;
-    return i==CONTAINERS+1 ? 0x43c0cfc0u : 0x43ff35d0u;
+    return i==CONTAINERS+1 ? 0x43c0dfc0u : 0x43ff45d0u;
 }
 /* live shadows */
 rec_t kit_shadow[KITS][TRACKS] DATA = {{{{0}}}};
@@ -430,7 +430,7 @@ static u32 full_container(u32 a)
 {
     u32 i;
     /* Two native cache entries: 12-byte header + 0x3e6604-byte container. */
-    if (a && (a == image_container || a == 0x43c0cfc0u || a == 0x43ff35d0u))
+    if (a && (a == image_container || a == 0x43c0dfc0u || a == 0x43ff45d0u))
         return 1;
     for (i = 0; i < (container_scope_callback ? 0xffffffffu:CONTAINERS); i++) {
         u32 base=container_at(i);if(container_scope_callback && !base)break;
@@ -446,7 +446,7 @@ static u32 kit_slot(u32 a)
     if (a && (a == save_buffer || a == reload_buffer))
         return 1;
     for (i = 0; i < 2; i++) {
-        base = i ? 0x43ff35d0u : 0x43c0cfc0u;
+        base = i ? 0x43ff45d0u : 0x43c0dfc0u;
         off = a - (base + KIT_SLOTS);
         if (a >= base + KIT_SLOTS && off < KITS * KIT_SLOT && off % KIT_SLOT == 0)
             return 1;

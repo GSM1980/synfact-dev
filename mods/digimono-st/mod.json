@@ -1,5 +1,5 @@
 {
-  "id": "digimono-st", "version": "0.3.1", "device": "syntakt", "os": "1.41",
+  "id": "digimono-st", "version": "0.4.0", "device": "syntakt", "os": "1.42",
   "title": "SY MONOMACHINE", "category": "Synth",
   "author": "gdeo607 (Digi Mono), Inigo Hernandez (MONO2K), Synfact port", "license": "GPL-3.0-only AND MIT",
   "description": "One Monomachine-style machine: twelve TYPEs including SID-6581, FM+STAT, FM+PAR and FM+DYN from MONO2K. Eight SYN controls including TUNE; no MACRO. Clean-room engines on AUDIO CPU, not original Monomachine firmware.",

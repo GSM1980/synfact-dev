@@ -1,6 +1,6 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | Idle accounting from Synfact pool/system_info_main.s (digihealth, irpina).
-| OS 1.41 only. The scheduler has saved all registers before this site.
+| OS 1.42 only. The scheduler has saved all registers before this site.
 | D2-D4 are scratch here; A0 is the incoming TCB and must survive.
 | core_clock_snapshot(out[3]) -> {timer, idle, MAIN audio IRQ inside idle}.
 | UI/task context; a short SR critical section makes the snapshot consistent.
@@ -8,18 +8,18 @@
         .globl core_task_switch, core_clock_snapshot
 core_task_switch:
         move.l 0xfc07000c,%d2
-        move.l 0x454e39a8,%d3
+        move.l 0x454e49a8,%d3
         tst.l core_clock+8
         beq.s 3f
         move.l 8(%sp),%d4
-        cmpi.l #0x41bae25c,%d3
+        cmpi.l #0x41baf25c,%d3
         bne.s 1f
-        cmpi.l #0x40082816,%d4
+        cmpi.l #0x4008288e,%d4
         beq.s 2f
         bra.s 3f
-1:      cmpi.l #0x41baa208,%d3
+1:      cmpi.l #0x41bab208,%d3
         bne.s 3f
-        cmpi.l #0x4008229c,%d4
+        cmpi.l #0x40082314,%d4
         bne.s 3f
 2:      move.l %d2,%d4
         move.l core_clock,%d3
@@ -27,9 +27,9 @@ core_task_switch:
         add.l %d4,core_clock+4
 3:      clr.l core_clock+8
         move.l %a0,%d3
-        cmpi.l #0x41bae25c,%d3
+        cmpi.l #0x41baf25c,%d3
         beq.s 4f
-        cmpi.l #0x41baa208,%d3
+        cmpi.l #0x41bab208,%d3
         bne.s 5f
 4:      move.l %d2,core_clock
         moveq #1,%d0
@@ -66,6 +66,8 @@ core_render_in:
         move.l %d0,core_clock+12
         move.l core_clock+8,%d0
         move.l %d0,core_clock+20
+        jsr core_audio_idle_begin
+        bne.s 4f
         move.l %a2,-(%sp)
         .globl core_render_in_table
 core_render_in_table:
@@ -76,11 +78,12 @@ core_render_in_table:
         jsr (%a0)
         bra.s 1b
 2:      movea.l (%sp)+,%a2
+4:
         movem.l (%sp),%d0-%d1/%a0-%a1
         lea 16(%sp),%sp
         link %a6,#-164
         movem.l %d0-%a5,(%sp)
-        jmp 0x400a385e
+        jmp 0x400a38d6
 core_render_out:
         .globl core_render_out_table
 core_render_out_table:
@@ -96,7 +99,7 @@ core_render_out_table:
         sub.l core_clock+12,%d0
         add.l %d0,core_clock+16
 3:      movem.l -164(%a6),%d0-%a5
-        jmp 0x400a54a6
+        jmp 0x400a551e
 
         .section .bss
         .balign 4

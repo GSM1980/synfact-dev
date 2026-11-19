@@ -55,10 +55,23 @@ def check_bank_modules(report, raw, allowed):
     expected += [names[:names.index('fm_tone_module')+1]+['dm_destination_module']+
                  names[names.index('fm_tone_module')+1:] for names in list(expected) if 'fm_tone_module' in names]
     expected += [names+['sample_manager_module'] for names in list(expected)]
-    # optional modules after them, in bank order: the chorus, then modulation skip
+    # Optional modules in bank order: Chorus, Playhead, then Modulation Skip.
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
     expected += [names+['chorus_module'] for names in list(expected)]
+    expected += [names+['playhead_module'] for names in list(expected)]
+    # mix-fast-st and icache-lock-st (experimental, no UI): before modulation skip.
+    expected += [names+['mix_fast_module'] for names in list(expected)]
+    expected += [names+['icache_lock_module'] for names in list(expected)]
     expected += [names+['modulation_skip_module'] for names in list(expected)]
+    # Playhead 1.2's modal must receive global KEY/ENC before the other UI
+    # modules. Machine-owned view callbacks retain their original prefix.
+    prefix={'sp_sampler_input_module','st_stereo_module','fm_tone_module','dm_destination_module'}
+    for names in list(expected):
+        if 'playhead_module' not in names:continue
+        reordered=[name for name in names if name!='playhead_module']
+        at=next((i for i,name in enumerate(reordered) if name not in prefix),len(reordered))
+        reordered.insert(at,'playhead_module')
+        expected.append(reordered)
     assert modules in expected, ('unexpected module composition/order',modules)
     directory,count=struct.unpack_from('>II',raw,32)
     assert count==len(modules), 'module directory/report count differs'

@@ -2,10 +2,25 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {compact} from '../src/codec/compact.ts'
 import {depackSection} from '../src/codec/elz.ts'
-import {buildSyntakt} from '../src/syntakt-build.ts'
+import {buildSyntakt, assertSyntaktRuntimeResident} from '../src/syntakt-build.ts'
 import {sha} from '../src/bytes.ts'
 import {readFileSync} from 'node:fs'
 import {join} from 'node:path'
+
+test('Syntakt runtime startup entries survive native clearing and stay within resident bounds', () => {
+  const ddr=[0x46000000,0x46010000]
+  const names=['core_modules_bind','core_machine_load','core_native_initialize']
+  const valid=new Map(names.map((name,i)=>[`core:${name}`,ddr[0]+4*i]))
+  assert.doesNotThrow(()=>assertSyntaktRuntimeResident(valid,ddr))
+  for(const name of names) {
+    for(const address of [ddr[0],ddr[1]-1])
+      assert.doesNotThrow(()=>assertSyntaktRuntimeResident(new Map(valid).set(`core:${name}`,address),ddr))
+    for(const address of [0,ddr[0]-1,ddr[1],0x40347bc2,NaN,Infinity])
+      assert.throws(()=>assertSyntaktRuntimeResident(new Map(valid).set(`core:${name}`,address),ddr),/outside resident core RAM/)
+    const missing=new Map(valid);missing.delete(`core:${name}`)
+    assert.throws(()=>assertSyntaktRuntimeResident(missing,ddr),/outside resident core RAM/)
+  }
+})
 
 test('compact streams round-trip different data and compression levels', () => {
   let seed=123456789
@@ -20,7 +35,20 @@ test('Syntakt builder rejects unpinned and malformed manifests before fetching',
   const data=new TextEncoder().encode('{}'), fetch=async()=>{throw Error('must not fetch')}
   await assert.rejects(buildSyntakt(new Uint8Array(),data,'0'.repeat(64),fetch),/manifest hash mismatch/)
   await assert.rejects(buildSyntakt(new Uint8Array(),data,sha(data),fetch),/Invalid Syntakt manifest/)
+  const pin=(file:string)=>({file,sha256:'0'.repeat(64)})
+  const old=new TextEncoder().encode(JSON.stringify({schema:1,device:'syntakt',os:'1.41',meter:true,
+    mods:[pin('core.elemod'),pin('machines.elemod')],audio:pin('audio.bin'),upper:pin('upper.bin'),symbols:{},
+    mainSha256:'0'.repeat(64),audioSha256:'0'.repeat(64),outputSha256:'0'.repeat(64)}))
+  await assert.rejects(buildSyntakt(new Uint8Array(),old,sha(old),fetch),/Invalid Syntakt manifest/)
 })
+
+test('OS 1.42 core package refuses official OS 1.41 before fetching artifacts',
+  {skip: !process.env.SYNTAKT_PREVIOUS_STOCK || !process.env.SYNTAKT_ARTIFACTS}, async () => {
+    const stock=readFileSync(process.env.SYNTAKT_PREVIOUS_STOCK!)
+    const manifest=readFileSync(join(process.env.SYNTAKT_ARTIFACTS!,'syntakt.json'))
+    await assert.rejects(buildSyntakt(stock,manifest,sha(manifest),async()=>{throw Error('must not fetch')}),
+      /Requires official Syntakt OS 1.42/)
+  })
 
 test('Syntakt core matches an independent desktop reference',
   {skip: !process.env.SYNTAKT_STOCK || !process.env.SYNTAKT_ARTIFACTS || !process.env.SYNTAKT_REFERENCE}, async () => {

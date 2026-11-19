@@ -10,8 +10,8 @@
 #define KIT 0x1618u
 #define SOUND 0x123u
 #define RECORD 0x107u
-#define KITS 0x41ad5134u
-#define POOL 0x41b93ec9u
+#define KITS 0x41ad6134u
+#define POOL 0x41b94ec9u
 #define SLOT 0x5c00u
 #define CARRIER 0x5ac0u
 #define CARRIER_BYTES 320u
@@ -34,7 +34,9 @@ static arp_u32 writer_mutex[4] DATA={0};
 static void enter(void){((void (*)(void *))0x40001980u)(writer_mutex);}
 static void leave(void){((void (*)(void *))0x40001aa2u)(writer_mutex);}
 arp_u32 arp_persist_denied DATA=0;
-static const struct arp_settings defaults={0,9,1,30,15,0,0xffff,{0}};
+static const struct arp_settings defaults __attribute__((aligned(4)))={0,9,1,30,15,0,0xffff,{0}};
+_Static_assert(sizeof(struct arp_settings)==24,"ARP settings word comparison");
+_Static_assert(__builtin_offsetof(struct cell,p)%4==0 && sizeof(struct cell)%4==0,"ARP bank alignment");
 static void copy_settings(struct arp_settings *d,const struct arp_settings *s)
 {unsigned int i;for(i=0;i<sizeof(*s);i++)((volatile unsigned char *)d)[i]=((const unsigned char *)s)[i];}
 static arp_u32 hash(const unsigned char *p,unsigned int n)
@@ -234,7 +236,7 @@ static int kit_index(arp_u32 record,arp_u32 container,unsigned int *index)
 static struct kit_assoc *kit_remember(arp_u32 record)
 {
     unsigned int i;for(i=0;i<16;i++)if(encoded_kit[i].address==record)break;
-    if(i==16)i=record==0x405ff554u?0:record==0x405fd354u?1:2+(next_kit++%14);
+    if(i==16)i=record==0x40600554u?0:record==0x405fe354u?1:2+(next_kit++%14);
     encoded_kit[i].address=record;
     return &encoded_kit[i];
 }

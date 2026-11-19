@@ -42,7 +42,7 @@ core_machine_kit_owner:
         cmpi.l #0x1f9,%d0
         bcs.w core_stock_kit_owner
         move.l %d0,-(%sp)
-        jsr 0x400a5c6c
+        jsr 0x400a5ce4
         addq.l #4,%sp
         subi.l #0x31,%d0
         moveq #5,%d1
@@ -53,4 +53,4 @@ core_machine_kit_owner:
         rts
 core_stock_kit_owner:
         .byte 0x22,0x2f,0x00,0x04,0x0c,0x81,0x00,0x00,0x01,0xf9
-        jmp 0x400a6204
+        jmp 0x400a627c

@@ -5,9 +5,10 @@
 #define CORE_SMZ_ABI 0x454c0001u
 /* Bump for every core change that can alter a bank's resident contract.
  * SAFE feature 16 stores this exact ID in the former global-init word. */
-#define CORE_SMZ_CONTRACT 0x53594603u
+#define CORE_SMZ_CONTRACT 0x53594606u
 #define CORE_SMZ_AUDIO 0x4204f750u
-#define CORE_SMZ_AUDIO_MAX (0x42100000u-CORE_SMZ_AUDIO)
+/* Core 2.2: 4 MiB, sample store pages 4000..47ff (docs/AUDIO-MEMORY-MAP.md). */
+#define CORE_SMZ_AUDIO_MAX 0x400000u
 #define CORE_SMZ_PAGE 2048u
 #define CORE_SMZ_MACHINES 16u
 #define CORE_SMZ_PARAMS 32u

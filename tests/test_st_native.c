@@ -5,13 +5,14 @@
 #include <syntakt/native.h>
 #include <syntakt/host.h>
 #include <stddef.h>
-/* Host API 12 appends core_info (92) and bank_info (96); earlier offsets are unchanged. */
-typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==100 &&
+/* API 12 core_info/bank_info retain 92/96; API 15 appends audio_idle at 100. */
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==104 &&
     offsetof(struct st_machine_host_api,native_query)==84 &&
     offsetof(struct st_machine_host_api,native_dispatch)==84 &&
     offsetof(struct st_machine_host_api,pool)==88 &&
     offsetof(struct st_machine_host_api,core_info)==92 &&
-    offsetof(struct st_machine_host_api,bank_info)==96 ? 1 : -1];
+    offsetof(struct st_machine_host_api,bank_info)==96 &&
+    offsetof(struct st_machine_host_api,audio_idle)==100 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
@@ -36,6 +37,7 @@ void core_event_publish(const u32 *a)
     assert(native_calls==2);native_calls=0;publications++;
 }
 void core_machine_input_reset(void){}
+void core_audio_idle_reset(void){}
 #include "../mods/core-st/modules.c"
 u32 core_stock_trig(u32 a,u32 b,u32 c,u32 d,u32 e,u32 f){replays++;return a+b+c+d+e+f;}
 u32 core_stock_header_load(u32 a,u32 b){replays++;return a^b;}
@@ -44,13 +46,24 @@ const u32 *core_stock_page_layout(u32 page){return (const u32 *)(page+4);}
 static u32 native_timer;
 #define CORE_NATIVE_TIMER() (native_timer+=3)
 #include "../mods/core-st/native.c"
-static int interest_open(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(i<ST_NATIVE_OPERATION_COUNT?core_native_interest[i]!=1:i==ST_NATIVE_OPERATION_COUNT+1 && !core_native_interest[i])return 0;return 1;}
+static int interest_open(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(i<ST_NATIVE_OPERATION_COUNT?!core_native_interest[i]:i==ST_NATIVE_OPERATION_COUNT+1 && !core_native_interest[i])return 0;return 1;}
 static int interest_closed(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(core_native_interest[i])return 0;return 1;}
 static int initialize(const struct st_smz_api *a){assert(a->version==3 && a->ui->version==6);return 0;}
 static int first(u32 op,const u32 *a,u32 *out){(void)op;(void)a;(void)out;native_calls++;return 0;}
 static int second(u32 op,const u32 *a,u32 *out)
 {native_calls++;if(op==ST_NATIVE_SOUND_ALLOWED){assert(a[0]==2);*out=0;return 1;}
  if(op==ST_NATIVE_NOTE_ACCEPT){*out=note_consumed;return 1;}return 0;}
+static int legacy(u32 op,const u32 *a,u32 *out)
+{(void)op;(void)a;(void)out;native_calls++;return 0;}
+static u32 change_routes;
+static int changing(u32 op,const u32 *a,u32 *out)
+{
+    (void)op;(void)a;(void)out;native_calls++;
+    if(change_routes){change_routes=0;
+        core_native_interest_set((void (*)(void))first,0);
+        core_native_interest_set((void (*)(void))second,0);}
+    return 0;
+}
 static int before(void *v,void *e,u32 phase){assert(v==(void *)1 && e==(void *)2 && phase==1);pre++;return 1;}
 static void after(void *v,void *e,u32 phase){assert(v==(void *)1 && e==(void *)2 && !phase);post++;}
 int main(void)
@@ -62,7 +75,8 @@ int main(void)
         {ST_EV_NATIVE,(void (*)(void))second}};
     const struct st_smz_module m={"NATIVE",initialize,subs,4};
     u32 a[]={1,2,3,4,5,6},v;
-    assert(interest_open());core_native_initialize();assert(interest_closed());   /* fail open, then none */
+    assert(interest_open() && core_native_interest[ST_NATIVE_LFO]==128);
+    core_native_initialize();assert(interest_closed());   /* fail open, then none */
     assert(core_native(ST_NATIVE_TRIG,a)==21 && replays==1);
     assert(core_native(ST_NATIVE_HEADER_LOAD,a)==3 && replays==2);
     assert(core_native(ST_NATIVE_MACHINE_ALLOWED,a)==1);
@@ -82,8 +96,8 @@ int main(void)
     core_native_interest_set((void (*)(void))first,1u<<ST_NATIVE_TRIG);
     assert(interest_open());                                                  /* second still wants all */
     core_native_interest_set((void (*)(void))second,1u<<ST_NATIVE_SOUND_ALLOWED);
-    for(v=0;v<4*NATIVE_WORDS;v++)assert(core_native_interest[v]==(v==ST_NATIVE_TRIG || v==ST_NATIVE_SOUND_ALLOWED));
-    native_calls=0;a[0]=2;assert(!core_native(ST_NATIVE_SOUND_ALLOWED,a) && native_calls==2);
+    for(v=0;v<4*NATIVE_WORDS;v++)assert(core_native_interest[v]==(v==ST_NATIVE_TRIG?1:v==ST_NATIVE_SOUND_ALLOWED?2:0));
+    native_calls=0;a[0]=2;assert(!core_native(ST_NATIVE_SOUND_ALLOWED,a) && native_calls==1);
     native_calls=0;a[0]=1;a[1]=2;assert(core_native(ST_NATIVE_HEADER_LOAD,a)==(1u^2u) && !native_calls && replays==4); /* stock replay */
     assert(core_native(ST_NATIVE_MACHINE_ALLOWED,a)==1 && !native_calls);
     /* TYPE track filter: bits 24..31 per subscriber, 0/0xff = every cursor. */
@@ -115,5 +129,29 @@ int main(void)
     assert(core_native_interest[20] && !core_native_interest[18] && !core_native_interest[19]);
     note_consumed=1;assert(core_native(ST_NATIVE_NOTE_ACCEPT,a)==1);
     note_consumed=0;assert(!core_native(ST_NATIVE_NOTE_ACCEPT,a));
+    {
+        u32 wide[41],i;const u32 sparse[]={(u32)first,(u32)second,(u32)first,0};
+        events[ST_EV_NATIVE].list=sparse;core_native_initialize();
+        assert(core_native_interest[ST_NATIVE_TRIG]==5 && core_native_interest[ST_NATIVE_NOTE_ACCEPT]==2);
+        native_calls=0;assert(!core_event_native(ST_NATIVE_TRIG,a,&v) && native_calls==2);
+        note_consumed=1;native_calls=0;
+        assert(core_event_native(ST_NATIVE_NOTE_ACCEPT,a,&v) && v==1 && native_calls==1);
+        /* Unknown callbacks and long collections preserve fail-open dispatch. */
+        for(i=0;i<40;i++)wide[i]=(u32)legacy;wide[40]=0;
+        events[ST_EV_NATIVE].list=wide;core_native_initialize();
+        assert(core_native_interest[ST_NATIVE_LFO]==128);
+        native_calls=0;assert(!core_event_native(ST_NATIVE_LFO,a,&v) && native_calls==40);
+        {const u32 nested[]={(u32)changing,(u32)first,(u32)second,0};
+         events[ST_EV_NATIVE].list=nested;
+         core_native_interest_set((void (*)(void))changing,1u<<ST_NATIVE_PUBLISH);
+         core_native_interest_set((void (*)(void))first,1u<<ST_NATIVE_PUBLISH);
+         core_native_interest_set((void (*)(void))second,1u<<ST_NATIVE_PUBLISH);
+         assert(core_native_interest[ST_NATIVE_PUBLISH]==128);
+         change_routes=1;native_calls=0;
+         assert(!core_event_native(ST_NATIVE_PUBLISH,a,&v) && native_calls==3);
+         assert(core_native_interest[ST_NATIVE_PUBLISH]==1);
+         native_calls=0;assert(!core_event_native(ST_NATIVE_PUBLISH,a,&v) && native_calls==1);}
+        events[ST_EV_NATIVE].list=ev_native;core_native_initialize();
+    }
     puts("PASS: per-operation interest (fail open, atomic with the list, union, stock replay); shared native list order/consume/stock fallback; API 3 negotiation; consuming pre-KEY isolated from legacy post-KEY; no additional input registry");return 0;
 }

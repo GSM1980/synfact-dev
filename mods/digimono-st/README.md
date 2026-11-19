@@ -1,4 +1,4 @@
-# SY MONOMACHINE 0.3.1
+# SY MONOMACHINE 0.4.0
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
@@ -13,7 +13,14 @@ a parameter-locked trigger. TUNE and the seven values remain shared across
 types: changing TYPE never resets a Sound or its locks. Init Sound is SAW.
 Save/load, locks, undo, modulation and page navigation use the existing core.
 
-**Install core 1.8.2 with this bank.** Core 1.8.1 fixes the bind-time layout snapshot:
+**Requires OS 1.42 and this branch's core 2.3.0 with host API 16.**
+Version 0.4.0 integrates remote main's OS/memory contract and preserves the
+0.3.1 AUDIO generators. Rebuild the bank and core together; older 1.41 banks
+are not compatible with the current core contract. The stopped-transport
+preview service remains at its API 15 ABI offset; destination query 32 uses
+API 16 so an unextended main core correctly refuses the destination module.
+
+The original core 1.8.1 fix removes the bind-time layout snapshot:
 SAW's empty E now becomes PULSE's SUB2, ENS/CHORDS' WAVE or VO's VOIC when TYPE
 changes. Unused slots disappear completely, including their dial and edit ID.
 Core 1.8.0 leaves SAW's initial seven-position layout fixed even though labels
@@ -24,7 +31,7 @@ Sound-modulation destination lists. TUNE, TYPE and the common targets stay
 available. The list reads TYPE from its own Sound model, so changing tracks
 without opening SYN first works too. Saved destinations, parameter IDs and
 runtime capability flags are unchanged; a hidden route is not rewritten.
-The bank's UI-only `MONO DESTINATIONS` module requires host API 15 and refuses
+The bank's UI-only `MONO DESTINATIONS` module requires host API 16 and refuses
 an older core. It adds no event subscription or AUDIO work.
 
 | TYPE | A | B | C | D | E | F | G | H |

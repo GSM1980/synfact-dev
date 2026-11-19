@@ -1,12 +1,12 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| Optional machine-file infrastructure. Application hooks only, OS 1.41.
+| Optional machine-file infrastructure. Application hooks only, OS 1.42.
         .section .run,"ax"
         .globl core_machine_boot,core_machine_flush,core_machine_page_count
         .globl core_machine_page_map,core_machine_sound_type,core_machine_copy_page
         .globl core_machine_menu_alloc,core_machine_menu_capacity,core_machine_menu_bound
 core_machine_boot:
         jsr core_machine_load
-        jmp 0x400bd6d6              | original project/state load, before samples
+        jmp 0x400bd74e              | original project/state load, before samples
 core_machine_flush:
         move.l 4(%sp),%d0
         move.l %d0,%d1
@@ -27,7 +27,7 @@ core_machine_flush:
 core_machine_page_count:
         move.l core_machine_pages,%d0
         beq.s 1f
-        move.l 0x4d84f2c1,%d2
+        move.l core_pool_stock_bytes,%d2
         addi.l #2047,%d2
         lsr.l #8,%d2
         lsr.l #3,%d2
@@ -35,13 +35,13 @@ core_machine_page_count:
         lsl.l #8,%d2
         lsl.l #3,%d2
         rts
-1:      move.l 0x4d84f2c1,%d2
+1:      move.l core_pool_stock_bytes,%d2
         rts
 core_machine_page_map:
         move.l core_machine_pages,%d0
         beq.s 2f
-        move.l 0x41bbe424,%d0
-        move.l 0x4d84f2c1,%d1
+        move.l 0x41bbf424,%d0
+        move.l core_pool_stock_bytes,%d1
         addi.l #2047,%d1
         lsr.l #8,%d1
         lsr.l #3,%d1
@@ -57,9 +57,12 @@ core_machine_page_map:
         subi.l #0x4d84f2c5,%d0
         rts
 1:      moveq #11,%d1
-2:      move.l 0x41bbe424,%d0
+2:      move.l 0x41bbf424,%d0
         move.w %d0,0x1000000c
-        lsl.l %d1,%d0
+        move.l %d0,-(%sp)
+        jsr core_pool_stock_page
+        addq.l #4,%sp
+        subi.l #0x4d84f2c5,%d0
         rts
 core_machine_copy_page:
         movea.l 4(%sp),%a0
@@ -103,7 +106,7 @@ core_machine_menu_alloc:
         move.l #320,%d0
         move.l %d0,4(%sp)
 1:      move.l 4(%sp),-(%sp)
-        jsr 0x40103788
+        jsr 0x4010394c
         addq.l #4,%sp
         rts
 core_machine_menu_capacity:
@@ -181,5 +184,5 @@ core_machine_frame_tail:
         bra.s 2f
 1:      clr.b 0x800021a9
 2:
-        lea 0x402d7010,%a0           | exact displaced native clock-tail pointer
+        lea 0x402d7360,%a0           | exact displaced native clock-tail pointer
         rts

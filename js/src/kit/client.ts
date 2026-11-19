@@ -66,7 +66,7 @@ export function createBuilder(options: BuilderOptions) {
     /** What is wrong with an OS version field, if anything, and a file name for the build. */
     version(version: string, enabled: readonly string[]) { return call<VersionField>('version', { version, enabled }) },
     build(enabled: readonly string[], version: string, name: string, log?: (line: string) => void) { return call<BuildResult>('build', { enabled, version, name }, undefined, log) },
-    /** Experimental Syntakt 1.41 core build from a separately pinned artifact manifest. */
+    /** Experimental Syntakt 1.42 core build from a separately pinned artifact manifest. */
     async buildSyntakt(file: Blob, manifest: string, sha256: string, log?: (line: string) => void) {
       return call<{data:ArrayBuffer;sha256:string;bytes:number;coreVersion:string;facts:unknown}>(
         'build_syntakt', {manifest,sha256}, await file.arrayBuffer(), log)

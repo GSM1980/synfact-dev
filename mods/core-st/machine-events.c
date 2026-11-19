@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Machine background UI work subscribes to the existing compose tick.
  * Traverse the live visible-view list; retain no pointers and change no vptr.
- * The five native parameter-interface tables are OS 1.41 identities, not
+ * The five native parameter-interface tables are OS 1.42 identities, not
  * machine identities. Unknown native views are never read as parameter views.
  */
 #include "machines.h"

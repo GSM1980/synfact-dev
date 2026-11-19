@@ -19,6 +19,7 @@ static const char *error_message;
 u32 fw_mmc_ready[]={1},fw_mmc_sectors[]={0x3a4000},fw_empty_string[]={0};
 void core_fn_manager(void){}
 void core_high_validate(void){}
+void core_pool_stock_changed(u32 address){assert(address>=0x400000u && address<0x2400000u);}
 static int disk_io(u32 lba,u32 n,void *p,int writing)
 {
     u32 k=lba>>10,off=(lba&1023)*512;

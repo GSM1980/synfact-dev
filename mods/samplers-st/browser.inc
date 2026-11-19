@@ -7,11 +7,11 @@
 #define SP_BROWSER_TYPE ((u32 (*)(void *))0x40030622u)
 #define SP_BROWSER_TRACK ((u32 (*)(void *))0x4001ff74u)
 #define SP_BROWSER_GET ((u32 (*)(void *,u32,u8 *))0x40039160u)
-#define SP_BROWSER_TRIG ((u32 (*)(void *))0x400c2d2au)
-#define SP_BROWSER_RECORD ((u32 (*)(void *))0x400c34d6u)
-#define SP_BROWSER_INVALIDATE ((void (*)(void *))0x400ffc5eu)
-#define SP_BROWSER_FONT ((void *(*)(void *))0x400f92b4u)
-#define SP_BROWSER_TEXT ((void (*)(void *,void *,int,int,u32,const char *))0x400f89a4u)
+#define SP_BROWSER_TRIG ((u32 (*)(void *))0x400c2dd6u)
+#define SP_BROWSER_RECORD ((u32 (*)(void *))0x400c3582u)
+#define SP_BROWSER_INVALIDATE ((void (*)(void *))0x400ffe22u)
+#define SP_BROWSER_FONT ((void *(*)(void *))0x400f9478u)
+#define SP_BROWSER_TEXT ((void (*)(void *,void *,int,int,u32,const char *))0x400f8b68u)
 #endif
 #define SP_BROWSER_TICKS 240u
 #define SP_BROWSER_ROWS 7u

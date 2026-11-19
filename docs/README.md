@@ -1,9 +1,15 @@
 # Synfact docs
 
+Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
+See [OS142-PORT.md](OS142-PORT.md).
+
 Everything past the [front page](../README.md). The pages are plain Markdown
 and change with the code, so a commit's docs match its code.
 
 ## Building and testing
+
+- **[Consolidated MAIN optimization release](MAIN-OPTIMIZATION-RELEASE.md)**:
+  released versions, development-label mapping and retained behavior.
 
 - **[Setting up a workstation](SETUP.md)**: every tool, where to get it, how
   to install it, the environment variables, and the steps to a pull request.
@@ -11,6 +17,22 @@ and change with the code, so a commit's docs match its code.
 - **[Syntakt builds](SYNTAKT-BUILD.md)**: the flags and the exact commands for
   the core SYX, the SMZ4 bank, the regressions and the emulator checks.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
+- **[LFO3 in module-only banks](LFO3-MODULE-ONLY-INVESTIGATION.md)**: the zero-machine
+  registry bug, core 2.1.2 correction and offline reproduction.
+- **[Project operations and MAIN CPU](PROJECT-OPERATIONS-CPU.md)**: stopped
+  transport and reduced MAIN mixing during project commands, independently of
+  the recorder, with automatic restoration when the worker returns.
+- **[Native sample/core overlap](STOCK-SAMPLE-CORE-OVERLAP.md)**: valid stock
+  samples, the original MAIN collision and the streamed 64-slot fix.
+- **[Unused-module MAIN work](IDLE-MAIN-PERFORMANCE.md)**: idle dispatch,
+  stock transport, LFO3/ARP/stereo improvements and hardware comparison limits.
+- **[Modulation Skip MAIN](MODULATION-SKIP-MAIN-PERFORMANCE.md)**: decision,
+  saturation and scan optimization with exact stock/output/cadence comparisons.
+- **[Core MAIN](CORE-MAIN-PERFORMANCE.md)**: native-service dispatch and mixer
+  capture, complete-call counts, legacy profiling and cross-core checks.
+- **[Stock MAIN CPU profile](STOCK-MAIN-CPU-PROFILE.md)**: where stock OS 1.42
+  spends MAIN (half of it in instruction-cache misses) and what rewriting or
+  cache locking could recover.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
 - **[Safe core/SMZ4 startup proposal](SAFE-BOOT-SMZ4-07-16.md)**: compatibility
@@ -20,6 +42,9 @@ and change with the code, so a commit's docs match its code.
 
 - **[Machine reference](MACHINE-REFERENCE.md)**: the limits, the control and page
   mapping, the IDs, the menu and aliases, the audio voice and its calls.
+- **[The AUDIO CPU's memory](AUDIO-MEMORY-MAP.md)**: what the stock AUDIO image
+  puts where, traced from its code, and core 2.2's layout: the 4 MiB bank
+  window, the pool above AUDIO's own page, the stack's 64 KiB.
 - **[Writing a machine or a module](MACHINES.md)**: from an empty folder to
   a machine in the SMZ4 bank that is ready for a pull request. The descriptor,
   the sound contract, `mod.json`, the headers, and a checklist. Start here for
@@ -60,3 +85,6 @@ and change with the code, so a commit's docs match its code.
   checks, the linker and the build, with no dependencies and no Python. For
   the same stock file and mods it writes the same files as the Python, byte
   for byte. It is GPL-3.0-or-later.
+
+- **[Recorder post-take audio pause](RECORDER-AUDIO-PAUSE.md)**: reduced audio, preview and manual STOP/reentry.
+- **[Recorder capture CPU](RECORDER-CAPTURE-CPU.md)**: stereo capture assembly, integer EMAC and measured mono/stereo callbacks.

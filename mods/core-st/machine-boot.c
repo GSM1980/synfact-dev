@@ -7,10 +7,12 @@
  */
 #include "machines.h"
 #include "boot-preimages.h"
+#include "cold.h"
 typedef st_u32 u32;typedef core_u8 u8;
 extern int fw_mmc_read(u32,u32,void *),fw_mmc_write(u32,u32,const void *);
 extern u32 fw_mmc_ready[],fw_mmc_sectors[];
 extern void *fw_malloc(u32);extern void fw_free(void *);
+extern void *fw_memcpy(void *,const void *,u32);
 extern void core_machine_flush(void *,u32);
 extern const u32 core_machine_audio_abi[];
 extern int core_pool_available(void);
@@ -27,6 +29,11 @@ u32 core_machine_paints; /* Reserved diagnostic: silent loading never draws. */
 u32 core_machine_pages;
 const u8 *core_machine_audio;
 static void *retained;
+u8 *core_machine_transfer;  /* the whole file, AUDIO section included, until the sender is done */
+/* TASK context, after the sender's last memcpy into the FPGA mailbox: no page
+ * is read again (the native sender never returns to its page state). */
+void core_machine_audio_release(void)
+{u8 *p=core_machine_transfer;core_machine_transfer=0;if(p){core_machine_audio=0;fw_free(p);}}
 /* Host API 12: the loaded bank's mod-info directory, null when none is published. */
 const unsigned char *core_bank_info;
 struct disk_reader {u32 base,sector,valid;u8 cache[4096] __attribute__((aligned(16)));};
@@ -47,7 +54,7 @@ static int disk_read(void *context,u32 at,void *out,u32 n)
 /* The first native UI message changes the title; subsequent messages update
  * the original bar. Report percentage changes even for batches <128 pages. */
 #ifndef CORE_SAMPLE_NOTIFY
-#define CORE_SAMPLE_NOTIFY ((void (*)(u32))0x4008297cu)
+#define CORE_SAMPLE_NOTIFY ((void (*)(u32))0x400829f4u)
 #endif
 void core_sample_progress(u32 page,u32 total)
 {
@@ -125,6 +132,15 @@ preflight:
     }
     if(trial && !core_mods_transition_io(&storage,chosen.slot,
                  CORE_MODS_CANDIDATE,CORE_MODS_TRYING))goto reject;
+    /* Only the boot page sender reads the AUDIO section. MAIN's part (envelope,
+     * relocations, image: everything before it) moves to a block of its own,
+     * copied from the validated bytes before any relocation; the whole file
+     * goes back to the heap once the last page is in the FPGA mailbox
+     * (core_machine_audio_release). Without that block the file stays whole,
+     * as before 2.1.1. The pointer is read only once core_machine_pages is set. */
+    core_machine_audio=file+again.audio;
+    {u8 *own=fw_malloc(again.audio);
+     if((u32)own>=0x40000000u){fw_memcpy(own,file,again.audio);core_machine_transfer=file;file=own;}}
     core_smz_relocate(file,&again);
     core_machine_flush(file+again.image,again.bytes);
     if(again.ui!=CORE_SMZ_NONE)core_machine_ui_definitions=(void *)(file+again.image+again.ui);
@@ -137,7 +153,6 @@ preflight:
     if(again.nmods && !core_modules_bind((void *)(file+again.image+again.modules),again.nmods)){
         core_machine_active=0;retained=file;fw_free(guard);return;}
     retained=file;core_bank_info=again.info==CORE_SMZ_NONE?0:file+again.image+again.info;
-    core_machine_audio=file+again.audio;
     core_machine_pages=again.count?(again.audio_bytes+2047)>>11:0;
     core_machine_status=0;
     if(trial){core_machine_trial=1;core_machine_trial_slot=chosen.slot;

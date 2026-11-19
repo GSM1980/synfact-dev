@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| Syntakt 1.41: generic machine queries. C convention at function entries.
+| Syntakt 1.42: generic machine queries. C convention at function entries.
 | No machine-specific code is linked here; no SMZ means stock replays.
         .section .run,"ax"
 | A native lookup never needs a C machine query. Keep the exact stock replay
@@ -50,7 +50,7 @@ core_machine_name_full:
         lea 12(%sp),%sp
 core_stock_name_full:
         .byte 0x72,0x2c,0x20,0x2f,0x00,0x04,0xb2,0x80
-        jmp 0x400a6694
+        jmp 0x400a670c
         .globl core_machine_name_short,core_stock_name_short
 core_machine_name_short:
         STOCK_FIRST name_short,4,64
@@ -76,7 +76,7 @@ core_machine_name_short:
         lea 12(%sp),%sp
 core_stock_name_short:
         .byte 0x72,0x2c,0x20,0x2f,0x00,0x04,0xb2,0x80
-        jmp 0x400a66b4
+        jmp 0x400a672c
         .globl core_machine_group_name,core_stock_group_name
 core_machine_group_name:
         STOCK_FIRST group_name,4,64
@@ -102,7 +102,7 @@ core_machine_group_name:
         lea 12(%sp),%sp
 core_stock_group_name:
         .byte 0x72,0x2c,0x20,0x2f,0x00,0x04,0xb2,0x80
-        jmp 0x400a66d4
+        jmp 0x400a674c
         .globl core_machine_menu_category,core_stock_menu_category
 core_machine_menu_category:
         STOCK_FIRST menu_category,4,64
@@ -154,7 +154,7 @@ core_machine_availability:
         lea 12(%sp),%sp
 core_stock_availability:
         .byte 0x2f,0x02,0x74,0x2c,0x20,0x2f,0x00,0x08
-        jmp 0x400a6482
+        jmp 0x400a64fa
         .globl core_machine_digital_kind,core_stock_digital_kind
 core_machine_digital_kind:
         STOCK_FIRST digital_kind,4,64
@@ -180,7 +180,7 @@ core_machine_digital_kind:
         lea 12(%sp),%sp
 core_stock_digital_kind:
         .byte 0x72,0x23,0x20,0x2f,0x00,0x04,0xb2,0x80
-        jmp 0x400a63cc
+        jmp 0x400a6444
         .globl core_machine_ui_to_engine,core_stock_ui_to_engine
 core_machine_ui_to_engine:
         STOCK_FIRST ui_to_engine,4,0x2e0
@@ -206,7 +206,7 @@ core_machine_ui_to_engine:
         lea 12(%sp),%sp
 core_stock_ui_to_engine:
         .byte 0x20,0x2f,0x00,0x04,0x0c,0x80,0x00,0x00,0x02,0xdf
-        jmp 0x400a6358
+        jmp 0x400a63d0
         .globl core_machine_local_slot,core_stock_local_slot
 core_machine_local_slot:
         STOCK_FIRST local_slot,4,0x1f9
@@ -270,7 +270,7 @@ core_machine_local_slot:
         lea 12(%sp),%sp
 core_stock_local_slot:
         .byte 0x22,0x2f,0x00,0x04,0x0c,0x81,0x00,0x00,0x01,0xf9
-        jmp 0x400a5c54
+        jmp 0x400a5ccc
         .globl core_machine_owner,core_stock_owner
 core_machine_owner:
         STOCK_FIRST owner,4,0x1f9
@@ -296,7 +296,7 @@ core_machine_owner:
         lea 12(%sp),%sp
 core_stock_owner:
         .byte 0x22,0x2f,0x00,0x04,0x0c,0x81,0x00,0x00,0x01,0xf9
-        jmp 0x400a5c76
+        jmp 0x400a5cee
         .globl core_machine_engine_to_ui,core_stock_engine_to_ui
 core_machine_engine_to_ui:
         STOCK_FIRST engine_to_ui,4,0x1f9
@@ -322,7 +322,7 @@ core_machine_engine_to_ui:
         lea 12(%sp),%sp
 core_stock_engine_to_ui:
         .byte 0x20,0x2f,0x00,0x04,0x0c,0x80,0x00,0x00,0x01,0xf8
-        jmp 0x400a6374
+        jmp 0x400a63ec
         .globl core_machine_slot_to_engine,core_stock_slot_to_engine
 core_machine_slot_to_engine:
         STOCK_FIRST slot_to_engine,8,64
@@ -362,7 +362,7 @@ core_machine_slot_to_engine:
         lea 12(%sp),%sp
 core_stock_slot_to_engine:
         .byte 0x2f,0x0a,0x2f,0x02,0x24,0x2f,0x00,0x10
-        jmp 0x400a63f4
+        jmp 0x400a646c
         .globl core_machine_page_local,core_stock_page_local
 core_machine_page_local:
         STOCK_FIRST page_local,8,64
@@ -388,7 +388,7 @@ core_machine_page_local:
         lea 12(%sp),%sp
 core_stock_page_local:
         .byte 0x2f,0x02,0x74,0x0c,0x22,0x2f,0x00,0x08
-        jmp 0x400a6562
+        jmp 0x400a65da
         .globl core_machine_page_copy,core_stock_page_copy
 core_machine_page_copy:
         STOCK_FIRST page_copy,4,64
@@ -414,7 +414,7 @@ core_machine_page_copy:
         lea 12(%sp),%sp
 core_stock_page_copy:
         .byte 0x2f,0x02,0x70,0x2c,0x24,0x08,0x22,0x2f,0x00,0x08
-        jmp 0x400a652a
+        jmp 0x400a65a2
         .globl core_machine_range_copy,core_stock_range_copy
 core_machine_range_copy:
         STOCK_FIRST range_copy,4,0x1f9
@@ -440,7 +440,7 @@ core_machine_range_copy:
         lea 12(%sp),%sp
 core_stock_range_copy:
         .byte 0x2f,0x02,0x20,0x2f,0x00,0x08,0x0c,0x80,0x00,0x00,0x01,0xf9
-        jmp 0x400a62d4
+        jmp 0x400a634c
         .globl core_machine_valid_owner,core_stock_valid_owner
 core_machine_valid_owner:
         STOCK_FIRST valid_owner,4,0x1f9
@@ -466,7 +466,7 @@ core_machine_valid_owner:
         lea 12(%sp),%sp
 core_stock_valid_owner:
         .byte 0x20,0x2f,0x00,0x04,0x0c,0x80,0x00,0x00,0x01,0xf8
-        jmp 0x400a64e8
+        jmp 0x400a6560
         .globl core_machine_source_layout,core_stock_source_layout
 core_machine_source_layout:
         STOCK_FIRST source_layout,4,0
@@ -511,7 +511,7 @@ core_machine_source_layout:
         lea 12(%sp),%sp
 core_stock_source_layout:
         .byte 0x72,0x2c,0x20,0x2f,0x00,0x04,0xb2,0x80
-        jmp 0x4007b9f2
+        jmp 0x4007ba6a
         .globl core_machine_cached_parameter,core_stock_cached_parameter
 core_machine_cached_parameter:
 | The randomize draw (40014954) asks machine-randomize.c first: a bank
@@ -557,7 +557,7 @@ core_machine_cached_parameter:
         lea 12(%sp),%sp
 core_stock_cached_parameter:
         .byte 0x22,0x2f,0x00,0x04,0x0c,0x81,0x00,0x00,0x01,0xf9
-        jmp 0x4007b9bc
+        jmp 0x4007ba34
         .globl core_machine_format_value,core_stock_format_value
 core_machine_format_value:
         STOCK_FIRST_SEND format_value,4
@@ -583,7 +583,7 @@ core_machine_format_value:
         lea 12(%sp),%sp
 core_stock_format_value:
         .byte 0x22,0x2f,0x00,0x04,0x0c,0x81,0x00,0x00,0x01,0xf9
-        jmp 0x4007bb74
+        jmp 0x4007bbec
         .globl core_machine_parameter_label,core_stock_parameter_label
 core_machine_parameter_label:
         STOCK_FIRST_SEND parameter_label,8
@@ -645,7 +645,7 @@ core_machine_synth_parameter:
         lea 12(%sp),%sp
 core_stock_synth_parameter:
         .byte 0x22,0x2f,0x00,0x04,0x0c,0x81,0x00,0x00,0x01,0xf9
-        jmp 0x400a6182
+        jmp 0x400a61fa
         .globl core_machine_parameter_long_label,core_stock_parameter_long_label
 core_machine_parameter_long_label:
         STOCK_FIRST_SEND parameter_long_label,8
@@ -706,7 +706,7 @@ core_machine_modulation_flags:
         lea 12(%sp),%sp
 core_stock_modulation_flags:
         .byte 0x22,0x2f,0x00,0x04,0x0c,0x81,0x00,0x00,0x01,0xf9
-        jmp 0x400a6674
+        jmp 0x400a66ec
         .globl core_machine_menu_rank,core_stock_menu_rank
 core_machine_menu_rank:
         STOCK_FIRST menu_rank,4,0
@@ -732,4 +732,4 @@ core_machine_menu_rank:
         lea 12(%sp),%sp
 core_stock_menu_rank:
         .byte 0x2f,0x0a,0x20,0x6f,0x00,0x08,0x20,0x08
-        jmp 0x40178b1a
+        jmp 0x40178cde

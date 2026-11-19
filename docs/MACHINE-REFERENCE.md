@@ -255,16 +255,28 @@ as a difference:
    `ST_STEREO_R(t)` (`st_stereo_claim(t)`, `<syntakt/stereo.h>`). It runs the
    render filter `0x400068ea` on R with L's coefficients and R's own memory,
    and the two gain ramps (`0x400045a0`, `0x400049f4`) from the start values
-   L used.
+   L used. Since samplers-st 1.4 a stereo track does the filter on L and R in
+   one loop and both ramps of L and R in another, with the natives' own EMAC
+   operations in their order (`mods/samplers-st/audio/voice-stereo.c`; the
+   same words, checked in analog-emu).
 2. At the chain end (core 1.8, `40000ac6`, after AMP and before the track
    DMA) the engine runs the native chain on R: drive and base-width on all
    eight R buffers, the multimode and the AMP envelope (`0x40001476`, per
    track) of the claimed tracks. Only the chain writes the chain's state
    (a scan of the AUDIO image: the chain routines and the boot), so the state
    from before the L pass is the one the previous chain end left. The engine
-   saves the control state the L pass left, loads the one from before it,
-   swaps in R's signal memory, runs the chain, then swaps L's memory back and
-   reloads L's control state. Mono tracks and L are what the stock chain made.
+   exchanges the control state the L pass left with the one from before it
+   (kept from the previous chain end), swaps in R's signal memory, runs the
+   chain, then swaps L's memory back and copies L's control state back; that
+   copy is the next block's state from before its L pass. Mono tracks and L
+   are what the stock chain made. When every claimed track has OVERDRIVE off
+   (row word `0x28` <= 0) and a drive wet weight (`0x800083b0 + 4t`) of 0,
+   the native drive's output for those tracks is its dry MAC alone, and the
+   engine runs that MAC itself instead of the native drive. The multimode on
+   R skips its coefficient part: R's targets are the coefficients the L pass
+   left (`0x80008740 + 32t`), so the engine writes them to the routine's
+   target block (`0x80008900`), builds the native frame (t at 48, the type at
+   52) and enters at `0x40001ea4`, where every path of the first part joins.
 3. It sends D = R − L through the shared window, `0x5b0` to `0x7df`: 32
    16-bit mantissas per track, one shift per track and block
    (D = mantissa << (shift + 1)), the track mask, a tag and the sequence at
@@ -276,7 +288,13 @@ as a difference:
 4. MAIN adds gR × D to every bus the right gain feeds: the delay input
    (`ev_delay_in`), the reverb input (`ev_reverb_in`) and the two main buses
    (`ev_main_mix`). Left stays gL × L and right becomes gR × R; pan acts as a
-   balance.
+   balance. Since samplers-st 1.4 with EMAC: D / 2 is expanded to Q31 once a
+   block, and each bus takes four tracks a pass, `acc0 = bus`, two MSACs a
+   track (fractional, MACSR `0xa0`: the scale factor works in integer modes
+   only, RM 5.3.5), MOVCLR. The 48-bit accumulator holds the pass's sum and
+   MOVCLR saturates it, so a clipping bus saturates after each four tracks
+   (1.3: after each track). The interrupted code's MACSR, ACC0 and ACCext01
+   are saved and put back raw.
 
 Pairing D with its L. MAIN's audio interrupt reads L by DMA (`0x400a4a74`)
 and mixes it later in the same interrupt (`0x400a4fce`), and AUDIO can finish
@@ -293,11 +311,24 @@ D with it. The only block never used is the one a restart left in the window,
 until the engine has sent one of this boot. The track is not meant to fall
 back to mono: `DROP` on the test probe counts the blocks where no D matched.
 
-Which tracks are stereo: the samplers claim a track while it plays a stereo
-sample (core 1.8, `st_machine_sample_channels`; SAMPLE-POOL.md) and while the
-previous block still sounds on L or R after the chain, so a filter's tail
-stays stereo to its end. A mono sample costs nothing, a track whose D is zero
-leaves the mask, and in STOP the R pass and MAIN's work cost nothing.
+Which tracks are stereo (samplers-st 1.4, `sp_stereo_wanted`): a track with
+a stereo sample (core 1.8, `st_machine_sample_channels`; SAMPLE-POOL.md) is
+claimed in the block it is triggered in (voice + 0x38), while the previous
+block still sounds on L or R after the chain, and in a block where its PCM
+starts after a silent one. A track with a mono sample is claimed only while
+a stereo tail still sounds on R. Not "while the sample plays": in STOP a
+looping sample plays on under a closed AMP envelope, and in samplers-st 1.3
+that kept the R pass running in silence. A mono sample
+costs nothing, a track whose D stays under -96 dBFS leaves the mask, and in
+STOP, once the output is silent, the R pass and MAIN's work cost nothing.
+"Still sounds" is a sample at or above `ST_STEREO_QUIET` (2^16 in Q31,
+-96 dBFS), not a nonzero one: after silence in, the native multimode of
+types 0 and 1 settles on a residual of a few hundred (about -138 dBFS) and
+never reaches 0 (types 2 to 6 take 220 to 930 blocks), so in samplers-st
+1.3 a track that had played a stereo sample could stay stereo, its R pass
+running every block, for good. With the threshold every
+type's tail is quiet within 12 blocks of silence (analog-emu,
+`tests/test_st_stereo_natives_emu.py`).
 
 The gains are the stock kernels' own: each kernel ramps a track's gain over
 the block from the value in its state array to the target and stores the end
@@ -310,7 +341,8 @@ reverb `0x800062c0`, main bus `0x8000e160` (bus `0x8000dad0`), direct bus
 |---|---|---|
 | `0x8000f400` | 1024 bytes | R buffers, 8 × 32 Q31 |
 | `0x8000f800` | 160 bytes | R's chain memory: multimode `0x80008580` (8 words) and `0x80008920` (16), base-width `0x800088a0` (16) |
-| `0x8000f8a0`, `0x8000fb50` | 688 bytes each | the chain's control state, before and after the L pass: drive `0x800083b0` (40 words), flags and types `0x80008550` (12), multimode coefficients and mix weights `0x80008740` (88), `0x800088e0` (8), AMP `0x800049e0` (24). The one free after a chain end stages the block the DMA sends |
+| `0x8000f8a0` | 688 bytes | the chain's control state from before the L pass (after a chain end: the L pass's, for the next block): drive `0x800083b0` (40 words), flags and types `0x80008550` (12), multimode coefficients and mix weights `0x80008740` (88), `0x800088e0` (8), AMP `0x800049e0` (24) |
+| `0x8000fb50` | 688 bytes | where the engine stages the block it copies to the window (samplers-st 1.3: the second copy of the control state) |
 | `0x8000fe00` | 128 bytes | R's render-filter blocks, 4 words per track |
 | `0x8000fe80` | 128 bytes | render scratch for R |
 
@@ -320,7 +352,10 @@ the fingerprint, `0x5c4` the tag `STR2`, `0x5c8` blocks with a stereo track,
 sequence again; `0x7e0` to `0x7ef` a profile for test pages
 (`<syntakt/stereo.h>`). AUDIO writes in ascending order, so MAIN reads
 `0x7d0`, the block, then `0x5b0`: equal means one whole block. The window is
-not cleared at boot: MAIN needs the tag.
+not cleared at boot: MAIN needs the tag. With no stereo track the engine
+writes one block with an empty mask and then leaves the window alone until a
+track is stereo again; MAIN takes that block, while it is current, as
+nothing to mix.
 
 Measured on the unit (2026-11-10, test build: R is the same sample 10 ms
 behind, `mods/samplers-st/README.md`), CPU A: 8 sampler tracks 52 % mono, 99 %
@@ -339,6 +374,23 @@ state 20, drive and base-width 66, multimode 110, AMP 7, sending 80, renders
 322; MAIN reading D 38 and mixing it 43 (permille of MAIN's block); DROP 0,
 TORN 0, LATE and AGAIN 10 each over several minutes. 8 stereo samplers: CPU A
 99 %.
+
+Instruction counts (samplers-st 1.4, 2026-11-10; Unicorn for integer code,
+analog-emu's core for EMAC code; instructions, not cycles), per 32-frame
+block, against 1.3:
+
+| Part | 1.3 | 1.4 |
+|---|---|---|
+| a sampler track's PCM, mono / stereo sample | 2479 / 3456 | 679 / 969 (824 / 1129 in C) |
+| the chain end's own code, 8 stereo tracks | 13685 | 9478 |
+| the R drive, 8 stereo tracks, OVERDRIVE off | 8111 | 2080 |
+| a stereo track's voice tail (filter and ramps, L and R) | 3137 | 2581 |
+| the R multimode, a track (by type) | 3092..3130 | 2940..2949 |
+| MAIN, gR × D, one bus, 8 tracks (with D's expansion, once a block) | about 6400 | 3250 |
+
+Most of what is left is native and at its floor: the multimode's three
+per-frame EMAC loops (about 2700 a track), base-width (about 330 a track)
+and the AMP envelope (about 380 a track). Not yet measured on the unit.
 
 ### Units and limits
 
@@ -369,7 +421,142 @@ MAIN mix, the mixer FX events, and the native transaction collection (event 11,
 `native.h`). A subscription can also name a view (`ST_EV_VIEW`) or request the
 pre-native KEY phase (`ST_EV_PRE`).
 
-## 9. Not recorded in this repository
+### Native MainScreen stack (OS 1.41)
+
+MainScreen show `40033b74` publishes persistent children through `400ffd62`
+and manager push `40100bc2`; the parameter switch uses `401015b8`. Publication
+order is `+228h`, current parameter `+c0h`, `+e8h`, `+218h`, `+f0h`, `+220h`.
+The current parameter is therefore not normally the stack tail. Permanent
+mute is the separate transient child at `+230h`.
+
+Native list unlink `401bb31c(node)` and insert-before
+`401bb2f6(node, position)` only change links, not shared ownership. The
+manager's mutex is at `+4h`; its native guard constructor
+`4016e76a(guard, mutex)` stores the pointer and a held byte in an 8-byte
+guard, released by `4016e790(guard)`. Native manager removal
+`40100d20(manager, shared_pair)` detaches/removes that view while retaining
+other nodes. ARP 1.10.2's native-stack regression executes these routines
+when creating below mute and then removing mute; no list primitives are
+mocked. Highest opaque remains MainScreen because both overlays are
+transparent.
+
+The manager (UI controller `+40h`) has a list sentinel at `+14h`, tail link at
+`+18h`, and highest opaque node at `+1ch`; a node holds its view at `+8h`.
+Native draw traversal is `401007ce`. View manager pointer is `+2ch`, and its
+closed flag at `+30h` is a byte. Provenance and executable checks:
+[TRIG/ARP investigation](TRIG-ARP-MUTE-INVESTIGATION.md) and
+`tests/test_st_arp_native_stack_emu.py`.
+
+OS 1.42's native Bitmap constructor is `400f72be(object, width, height,
+pixels, mask)`; `400f7fb6` fills a clipped rectangle and `400f8f70(dst, src,
+x, y, flags)` blits it. An eight-word owned object can borrow retained pixel
+and mask arrays without heap allocation. For 128x64, each array is 256
+big-endian words: two words per column, with y=0 in bit 31 of the first and
+y=63 in bit 0 of the second. A zero mask bit preserves the destination pixel.
+This layout, clipping and masked blit execute against the supplied 1.42 MAIN
+in `tests/test_st_playhead_emu.py`; Playhead 1.2 caches its selector this way.
+
+The native three-pane list (`400fad82` constructor, `400faa2e` draw) uses the
+base list painter `400f572c`. Per-list fields are viewport x/y at `198/19c`,
+width/height at `1a0/1a4`, row height at `1a8`, visible row count at `1c`, and
+header height at `84`. The base painter starts rows at viewport top minus six
+pixels and, for a titled pane, subtracts another eight. Item constructor
+`400fa84c`'s third callback receives `(capture, item, bitmap, x, y)` after the
+label and before native selection XOR (`400f59ec..400f5a8c`). Sample Manager
+uses this owned callback for the right size column. Small-font lookup is
+`400f9478(view+94)`; ASCII font data has default width at +0, optional signed
+widths at +8, and one-pixel inter-glyph spacing (`400f9482/400f9584`). These
+facts execute against OS 1.42 in `tests/test_st_manager_draw_emu.py`.
+
+On OS 1.42, `4016e044()` returns the root owner from singleton `444e2334`,
+not the controller. Native composition at `4000a21a..4000a220` passes
+`root+0x40` to `4010095c`, which reads the controller's dirty byte at +0x20.
+Request function `40100966(controller)` sets that byte. Thus the effective
+dirty address is `root+0x60`; `root+0x20` is unrelated. Playhead 1.2.1's
+regression executes the real getter, request function and compose gate to
+verify that key-driven redraws reach native composition.
+
+Manager push `40100bc2` calls visibility recomputation `40100ade` before
+the new view's attach callback. Visibility calls `4000a0e6`, which composes
+the UI synchronously and reaches the patched `core_tick` call at `4000a220`.
+State published before push must therefore be valid for a reentrant tick.
+`tests/test_st_arp_reentrant_view_emu.py` executes this chain; LCD work after
+the tick (`4000a22c` onward) is its explicit composition boundary.
+
+Native close `400ffd02(view)` marks the closed byte and requests deferred
+manager cleanup (`+22h`); it does not destroy the view. A native shared owner
+can outlive removal, delaying the view destructor. The ARP retained-view
+regression executes `4017cdee` shared-pair copy and `4016dde8` release to
+exercise that lifetime. Screen redraw (`400ffc5e`) and LED invalidation
+(`400ffc96`) are separate flags; the native LED frame is `400094f4`, with
+manager gate `401007ae` and reverse LED walk `40100856`.
+
+Deferred cleanup `40100ea4` removes closed nodes then calls visibility;
+visibility can re-enter core tick and close a view already visited by the
+walk. Stock `40100f2c..40100f3e` clears manager `+22h` after that callback,
+losing the new request. Core 1.8.2 clears it before visibility, preserving
+new closes without changing the 18-byte window's instruction count.
+`tests/test_st_view_cleanup_emu.py` executes the full native cleanup and its
+reentrant tick; direct shared-pair removal is not an equivalent test of this
+deferred path. [Patch details](../mods/core-st/VIEW-CLEANUP.md).
+
+## 9. The sequencer's step per track (MAIN)
+
+The sequencer runs in a forced interrupt (`0x4008c924`, every 900000 units of
+the native clock: 24 a quarter note). For each of the 13 tracks (12 audio,
+12 = FX) it keeps bytes at `0x43bd73fc + t` (the step it plays next),
+`0x43bd7416 + t` (the step before), `0x43bd7409 + t` (ticks into the step) and
+`0x43bd753c + t` (steps counted toward the track's bar). On tick 0 of a step it
+prepares that step's trig (`0x4008b882`, the core's TRIG operation) and
+enqueues it a step ahead with its micro timing. When the step's ticks are over
+it advances the step at `0x4008d0e4..0x4008d120`: last = step, step + 1, and 0
+at the length. The length is the track's (track record `+969`, a word) when
+the pattern's byte `+0x21379` is set, else the pattern's (`+0x21374`); a track
+record is `pattern + 0x499 * t`. Starting or changing patterns sets step =
+position mod length (`0x4008cb7c`). The UI's copies are `0x444e2370 + t` (last)
+and `0x444e237d + t` (step), copied every tick at `0x4008d1a8`; live
+recording reads `0x444e2370` (`0x4008da6e`). The step is set from the
+pattern's position in several places (starts, resyncs, pattern hand-overs at
+`0x4008ac3a`, `0x4008b39e`, resets at `0x4008b69e`, `0x4008c78e`,
+`0x4008cd62`, `0x4008d338`, and `0x4008d88a`); it is used by the trig
+preparation (`0x4008cf00`, `0x4008cf14`, and `0x4008c204` for a pattern
+started mid-way), the UI copy and the accessor `0x4008b734(t)` (last[t] for
+t 0..12, the pattern's step `0x43bd73c4` above), which the trig LEDs'
+playhead reads (`0x400c20ee`). playhead-st changes it at those uses
+(`mods/playhead-st/seq-direction.s`). The sequencer's pattern pointers name
+their kits: `0x43bd7430` (playing) with `0x43bd743c`, `0x43bd7438` (next)
+with `0x43bd7444`; the live kits are `0x41ad5134 + k × 0x1618`, k < 128. An
+encoded kit slot (0x1600 bytes) uses [0, 0x14d2) natively, LFO3
+[0x14e0, 0x15d0) and playhead-st [0x15e0, 0x15f8). A native edit of a kit
+ends in `KitActive::kitChanged` (`0x40172250`, vtable `0x401c33f4` +0x5c; the
+object is in the project, `0x40a38b18 + 0x378d8`, kits at its +0x10), which
+re-encodes the kit into its mirror slots (job "KitActive::updateSingleMirror",
+`0x4001082e`): what survives a power cycle without a project save.
+
+Key IDs used here beyond `mods/core-st/README.md`'s: TRK = 2 (MainScreen's key
+switch at `0x40033f0a`, case 2, pushes the TrackSelectionView), UP = 14,
+DOWN = 15, LEFT = 16, RIGHT = 17. The MainScreen's header (`0x40032b0e..0x40032b72`) draws the tempo
+(`0x402d7010`, BPM × 120; `0x4013273e(tempo, 120, 1, 1)` splits it) as `%d.%d`
+right-aligned to x 125 in the font `0x443da1f0`, and the metronome at x 117 −
+the tempo's width, rows 55..62 (`0x400f8dac`, y 55 or 56). The active track is `0x4001ff74(app + 0x30)`, app = `0x4016e804()`.
+
+### MAIN mixer preview ABI (OS 1.41, core 1.9)
+
+Verified against the supplied OS 1.41 and analog-emu's ColdFire interpreter:
+the mixer call at `400a4fce` calls `4008f1ca` with three C stack words. The
+third (`A6+16` after LINK) is the mixer record retained in A2. Native mixer
+frame size is 556 bytes; D2-D7/A2-A5 occupy its bottom 40 bytes. Continuation
+`4008fb38` initializes the remaining output locals, combines ADC `8000ded0`
+with preview `8000dfd0`, and runs native USB/codec output before restoring
+MACSR 20h, callee saves, A6 and SP at `4008fea4..4008feb8`. The codec TX ring
+base is `80000000 + (4553f6dc << 10)` in this path. The reduced recorder mixer
+clears six 256-byte buses starting at `8000dad0`, invokes its clock/preview
+callback, initializes MACSR A0h and ACC0..3, then enters that continuation.
+The cfbench test compares the codec frame against the complete original
+mixer and checks USB MAIN against an independent numeric oracle. These are
+controlled interpreter fixtures, not physical audio or DMA timing tests.
+
+## 10. Not recorded in this repository
 
 - The names of the menu categories 1 to 14, other than 5, 10 and 11.
 - The names of the stock routines the audio code calls. Only addresses and the

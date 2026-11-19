@@ -5,21 +5,21 @@
       "slug": "arp-st",
       "id": "arp-st",
       "title": "ARP experiment",
-      "latest": "1.8",
+      "latest": "1.10.7",
       "path": "mods/arp-st"
     },
     {
       "slug": "chorus-st",
       "id": "chorus-st",
       "title": "Chorus",
-      "latest": "1.1",
+      "latest": "1.2.1",
       "path": "mods/chorus-st"
     },
     {
       "slug": "core-st",
       "id": "core",
       "title": "core",
-      "latest": "1.8.2",
+      "latest": "2.3.0",
       "path": "mods/core-st"
     },
     {
@@ -33,70 +33,91 @@
       "slug": "fm-tone-st",
       "id": "fm-tone-st",
       "title": "SY FM DTONE",
-      "latest": "1.1",
+      "latest": "1.1.2",
       "path": "mods/fm-tone-st"
+    },
+    {
+      "slug": "icache-lock-st",
+      "id": "icache-lock-st",
+      "title": "I-cache lock: stock audio code kept in MAIN's instruction cache",
+      "latest": "0.1",
+      "path": "mods/icache-lock-st"
     },
     {
       "slug": "lfo3-st",
       "id": "lfo3-st",
       "title": "Third LFO",
-      "latest": "1.2",
+      "latest": "1.3.1",
       "path": "mods/lfo3-st"
     },
     {
       "slug": "machines-st",
       "id": "machines-st",
       "title": "Syntakt machine loader",
-      "latest": "1.0",
+      "latest": "1.0.2",
       "path": "mods/machines-st"
+    },
+    {
+      "slug": "mix-fast-st",
+      "id": "mix-fast-st",
+      "title": "Mix fast: skip zero gain ramps in the stock mix kernels",
+      "latest": "0.1",
+      "path": "mods/mix-fast-st"
     },
     {
       "slug": "modulation-skip-st",
       "id": "modulation-skip-st",
       "title": "Skip unchanged modulation per track",
-      "latest": "1.2.3",
+      "latest": "1.2.5",
       "path": "mods/modulation-skip-st"
+    },
+    {
+      "slug": "playhead-st",
+      "id": "playhead-st",
+      "title": "Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
+      "latest": "1.2.1",
+      "path": "mods/playhead-st"
     },
     {
       "slug": "poly-st",
       "id": "poly-st",
       "title": "POLY",
-      "latest": "1.4",
+      "latest": "1.7",
       "path": "mods/poly-st"
     },
     {
       "slug": "recorder-st",
       "id": "recorder-st",
       "title": "Audio Recorder",
-      "latest": "1.1",
+      "latest": "1.4.1",
       "path": "mods/recorder-st"
     },
     {
       "slug": "sample-manager-st",
       "id": "sample-manager-st",
       "title": "Sample Manager",
-      "latest": "1.1",
+      "latest": "1.2.1",
       "path": "mods/sample-manager-st"
     },
     {
       "slug": "samplers-st",
       "id": "samplers-st",
       "title": "SP sample machines",
-      "latest": "1.3",
+      "latest": "1.5.2",
       "path": "mods/samplers-st"
     },
     {
       "slug": "system-info-smz-st",
       "id": "system-info-smz-st",
       "title": "System info",
-      "latest": "1.1",
+      "latest": "1.1.2",
       "path": "mods/system-info-smz-st"
     },
     {
       "slug": "system-info-st",
       "id": "system-info-st",
       "title": "System info",
-      "latest": "1.1",
+      "latest": "1.1.2",
       "path": "mods/system-info-st"
     }
   ]

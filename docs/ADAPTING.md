@@ -1,9 +1,21 @@
 # How to adapt your mod to the Syntakt
 
+Playhead 1.1 appends ANCHOR/STUTTER/FOLD/WALK+ as saved mode IDs 5..8 in
+the module's existing `PLH1` kit record. Existing IDs 0..4 and the record layout
+are retained. A newer record containing these modes falls back to FORWARD
+with an older module. Module authors must preserve the kit-tail ownership
+listed in [MACHINE-REFERENCE.md](MACHINE-REFERENCE.md); see
+[Playhead](../mods/playhead-st/README.md#saving) for the codec and behavior.
+
 This guide is for people and for coding agents. Every step has a command
 and the output that means it worked; the last sections map every refusal to
 its fix and give a definition of done. The format itself is
-[FORMAT.md](FORMAT.md). Addresses are Syntakt OS 1.41's.
+[FORMAT.md](FORMAT.md). Current source builds target Syntakt OS 1.42; historical
+address examples below are from 1.41. Use the current manifests and SDK headers
+for addresses, and [OS142-PORT.md](OS142-PORT.md) for the port and validation.
+Core 2.0 requires SMZ4 feature 16 and an exact contract: `0x53594606` from core
+2.2 (`0x53594605` for 2.0 and 2.1); rebuild every bank, including banks
+containing only modules. Untagged, 1.41 and older-contract banks are refused.
 
 Most Syntakt mods are machines or modules in the core's SMZ4 bank: the
 "Syntakt core" sections below describe its services, and
@@ -104,6 +116,76 @@ These are the events the Syntakt's core shares with elekloader's cores
 sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
+
+### Syntakt core 2.3: sample-pool memory snapshot and capacity preflight
+
+Sample-pool API 2 appends `memory(struct st_pool_memory *)` to the API 1
+prefix. Check `host->version >= 11` and `host->pool->version >= 2` before
+calling it from a task/UI callback. `bytes[128]` contains each loaded slot's
+PCM span (stereo includes both channels); `used` counts unique 2 KiB extents
+referenced by slots 65..128 only. `total` comes from the current AUDIO layout,
+excluding stock PCM, service code and stack. No disk IO or allocation occurs.
+Runtime sync checks the whole requested allocation, including aliases and
+fragmentation, before changing AUDIO. Capacity failure returns `-2` from
+`sync` and `-6` from the existing rollback-capable `host->pool_apply`.
+The host ABI prefix and SMZ4 contract `0x53594606` remain unchanged.
+
+### Syntakt core 2.2: a 4 MiB bank window, the pool above AUDIO's page
+
+The bank's AUDIO section may be up to 4 MiB (sample store pages `4000..47ff`,
+`4204f750..4244f750`; 723,120 bytes before). The sample pool moved to the top of
+the sample store mapping: the service at `4404ff50`, its PCM at
+`44050f50..47feff50` (63.62 MiB), the 64 KiB below `48000000` left to the AUDIO
+stack ([AUDIO-MEMORY-MAP.md](AUDIO-MEMORY-MAP.md)). A machine reaches the pool
+only through `st_machine_sample()` and `st_machine_sample_channels()`
+(`<syntakt/machines.h>`), which now finds the channel table through the AUDIO
+ABI directory: never name a pool address. The contract is `0x53594606`: banks
+built for 2.0/2.1 inline the old pool address and are refused; rebuild them.
+
+### Syntakt core 2.0.3: selected-model parameter labels
+
+The selected-track model's native long-label override now queries the same
+machine registry and module provider (query 20, `{model, engine_id}`) as the
+base model. Providers return a long-name string through `value`; an unhandled
+query retains the native implementation, including its filter-mode labels.
+This fixes Chorus parameter modals without a Chorus-only hook. Host ABI and
+SMZ4 contract `0x53594605` are unchanged.
+
+### Syntakt core 2.0.1: streamed samples and deferred waveforms
+
+Call UI API `wave_idle(slot, budget)` only for a visible waveform. It polls
+playheads and lazily scans bounded disk slices until `wave(slot)->ready == 2`.
+It can perform task IO and allocation, so never call it in an IRQ or draw.
+Boot computes no stock/HZFS envelopes; cached waves need no further disk reads.
+Runtime HZFS transfers can populate the same cache. UI/host ABI is unchanged.
+
+Stock and HZFS PCM stream through temporary boot pages. MAIN retains only
+metadata after transfer; `core_pool_sample_source` no
+longer lends a stock PCM pointer. Use UI API `wave` for envelopes and AUDIO
+sample services for playback. The UI/host ABI and bank contract stay unchanged.
+The new core-owned task completion site frees boot scratch after the final
+mailbox copy; no module may hook it or retain those page buffers. See
+[the memory investigation](STOCK-SAMPLE-CORE-OVERLAP.md).
+
+### Syntakt core 1.9: stopped-transport preview owner
+
+Host API 15 appends `audio_idle` at offset 100, preserving the earlier
+100-byte prefix. This is a pointer to one core-owned owner slot. Register a
+retained immutable `st_audio_idle_owner` during module initialization only,
+after refusing a nonempty slot; both callbacks must be nonnull. Failed bank
+initialization clears the slot. No new event ID or SMZ format is introduced.
+
+At MAIN render-in, `ready()` returns 0 or 1 without allocation, IO or EMAC.
+With native transport stopped (state 2), 1 selects reduced processing for the
+whole block. The core skips render-in observers and modulation/LFO bodies,
+and redirects the mixer call at `400a4fce` to the owner's `mix(a,b,record)`.
+The owner must preserve native OS 1.41 mixer ABI/callee saves, clear unused
+buses, advance its preview clock and deliver valid output. The recorder's
+`idle.s` retains the native output tail at `4008fb38`; it does not skip native
+IRQ/DMA/CPU2 control transport. Normal mixer fallback is `4008f1ca` unchanged.
+Render-out accounting/observers still run. An absent owner, readiness 0 or
+external transport START restores normal processing. Recorder 1.2 requires
+this service and consumes PLAY key edges while its completed take is open.
 
 ### Syntakt core 1.1: the mod list in System info
 
@@ -329,7 +411,7 @@ examples for elekloader's other devices, is elekloader's own
 | `ends mid-instruction`, `sweeps land on the start`, `does not decode` | the site does not cover whole instructions | move or widen the site to instruction boundaries (disassemble the stock main OS) |
 | `... overlap (0x...-0x...)` | another mod patches or claims those bytes | subscribe to an event instead, agree with that mod's author, or propose the site as a core event ([CORE-CONTRIBUTING.md](CORE-CONTRIBUTING.md)) |
 | `X requires Y` / `core is not enabled` | a dependency is missing | add Y (with lint: `--with Y.elemod`) |
-| `X needs core 3.0 or newer, and this build has core 2.1` | the mod's `resources.core` asks for a newer core | build with that core (the app and the web page take it when you tick the mod); an older loader says `imports fw_..., which no given mod exports` instead |
+| `X needs core 3.0 or newer, and this build has core 2.0` | the mod's `resources.core` asks for a newer core | build with that core (the app and the web page take it when you tick the mod); an older loader says `imports fw_..., which no given mod exports` instead |
 | `imports cm_ui_v31, which no given mod exports` | the page names `cm_ui_v31` (a knob that draws itself, `CM_DRAW`), and no mod given exports it: machine-pages before 1.1 does not | use machine-pages 1.1 or newer |
 | `CM_KNOB: draw= needs flags=CM_DRAW` or `CM_KNOB: with CM_DRAW, +36 is draw` (assembly, `core3.inc`) | a knob's `draw=` without `flags=CM_DRAW`, or its `gfx=` with it | give the knob `flags=CM_DRAW` with `draw=`, or `draw=` in place of `gfx=`; the page's `CM_UI` needs `abi=cm_ui_v31` |
 | `imports N, which no given mod exports` | a missing dependency, or a typo | add the mod that exports N, fix the name, or list N under `weak` |
@@ -385,7 +467,7 @@ independent groups must keep advancing when analog groups coexist.
 
 
 Host API 11 appends `const struct st_sample_pool_api *pool` at byte 88,
-retaining every earlier offset. The pool service version is 1. It supplies
+retaining every earlier offset. The original pool service version is 1. It supplies
 validation/sync/cached names, preview start/refill/release and one optional
 menu/progress UI provider. Native hooks, storage, PCM streaming/mixing and
 project references remain in core. A bank-owned Sample Manager uses existing
@@ -430,9 +512,19 @@ Each added page is page ID 3, whose descriptor (`4007b9d0`, 44 bytes: a word,
 the header title as a COW `std::string`, nine control IDs) the core asks for
 through PAGE_LAYOUT. While the MainScreen's TRIG view (`st_trig_current`)
 shows its page, a module answers with its own (`st_trig_descriptor`, a
-static `ST_TRIG_TITLE`): the header then reads its title ("Polyphonic mode",
-"Arpeggiator") and the native editor its control IDs, never page 3's
-(Euclidean's). There is no other state: the vector's size (2, 3, 4 or 5) says which are
+static `ST_TRIG_TITLE`): the header and the page popup then read its title
+("Polyphonic mode (3/5)", "Arpeggiator (4/5)") and the native editor its
+control IDs, never page 3's (Euclidean's). `st_trig_current` finds the
+MainScreen through the UI controller's view manager (`4016de80`, `+40h`),
+not the application's (`4016e804`); with the application, before ARP 1.9 /
+POLY 1.5, it answered 0 outside page actions and the popup read "Euclidean".
+A module that moves the page itself (ARP on TRIG) shows the popup the native
+page key shows with `st_trig_popup(view)` ("<title> (n/m)" through `400c33d0`
+in the view's `+6Ch`). The first TRIG page reads "TRIG (1/n)": the core asks
+PAGE_LAYOUT only for page 3, so `st_trig_name_first(view)`, from a module's
+PAGE_SYNC while its pages are there, gives the stock descriptor of page ID 2
+(digital) or 1 (analog) a leaked static "TRIG" instead of "Trig Parameters";
+MIDI's page 26 stays stock. There is no other state: the vector's size (2, 3, 4 or 5) says which are
 there, and `st_trig_set(view, module, want)` changes only that module's
 part, keeping the page shown (or going to 0 when it went away). Either order,
 either module alone. The added entries are page ID 3, so the native view
@@ -440,7 +532,8 @@ beneath is always a valid TRIG page; the module draws or opens its own view
 over it. A new module that adds TRIG pages takes the next bit in the header,
 after ARP. The core could own this vector later
 ([CORE-CONTRIBUTING.md](CORE-CONTRIBUTING.md)); its resident RAM is full today.
-`tests/test_st_trig_pages.c` covers every transition.
+`tests/test_st_trig_pages.c` covers every transition, the TRIG view found
+through the UI controller, the popup and the first page's title.
 
 ## Syntakt: mixer events, the FX codec and several providers (core 1.2)
 
@@ -524,7 +617,7 @@ it does for the Sound; on an older core it hooks it as before.
 
 ## Syntakt: destination visibility per model (core 1.8.2)
 
-Host API 15 adds query `ST_PARAMETER_UI_DEST_FLAGS` (32). `args[0]` is the
+Host API 16 adds query `ST_PARAMETER_UI_DEST_FLAGS` (32). `args[0]` is the
 engine ID; `result` is the borrowed model whose native destination list is
 being enumerated, not an output buffer. A provider returns nonzero with a
 capability mask in `*value`, or zero there to hide the entry. Read TYPE through
@@ -532,7 +625,7 @@ that model's getter; do not use the last visible SYN page's global state.
 Only the native builder `4001471c` flags call (return `400147a0`, A5=model)
 uses this query; runtime flags remain query 21. A declined filter falls back
 to the original flags/provider behavior. No new field, serialized feature,
-patch site or event is added. Digi Mono's init-only module requires API 15.
+patch site or event is added. Digi Mono's init-only module requires API 16.
 
 ## Syntakt: live SYN slot maps (core 1.8.1)
 
@@ -553,7 +646,10 @@ that uses it is in `mods/samplers-st/stereo/`, written in the core's shape:
 
 - A machine that renders stereo calls `st_stereo_claim(t)` in its render and
   writes R where it points; L goes to its output as before. It runs on R the
-  same native render calls it runs on L (the samplers' `sp_render`).
+  same native render calls it runs on L (the samplers' `sp_render`). A
+  machine on the native sample voice can use `mods/samplers-st/audio/voice-stereo.c`
+  for that: the voice's filter and gain ramps on L and R in one loop each, the
+  same words as the native calls.
 - The engine runs the native chain on R and sends D = R − L; the module
   `STEREO` adds gR × D to the right buses. Pan becomes a balance.
 - The engine, its module and a claiming machine must be in the same bank (the
@@ -574,3 +670,63 @@ stereo slot, `channels == 2` with R's bins `lo_r`/`hi_r` in its wave; read
 them only when `api->version >= 8`. The samplers tag stereo rows `ST` in the
 sample list and draw L above R on SYN page 2; the Sample Manager writes `ST `
 before a stereo sample's name.
+
+## Syntakt core 1.8.1.1: resident startup and stock transport exit
+
+The 1.8.1 route-bitset prototype is withdrawn after its nonresident module
+binder failed during hardware startup. 1.8.1.1 restores the original 1.8.0
+resident binder/native dispatcher. Startup entries must remain in resident
+RAM after native BSS clearing; the builder and target startup test enforce it.
+
+All-stock digital track types now take the existing empty machine-transport
+path after two aligned SRAM reads. Live native types are read each block, so
+switching to an added machine requires no cache invalidation. The one-time
+module binder remains resident with all runtime state. AUDIO and bank formats
+are unchanged.
+See [idle MAIN performance](IDLE-MAIN-PERFORMANCE.md) for complete-path counts,
+compatibility, regression coverage and hardware comparison limits.
+
+## Syntakt core 1.8.1.2: resident native callback routes
+
+The existing interest bytes now encode ordered subscribers, so an operation
+does not enter unrelated callbacks. The assembly adapters still only test
+zero/nonzero. TYPE track bytes 18/19, PAGE view restrictions, callback order,
+consume behavior, old profiler bounds, host APIs and bank format remain.
+Unknown subscribers retain all operations; long routes fail open to the
+original list traversal. Routes snapshot before callbacks and publish
+atomically with the list. No new allocation or SRAM reservation is needed.
+
+Both route preparation and dispatch are handwritten resident assembly;
+application-time startup entries also remain resident after native clearing.
+The 64 KiB reserve and compiler profile are unchanged. New route/ABI tests
+execute the target code and are part of common regressions when Unicorn is
+provided. See [idle MAIN performance](IDLE-MAIN-PERFORMANCE.md) for measured
+hot-path reductions and the one-time configuration cost.
+
+## Syntakt core 1.8.1.3: native-service wrapper and track-send capture
+
+The public native service keeps its operation numbers, arguments, result,
+stock replay and optional 36-word profiler layout. Its target wrapper is
+resident assembly: no-interest calls tail-call the existing original service;
+interested calls still enter the unchanged ordered dispatcher. The profiler
+uses its entry pointer snapshot even if a callback changes the registration,
+and operations 18 and above never index the legacy buffer. Invalid operations
+still take the original entry timer sample when profiling is enabled.
+
+Track-send capture groups its three existing stores in a MOVEM, preserving
+the old scratch pointer, row contents, subscriber order and live EMAC state.
+There is no new hook, ABI, SDK field, allocation, SRAM reservation or cadence.
+All runtime code remains resident in the same 64 KiB reserve; AUDIO and the
+MSKIP 1.4 complete bank are byte-identical to their previous delivery.
+See [core MAIN performance](CORE-MAIN-PERFORMANCE.md) for validation and limits.
+
+## Syntakt core 1.8.2: preserve view closes raised by composition
+
+Deferred UI view cleanup can synchronously compose the screen and run core
+tick subscribers. A close requested by that composition must survive the
+cleanup's return. The inline native site now clears the consumed request
+before visibility/composition, instead of erasing newly raised requests
+afterwards. The native list, mutex, ABI, resident budgets, instruction counts
+and audio/render paths are unchanged. No module API or SDK field is added.
+This general UI lifecycle fix is part of the core, not a private ARP hook.
+See [the patch and regression](../mods/core-st/VIEW-CLEANUP.md).

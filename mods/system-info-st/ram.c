@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later; ported from Synfact. */
-/* SYSTEM INFO: committed external DDR / total external DDR, OS 1.41.
+/* SYSTEM INFO: committed external DDR / total external DDR, OS 1.42.
  * Fixed OS image+BSS reservations are counted even when their PCM is silent.
  * The native buddy arena is already inside that reservation: subtract its
  * validated free blocks, never add its allocations a second time.
@@ -11,14 +11,14 @@ struct si_ram_result { si_u32 total, used, valid; };
 #define SI_DDR_BASE 0x40000000u
 #define SI_DDR_END  0x48000000u
 #define SI_IMAGE   0x40000400u
-#define SI_MAIN_END 0x45565490u
+#define SI_MAIN_END 0x45566490u
 #define SI_MAIN_FIXED_EXTRA ((0x478af2d0u-0x45570000u)+(0x48000000u-0x47c00000u))
 #define SI_AUDIO_END 0x4404f980u
-#define SI_HEAP_CB ((volatile si_u32 *)0x402d4fd4u)
-#define SI_ARENA 0x444e38c0u
-#define SI_HEADS 0x454e38c0u
+#define SI_HEAP_CB ((volatile si_u32 *)0x402d5324u)
+#define SI_ARENA 0x444e48c0u
+#define SI_HEADS 0x454e48c0u
 #define SI_UNITS 0x100000u
-#define SI_MUTEX ((void *)0x44484004u)
+#define SI_MUTEX ((void *)0x44485004u)
 #define SI_LOCK ((void (*)(void *))0x40001980u)
 #define SI_UNLOCK ((void (*)(void *))0x40001aa2u)
 

@@ -8,6 +8,13 @@
 #include "storage.h"
 #include "sample-pool.h"
 #define ST_PARAMETER_UI_DEST_FLAGS 32u
+/* Init-only MAIN mixer replacement for a stopped-transport preview session.
+ * ready() returns 0 or 1. mix has native OS 1.42 mixer C ABI (three words),
+ * preserves callee saves and owns bus clearing, preview clock and output. */
+struct st_audio_idle_owner {
+    int (*ready)(void);
+    void (*mix)(unsigned int,unsigned int,void *);
+};
 struct st_machine_host_api {
     unsigned int version;
     const struct st_storage_io *storage;
@@ -82,7 +89,7 @@ struct st_machine_host_api {
      * through the page's model (24 for a module's ID). Before 13 there is one
      * provider slot: a provider only for 31 registers on 14. Register in
      * the module's init.
-     * Host API 15 (core 1.8.2): query ST_PARAMETER_UI_DEST_FLAGS (32), only
+     * Host API 16: query ST_PARAMETER_UI_DEST_FLAGS (32), only
      * while the native destination builder enumerates a registered machine.
      * args[0] is the engine ID; result is the borrowed model/proxy whose
      * destinations are being listed (NOT a result buffer). Return nonzero
@@ -111,7 +118,14 @@ struct st_machine_host_api {
     const unsigned char *const *bank_info;
     /* Host API 13 (core 1.2) adds no field: chained parameter providers, FX
      * codec notifications and queries 28..30 (parameter_provider above).
-     * Host API 14 (core 1.4) adds no field: queries 24 (Kit) and 31.
-     * Host API 15 (core 1.8.2) adds no field: UI-only destination query 32. */
+     * Host API 14 (core 1.4) adds no field: queries 24 (Kit) and 31. */
+    /* Host API 15: one init-only owner slot. Refuse a nonempty slot, then
+     * publish a retained immutable descriptor with both callbacks nonnull.
+     * Failed bank init clears the slot. ready() is MAIN render-in context;
+     * mix() replaces the native mixer call only while stopped and ready.
+     * Both are bounded, no heap/IO; mix may use the native EMAC/output ABI. */
+    const struct st_audio_idle_owner *volatile *audio_idle;
+    /* Host API 16 adds no field: UI-only destination query 32. API 15's
+     * stopped-transport mixer owner and its ABI offset remain unchanged. */
 };
 #endif

@@ -30,7 +30,7 @@ def main():
     if out.is_relative_to(ROOT):
         subprocess.run(['git','check-ignore',str(out/'artifact.bin')],cwd=ROOT,check=True,capture_output=True)
     stock,dev,release=formats.load(a.stock)
-    if dev.key!='syntakt' or release.version!='1.41':raise ValueError('requires official Syntakt OS 1.41')
+    if dev.key!='syntakt' or release.version!='1.42':raise ValueError('requires official Syntakt OS 1.42')
     mods=[]
     dirs=[ROOT/'mods/core-st',ROOT/'mods/machines-st']
     # --system-info retains AUDIO telemetry; its UI now lives in the SMZ.
@@ -48,12 +48,28 @@ def main():
                  'machine-ui.c','machine-ui.s','sample-wave.c','crc.c','modules.c','modules.s',
                  'machine-host.c','native.c','native.s','view-draw.s','note-events.s'):
         obj=elf.Elf.load(ROOT/'mods/core-st/out/core.work'/(name+'.o'))
+        # The one-time bank binder may reside alongside MAIN's boot copier
+        # instead of the 64 KiB resident window. Audit that C code as well;
+        # moving a function must not remove its ColdFire instruction check.
+        cold=obj.section('.boot') if name.endswith('.c') else None
+        if cold and cold.data:
+            try:count=audit(cold.data)
+            except ValueError as exc:raise ValueError('MAIN '+name+' .boot: '+str(exc)) from exc
+            audits[name+' .boot']={'bytes':len(cold.data),'instructions':count}
         section=obj.section('.text' if name.endswith('.c') else '.run')
         if not section:continue
         try:count=audit(section.data)
         except ValueError as exc:raise ValueError('MAIN '+name+': '+str(exc)) from exc
         audits[name]={'bytes':len(section.data),'instructions':count}
     linked=link.link(mods,stock.section(3))
+    # Application startup is after native BSS clearing, which destroys the
+    # appended boot/load image. Runtime loader entries must remain resident.
+    # In 1.8.1, moving the binder to .boot passed its opcode audit but crashed
+    # at its first call on the device (40347bc2). Do not package that layout.
+    for name in ('core_modules_bind','core_machine_load','core_native_initialize'):
+        address=linked.map['core:'+name]
+        if not linked.layout['ddr'][0]<=address<linked.layout['ddr'][1]:
+            raise ValueError('runtime startup entry '+name+' is outside resident core RAM')
     event_operands={}
     for name in ('tick','draw','key','enc','settings','render_in','render_out',
                  'fs_route','fs_write','fs_written','main_mix'):
@@ -68,7 +84,7 @@ def main():
     audio,ainfo=audio_build(stock,dev,out/'audio',a.system_info)
     main_bin=out/'main.bin';audio_bin=out/'audio.bin'
     main_bin.write_bytes(linked.image);audio_bin.write_bytes(audio)
-    output=out/('Syntakt_OS1.41_Elekloader_Core'+mods[0].version+('_SystemInfo' if a.system_info else '')+'_EXPERIMENTAL.syx')
+    output=out/('Syntakt_OS1.42_Elekloader_Core'+mods[0].version+('_SystemInfo' if a.system_info else '')+'_EXPERIMENTAL.syx')
     if output.exists():raise ValueError('output already exists; choose a new --out directory')
     run=subprocess.run([a.eft,'-i',str(Path(a.stock).resolve()),'-c','3',str(main_bin),
         '-c','7',str(audio_bin),'-l','1','-o',str(output)],capture_output=True,text=True)

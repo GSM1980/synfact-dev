@@ -7,6 +7,7 @@ import argparse,json,subprocess,sys
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
 
 def check_digimono_audio_change(current,baseline):
     """Normal bank: change only Digi Mono's adapter, adding its MONO2K object."""
@@ -66,11 +67,13 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         'project-pool':['tests/test_st_pool.c','mods/core-st/crc.c','mods/core-st/hzfs.c'],
         'sample-manager':['tests/test_st_manager.c','mods/core-st/crc.c'],
         'audio-pool':['tests/test_st_pool_receiver.c'],
+        'pool-service':['tests/test_st_pool_service.c'],   # not "install": Windows asks to elevate such names
         'parameter-transport':['tests/test_st_parameters.c'],
         'sampler-audio':['tests/test_st_samplers.c',*[str(p.relative_to(ROOT)) for p in
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
         'smz-parser':['tests/test_st_smz_extensions.c','mods/core-st/smz.c'],
-        'stereo-transport':['tests/test_st_stereo.c']}
+        'stereo-transport':['tests/test_st_stereo.c'],
+        'sampler-fast':['tests/test_st_sampler_fast.c']}
     cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
     # Safe boot (core 1.7.1): slot storage alone, the boot orchestration, and the
     # production loader with the production storage end to end (both on the bank).
@@ -80,7 +83,9 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     cases['trig-pages']=['tests/test_st_trig_pages.c']
     has_recorder='recorder_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']
     if 'poly_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:cases['poly']=['tests/test_st_poly.c']
-    if has_recorder:cases['recorder']=['tests/test_st_recorder.c','mods/core-st/hzfs.c','mods/core-st/crc.c']
+    if has_recorder:
+        cases['recorder']=['tests/test_st_recorder.c','mods/core-st/hzfs.c','mods/core-st/crc.c']
+        cases['recorder-post-take']=['tests/test_st_recorder_post_take.c','mods/core-st/hzfs.c','mods/core-st/crc.c']
     if 'arp_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
         cases['arp-clock']=['tests/test_st_arp_clock.c','mods/arp-st/clock.c']
         cases['arp-runtime']=['tests/test_st_arp_runtime.c','mods/arp-st/runtime.c','mods/arp-st/selector.c','mods/arp-st/clock.c','mods/arp-st/length.c']
@@ -89,8 +94,8 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         exe=out/(name+'.exe')
         run('compile '+name,[cc,'-O2','-Wl,--large-address-aware','-I','elekloader/sdk/include',*sources,'-o',exe])
         args=[out/'synfact-machines.smz4'] if name in ('smz-parser','smz-boot','trial-boot') else []
-        legacy=ROOT/'out/smz-module-0.8-final/example.smz4'
-        if name=='smz-parser' and legacy.exists():args.append(legacy)
+        # Core 2.0 refuses old/untagged banks. The parser's checksummed negative
+        # controls cover both; only current-contract banks belong in its argv.
         run(name,[exe,*args])
     run('boot preimage source',[sys.executable,'tools/generate_boot_preimages.py','--check'])
     boot_exe=out/'boot-preimages.exe'
@@ -100,6 +105,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     for name in ('common_hooks','destination_hooks','syn_page_hook','new_project_hook'):
         run(name,[sys.executable,'tests/test_st_'+name+'.py',out])
     run('stock/native fast paths',[sys.executable,'tests/test_st_fast_paths.py',out])
+    run('project operation scopes',[sys.executable,'tests/test_st_project_operations.py',out])
     skipped=[]
     if synfact:
         run('FM source/cache/UI/ratio',[sys.executable,'tests/test_st_fm.py','--bank',
@@ -138,7 +144,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
             # The chain end (core 1.8) calls the companion; a previous build
             # has it stock (move.l 4004f6e0,d0) or as a call.
             i=0x40000ac6-base;assert new[i:i+2]==b'\x4e\xb9'
-            if old[i:i+6]==bytes.fromhex('20394004f6e0'):operands.update(range(i,i+6))
+            if old[i:i+6]==bytes.fromhex('20394004f758'):operands.update(range(i,i+6))
             else:
                 assert old[i:i+2]==b'\x4e\xb9'
                 operands.update(range(i+2,i+6))
@@ -183,13 +189,23 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 assert current['machines']==baseline['machines']
                 # samplers-st 1.3 adds its stereo engine: the STEREO module right
                 # after the input module, and one more sampler AUDIO object (the
-                # sixth, stereo/audio.c). Nothing else may appear.
-                modules,added=list(baseline['modules']),set()
+                # sixth, stereo/audio.c); 1.4 adds the seventh, audio/voice-stereo.c.
+                # New objects may appear only in the samplers' folder (audio0-*),
+                # after the old ones. Nothing else may appear.
+                modules=list(baseline['modules'])
                 if 'st_stereo_module' in current['modules'] and 'st_stereo_module' not in modules:
                     modules.insert(modules.index('sp_sampler_input_module')+1,'st_stereo_module')
-                    added={'audio0-5.o'}
-                    assert 'audio0-5.o' not in old_objects
-                    for name in added:new_objects.pop(name)
+                    assert 'audio0-5.o' in new_objects and 'audio0-5.o' not in old_objects
+                # Playhead has MAIN code only; its addition must not change any
+                # other module's order or introduce a non-sampler AUDIO object.
+                if 'playhead_module' in current['modules'] and 'playhead_module' not in modules:
+                    at=modules.index('modulation_skip_module') if 'modulation_skip_module' in modules else len(modules)
+                    modules.insert(at,'playhead_module')
+                def index(name):return int(Path(name).stem.split('-')[1])
+                added={name for name in new_objects if name not in old_objects}
+                assert all(name.startswith('audio0-') for name in added),added
+                assert not added or min(map(index,added))>max(index(n) for n in old_objects if n.startswith('audio0-'))
+                for name in added:new_objects.pop(name)
                 assert current['modules']==modules
                 assert new_section!=old_section and new_objects.keys()==old_objects.keys()
                 assert new_objects['audio0-0.o']!=old_objects['audio0-0.o']
@@ -204,7 +220,51 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
     else:skipped.append('AUDIO comparison: supply --previous-build')
     # The linked core's own safe-boot record writes, executed (core 1.7.1): the
     # path core 1.7 crashed on at its first trial boot. Needs Unicorn.
-    if unicorn_python:run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
+    if unicorn_python:
+        run('project operation lifecycle (Unicorn)',[
+            unicorn_python,'-B','tests/test_st_project_operations.py',out,'--emulate'])
+        run('64-slot stock streaming and release (Unicorn)',[
+            unicorn_python,'-B','tests/test_st_stock_stream_emu.py',
+            '--core',out,'--out',out/'stock-stream.json'])
+        run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
+        run('module startup after native clearing (Unicorn)',[unicorn_python,'-B','tests/test_st_module_startup_emu.py',
+            '--core',out,'--bank',out/'synfact-machines.smz4','--out',out/'module-startup.json'])
+        if 'core:core_native_route_fill' in json.loads((out/'verification.json').read_text())['symbols']:
+            run('resident native routes and ABI (Unicorn)',[unicorn_python,'-B','tests/test_st_native_routes_emu.py',
+                '--core',out,'--out',out/'native-routes.json'])
+        if 'core:core_native_profile_buffer' in json.loads((out/'verification.json').read_text())['symbols']:
+            baseline=previous if previous and 'core:core_native_list' in json.loads(
+                (previous/'verification.json').read_text())['symbols'] else out
+            if baseline==out:skipped.append('native service/mixer performance A/B: supply compatible --previous-build')
+            for script,label,output in (
+                    ('test_st_native_service_emu.py','native service results/profiling/ABI','native-service.json'),
+                    ('test_st_core_mixer_emu.py','linked mixer stock state/cost','core-mixer.json')):
+                run(label+' (Unicorn)',[unicorn_python,'-B','tests/'+script,
+                    '--before',baseline,'--after',out,'--out',out/output])
+        if 'modulation_skip_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
+            run('real LFO3/MSKIP installation and modulation (Unicorn)',[unicorn_python,'-B','tests/test_st_patchers_emu.py',
+                '--core',out,'--bank',out/'synfact-machines.smz4','--out',out/'patchers.json'])
+        from elekloader.sdk import elf
+        bank_elf=out/'synfact-machines.work/main.elf'
+        bank_symbols={s.name for s in elf.Elf.load(bank_elf).symbols}
+        if 'lfo3_owned_row_lookup' in bank_symbols:
+            if 'playhead_native' in bank_symbols:
+                run('full native catalog interest capacity (Unicorn)',[
+                    unicorn_python,'-B','tests/test_st_native_catalog_emu.py','--core',out,
+                    '--bank',out/'synfact-machines.smz4','--out',out/'native-catalog.json'])
+            reference=previous/'synfact-machines.smz4' if previous else None
+            if reference and reference.exists() and 'lfo3_module' in json.loads(
+                    Path(str(reference)+'.json').read_text())['modules']:
+                run('LFO3/ARP event ownership and exact copies (Unicorn)',[
+                    unicorn_python,'-B','tests/test_st_lfo3_events_emu.py','--core',out,
+                    '--before',reference,'--after',out/'synfact-machines.smz4',
+                    '--out',out/'lfo3-events.json'])
+                if 'lfo3_output_rows' in bank_symbols:
+                    run('LFO3 output activity and native route transitions (Unicorn)',[
+                        unicorn_python,'-B','tests/test_st_lfo3_activity_emu.py','--core',out,
+                        '--before',reference,'--after',out/'synfact-machines.smz4',
+                        '--out',out/'lfo3-activity.json'])
+            else:skipped.append('LFO3 event differential: supply --previous-build with LFO3 bank/work')
     else:skipped.append('safe-boot emulation: supply --unicorn-python (and LIBUNICORN_PATH)')
     if 'dm_destination_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
         if unicorn_python:run('Digi Mono native destination lists (Unicorn)',[unicorn_python,'-B','tests/test_st_digimono_destinations_emu.py',out])

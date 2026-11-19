@@ -15,17 +15,19 @@ const struct st_machine_ui_api core_machine_ui_api={7};
 void *fw_malloc(u32 n){(void)n;assert(0);return 0;}
 void fw_free(void *p){(void)p;assert(0);}
 void core_machine_input_reset(void){}
+void core_audio_idle_reset(void){}
 void core_event_publish(const u32 *p)
 {
     u32 k;for(k=0;p[k];k+=2)*(u32 *)p[k]=p[k+1];                     /* interest + page view words */
     assert(k==2*((ST_NATIVE_OPERATION_LIMIT+3)/4+1));publications++;
 }
 #include "../mods/core-st/modules.c"
-static int interest_open(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(i<ST_NATIVE_OPERATION_COUNT?core_native_interest[i]!=1:i==ST_NATIVE_OPERATION_COUNT+1 && !core_native_interest[i])return 0;return 1;}
+static int interest_open(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(i<ST_NATIVE_OPERATION_COUNT?!core_native_interest[i]:i==ST_NATIVE_OPERATION_COUNT+1 && !core_native_interest[i])return 0;return 1;}
 int main(void)
 {
     u32 args[]={2},result=0;
-    assert(interest_open());core_native_initialize();assert(interest_open());
+    assert(interest_open() && core_native_interest[ST_NATIVE_LFO]==128);
+    core_native_initialize();assert(interest_open() && core_native_interest[ST_NATIVE_LFO]==128);
     assert(core_event_native(7,args,&result) && result==123 && calls==1);
     assert(core_modules_bind(0,0) && publications==1 && interest_open());
     assert(!core_module_count && !core_module_subscriptions);

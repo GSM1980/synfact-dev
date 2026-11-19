@@ -1,9 +1,44 @@
-# Audio Recorder for Syntakt (1.1)
+# Audio Recorder for Syntakt (1.4)
+
+Desktop OS 1.42 release: **1.4.1**, based on remote main `f48f3ab`.
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+
+Version 1.2 consolidates the MAIN idle callback work tested as development
+1.1.1. See [the release mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
 
 Source port of Synfact's recorder, UI, trim, save job, optimized capture and
-normalizer. Requires Syntakt OS 1.41 and **core 0.12.0 / UI API 6** with its
+normalizer. Requires Syntakt OS 1.41 and **core 1.9.0 / host API 15** with its
 AUDIO companion. The recorder is an optional MAIN module inside the same SMZ4
 bank as FM TONE and the four SP machines. It does not require a donor SYX.
+
+After STOP or a step-length stop, a closed take requests the core's reduced
+MAIN mode while the sequencer is stopped. Capture, mix/FX sends, delay/reverb,
+modulation/LFO bodies and render-in observers are omitted; native DMA, CPU2
+control frames, sample-pool transfers and the final output stage continue.
+FUNC+YES auditions the normalized selection in mono/stereo. PLAY press,
+repeat and release are consumed throughout the post-take recorder session,
+including naming and assignment. Closing/covering the recorder with an
+unrelated view, or clearing the take, restores normal processing next block.
+Naming and assignment retain reduced mode. Reopening a retained take stops
+transport and requests reduced mode again, preserving PCM and trim. The UI
+also stops transport after capture ends with YES or an external START arrives
+while editing a completed take. The core falls back to normal audio whenever
+transport is actually running, until the UI has issued STOP. FUNC+NO discards
+the take and restores full processing while staying in the recorder.
+STOP while capturing a take explicitly calls native transport STOP from the UI event,
+independently of whether its configured length was reached, and consumes both
+edges/repeats. This enters reduced audio before normalization without relying
+on STOP propagating through the opaque recorder view.
+
+This first experimental version freezes FX delay-line state while bypassed;
+existing FX tails can resume after leaving. USB per-track transport and AUDIO
+synthesis are retained. Only MAIN's music mix is replaced; no timer, DMA,
+mailbox, or instrument connection is disabled. Physical sound, save speed and
+CPU reduction need comparison on the instrument.
 
 ## Controls
 
@@ -40,7 +75,8 @@ audition and the input monitor play each side on its own side. A stereo take
 is saved interleaved with the HZFS stereo flag (core 1.8), so the pool and the
 samplers play it in stereo. Monitor affects external inputs only. PLAY/STOP
 continue through the native transport; a take that fills its set number of
-steps stops a playing sequencer (native STOP `4008c288`) before normalizing.
+steps, or ending capture with YES, stops a playing sequencer (native STOP
+`4008c288`) before normalizing.
 Audition and monitor use the core's preview bus `8000dfd0`, outside the FX
 track (`<syntakt/mix.h>`). Saving uses a native 16-character name;
 NO in track selection skips assignment and still saves the sample.
@@ -80,6 +116,15 @@ optimized full 32-frame path, partial-tail behavior, 60 Hz empty-state metering
 and inactive-state skips. The source normalizer retains ColdFire MULS.L/SWAP,
 exact -1 dBFS fixed-point scaling and combined waveform-envelope updates.
 
+MAIN LR stereo RECORDING now converts directly to PCM in an unrolled assembly
+loop, collecting PCM/meter peaks in the same pass. Return correction uses
+integer EMAC products with the original per-product rounding and saves/restores
+the complete physical accumulator state it touches. Known-zero correction
+banks skip redundant clears and arithmetic. ARMED, partial tails and unprimed
+blocks retain the general path. No audio frames are decimated or deferred.
+See [capture measurements](../../docs/RECORDER-CAPTURE-CPU.md) for the real-bank
+differential, instruction counts and the limits of these measurements.
+
 Normalization runs in 3,072-frame quotas, at most 32 per UI tick. Save writes
 and verification use bounded 4 KiB steps. Each job checks the audio clock
 between steps against a soft 4 ms budget; a native storage call is not a hard
@@ -117,6 +162,15 @@ performed by a build or test.
 
 ## Validation
 
+Version 1.1.1 keeps disabled-view clock/phase maintenance in the small audio
+callback, avoiding the capture worker's saved register frame. It enters the
+audition worker only for a nonzero playback length; closing the view still
+allows audition. Capture, input monitoring and normalization are unchanged.
+The linked differential in `tests/test_st_idle_audio_paths_emu.py` checks 142
+transitions against the preceding bank, including wraparound, audition while
+closed and synchronous view closure. Instruction counts are not hardware CPU
+percentages; see [the MAIN measurements](../../docs/IDLE-MAIN-PERFORMANCE.md).
+
 `tests/test_st_recorder.c` executes the production C with explicit native UI/IO
 doubles and the real core HZFS/CRC code on a 32-bit host. It covers double-tap
 edges/wrap, focus, raw encoders, trim/zoom, 72 capture comparisons, 56 exact
@@ -125,7 +179,10 @@ pool/AUDIO failures, competing transfers and closing during save.
 
 `tests/test_st_recorder.py BUILD_DIR --synfact PATH` checks source provenance,
 linked event/host ABI, target flags, IRQ helper instructions and retained donor
-draw/trim/optimized arithmetic. The complete regression runner also checks FM,
+draw/trim/fallback arithmetic. `tests/test_st_recorder_capture_cfbench.py`
+executes the old/new linked callbacks and new assembly kernels in analog-emu,
+comparing exact PCM, peaks, correction banks and physical EMAC state. The
+complete regression runner also checks FM,
 SP, project pools, Sample Manager, native hook replays, instruction legality,
 unit tests and lint. Final 0.12.0 AUDIO remains byte-identical to 0.11.0. These checks
 do not execute ColdFire or replace physical tests on the Syntakt.

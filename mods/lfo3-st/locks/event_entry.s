@@ -13,7 +13,7 @@ lfo3_events_capture_entry:
         movem.l (%sp),%d0-%d1/%a0-%a1
         lea 16(%sp),%sp
         move.l #1500,%d0
-        jmp 0x4008bbfc
+        jmp 0x4008bc74
 
         .globl lfo3_events_allocate_entry
 lfo3_events_allocate_entry:
@@ -26,41 +26,41 @@ lfo3_events_allocate_entry:
         lea 16(%sp),%sp
         clr.l 16(%a0)
         addq.l #1,(%a0)
-        jmp 0x4011a490
+        jmp 0x4011a654
 
         .globl lfo3_events_native_apply
 lfo3_events_native_apply:
         lea -44(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp 0x400978bc
+        jmp 0x40097934
 
         .globl lfo3_events_native_restore
 lfo3_events_native_restore:
         lea -36(%sp),%sp
         move.l 40(%sp),%d1
-        jmp 0x40097768
+        jmp 0x400977e0
 
         .globl lfo3_events_native_clear
 lfo3_events_native_clear:
         move.l 4(%sp),%d0
         move.l %d0,%d1
-        jmp 0x4009787a
+        jmp 0x400978f2
 
         .globl lfo3_events_native_fx_restore
 lfo3_events_native_fx_restore:
         lea -28(%sp),%sp
         clr.l %d0
-        jmp 0x40097808
+        jmp 0x40097880
 
         .globl lfo3_events_native_convert
 lfo3_events_native_convert:
         lea -12(%sp),%sp
         move.l 28(%sp),%d0
-        jmp 0x4008b838
+        jmp 0x4008b8b0
 
         .globl lfo3_events_native_pool_init
 lfo3_events_native_pool_init:
         move.l %d3,-(%sp)
         move.l %d2,-(%sp)
-        lea 0x444dbc80,%a0
-        jmp 0x4011a3aa
+        lea 0x444dcc80,%a0
+        jmp 0x4011a56e

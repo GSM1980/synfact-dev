@@ -29,7 +29,7 @@ int main(void)
          8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,~0u};
     u8 view[0x100]={0};u32 i,page,k,id,index,args[2],result,selected,changed[28];
     core_machine_ui_definitions=uis;assert(core_machine_bind(defs,5));
-    *(u32 *)view=0x401ca0dcu;*(u32 *)(view+0x88)=0x14;*(u32 **)(view+0x7c)=malloc(4);
+    *(u32 *)view=0x401ca37cu;*(u32 *)(view+0x88)=0x14;*(u32 **)(view+0x7c)=malloc(4);
     **(u32 **)(view+0x7c)=6;*(u32 **)(view+0x80)=*(u32 **)(view+0x84)=*(u32 **)(view+0x7c)+1;
     for(i=0;i<5;i++){
         active_type=defs[i].type;core_machine_sync(view);

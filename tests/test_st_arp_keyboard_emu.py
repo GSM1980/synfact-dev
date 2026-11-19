@@ -1,4 +1,4 @@
-"""Standalone mono ARP fed by real OS 1.41 held-key/priority instructions.
+"""Standalone mono ARP fed by real OS 1.42 held-key/priority instructions.
 
 No POLY initialization. Sound lookup/publication, smoothing and lock-apply
 are explicit boundaries. Executes native held set, note priority, pool/queue,
@@ -18,7 +18,7 @@ class KeyboardMachine(Machine):
         self.call(self.cs['core:core_native_initialize'])
         self.withheld=0;self.fail_template=False
     def code(self,u,pc,n,ctx):
-        if pc==0x400a3548:
+        if pc==0x400a35c0:
             track=self.word(u.reg_read(UC_M68K_REG_A7)+4)
             self.ret(KIT+0x2a+track*0x123);return # Sound lookup boundary
         if pc==self.sym.get('arp_native') and getattr(self,'fail_template',False):
@@ -26,17 +26,17 @@ class KeyboardMachine(Machine):
             if self.word(sp+4)==2:
                 event=self.word(self.word(sp+8))
                 if self.word(event)!=0x41525031:
-                    self.withheld=self.word(0x444de440);self.w(0x444de440,0);self.fail_template=False
+                    self.withheld=self.word(0x444df440);self.w(0x444df440,0);self.fail_template=False
         return super().code(u,pc,n,ctx)
     def key(self,note,on=1,track=0,flags=0x10601):
         a=[track,note,100,on,flags]+[0]*10
         self.u.mem_write(KEY,struct.pack('>15I',*a))
-        self.call(0x40119684,KEY)
+        self.call(0x40119848,KEY)
     def pitches(self):return [x['pitch'] for x in self.log]
     def advance(self):
         # Normal internal-clock advance, independent of the sequencer's PLAY.
         before=self.word(0x800046ec);self.phase='call'
-        self.u.emu_start(0x400a5398,0x400a53b6,count=100)
+        self.u.emu_start(0x400a5410,0x400a542e,count=100)
         assert self.word(0x800046ec)==(before+28800)&0xffffffff
 
 class ProducerMachine(KeyboardMachine):
@@ -46,15 +46,15 @@ class ProducerMachine(KeyboardMachine):
     """
     def __init__(self,core,bank):
         super().__init__(core,bank);self.preview=W+0xc00;self.inputs=[]
-        self.w(0x444842d0,self.preview);self.w(0x402d575c,0xffffffff)
+        self.w(0x444852d0,self.preview);self.w(0x402d5aac,0xffffffff)
         for track in range(self.tracks):
-            self.call(0x400b3574,0x40a38b34+track*0x499,0)
-            self.call(0x40104fd8,track)
+            self.call(0x400b35ec,0x40a39b34+track*0x499,0)
+            self.call(0x4010519c,track)
         self.w(0x800030bc,KIT+0xdce);self.w(0x80003120,KIT)
         self.u.mem_write(self.preview,bytes(0x123))
     def code(self,u,pc,n,ctx):
-        if pc in [0x40109efa,0x40109f6c,0x4008b7ce,0x401041c8]:self.ret();return
-        if pc==0x4008da6e:
+        if pc in [0x4010a0be,0x4010a130,0x4008b846,0x4010438c]:self.ret();return
+        if pc==0x4008dae6:
             self.u.mem_write(self.word(u.reg_read(UC_M68K_REG_A7)+12),bytes(4));self.ret();return
         if pc==self.sym.get('arp_native') and hasattr(self,'inputs'):
             sp=u.reg_read(UC_M68K_REG_A7)
@@ -64,16 +64,16 @@ class ProducerMachine(KeyboardMachine):
         return super().code(u,pc,n,ctx)
     def key(self,note,on=1,track=0,flags=None):
         assert flags is None
-        if on==1:self.call(0x40104c02,track,note,100,64,0,0xffffffff,0xffffffff,0xffffffff)
-        else:self.call(0x4010502c,track,note,64)
+        if on==1:self.call(0x40104dc6,track,note,100,64,0,0xffffffff,0xffffffff,0xffffffff)
+        else:self.call(0x401051f0,track,note,64)
 
 def verify(core,bank,out):
     results=[]
     for mode,expected in [(1,[67,60,64,67]),(2,[60,64,67,60]),(3,[67,64,60,67])]:
-        m=KeyboardMachine(core,bank);pools=m.pool_counts();m.w(0x43bd73bc,2)
+        m=KeyboardMachine(core,bank);pools=m.pool_counts();m.w(0x43bd83bc,2)
         assert m.configure(mode=mode,range_=0)
         for n in [67,60,64]:m.key(n)
-        assert m.word(m.sym['arp_live'])==1 and not m.word(0x444de434),'input chord sounded directly'
+        assert m.word(m.sym['arp_live'])==1 and not m.word(0x444df434),'input chord sounded directly'
         for t in [0,5400000,10800000,16200000]:m.frame(t)
         assert m.pitches()==expected,(mode,m.log)
         # Each output still targets track 0; other pitches/gates stay untouched.
@@ -97,13 +97,13 @@ def verify(core,bank,out):
         if action=='off':assert m.configure(mode=0)
         elif action=='stop':
             m.u.mem_write(W+0x140,struct.pack('>6I',0x41525031,0x53544f50,0,0,0,0))
-            m.call(0x4011a722,W+0x140)
-        else:m.w(0x43bd743c if action=='kit' else 0x43bd7430,(KIT if action=='kit' else SEQ)+0x30000);m.frame(28800)
+            m.call(0x4011a8e6,W+0x140)
+        else:m.w(0x43bd843c if action=='kit' else 0x43bd8430,(KIT if action=='kit' else SEQ)+0x30000);m.frame(28800)
         assert m.pool_counts()==pools and m.word(0x80003084)==1 and not m.word(m.sym['arp_live'])
         results.append({'case':action,'pools_balanced':True})
     # A changed set with a cyclic native list is bounded and stops the ARP.
     m=KeyboardMachine(core,bank);pools=m.pool_counts();m.configure();m.key(60);m.frame(0)
-    base=0x4553f6e0;node=m.word(base+0x410);m.w(node+4,node)
+    base=0x455406e0;node=m.word(base+0x410);m.w(node+4,node)
     m.w(base+4,m.word(base+4)|(1<<29))
     m.frame(28800);assert m.pool_counts()==pools and not m.word(m.sym['arp_live'])
     results.append({'case':'corrupt-held-list-stops-bounded'})
@@ -124,17 +124,17 @@ def verify(core,bank,out):
     results.append({'case':'eight-independent-digital-tracks-no-POLY'})
     # Real allocator returns empty at template acquisition: original plays.
     m=KeyboardMachine(core,bank);pools=m.pool_counts();m.configure();m.fail_template=True;m.key(60)
-    assert m.withheld and not m.word(0x444de440)
-    m.w(0x444de440,m.withheld);m.frame(0)
+    assert m.withheld and not m.word(0x444df440)
+    m.w(0x444df440,m.withheld);m.frame(0)
     assert m.pitches()==[60] and not m.word(m.sym['arp_live']) and m.pool_counts()==pools
     results.append({'case':'template-pool-empty-native-fallback'})
     # Output bucket pressure is bounded; keep the chord, resume next division.
     m=KeyboardMachine(core,bank);pools=m.pool_counts();m.configure(range_=0);m.key(60);m.key(64)
-    held=m.word(0x444de43c);m.w(0x444de43c,0);m.frame(0);assert not m.log
-    m.w(0x444de43c,held);m.frame(5400000);assert m.pitches()==[64]
+    held=m.word(0x444df43c);m.w(0x444df43c,0);m.frame(0);assert not m.log
+    m.w(0x444df43c,held);m.frame(5400000);assert m.pitches()==[64]
     m.key(60,2);m.key(64,2);m.frame(5428800);assert m.pool_counts()==pools
     results.append({'case':'output-bucket-full-next-division-recovery'})
-    m=KeyboardMachine(core,bank);pools=m.pool_counts();m.w(0x43bd73bc,2);m.configure(range_=0)
+    m=KeyboardMachine(core,bank);pools=m.pool_counts();m.w(0x43bd83bc,2);m.configure(range_=0)
     for n in [60,64,67]:m.key(n)
     while m.word(0x800046ec)<10828800:
         m.frame(m.word(0x800046ec));m.advance()

@@ -1,6 +1,6 @@
 {
-  "id": "poly-st", "version": "1.4", "title": "POLY", "license": "GPL-2.0-or-later",
-  "device": "syntakt", "os": "1.41",
-  "sources": ["main.c", "native.s", "publication.s"],
+  "id": "poly-st", "version": "1.7", "title": "POLY", "license": "GPL-2.0-or-later",
+  "device": "syntakt", "os": "1.42",
+  "sources": ["main.c", "native.s", "publication.s", "sync.s", "copies.s"],
   "smz_module": {"descriptor": "poly_module"}
 }

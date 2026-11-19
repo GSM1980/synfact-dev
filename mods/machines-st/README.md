@@ -1,5 +1,12 @@
 # Syntakt machine companion
 
+Desktop OS 1.42 release: **1.0.2**, based on remote main `f48f3ab`.
+Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+
+Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+new bank; older hardware measurements below refer to the previous OS. See
+[the port notes](../../docs/OS142-PORT.md).
+
 This ordinary SDK module declares the MAIN capability used by core-st's optional
 machine loader. It contains no machine implementation. Its matching AUDIO
 services are source-built by `python -m elekloader.sdk.syntakt`.

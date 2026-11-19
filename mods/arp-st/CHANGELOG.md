@@ -1,9 +1,47 @@
 # Changelog: ARP experiment
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.8.
+Generated from git history by `tools/changelog.py`. Latest version: 1.10.7.
+
+## 1.10.7 (2026-11-18)
+
+- Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
+- Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
+- Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
+- Fix ARP encoder edits beneath mute and Chorus popup labels (`6bcf23b`, 2026-11-18)
+
+## 1.10.6 (2026-11-17)
+
+- Changelogs: POLY 1.7 (`c0e44f9`, 2026-11-18)
+- ARP 1.10.6: RANGE shows the octaves moved (-3..3) (`07c5d2b`, 2026-11-17)
+- Changelogs: ARP 1.10.6 (`3d50e09`, 2026-11-17)
+
+## 1.10.5 (2026-11-17)
+
+- move to OS 1.42 (`276667a`, 2026-11-17)
+- Changelogs: move to OS 1.42 (`3c0cdcb`, 2026-11-17)
+
+## 1.10.4 (2026-11-16)
+
+- Fix TRIG/ARP mute navigation and reentrant native view cleanup (`5ff821a`, 2026-11-16)
+- Generate ARP 1.10.4 and core 1.8.2 changelogs (`84ec2db`, 2026-11-16)
+
+## 1.10 (2026-11-14)
+
+- Changelogs: Playhead 1.0 (`c60f324`, 2026-11-16)
+- Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
+- Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
+- Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
+
+## 1.9 (2026-11-11)
+
+- ARP 1.9, POLY 1.5: TRIG page popups and blue arp steps (`80f36a1`, 2026-11-11)
+- Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)
 
 ## 1.8 (2026-11-09)
 
+- Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
+- Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
+- Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 - ARP 1.8, FM TONE 1.1, POLY 1.4: TRIG pages, SCALE, falling RANGE, FUNC snaps (`f89c72b`, 2026-11-09)
 - Syntakt docs: setup guide, machine guides, and environment variables (`c8071dd`, 2026-11-09)
 - Changelogs for the Syntakt core and mods, generated from git history (`5382765`, 2026-11-09)

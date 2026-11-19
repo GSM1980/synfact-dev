@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Borrowed OS 1.41 pattern services, UI task only. These use the existing
+ * Borrowed OS 1.42 pattern services, UI task only. These use the existing
  * native models/proxies and the core's normal parameter-ID translation.
  * No ownership transfer, private lock matrix or firmware hook.
  */

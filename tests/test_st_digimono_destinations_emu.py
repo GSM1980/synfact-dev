@@ -50,23 +50,23 @@ class Destination(Core):
         module=self.bank_symbols['dm_destination_module']
         assert self.invoke(self.word(module+4),API)==0
         assert self.word(self.sym['core:core_parameter_providers'])==self.bank_symbols['dm_destination_query']
-        self.w(PROXY,0x401c3aac);self.w(PROXY+0x10,MODEL)
-        self.w(MODEL,0x401c61f4);self.w(MODEL+0x10,SOUND)
+        self.w(PROXY,0x401c3d4c);self.w(PROXY+0x10,MODEL)
+        self.w(MODEL,0x401c6494);self.w(MODEL+0x10,SOUND)
         self.u.mem_write(SOUND+0xa2,bytes([71]))
         # Native C++ destination-order map: boot's empty header, then allow
         # its real 63-entry population and additional owners to execute.
-        self.u.mem_write(0x405fd330,bytes(24))
-        self.w(0x405fd33c,0x405fd334);self.w(0x405fd340,0x405fd334)
-        self.u.mem_write(0x405fd348,b'\x01')
+        self.u.mem_write(0x405fe330,bytes(24))
+        self.w(0x405fe33c,0x405fe334);self.w(0x405fe340,0x405fe334)
+        self.u.mem_write(0x405fe348,b'\x01')
         self.ui_calls=0
 
     def environment(self,u,pc,size,data):
-        if pc in (0x4010350c,0x40103788):
+        if pc in (0x401036d0,0x4010394c):
             count=self.args(1)[0];pointer=self.heap
             self.heap+=(count+31)&~15
             assert self.heap<0x47800000
             self.ret(pointer)
-        elif pc in (0x40103712,0x40103794):self.ret(0)
+        elif pc in (0x401038d6,0x40103958):self.ret(0)
         elif hasattr(self,'bank_symbols') and pc==self.bank_symbols.get('dm_destination_query'):
             q,args,model,value=self.args(4)
             if q==32:
@@ -108,8 +108,8 @@ def verify(folder):
             ordered=[i for i in ids if ENGINE<=i<=ENGINE+8]
             saved=bytes(machine.u.mem_read(SOUND,172))
             for first,second in zip(ordered,ordered[1:]):
-                a=machine.invoke(0x400a5c4a,first)<<8
-                b=machine.invoke(0x400a5c4a,second)<<8
+                a=machine.invoke(0x400a5cc2,first)<<8
+                b=machine.invoke(0x400a5cc2,second)<<8
                 assert machine.invoke(0x40014b90,PROXY,a,0x100,mask)==b
                 assert machine.invoke(0x40014b90,PROXY,b,-0x100,mask)==a
             assert bytes(machine.u.mem_read(SOUND,172))==saved
@@ -118,7 +118,7 @@ def verify(folder):
                 if common is None:common=other
                 else:assert common==other,'non-machine targets changed with TYPE'
             for index in range(9):
-                assert machine.invoke(0x400a666a,ENGINE+index,a5=PROXY)==0xe00,'runtime flags filtered'
+                assert machine.invoke(0x400a66e2,ENGINE+index,a5=PROXY)==0xe00,'runtime flags filtered'
             cases+=1
     print('PASS:',cases,'native destination lists and relative selectors: all 12 TYPEs, LFO1/2/3 masks, no blanks, unchanged common targets/Sound/runtime flags; real model getter, sorting, core and bank')
 

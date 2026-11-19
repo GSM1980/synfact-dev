@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| Fixed OS 1.41 bridges. No module-supplied patches or destinations.
+| Fixed OS 1.42 bridges. No module-supplied patches or destinations.
 | Each adapter tests its own operation byte of core_native_interest (modules.c).
         .section .run,"ax"
         .macro ENTRY name,op,bytes
@@ -18,17 +18,17 @@ core_stock_\name:
         ENTRY trig,0,8
         lea -56(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp 0x4008b88a
+        jmp 0x4008b902
         ENTRY enqueue,1,6
-        jmp 0x4011a648
+        jmp 0x4011a80c
         ENTRY header_load,5,8
         lea -12(%sp),%sp
         movem.l %d2/%a2-%a3,(%sp)
-        jmp 0x400a79d4
+        jmp 0x400a7a4c
         ENTRY header_reset,6,6
         movea.l 4(%sp),%a0
         tst.l %a0
-        jmp 0x400b36d4
+        jmp 0x400b374c
 
         .macro OBSERVE name,op,arg
         .globl core_native_\name
@@ -49,7 +49,7 @@ core_native_\name:
         OBSERVE publish,3,%a2
         lea 0x80004688,%a4
         clr.l %d5
-        jmp 0x400a4ae6
+        jmp 0x400a4b5e
 
         .globl core_native_immediate
 core_native_immediate:
@@ -67,10 +67,10 @@ core_native_immediate:
         tst.l %d0
         bne.s 1f
 8:
-        movea.l 0x444de434,%a2
+        movea.l 0x444df434,%a2
         tst.l %a2
-        jmp 0x4011a73c
-1:      jmp 0x4011a780
+        jmp 0x4011a900
+1:      jmp 0x4011a944
 
         .globl core_native_type,core_native_src_type
 core_native_type:
@@ -88,7 +88,7 @@ core_native_type:
         bne.s 8f
 7:
         .byte 0x71,0x19,0xe1,0x88,0x31,0x40,0x00,0x3e
-        jmp 0x400a4bd6
+        jmp 0x400a4c4e
 8:
         lea -16(%sp),%sp
         movem.l %d1/%a0-%a1,(%sp)
@@ -102,7 +102,7 @@ core_native_type:
         lea 1(%a1),%a1
         lsl.l #8,%d0
         move.w %d0,62(%a0)
-        jmp 0x400a4bd6
+        jmp 0x400a4c4e
 core_native_src_type:
         tst.b core_native_interest+4
         beq.s 7f
@@ -118,7 +118,7 @@ core_native_src_type:
         bne.s 8f
 7:
         .byte 0x71,0x2b,0x0d,0xa0,0x72,0x25,0xb2,0x80
-        jmp 0x400a4c9e
+        jmp 0x400a4d16
 8:
         lea -16(%sp),%sp
         movem.l %d1/%a0-%a1,(%sp)
@@ -132,7 +132,7 @@ core_native_src_type:
         lea 16(%sp),%sp
         moveq #0x25,%d1
         cmp.l %d0,%d1
-        jmp 0x400a4c9e
+        jmp 0x400a4d16
 
         .globl core_native_sound_set,core_native_machine_select
 core_native_sound_set:
@@ -204,6 +204,10 @@ core_native_machine_select:
 
         .globl core_native_modulation,core_native_lfo
 core_native_modulation:
+        tst.l core_audio_idle_active
+        beq.s .Lidle_mod_normal
+        rts
+.Lidle_mod_normal:
         tst.b core_native_interest+16
         beq.s 3f
         clr.l -(%sp)
@@ -216,9 +220,13 @@ core_native_modulation:
         jmp (%a0)
 3:      lea -60(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp 0x40097b04
+        jmp 0x40097b7c
 | LFO subscribers receive the native call's {working, tempo, trigs} (0.12.14).
 core_native_lfo:
+        tst.l core_audio_idle_active
+        beq.s .Lidle_lfo_normal
+        rts
+.Lidle_lfo_normal:
         tst.b core_native_interest+17
         beq.s 4f
         pea 4(%sp)
@@ -231,4 +239,4 @@ core_native_lfo:
         jmp (%a0)
 4:      lea -64(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp 0x4011926e
+        jmp 0x40119432

@@ -27,17 +27,37 @@ static void receiver_sleep(u32 delay)
 static unsigned char disk[4][0x80000],sample[64+2200];
 static unsigned char project_sector[512];
 static u32 io_fail,live,id,allocations;
+static u32 stock_lengths[64],stock_reads,stock_peaks,stock_io_fail;
+static u32 fail_allocations,fail_boot;
+static void *owned[64];
 const unsigned char core_pool_image[4096]={0x45,0x4c,0x50,0x31,0,0,0x10,0};
+/* 2.1.1: only the header and code are resident (pool_audio.py); this one has a header only. */
+const u32 core_pool_image_bytes=64;
 u32 fw_mmc_ready[]={1},fw_mmc_sectors[]={0x3a4000},core_machine_pages;
 void *fw_malloc(u32 n)
 {
-    void *p=VirtualAlloc((void *)(0x47000000u+0x100000u*allocations++),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
-    if(p)live++;return p;
+    if(fail_allocations || (fail_boot && n==5120))return 0;
+    u32 i;void *p;for(i=0;i<64 && owned[i];i++){}assert(i<64);
+    p=VirtualAlloc((void *)(0x47000000u+0x100000u*i),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
+    if(p){owned[i]=p;live++;allocations++;}return p;
 }
-void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));live--;}
+void fw_free(void *p){u32 i;for(i=0;i<64 && owned[i]!=p;i++){}assert(i<64);
+ assert(VirtualFree(p,0,MEM_RELEASE));owned[i]=0;live--;}
+void *fw_memcpy(void *d,const void *s,u32 n){return memcpy(d,s,n);}
+void *fw_memset(void *d,int v,u32 n){return memset(d,v,n);}
 int fw_mmc_read(u32 lba,u32 n,void *p)
 {
     if(lba==0x80000u && n==512){memcpy(p,project_sector,512);return 0;}
+    if(lba>=8*1024u && lba<72*1024u){
+        u32 slot=(lba>>10)-8,at=(lba&1023u)*512,k,frame;u8 *q=p,header[64]={0};
+        stock_reads++;if(stock_io_fail)return -1;wr(header,0x53414d50u);wr(header+8,stock_lengths[slot]);
+        for(k=0;k<n;k++){
+            if(at+k<64)q[k]=header[at+k];
+            else {frame=(at+k-64)/2;u32 v=slot*257;
+                if(stock_peaks && !slot)v=frame==4997?1234:frame==4999?20000:0;
+                q[k]=(u8)(v>>((at+k)&1?0:8));}
+        }return 0;
+    }
     u32 at=(lba-(0x600u<<10))*512;assert(lba>=(0x600u<<10) && at+n<=sizeof(disk));
     if(io_fail)return -1;memcpy(p,(u8 *)disk+at,n);return 0;
 }
@@ -51,14 +71,15 @@ void core_pool_ui_file(u32 code,u32 ordinal,u32 n){(void)code;(void)ordinal;(voi
 static int sample_source(void *ctx,u32 at,u32 n,void *dst)
 {(void)ctx;memcpy(dst,sample+at,n);return 0;}
 static void reset_state(void)
-{if(state)fw_free(state);state=0;core_pool_boot_pages=0;core_pool_busy=0;assert(live==(saved_record!=0)+(waves!=0));}
+{core_pool_boot_release();if(state)fw_free(state);state=0;stock_last=0xffffffffu;
+ if(waves)fw_free(waves);waves=0;work=128;
+ core_pool_stock_bytes=256;core_pool_boot_pages=0;core_pool_busy=0;assert(live==(saved_record!=0)+(waves!=0));}
 int main(void)
 {
-    u16 entries[128];u8 object[516],source_project[512],copy_project[512],*blob;u32 i,pos,wire;
-    const u8 *page;const struct st_machine_wave *wave;void *project_ram,*blob_ram;
+    u16 entries[128];u8 object[516],source_project[512],copy_project[512];u32 i,wire;
+    const u8 *page;const struct st_machine_wave *wave;void *project_ram;
     project_ram=VirtualAlloc((void *)0x40650000u,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
-    blob_ram=VirtualAlloc((void *)0x4d840000u,0x30000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
-    assert(project_ram==(void *)0x40650000u && blob_ram==(void *)0x4d840000u);
+    assert(project_ram==(void *)0x40650000u);
     assert(VirtualAlloc((void *)0x10000000u,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x10000000u);
     assert(VirtualAlloc((void *)0x43bd0000u,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x43bd0000u);
     memset(source_project,0xa5,512);memset(copy_project,0,512);
@@ -105,18 +126,16 @@ int main(void)
     wr(sample,0x53414d50);wr(sample+8,1100);
     for(i=64;i<sizeof(sample);i++)sample[i]=(u8)i;
     assert(core_hzfs_put(&core_hzfs_native_io,"long",sizeof(sample),0,sample_source,0,&id)==1 && id==1);
-    blob=(u8 *)STOCK_BLOB;pos=0;
-    for(i=0;i<64;i++){wr(blob+pos,4);pos+=4;memset(blob+pos,(int)i,8);pos+=8;}
-    *(u32 *)0x4d84f2c1u=pos;
+    for(i=0;i<64;i++)stock_lengths[i]=4;
     memset(PROJECT,0,512);core_pool_read(PROJECT,entries);entries[64]=0x8001;core_pool_write(PROJECT,entries);
     core_pool_prepare();assert(core_pool_boot_pages==4 && state && state->files==1);
-    page=core_pool_boot_page(0,&wire);assert(wire==0x4164 && !memcmp(page,sample+64,2048));
+    page=core_pool_boot_page(0,&wire);assert(wire==0x8003 && !memcmp(page,sample+64,2048));
     assert(core_pool_boot_page(0,&wire)==page); /* sender retry */
-    page=core_pool_boot_page(1,&wire);assert(wire==0x4165 && !memcmp(page,sample+64+2048,152));
+    page=core_pool_boot_page(1,&wire);assert(wire==0x8004 && !memcmp(page,sample+64+2048,152));
     for(i=152;i<2048;i++)assert(!page[i]);
-    page=core_pool_boot_page(2,&wire);assert(wire==0x4162 && rd(page)==IMAGE_MAGIC);
+    page=core_pool_boot_page(2,&wire);assert(wire==0x8001 && rd(page)==IMAGE_MAGIC);
     assert(rd(page+8)==adler(state->image+12,4096-12));
-    page=core_pool_boot_page(3,&wire);assert(wire==0x4163);
+    page=core_pool_boot_page(3,&wire);assert(wire==0x8002);
     assert(rd(state->image+0xc00+64*8)==1100 && rd(state->image+0xc04+64*8)==CORE_POOL_PCM);
     assert(state->frames[0]==4 && state->pointer[0]==STOCK_AUDIO+4);
     assert(core_pool_report[2]==1);
@@ -130,7 +149,7 @@ int main(void)
     }
     entries[64]=0x8001;core_pool_write(PROJECT,entries);
     for(i=0;i<128;i++){receiver_table[2*i]=state->frames[i];receiver_table[2*i+1]=state->pointer[i];}
-    *(volatile u32 *)0x43bdc824u=1;core_pool_created();assert(receiver_calls);
+    *(volatile u32 *)0x43bdd824u=1;core_pool_created();assert(receiver_calls);
     core_pool_read(PROJECT,entries);
     for(i=0;i<128;i++){
         assert(entries[i]==(i<64?i+1:0));assert(state->code[i]==entries[i]);
@@ -145,40 +164,45 @@ int main(void)
     /* A missing catalogue still preserves every native stock source. */
     io_fail=1;core_pool_prepare();io_fail=0;assert(core_pool_boot_pages==2);
     core_pool_boot_page(0,&wire);assert(state->frames[0]==4 && !state->frames[64]);reset_state();
-    /* The visible stock wave gets a whole-sample overview immediately, then
-     * the bounded idle scan refines peaks missed by the sparse pass. */
-    state=fw_malloc(sizeof(*state));assert(state);memset(state,0,sizeof(*state));
-    state->code[0]=1;state->frames[0]=state->stock_frames[0]=5000;
-    state->stock_pointer[0]=STOCK_AUDIO+0x1000;
-    memset(blob+0x1000,0,10000);
-    blob[0x1000+2*4997]=0x04;blob[0x1000+2*4997+1]=0xd2;
-    blob[0x1000+2*4999]=0x4e;blob[0x1000+2*4999+1]=0x20;
-    core_pool_wave_idle(0,64);wave=core_pool_wave(0);
-    assert(wave && wave->ready && wave->frames==5000 && wave->hi[95]==1234);
-    state->code[1]=2;state->frames[1]=state->stock_frames[1]=4;
-    state->stock_pointer[1]=STOCK_AUDIO+0x3000;
-    memset(blob+0x3000,0,8);
-    core_pool_wave_idle(1,64); /* interrupt the first sample's exact scan */
-    for(i=0;i<80;i++)core_pool_wave_idle(0,64);
-    assert(wave->ready==2 && wave->hi[95]==20000);
-    blob[0x1000+2*4997]=blob[0x1000+2*4997+1]=0;
-    blob[0x1000+2*4999]=blob[0x1000+2*4999+1]=0;
-    core_pool_wave_begin(1,5000,1);core_pool_wave_idle(0,64);
-    assert(wave->ready==1 && wave->hi[95]==0); /* same code, new PCM */
-    state->frames[0]=state->stock_frames[0]=4;
-    core_pool_wave_idle(0,64);wave=core_pool_wave(0);
-    assert(wave && wave->ready && wave->frames==4);
+    /* Boot does no envelope work. Lazy UI slices reread disk after release;
+     * exact cached peaks then require no further reads. */
+    stock_lengths[0]=5000;stock_peaks=1;core_pool_prepare();
+    for(i=0;i<(core_pool_stock_bytes+2047)/2048;i++){
+        const void *p=core_pool_stock_page(i);u32 before=stock_reads;
+        assert(core_pool_stock_page(i)==p && stock_reads==before);
+    }
+    assert(!waves && !core_pool_wave(0));
+    {u32 before=stock_reads,frames;const u8 *pcm;
+     core_pool_boot_release();assert(!boot);
+     assert(core_pool_sample_source(0,&pcm,&frames)==1 && !pcm && frames==5000);
+     for(i=0;i<3;i++)core_pool_wave_idle(0,2048);
+     wave=core_pool_wave(0);assert(stock_reads>before && wave && wave->ready==2 && wave->hi[95]==20000);
+     before=stock_reads;core_pool_wave_idle(0,2048);assert(stock_reads==before);
+     core_pool_stock_changed(0x400000);core_pool_wave_idle(0,2048);assert(stock_reads==before && wave->ready==2);}
     reset_state();
-    /* Two long samples loaded at boot both keep their waves. Before core 1.8
-     * the second evicted the first: no slot's frames are published until the
-     * boot load ends, so the cache took the first wave for unused. */
+    stock_lengths[0]=4;stock_peaks=0;
+    /* A write during a partial lazy scan must never produce a waveform of
+     * bytes different from the PCM that AUDIO loaded. */
+    stock_lengths[0]=5000;core_pool_prepare();core_pool_boot_release();core_pool_wave_idle(0,64);
+    wave=core_pool_wave(0);assert(wave && !wave->ready);
+    {u32 before=stock_reads;core_pool_stock_changed(0x400000);core_pool_wave_idle(0,2048);
+     assert(stock_reads==before && !wave->ready);}
+    reset_state();stock_lengths[0]=4;
+    /* Long samples also defer envelopes and independently cache lazy reads. */
     assert(core_hzfs_put(&core_hzfs_native_io,"two",sizeof(sample),0,sample_source,0,&id)==1 && id==2);
     memset(PROJECT,0,512);core_pool_read(PROJECT,entries);entries[64]=0x8001;entries[65]=0x8002;
     core_pool_write(PROJECT,entries);core_pool_prepare();assert(state && state->files==2);
     for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+    assert(!waves);core_pool_boot_release();core_pool_wave_idle(64,2048);core_pool_wave_idle(65,2048);
     {const struct st_machine_wave *a=core_pool_wave(64),*b=core_pool_wave(65);
      assert(a && b && a!=b && a->ready==2 && b->ready==2 && a->code==0x8001 && b->code==0x8002);}
     reset_state();
+    /* The boot CRC still validates AUDIO. If disk contents later change,
+     * a lazy HZFS scan must reject its new CRC rather than cache that wave. */
+    core_pool_prepare();for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+    core_pool_boot_release();disk[2][100]^=1;core_pool_wave_idle(64,2048);
+    wave=core_pool_wave(64);assert(wave && !wave->ready);disk[2][100]^=1;
+    core_pool_wave_idle(64,2048);assert(wave->ready==2);reset_state();
     /* Core 1.8: a stereo entry (flag ST_HZ_STEREO, interleaved L, R; frames
      * still counts samples) boots as frame pairs with channel count 2 in the
      * image's channel table; mono slots keep 1. */
@@ -192,6 +216,7 @@ int main(void)
     core_pool_boot_page(0,&wire);core_pool_boot_page(1,&wire);core_pool_boot_page(2,&wire);
     assert(rd(state->image+0xc00+64*8)==550 && rd(state->image+0xc04+64*8)==CORE_POOL_PCM);
     assert(state->image[0xb80+64]==2 && state->image[0xb80]==1 && state->channels[64]==2);
+    assert(!waves);core_pool_boot_release();core_pool_wave_idle(64,2048);
     wave=core_pool_wave(64);assert(wave && wave->frames==550 && wave->ready==2 && wave->channels==2);
     assert(core_pool_sample_channels(64)==2 && core_pool_sample_channels(0)==1 && core_pool_sample_channels(65)==1);
     /* L (even bytes 64+4k..) and R keep their own peaks: the pattern is i&255,
@@ -200,8 +225,86 @@ int main(void)
      assert(wave->lo[0]<=l && wave->hi[0]>=l && wave->lo_r[0]<=r && wave->hi_r[0]>=r);
      assert(wave->lo[0]!=wave->lo_r[0] || wave->hi[0]!=wave->hi_r[0]);}
     reset_state();
+    /* Budget snapshots exclude stock/lower slots and deduplicate upper aliases.
+     * Dry-run rejection must leave every descriptor and the mailbox untouched. */
+    core_pool_prepare();for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+    core_pool_boot_release();
+    {
+        struct st_pool_memory memory;struct st_hzfs fs;int opened=0;
+        u32 calls=receiver_calls;u32 saved_pointer=state->pointer[64];
+        core_pool_memory(&memory);
+        assert(memory.total==66711552u && memory.used==4096 && memory.bytes[64]==2200);
+        entry(65,550,saved_pointer,2);state->code[65]=0x8001;
+        core_pool_memory(&memory);assert(memory.used==4096 && memory.bytes[65]==2200);
+        entry(0,550,saved_pointer+4096,2);state->code[0]=0x8001;
+        core_pool_memory(&memory);assert(memory.used==4096);
+        for(i=0;i<128;i++)state->wanted[i]=state->code[i];
+        state->wanted[66]=0x8002;
+        entry(64,(CORE_POOL_END-CORE_POOL_PCM)/2,CORE_POOL_PCM,1);
+        assert(preflight(&fs,&opened)==-2);if(opened)core_hzfs_close(&fs);
+        assert(receiver_calls==calls && state->pointer[64]==saved_pointer && !state->frames[66]);
+        core_pool_write(PROJECT,state->wanted);assert(core_pool_sync()==-2);
+        assert(receiver_calls==calls && state->pointer[64]==saved_pointer && !state->frames[66]);
+        /* Fragmentation: sufficient total free space, no two-page hole. */
+        entry(64,(CORE_POOL_END-CORE_POOL_PCM-4096)/2,CORE_POOL_PCM+2048,1);
+        entry(65,0,0,1);state->code[65]=0;state->wanted[65]=0;
+        entry(0,0,0,1);state->code[0]=0;state->wanted[0]=0;
+        opened=0;assert(preflight(&fs,&opened)==-2);if(opened)core_hzfs_close(&fs);
+        /* A two-page free tail fits exactly. Removal frees the old extent. */
+        entry(64,(CORE_POOL_END-CORE_POOL_PCM-4096)/2,CORE_POOL_PCM,1);
+        opened=0;assert(preflight(&fs,&opened)==1);if(opened)core_hzfs_close(&fs);
+        state->wanted[64]=0;opened=0;assert(preflight(&fs,&opened)==1);if(opened)core_hzfs_close(&fs);
+        /* Two new files: the first fits, the second does not. Neither may
+         * reach AUDIO, and the existing large descriptor stays published. */
+        entry(64,0,0,1);state->code[64]=0;
+        entry(127,(CORE_POOL_END-CORE_POOL_PCM-4096)/2,CORE_POOL_PCM,1);state->code[127]=0x8003;
+        for(i=0;i<128;i++)state->wanted[i]=state->code[i];
+        state->wanted[64]=0x8001;state->wanted[65]=0x8002;
+        core_pool_write(PROJECT,state->wanted);assert(core_pool_sync()==-2);
+        assert(receiver_calls==calls && !state->frames[64] && !state->frames[65] && state->code[127]==0x8003);
+    }
+    reset_state();
+    /* Full legal stock capacity and a mixture of empty, short and rejected
+     * oversize headers. Compare every byte, including page boundary splits. */
+    for(u32 variant=0;variant<2;variant++){
+        u32 total=0,at=0,count;u8 *expected;
+        for(i=0;i<64;i++){
+            stock_lengths[i]=variant?(i%4==0?0:i%4==1?1:i%4==2?2047:240001):240000;
+            total+=4+2*(stock_lengths[i]<=240000?stock_lengths[i]:0);
+        }
+        expected=malloc(total);assert(expected);
+        for(i=0;i<64;i++){
+            u32 n=stock_lengths[i]<=240000?stock_lengths[i]:0;wr(expected+at,n);at+=4;
+            for(u32 k=0;k<n;k++){expected[at++]=(u8)i;expected[at++]=(u8)i;}
+        }
+        memset(PROJECT,0,512);core_pool_prepare();assert(core_pool_stock_bytes==total);
+        count=(total+2047)/2048;
+        for(i=0;i<count;i++){
+            u32 n=total-i*2048;if(n>2048)n=2048;
+            page=core_pool_stock_page(i);assert(!memcmp(page,expected+i*2048,n));
+            for(u32 k=n;k<2048;k++)assert(!page[k]);
+        }
+        for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+        assert(!waves);core_pool_boot_release();
+        if(!variant)for(i=0;i<64;i++){
+            for(u32 k=0;k<118;k++)core_pool_wave_idle(i,2048);
+            wave=core_pool_wave(i);assert(wave && wave->ready==2 && wave->frames==240000);
+            for(u32 k=0;k<96;k++)assert(wave->lo[k]==(short)(i*257) && wave->hi[k]==(short)(i*257));
+        }
+        core_pool_boot_release();assert(!boot);core_pool_boot_release();free(expected);reset_state();
+    }
+    /* Missing disk and a failed mid-stream read retain a safe empty/silent
+     * result and never publish an exact waveform for failed PCM. */
+    stock_io_fail=1;core_pool_prepare();assert(core_pool_stock_bytes==256);
+    page=core_pool_stock_page(0);for(i=0;i<2048;i++)assert(!page[i]);reset_state();stock_io_fail=0;
+    for(i=0;i<64;i++)stock_lengths[i]=4;
+    core_pool_prepare();stock_io_fail=1;core_pool_stock_page(0);stock_io_fail=0;
+    core_pool_boot_release();{u32 before=stock_reads;core_pool_wave_idle(0,2048);assert(stock_reads==before && !waves);}reset_state();
+    fail_allocations=1;core_pool_prepare();assert(!state && !boot && core_pool_stock_bytes==256);
+    page=core_pool_stock_page(0);for(i=0;i<2048;i++)assert(!page[i]);fail_allocations=0;
+    fail_boot=1;core_pool_prepare();assert(!state && !boot);fail_boot=0;reset_state();
     if(waves)fw_free(waves);if(saved_record)fw_free(saved_record);assert(!live);
-    assert(VirtualFree(project_ram,0,MEM_RELEASE));assert(VirtualFree(blob_ram,0,MEM_RELEASE));
+    assert(VirtualFree(project_ram,0,MEM_RELEASE));
     assert(VirtualFree((void *)0x10000000u,0,MEM_RELEASE));assert(VirtualFree((void *)0x43bd0000u,0,MEM_RELEASE));
     puts("PASS: project pool codecs/migration, snapshot/validation, stock preservation, boot page mapping, full long-sample CRC, shared transfer and a stereo entry");return 0;
 }

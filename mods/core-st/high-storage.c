@@ -3,6 +3,7 @@
  */
 #include "file-info.h"
 #include "hzfs.h"
+#include "cold.h"
 #define RAW_FIRST ST_HZ_RAW_FIRST
 #define STOCK_FIRST 0x00400000u
 #define STOCK_END 0x02400000u
@@ -13,6 +14,7 @@ extern void *fw_malloc(u32);
 extern void fw_free(void *),fw_info_copy(void *,const void *);
 extern void fw_string_ctor(void *,const char *,void *),core_fn_manager(void);
 extern void core_high_validate(void);
+extern void core_pool_stock_changed(u32);
 /* Native DataWriteClose calls its completion event only when this capture
  * is present. A non-owning no-op enables the existing ev_fs_written for high
  * windows too; no additional hook or storage mutation is introduced. */
@@ -63,7 +65,7 @@ int core_high_route(void *router,const char *const *path,void *out)
     zero(out,8);r[0]=1;*(void **)(r+4)=fw_empty_string;
     fw_info_copy(r+8,&info);return 1;
 }
-int core_sample_write_guard(void *router,const struct info *info,void *out)
+CORE_HOT int core_sample_write_guard(void *router,const struct info *info,void *out)
 {
     u32 address=info->address,k;(void)router;
     /* Header length has ALREADY replaced info.bytes, before writer creation.
@@ -73,7 +75,7 @@ int core_sample_write_guard(void *router,const struct info *info,void *out)
         if((address&(ST_HZ_WINDOW-1)) || info->bytes>STOCK_BODY ||
            info->bytes>STOCK_END-address){
             error(out,"Stock sample exceeds 5 seconds / one slot",16);return 1;
-        }return 0;
+        }core_pool_stock_changed(address);return 0;
     }
     if(info->validate.manager!=(void *)core_fn_manager ||
        info->validate.invoke!=(void *)core_high_validate)return 0;

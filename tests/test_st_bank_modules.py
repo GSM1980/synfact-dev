@@ -32,6 +32,29 @@ class BankModules(unittest.TestCase):
                     report,raw=fixture(prefix+names,browser)
                     check_bank_modules(report,raw,ALLOWED)
 
+    def test_icache_lock_goes_just_before_modulation_skip(self):
+        names=['sp_sampler_input_module',*ALLOWED[0]]
+        for good in [names+['icache_lock_module','modulation_skip_module'],names+['icache_lock_module']]:
+            report,raw=fixture(good)
+            check_bank_modules(report,raw,ALLOWED)
+        for bad in [names+['modulation_skip_module','icache_lock_module'],
+                    ['sp_sampler_input_module','icache_lock_module',*ALLOWED[0]],
+                    names+['icache_lock_module','icache_lock_module']]:
+            report,raw=fixture(bad)
+            with self.assertRaises(AssertionError):check_bank_modules(report,raw,ALLOWED)
+
+    def test_mix_fast_and_icache_lock_before_modulation_skip(self):
+        names=['sp_sampler_input_module',*ALLOWED[0]]
+        for good in [names+['mix_fast_module','modulation_skip_module'],
+                     names+['mix_fast_module'],
+                     names+['mix_fast_module','icache_lock_module','modulation_skip_module']]:
+            report,raw=fixture(good)
+            check_bank_modules(report,raw,ALLOWED)
+        for bad in [names+['modulation_skip_module','mix_fast_module'],
+                    names+['icache_lock_module','mix_fast_module']]:
+            report,raw=fixture(bad)
+            with self.assertRaises(AssertionError):check_bank_modules(report,raw,ALLOWED)
+
     def test_unknown_duplicate_or_reordered_modules_are_rejected(self):
         names=['sp_sampler_input_module',*ALLOWED[0]]
         for bad in [names+['unknown'],names+['sp_sampler_input_module'],

@@ -23,31 +23,31 @@ lfo3_pattern_native_set:
 lfo3_pattern_native_decode:
         lea -32(%sp),%sp
         movem.l %d2-%d4/%a2-%a6,(%sp)
-        jmp 0x400a8050
+        jmp 0x400a80c8
 
         .globl lfo3_pattern_native_compress
 lfo3_pattern_native_compress:
         lea -44(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp 0x400a8122
+        jmp 0x400a819a
 
         .globl lfo3_pattern_native_encode
 lfo3_pattern_native_encode:
         lea -24(%sp),%sp
         movem.l %d2-%d4/%a2-%a4,(%sp)
-        jmp 0x400a81f4
+        jmp 0x400a826c
 
         .globl lfo3_pattern_native_update
 lfo3_pattern_native_update:
         lea -36(%sp),%sp
         movem.l %d2-%d7/%a2-%a4,(%sp)
-        jmp 0x400a8284
+        jmp 0x400a82fc
 
         .globl lfo3_pattern_native_clear
 lfo3_pattern_native_clear:
         lea -12(%sp),%sp
         movem.l %d2/%a2-%a3,(%sp)
-        jmp 0x400b3744
+        jmp 0x400b37bc
 
         .macro filter name,target,native,size,regs,continuation
         .globl \name

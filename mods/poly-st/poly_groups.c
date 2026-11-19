@@ -46,7 +46,7 @@ u32 poly_owner(const volatile u8 *owners,u32 track)
 }
 
 /* 128 is an internal omitted-note sentinel, never sent as a MIDI note. */
-u32 poly_note(volatile u32 root,volatile u32 interval)
+u32 poly_note(u32 root,u32 interval)
 {
     s32 note;
     if(root>127 || interval>127 || interval==64)return 128;

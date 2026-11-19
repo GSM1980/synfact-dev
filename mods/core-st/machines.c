@@ -63,7 +63,7 @@ void core_machine_defaults(u32 type,void *model,u32 quiet)
     for(i=8;i<m->params;i++)
         *(u16 *)(sound+0x14+2*slots[i])=(u16)m->parameter[i].initial;
     if(!(quiet&255u))for(i=8;i<m->params;i++){
-        u32 event[3]={0x401c39d8u,slots[i],0x01000000u};
+        u32 event[3]={0x401c3c78u,slots[i],0x01000000u};
         ((void (*)(void *,void *))vt[0x10/4])(model,event);
     }
 }
@@ -71,7 +71,9 @@ int core_machine_bind(const struct core_machine_def *d,u32 count)
 {
     u32 i;void *memory;
     core_machine_active=0;core_machine_definitions=0;core_machine_count=0;core_machine_extended=0;
-    if(!count)return 1;
+    /* A modules-only bank still needs the parameter providers and the active
+     * assembly paths. Initialize an empty directory and valid lane storage
+     * before publishing active; no-bank startup never calls this function. */
     memory=fw_malloc(count*sizeof(*layouts)+71*4+16*4+8*CORE_MACHINE_SHADOW_ROW*4);
     if((u32)memory<0x40000000u)return 0;
     if(layouts)fw_free(layouts);layouts=memory;core_machine_lanes=(u32 *)(layouts+count);
@@ -148,7 +150,7 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     if(q<=ST_DIGITAL || q==ST_PAGE_COPY || q==ST_LAYOUT)m=find(id);
     else if(q==ST_SLOT_ENGINE || q==ST_PAGE_LOCAL)m=find(args[1]);
     else if(q==ST_RANK){
-        if(id!=0x4060c510u)return 0;
+        if(id!=0x4060d510u)return 0;
         m=find(*(u32 *)args[1]);
     }else if(q==ST_UI_ENGINE){
         if(id<0x2e0)return 0;

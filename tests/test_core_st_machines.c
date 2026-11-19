@@ -14,7 +14,7 @@ void core_machine_action_select(const u32 *layout){(void)layout;core_machine_act
 const char *core_machine_format(u32 id,u32 raw){(void)id;(void)raw;return 0;}
 u32 core_machine_policy(u32 id){return id==0x1fd?0x1f1:CORE_SMZ_NONE;}
 static u32 type=64,resets;
-static u32 allocations;
+static u32 allocations,fail_allocation;
 static u32 codec_notifications,chain_calls[2],fx_notes[2][4];
 /* Host API 13: two providers. A query stops at the first answer; every
  * notification (25..29, FX codec 28/29) reaches both; query 30 stops at an answer. */
@@ -37,7 +37,9 @@ static int codec_final(u32 q,u32 *a,void *result,u32 *value)
     assert(record[0x1c]==sound[0x14] && record[0x1d]==sound[0x15]);
     codec_notifications++;return 0;
 }
-void *fw_malloc(u32 n){return VirtualAlloc((void *)(0x48000000u+0x100000u*allocations++),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
+void *fw_malloc(u32 n)
+{if(fail_allocation)return 0;
+ return VirtualAlloc((void *)(0x48000000u+0x100000u*allocations++),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){if((u32)p>=0x40000000u)assert(VirtualFree(p,0,MEM_RELEASE));else free(p);}
 u32 fw_view_machine(void *v){(void)v;return type;}
 void fw_reset_increments(void *v){(void)v;resets++;}
@@ -51,7 +53,7 @@ static u8 *default_get(void *model)
 static void default_notify(void *model,void *raw)
 {
     u32 i,*event=raw;assert(model==&default_model && notifications<20);
-    assert(event[0]==0x401c39d8 && event[1]==core_machine_slot(8+notifications) && event[2]==0x01000000);
+    assert(event[0]==0x401c3c78 && event[1]==core_machine_slot(8+notifications) && event[2]==0x01000000);
     /* All values are committed before the first notification. */
     for(i=8;i<28;i++)assert(*(unsigned short *)(default_sound+0x14+2*core_machine_slot(i))==fm_tone.parameter[i].initial);
     notifications++;
@@ -73,10 +75,76 @@ static void verify_defaults(void)
     core_machine_active=0;core_machine_defaults(65,&default_model,0);
     assert(!notifications && !memcmp(default_sound,expected,sizeof(expected)));
 }
+/* LFO3 is a parameter provider, not a machine. Model its metadata contract
+ * without native descriptor addresses; exercise the real bind/query path. */
+static u32 module_calls;
+static int module_metadata(u32 q,u32 *a,void *result,u32 *value)
+{
+    u32 id=q==ST_LABEL || q==ST_LONG_LABEL?a[1]:a[0],i=id-0x3f9u;
+    module_calls++;
+    if(q==ST_UI_ENGINE){
+        if(id-0x4e0u>=10)return 0;
+        *value=id-0x4e0u+0x3f9u;return 1;
+    }
+    if(i>=10)return 0;
+    switch(q){
+    case ST_LABEL:case ST_LONG_LABEL:*value=(u32)"LFO3 TEST";return 1;
+    case ST_ENGINE_UI:*value=0x4e0u+i;return 1;
+    case ST_RANGE:{u32 *r=result;r[0]=0;r[1]=0x7f00;r[2]=0x4000;*value=(u32)r;return 1;}
+    case ST_CACHED:case ST_FORMAT:case ST_ENCODER_CACHED:a[0]=0x60u+i;return 0;
+    default:return 0;
+    }
+}
+static int other_module(u32 q,u32 *a,void *r,u32 *v)
+{(void)q;(void)a;(void)r;(void)v;return 0;}
+static void verify_module_only(void)
+{
+    u32 i,j,q,args[3]={0,0x3f9,0},range[3],value;
+    /* No bank: providers must remain unreachable through the query gate. */
+    assert(!core_machine_active && !allocations);
+    core_parameter_provider_set(module_metadata);
+    assert(!core_machine_query(ST_LABEL,args,0,&value) && !module_calls);
+    for(j=0;j<2;j++){
+        assert(core_machine_bind(0,0));
+        assert(core_machine_active && !core_machine_count && !core_machine_extended);
+        assert(core_machine_lanes && core_machine_shadow);
+        if(j)core_parameter_provider_set(other_module); /* LFO3 + ARP composition. */
+        for(i=0;i<10;i++){
+            args[0]=0x3f9+i;args[1]=0x3f9+i;
+            assert(core_machine_query(ST_LABEL,args,0,&value) && !strcmp((char *)value,"LFO3 TEST"));
+            assert(core_machine_query(ST_LONG_LABEL,args,0,&value) && !strcmp((char *)value,"LFO3 TEST"));
+            assert(core_machine_query(ST_RANGE,args,range,&value) && value==(u32)range);
+            assert(range[0]==0 && range[1]==0x7f00 && range[2]==0x4000);
+            assert(core_machine_query(ST_ENGINE_UI,args,0,&value) && value==0x4e0+i);
+            args[0]=0x4e0+i;assert(core_machine_query(ST_UI_ENGINE,args,0,&value) && value==0x3f9+i);
+            for(q=ST_CACHED;q<=ST_ENCODER_CACHED;q++){
+                if(q!=ST_CACHED && q!=ST_FORMAT && q!=ST_ENCODER_CACHED)continue;
+                args[0]=0x3f9+i;assert(!core_machine_query(q,args,0,&value) && args[0]==0x60+i);
+            }
+        }
+        for(i=64;i<80;i++)assert(!core_machine_present(i));
+        for(i=0;i<71;i++)assert(core_machine_lanes[i]==(i<54?fw_lane_ids[i]:0x47+i-54));
+        for(i=0;i<0x1f9;i++){
+            args[1]=i;assert(!core_machine_query(ST_LABEL,args,0,&value));
+        }
+        args[0]=64;args[1]=4;assert(!core_machine_query(ST_AVAILABLE,args,0,&value));
+    }
+    /* Empty-bank allocation failure must fail closed, including after an
+     * earlier successful bind; a subsequent successful bind can recover. */
+    fail_allocation=1;assert(!core_machine_bind(0,0));
+    assert(!core_machine_active && !core_machine_count);
+    i=module_calls;args[1]=0x3f9;
+    assert(!core_machine_query(ST_LABEL,args,0,&value) && module_calls==i);
+    fail_allocation=0;assert(core_machine_bind(0,0) && core_machine_active);
+    assert(core_machine_query(ST_LABEL,args,0,&value));
+    core_parameter_providers[0]=core_parameter_providers[1]=0;
+    puts("PASS: module-only registry, LFO3 metadata with/without second provider, native fallbacks, empty directory, allocation failure/recovery");
+}
 int main(void)
 {
     struct core_machine_param p[28];struct core_machine_def def[2];
     u32 i,args[3]={0},result[33],value;u8 view[0xa0]={0},sound[0xa4]={0},record[0xac]={0};
+    verify_module_only();
     for(i=0;i<28;i++){p[i].label="P";p[i].name="PARAM";p[i].min=0;p[i].max=0x7f00;p[i].initial=0x4000;p[i].alias=0x13;}
     def[0]=(struct core_machine_def){64,28,"TEST","T","SYN",p,ST_MACHINE_NO_INIT,44,5,9};
     def[1]=def[0];def[1].type=65;def[1].params=27;
@@ -112,7 +180,7 @@ int main(void)
     args[0]=0x1fe;assert(!core_machine_query(ST_ENCODER_CACHED,args,0,&value) && args[0]==0x13);
     args[0]=0x219+26;assert(core_machine_query(ST_OWNER,args,0,&value) && value==65);
     args[0]=0x219+27;assert(!core_machine_query(ST_OWNER,args,0,&value));
-    *(u32 *)view=0x401ca0dcu;*(u32 *)(view+0x88)=0x14;*(u32 **)(view+0x7c)=malloc(4);**(u32 **)(view+0x7c)=6;
+    *(u32 *)view=0x401ca37cu;*(u32 *)(view+0x88)=0x14;*(u32 **)(view+0x7c)=malloc(4);**(u32 **)(view+0x7c)=6;
     *(u32 **)(view+0x80)=*(u32 **)(view+0x84)=*(u32 **)(view+0x7c)+1;
     assert(!core_machine_sync(view));assert(*(u32 **)(view+0x80)-*(u32 **)(view+0x7c)==4 && resets==1);
     *(u32 *)(view+0x90)=3;assert(core_machine_nav(view,3)==0x1f9+27);

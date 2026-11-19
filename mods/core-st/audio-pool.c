@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Core AUDIO sample service, compiled at 42100790 and transported by the core.
+ * Core AUDIO sample service, compiled at 4404ff90 and transported by the core
+ * (core 2.2: sample store page 8001, docs/AUDIO-MEMORY-MAP.md).
  * Its code/table are outside the SMZ. No disk IO, allocation or waits in AUDIO.
  * BEGIN verifies a free, unpublished extent; DATA is sequential and checksummed
  * before copying; COMMIT publishes one complete descriptor after all PCM arrives.
@@ -8,10 +9,10 @@
  * CHANNELS holds 1 or 2 per slot (machines.h st_machine_sample_channels).
  */
 typedef unsigned int u32;typedef unsigned short u16;
-#define LO 0x42101750u
-#define HI 0x4404f750u
+#define LO 0x44050f50u
+#define HI 0x47feff50u
 #ifndef TABLE
-#define TABLE ((volatile u32 *)0x42101350u)
+#define TABLE ((volatile u32 *)0x44050b50u)
 #endif
 #ifndef WIN
 #define WIN ((volatile u32 *)0x800u)
@@ -20,7 +21,7 @@ typedef unsigned int u32;typedef unsigned short u16;
 #define DOORBELL (*(volatile u32 *)0x40040050u)
 #endif
 #ifndef CHANNELS
-#define CHANNELS ((volatile unsigned char *)0x421012d0u)
+#define CHANNELS ((volatile unsigned char *)0x44050ad0u)
 #endif
 #ifndef STOCK_TABLE
 #define STOCK_TABLE ((const u32 *)0x4404f754u)

@@ -101,13 +101,13 @@ int arp_runtime_live_start(struct arp_runtime *r,const struct arp_settings *p,
 int arp_runtime_frame(struct arp_runtime *r,const struct arp_settings *p,
                       arp_u32 begin,arp_u32 end,arp_u32 generation)
 {
-    arp_u32 due,gate,*e;int note;unsigned int i;
+    arp_u32 due,gate,*e;int note;
     if(!r->source)return 0;
     if(generation!=r->generation || !p->mode ||
        (r->finite && (int)(begin-r->until)>=0)){
         arp_runtime_stop(r);return 0;
     }
-    if(!arp_clock_poll(&r->clock,begin,end,generation,&due))return 0;
+    if(!arp_clock_poll_inline(&r->clock,begin,end,generation,&due))return 0;
     if(r->finite && (int)(due-r->until)>=0){arp_runtime_stop(r);return 0;}
     note=arp_next(&r->selector,p,generation);
     if(p->scale)note=arp_scale_snap(note,arp_scale_key);
@@ -122,7 +122,16 @@ int arp_runtime_frame(struct arp_runtime *r,const struct arp_settings *p,
     if(!e[12]){r->api->free(e);return 0;}
     if(!r->api->queue(e,due)){r->api->free(e);r->dropped++;return 0;}
     /* A reused event block makes any older entry for it stale. */
-    for(i=0;i<8;i++)if(r->queued[i]==e)r->queued[i]=0;
+    /* Fixed queue history: constant offsets remove the loop/end-pointer work
+     * without adding a test or assuming an event pointer occurs only once. */
+    if(r->queued[0]==e)r->queued[0]=0;
+    if(r->queued[1]==e)r->queued[1]=0;
+    if(r->queued[2]==e)r->queued[2]=0;
+    if(r->queued[3]==e)r->queued[3]=0;
+    if(r->queued[4]==e)r->queued[4]=0;
+    if(r->queued[5]==e)r->queued[5]=0;
+    if(r->queued[6]==e)r->queued[6]=0;
+    if(r->queued[7]==e)r->queued[7]=0;
     r->queued[r->queued_next&7]=e;r->queued_note[r->queued_next&7]=(arp_u32)note;
     r->queued_generation[r->queued_next&7]=generation;r->queued_next++;
     r->emitted++;return 1;

@@ -6,8 +6,8 @@
 static __inline__ int core_machine_parameter_view(const void *view)
 {
     st_u32 p=*(const st_u32 *)view;
-    return p==0x401c7838u || p==0x401c8838u || p==0x401ca0dcu ||
-        p==0x401c8d94u || p==0x4023ff74u || p==0x401c97fcu;
+    return p==0x401c7ad8u || p==0x401c8ad8u || p==0x401ca37cu ||
+        p==0x401c9034u || p==0x40240294u || p==0x401c9a9cu;
 }
 extern st_u32 fw_parameter_selecting(void *);
 /* One SYN ownership gate for drawing, navigation and periodic UI work.

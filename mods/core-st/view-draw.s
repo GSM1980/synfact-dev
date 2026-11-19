@@ -17,4 +17,4 @@ core_view_draw:
         move.l %a4,-(%sp)
         jsr (%a5)
         movea.l (%a3),%a3
-        jmp 0x40100836
+        jmp 0x401009fa

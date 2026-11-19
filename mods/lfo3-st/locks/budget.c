@@ -23,7 +23,7 @@ u32 lfo3_budget_init(budget_t *b,u32 limit)
 }
 static u32 valid(u32 p,u32 size)
 {
-    u32 base=*(const u32 *)0x402d4fd8u,end=*(const u32 *)0x402d4fe0u;
+    u32 base=*(const u32 *)0x402d5328u,end=*(const u32 *)0x402d5330u;
     return size && p>=base && p<end && size<=end-p && !((p-base)&15);
 }
 void *lfo3_budget_allocate(u32 n)

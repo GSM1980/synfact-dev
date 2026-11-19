@@ -1,6 +1,6 @@
 # Notes for coding agents
 
-Synfact builds custom firmware and mods for the Elektron Syntakt (OS 1.41), on
+Synfact builds custom firmware and mods for the Elektron Syntakt (OS 1.42), on
 the user's machine or in their browser, from the stock OS file they supply. It
 is built on elekloader's engine and keeps only the Syntakt. Read README.md
 first; the rest of the docs start at docs/README.md.

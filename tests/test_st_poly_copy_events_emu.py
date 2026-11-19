@@ -1,4 +1,4 @@
-"""Production destructive Sound copies and shared native p-lock application.
+"""Production slave Sound publication (1.7: no copies) and shared native p-lock application.
 
 Uses the real native Sound memcpy/LFO3 metadata backend and publication engine.
 Model/mutex/allocator boundaries come from the existing publication fixture.
@@ -26,6 +26,8 @@ def copy_probe(native,bank):
     source=LIVE+0x2a;values=[0x7800,0x300,0x4000,0x2f00,0x200,0,0x100,0x6000]
     r.u.mem_write(source,bytes((i*3)&255 for i in range(0x123)))
     r.u.mem_write(source+0xa2,b'\x41');r.record(r.sym['kit_shadow'],values)
+    # The slaves' own saved Sounds, which POLY 1.7 must never write.
+    own=b'\x55'*(2*0x123);r.u.mem_write(source+0x123,own)
     r.publish(source,0)
     # Install the same native memcpy entry that LFO3's initializer installs.
     r.u.mem_write(0x40115f78,struct.pack('>HI',0x4ef9,r.sym['lfo3_memcpy_entry']))
@@ -46,9 +48,8 @@ def copy_probe(native,bank):
         u.reg_write(UC_M68K_REG_A7,sp+4);u.reg_write(UC_M68K_REG_PC,ret)
     r.u.hook_add(UC_HOOK_CODE,pub)
     r.write(pending,6);r.call('poly_copy_ui',[])
-    assert published==[(source+0x123,1),(source+2*0x123,2)]
+    assert published==[(source,1),(source,2)] and r.read(source+0x123,2*0x123)==own
     for sound,t in published:
-        assert r.read(sound,0x123)==r.read(source,0x123)
         r.publish(sound,t)
         assert r.read(ENGINE+528+16*t,16)==r.read(ENGINE+528,16)
     n=len(published);r.call('poly_copy_ui',[]);assert len(published)==n
@@ -57,25 +58,31 @@ def copy_probe(native,bank):
     values[7]=0x5000;r.record(r.sym['kit_shadow'],values);r.publish(source,0)
     r.write(pending,6);r.call('poly_copy_ui',[])
     for sound,t in published[n:]:
+        assert sound==source
         r.publish(sound,t);assert r.read(ENGINE+528+16*t,16)==r.read(ENGINE+528,16)
-    return dict(sound_copies=4,shadow_records=True,no_idle_copies=True)
+    assert r.read(source+0x123,2*0x123)==own
+    return dict(sound_publications=4,sound_copies=0,slave_sounds_kept=True,shadow_records=True,no_idle_copies=True)
 
 def lock_probe(native,bank):
     r=Run(native,bank);r.u.mem_map(0x45500000,0x20000)
     lock=ARGS+0x4000;context=ARGS+0x5000;stride=20+8*80
+    # The pinned backend stores sixteen halfwords in every event record.
+    # Native lock-pool stride above and LFO3 metadata row stride are distinct.
+    event_bytes=4+16*2
+    assert r.call('lfo3_events_context_bytes')==4+(64+13)*event_bytes
     # One real native lock object, three references, three destination tracks.
     r.u.mem_write(lock,struct.pack('>5I',0,3,2,0,0)+struct.pack('>4H',0x36,0x2100,0x2100,0)+struct.pack('>4H',0x2f,0x6500,0x6500,0))
     r.write32(0x444db730,lock);r.write32(r.sym['lfo3_events_context'],context)
     r.write32(context,stride)
     # Captured LFO3 MODE/DEP locks attached to that same native object.
     r.write32(context+4,0xc0)
-    r.u.mem_write(context+8,struct.pack('>8H',0,0,0,0,0,0,0x100,0x5000))
+    r.u.mem_write(context+8,struct.pack('>16H',0,0,0,0,0,0,0x100,0x5000,*([0]*8)))
     for t in range(3):r.call('lfo3_events_apply',t,lock,0x800021b0)
     for t in range(3):
         row=0x800021cc+t*142
         assert struct.unpack('>H',bytes(r.u.mem_read(row+2*0x36,2)))[0]==0x2100
         assert struct.unpack('>H',bytes(r.u.mem_read(row+2*0x2f,2)))[0]==0x6500
-        at=context+4+64*20+20*t
+        at=context+4+64*event_bytes+event_bytes*t
         assert struct.unpack('>I',bytes(r.u.mem_read(at,4)))[0]==0xc0
         assert struct.unpack('>2H',bytes(r.u.mem_read(at+4+12,4)))==(0x100,0x5000)
     assert struct.unpack('>I',bytes(r.u.mem_read(lock+4,4)))[0]==3

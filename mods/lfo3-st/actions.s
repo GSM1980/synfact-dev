@@ -140,7 +140,7 @@ lfo3_actions_reload_scope:
         movem.l %d2-%d7/%a2-%a5,(%sp)
         jmp 0x4001e41a
 lfo3_actions_reload_read:
-        jsr 0x401106ce
+        jsr 0x40110892
         move.l 4(%sp),%d1
         move.l %d1,reload_buffer
         jmp 0x4001e4b4

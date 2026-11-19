@@ -11,7 +11,11 @@ test('Syntakt profile identifies pinned stock and reserves only its 64 KiB area'
   assert.equal(d,SYNTAKT)
   assert.equal(r.version,'1.41')
   assert.deepEqual(d.ddr,[0x46000000,0x46010000])
-  assert.equal(d.flashLimit-d.flashAt,2028880)
+  assert.equal(d.flashLimit-d.flashAt,2029392)
+  const [newDevice,newRelease] = identify('ded3c59fdb909eb9e2c3307b30a486452c8fa6947b12c14e0ce35a187b7f37c1')
+  assert.equal(newDevice,d)
+  assert.equal(newRelease.version,'1.42')
+  assert.equal(newRelease.mainLen,3442576)
   assert.equal(d.versionOptional,true)
   assert.deepEqual(d.secondary[7][3],[[0x4000094a,0x40000950],[0x40000ac6,0x40000acc],[0x40000b04,0x40000b0a],
     [0x40001016,0x40001020],[0x40002364,0x4000236c],[0x400023e8,0x400023f0],[0x400043b2,0x400043b6],[0x400043fe,0x40004400],

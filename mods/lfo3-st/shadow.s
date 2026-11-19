@@ -31,7 +31,7 @@ lfo3_memcpy_entry:
 lfo3_memcpy_native:
         movea.l 4(%sp),%a1
         movea.l 8(%sp),%a0
-        jmp     0x40115f80
+        jmp     0x40116144
 
 | Read-only privilege check: native task frames use SR=0x2000; a nonzero IPL
 | (ISR or masked task) runs no shadow work.
@@ -61,7 +61,7 @@ lfo3_sound_new_entry:
         rts
 2:      lea     -40(%sp),%sp
         movem.l %d2-%d3/%a2-%a6,(%sp)
-        jmp     0x400b3c40
+        jmp     0x400b3cb8
 lfo3_kit_new_entry:
         jsr     lfo3_irq_mask
         bne.w   2f
@@ -78,7 +78,7 @@ lfo3_kit_new_entry:
 2:      lea     -36(%sp),%sp
         clr.l   %d0
         movem.l %d2-%d5/%a2-%a6,(%sp)
-        jmp     0x400b3316
+        jmp     0x400b338e
 lfo3_fx_new_entry:
         jsr     lfo3_irq_mask
         bne.w   2f
@@ -94,16 +94,16 @@ lfo3_fx_new_entry:
         rts
 2:      lea     -28(%sp),%sp
         movem.l %d2/%a2-%a4,(%sp)
-        jmp     0x400b32b8
+        jmp     0x400b3330
 
 | ---- vector<Kit> relocation helper 40177794(src, end, dst); only its two
 | reallocation callers (return 40177852 / 40177918) move side-table keys.
         .globl  lfo3_relocate_entry
 lfo3_relocate_entry:
         move.l  (%sp),%d0
-        cmpi.l  #0x40177852,%d0
+        cmpi.l  #0x40177a16,%d0
         beq.s   2f
-        cmpi.l  #0x40177918,%d0
+        cmpi.l  #0x40177adc,%d0
         bne.w   3f
 2:      jsr     lfo3_irq_mask
         bne.w   3f
@@ -137,7 +137,7 @@ lfo3_relocate_entry:
         rts
 3:      move.l  %d3,-(%sp)
         move.l  #0xa4073deb,%d3
-        jmp     0x4017779c
+        jmp     0x40177960
 
 | ---- kit encode 400a787c(storage, kit, flag) -> D0 ok
         .globl  lfo3_kit_encode_entry
@@ -161,7 +161,7 @@ lfo3_kit_encode_entry:
         rts
 2:      lea     -28(%sp),%sp
         movem.l %d2-%d4/%a2-%a5,(%sp)
-        jmp     0x400a7884
+        jmp     0x400a78fc
 
 | ---- kit decode 400a7828(kit, storage) -> D0.b ok
         .globl  lfo3_kit_decode_entry
@@ -185,7 +185,7 @@ lfo3_kit_decode_entry:
         rts
 2:      move.l  4(%sp),%d0
         movea.l 8(%sp),%a0
-        jmp     0x400a7830              | CCR from the first move, as natively
+        jmp     0x400a78a8              | CCR from the first move, as natively
 
 | ---- serializer 400ae338(container, live, ?, flags, progress) -> D0:
 | registers the destination container for the kit codec during the call.
@@ -205,7 +205,7 @@ lfo3_serialize_entry:
         rts
 2:      lea     -44(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp     0x400ae340
+        jmp     0x400ae3b8
 
 | ---- deserializer 400b0368(live, container, progress) -> D0.b
         .globl  lfo3_deserialize_entry
@@ -222,7 +222,7 @@ lfo3_deserialize_entry:
         rts
 2:      lea     -40(%sp),%sp
         movem.l %d2-%d5/%a2,(%sp)
-        jmp     0x400b0370
+        jmp     0x400b03e8
 
 | ---- LOAD PROJECT decodes through 400adff8(live, container, progress).
         .globl  lfo3_decode_project_entry
@@ -242,7 +242,7 @@ lfo3_decode_project_entry:
         rts
 2:      lea     -36(%sp),%sp
         movem.l %d2-%d5/%a2-%a6,(%sp)
-        jmp     0x400ae000
+        jmp     0x400ae078
 
 | ---- +Drive sounds (Synfact S1, final form of build_package.py): the save
 | 40111b08(mmcfs, record, index) writes a 512-byte stack scratch holding the
@@ -270,7 +270,7 @@ lfo3_s1_save_entry:
 lfo3_s1_save_native:
         lea     -44(%sp),%sp
         movem.l %d2-%d5/%a2,(%sp)
-        jmp     0x40111b10
+        jmp     0x40111cd4
 lfo3_s1_load_entry:
         lea     -516(%sp),%sp
         move.l  %d2,(%sp)
@@ -294,7 +294,7 @@ lfo3_s1_load_entry:
 lfo3_s1_load_native:
         lea     -44(%sp),%sp
         movem.l %d2-%d5,(%sp)
-        jmp     0x40110acc
+        jmp     0x40110c90
 
 | ---- FX record codec used by incremental model refreshes (Synfact
 | task_scopes): encode 400a6d96(record, fx, flag), decode 400a6d2e(fx, record).
@@ -318,7 +318,7 @@ lfo3_fx_encode_entry:
 2:      move.l  %a3,-(%sp)
         move.l  %a2,-(%sp)
         movea.l 12(%sp),%a2
-        jmp     0x400a6d9e
+        jmp     0x400a6e16
 lfo3_fx_decode_entry:
         move.l  %d2,-(%sp)
         move.l  12(%sp),-(%sp)
@@ -337,7 +337,7 @@ lfo3_fx_decode_entry:
         rts
 2:      lea     -12(%sp),%sp
         movem.l %a2-%a4,(%sp)
-        jmp     0x400a6d36
+        jmp     0x400a6dae
 
 | ---- native LFO state reset 40118e24 (lea 444da751,a0): LFO3 states reset
 | with the same field writes (Synfact lfo3_frame_native_reset).
@@ -346,5 +346,5 @@ lfo3_native_reset_entry:
         move.l  %d1,-(%sp)
         jsr     lfo3_native_reset
         move.l  (%sp)+,%d1
-        lea     0x444da751,%a0
-        jmp     0x40118e2a
+        lea     0x444db751,%a0
+        jmp     0x40118fee

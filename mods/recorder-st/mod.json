@@ -1,10 +1,10 @@
 {
   "id": "recorder-st",
-  "version": "1.1",
+  "version": "1.4.1",
   "title": "Audio Recorder",
   "license": "GPL-2.0-or-later",
   "device": "syntakt",
-  "os": "1.41",
-  "sources": ["main.c", "irq.s"],
+  "os": "1.42",
+  "sources": ["main.c", "irq.s", "idle.s", "capture-kernels.s"],
   "smz_module": {"descriptor": "recorder_module"}
 }

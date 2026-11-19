@@ -14,6 +14,12 @@ int main(int argc,char **argv)
     for(k=1;k<(unsigned)argc;k++){
         f=fopen(argv[k],"rb");assert(f);fseek(f,0,SEEK_END);n=ftell(f);rewind(f);b=malloc(n);assert(fread(b,1,n,f)==n);fclose(f);
         r=(struct core_smz_reader){b,core_smz_memory_read,n};assert(core_smz_validate(&r,&v));bad=malloc(n);r.context=bad;
+        /* 1.42 must reject both historical contracts and untagged 1.41 banks,
+         * with valid checksums, before any initializer can call old addresses. */
+        memcpy(bad,b,n);put(bad+64,0x53594603u);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
+        memcpy(bad,b,n);put(bad+64,0x53594604u);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
+        memcpy(bad,b,n);put(bad+24,core_smz_be(bad+24)&~16u);put(bad+64,CORE_SMZ_NONE);
+        sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
         if(v.ui!=CORE_SMZ_NONE){
             at=v.image+v.ui+4;memcpy(bad,b,n);put(bad+at,5);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
             memcpy(bad,b,n);put(bad+at,0);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
@@ -47,5 +53,5 @@ int main(int argc,char **argv)
         }
         free(bad);free(b);
     }
-    puts("PASS: legacy banks, UI layouts/callbacks, modules-only/mixed banks and checksummed invalid metadata");return 0;
+    puts("PASS: OS 1.42 banks, old/untagged bank refusal, UI layouts/callbacks and checksummed invalid metadata");return 0;
 }

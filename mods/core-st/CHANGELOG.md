@@ -1,20 +1,85 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.8.2.
+Generated from git history by `tools/changelog.py`. Latest version: 2.3.0.
+
+## 2.3.0 (2026-11-19)
+
+- Improve Sample Manager sizes, project memory and atomic capacity checks (`ce91a3b`, 2026-11-19)
+
+## 2.2.0 (2026-11-19)
+
+- Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
+- Changelogs: core 2.2.0 and samplers 1.5.2 (`121e965`, 2026-11-19)
+
+## 2.1.2 (2026-11-19)
+
+- Core 2.1.2: initialize parameter services for module-only banks (`e39f627`, 2026-11-19)
+- Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
+
+## 2.1.1 (2026-11-19)
+
+- Core 2.1.1: free the bank's AUDIO copy in MAIN, cold code at -Os (`523dcc2`, 2026-11-19)
+- Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
+
+## 2.1.0 (2026-11-18)
+
+- Core 2.1: reduce MAIN audio during project operations (`e222ce8`, 2026-11-18)
+- Changelogs: core 2.1 project operation CPU headroom (`4402653`, 2026-11-18)
+
+## 2.0.3 (2026-11-18)
+
+- Fix ARP encoder edits beneath mute and Chorus popup labels (`6bcf23b`, 2026-11-18)
+
+## 2.0.2 (2026-11-18)
+
+- Core 2.0.2: retain native interest filters with the full Playhead bank (`e07cef9`, 2026-11-18)
+- Changelogs: core 2.0.2 native interest capacity (`53ad639`, 2026-11-18)
+- Record hardware validation of core 2.0.2 MAIN CPU recovery (`dff9f54`, 2026-11-18)
+- Clarify core 2.0.2 validation with the latest ARP and POLY releases (`c5bbe1a`, 2026-11-18)
+- Update core 2.0.2 changelog with hardware validation (`9c235f3`, 2026-11-18)
+
+## 2.0.1 (2026-11-17)
+
+- Changelogs: POLY 1.7 (`c0e44f9`, 2026-11-18)
+- Core 2.0.1: stream stock PCM safely and defer waveforms (`b6406a5`, 2026-11-17)
+- Changelogs: core 2.0.1 (`eae3159`, 2026-11-17)
+- Changelogs: ARP 1.10.6 (`3d50e09`, 2026-11-17)
+
+## 2.0.0 (2026-11-17)
+
+- move to OS 1.42 (`276667a`, 2026-11-17)
+- Changelogs: move to OS 1.42 (`3c0cdcb`, 2026-11-17)
+
+## 1.9.0 (2026-11-16)
+
+- Recorder 1.4 and core 1.9: reduced post-take audio and faster MAIN capture (`085868a`, 2026-11-16)
+- Changelogs: core 1.9.0 and Recorder 1.4 (`f48f3ab`, 2026-11-16)
 
 ## 1.8.2 (2026-11-11)
 
+- Fix TRIG/ARP mute navigation and reentrant native view cleanup (`5ff821a`, 2026-11-16)
+- Generate ARP 1.10.4 and core 1.8.2 changelogs (`84ec2db`, 2026-11-16)
 - Filter Digi Mono destinations by Sound TYPE (`7fe932b`, 2026-11-11)
+- Document destination filtering releases (`1094bde`, 2026-11-11)
 
 ## 1.8.1 (2026-11-11)
 
+- Playhead 1.0: step order per track (reverse, pendulum, random, walk) (`9dd0e4d`, 2026-11-16)
+- Changelogs: Playhead 1.0 (`c60f324`, 2026-11-16)
+- Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
+- Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
+- Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
 - Refresh SYN layouts when Digi Mono TYPE changes (`fe671aa`, 2026-11-11)
 - Document live SYN layout fix releases (`83ff21d`, 2026-11-11)
 
 ## 1.8.0 (2026-11-10)
 
+- Changelogs: samplers 1.4 (`9c5ba25`, 2026-11-11)
+- Changelogs: ARP 1.9, POLY 1.5 (`ccd74b7`, 2026-11-11)
 - Stereo tracks, stereo samples and the stereo Recorder (core 1.8.0) (`222a29d`, 2026-11-10)
 - Changelogs: core 1.8.0 (`40e397f`, 2026-11-10)
+- Sample Manager 1.2: FUNC+UP/DOWN steps one row after an audition (`a4bd154`, 2026-11-10)
+- Changelogs: Sample Manager 1.2 (`6bc6bb7`, 2026-11-10)
 
 ## 1.7.2 (2026-11-09)
 

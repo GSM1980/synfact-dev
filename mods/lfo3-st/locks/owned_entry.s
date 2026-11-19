@@ -20,22 +20,22 @@ copy_owned:
 lfo3_owned_native_allocate:
         lea -44(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
-        jmp 0x40103514
+        jmp 0x401036d8
         .globl lfo3_owned_native_release
 lfo3_owned_native_release:
         lea -12(%sp),%sp
         movem.l %d2-%d4,(%sp)
-        jmp 0x4010371a
+        jmp 0x401038de
         .globl lfo3_owned_native_move
 lfo3_owned_native_move:
         move.l %d3,-(%sp)
         move.l #0x7870e0cb,%d3
-        jmp 0x40177590
+        jmp 0x40177754
         .globl lfo3_owned_native_clear_track
 lfo3_owned_native_clear_track:
         lea -12(%sp),%sp
         movem.l %a2-%a4,(%sp)
-        jmp 0x400b361e
+        jmp 0x400b3696
 
         .macro action label,size,registers,target
         .globl \label

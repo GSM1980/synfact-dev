@@ -13,7 +13,7 @@ extern rec_t pool_shadow[128];
 static const u8 word[10]={0,1,2,3,4,5,5,6,7,1};
 u32 lfo3_lock_ui_slot(u32 id)
 {
-    return id-0x3f9u<10 ? 0x58u+word[id-0x3f9u] : ((u32 (*)(u32))0x400a5c4a)(id);
+    return id-0x3f9u<10 ? 0x58u+word[id-0x3f9u] : ((u32 (*)(u32))0x400a5cc2)(id);
 }
 void lfo3_lock_ui_store(void *proxy,u32 id,s32 value,s32 track,u32 record,u32 notify)
 {
@@ -24,7 +24,7 @@ void lfo3_lock_ui_store(void *proxy,u32 id,s32 value,s32 track,u32 record,u32 no
     /* This flag is the native store's record-to-pattern request; the fourth
      * argument of the view editor remains alternate-encoder behavior (§20). */
     if(record && (vt[10]!=0x400129ec || track==12)) {
-        void *app=((void *(*)(void))0x4016e804)();
+        void *app=((void *(*)(void))0x4016e9c8)();
         ((void (*)(void *,s32,u32,s32))0x40019150)(app,track,id,value);
     }
     if(notify) ((void (*)(void *))0x40013084)(proxy);

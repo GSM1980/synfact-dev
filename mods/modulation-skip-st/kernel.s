@@ -1,4 +1,4 @@
-| Pinned OS 1.41 modulation kernel with per-track execution guards.
+| Pinned OS 1.42 modulation kernel with per-track execution guards.
 | The source bytes are shared with the audited POLY kernel in this repository.
 .text
 .globl modulation_skip_filtered,modulation_skip_first,modulation_skip_first_continue,modulation_skip_after_first
@@ -38,7 +38,7 @@ modulation_skip_second_continue:
 modulation_skip_return:
 .byte 76,215,124,252,79,239,0,60,78,117
 modulation_skip_helper_bridge:
-jmp 0x40097aac
+jmp 0x40097b24
 modulation_skip_first_guard:
  move.l %a4,%d0
  subi.l #0x80004670,%d0

@@ -23,8 +23,9 @@ static void request(u32 seq,u32 cmd,u32 dest,u32 length,const u32 *payload,u32 w
 int main(void)
 {
     u32 payload[4]={0x12345678,0xabcdef12,0,0},pointer=LO;
-    void *ram=VirtualAlloc((void *)0x42100000u,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
-    assert(ram==(void *)0x42100000u);
+    /* the PCM this test writes: LO up to LO + 0x1010 (core 2.2: LO is 44050f50) */
+    void *ram=VirtualAlloc((void *)(LO&~0xffffu),0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
+    assert(ram==(void *)(LO&~0xffffu));
     request(1,1,LO,8,0,0);assert(win[6]==0x10001);
     request(2,2,LO,8,payload,2);assert(win[6]==0x20001 && *(u32 *)LO==payload[0]);
     request(3,3,7,4,0,0);assert(win[6]==0x30001 && table[14]==4 && table[15]==LO);

@@ -12,11 +12,12 @@ typedef unsigned int u32;typedef int s32;typedef unsigned short u16;typedef unsi
 #define FIELD(v,o) (*(u32 *)((u8 *)(v)+(o)))
 #define LFO3_ID 0x3f9u                     /* engine IDs (ST_MODULE_ID+0..9), LFO2 order */
 #define LFO3_UI 0x4e0u                     /* ST_MODULE_UI+0..9 */
-#define LFO_VIEW 0x402400ccu
+#define LFO_VIEW 0x402403ecu
 typedef struct {u16 v[8];} rec_t;
 struct lfo3_bank {u8 state[13][40];u32 rng[2];u16 params[13][8];u16 overlay[13][8];};
 extern struct lfo3_bank *lfo3_bank;
 extern volatile u32 lfo3_params_dirty;   /* locks_runtime.c; written under frame.busy */
+extern void lfo3_output_track(u32);
 /* Records: shadow.c (Synfact shadow layer, persisted with kits/projects). */
 typedef struct {u32 addr,size,tag,seq,count;rec_t r[13];} side_t;
 extern rec_t kit_shadow[128][13],pool_shadow[128];
@@ -41,7 +42,7 @@ static u32 publication_owned_valid;
 void lfo3_publication_forget_owned(void){publication_owned_valid=0;}
 
 u32 lfo3_index(u32 id){return id-LFO3_ID<10u?id-LFO3_ID:0xffffffffu;}
-static const u32 *descriptor(u32 i){return (const u32 *)(0x4022d59cu+(0x60u+i)*52u);}
+static const u32 *descriptor(u32 i){return (const u32 *)(0x4022d83cu+(0x60u+i)*52u);}
 
 void lfo3_records_init(void)
 {
@@ -107,12 +108,13 @@ static void prepare_track(u32 t)
     u32 slot,id=0,flags=0,i;rec_t r=frame.published[t];
     slot=r.v[3]>>8;
     if((frame.valid&(1u<<t)) && slot<=70 && !(r.v[3]&255)){
-        id=t==12?((u32 (*)(u32))0x400a6300u)(slot):((u32 (*)(u32,u32))0x400a63ecu)(slot,frame.type[t]);
-        if(id)flags=((u32 (*)(u32))0x400a666au)(id);
+        id=t==12?((u32 (*)(u32))0x400a6378u)(slot):((u32 (*)(u32,u32))0x400a6464u)(slot,frame.type[t]);
+        if(id)flags=((u32 (*)(u32))0x400a66e2u)(id);
     }
     if(!(flags&0x200))r.v[3]=0x7f00;
     for(i=0;i<8;i++)lfo3_bank->params[t][i]=r.v[i];
     lfo3_params_dirty|=1u<<t;                      /* the lock overlay copies this row again */
+    lfo3_output_track(t);
 }
 void lfo3_dest_forget(u32);
 /* Synfact throughput_publication: the destination is resolved again only
@@ -195,11 +197,11 @@ static void *view_proxy(void *view,u32 id)
 static s32 held_lock(void *view,u32 id)
 {
     u8 *selection=*(u8 **)((u8 *)view+0x6c);u32 length,step;s32 v;
-    if(!selection || !(u8)((u32 (*)(void *))0x400c2d2au)(selection) ||
-       !(u8)((u32 (*)(void *))0x400c34d6u)(selection))return -1;
-    length=((u32 (*)(void *))0x40027f3au)(((void *(*)(void *))0x40019036u)(((void *(*)(void))0x4016e804u)()));
+    if(!selection || !(u8)((u32 (*)(void *))0x400c2dd6u)(selection) ||
+       !(u8)((u32 (*)(void *))0x400c3582u)(selection))return -1;
+    length=((u32 (*)(void *))0x40027f3au)(((void *(*)(void *))0x40019036u)(((void *(*)(void))0x4016e9c8u)()));
     for(step=0;step<length && step<64;step++)
-        if((u8)((u32 (*)(void *,u32))0x400c2d94u)(selection,step) &&
+        if((u8)((u32 (*)(void *,u32))0x400c2e40u)(selection,step) &&
            (v=((s32 (*)(void *,u32,u32))(*(u32 **)view)[0x90/4])(view,step,id))!=-1)return v;
     return -1;
 }
@@ -215,7 +217,7 @@ u32 lfo3_page_locks(void *closure,u32 step)
 {
     u32 r=lfo3_page_locks_native(closure,step),slot,track;u8 **state=*(u8 ***)closure,*flags;void *model;
     if(!state || !(flags=state[0]) || !state[2] || step>=64 || (track=*(u32 *)state[2])>12)return r;
-    model=((void *(*)(void *))0x40019000u)(((void *(*)(void))0x4016e804u)());
+    model=((void *(*)(void *))0x40019000u)(((void *(*)(void))0x4016e9c8u)());
     if(!model)return r;
     model=((void *(*)(void *))0x40016062u)(model);
     for(slot=0x58;slot<0x68;slot++){
@@ -277,7 +279,7 @@ s32 lfo3_editor_guard(void *view,u32 id,s32 delta,u32 alternate,u8 *blocked)
  * LFO1 and LFO2 targets); an unavailable result keeps the current value. */
 s32 lfo3_editor_destination_alt(void *callback,s32 current,s32 delta)
 {
-    s32 value=((s32 (*)(s32,s32,u32))0x4007c8d0u)(current,delta,0x200);(void)callback;
+    s32 value=((s32 (*)(s32,s32,u32))0x4007c948u)(current,delta,0x200);(void)callback;
     return (u32)value<=0x4600u && !(value&255)?value:current;
 }
 s32 lfo3_editor_destination_relative(void *proxy,u32 id,s32 current,s32 delta)
@@ -319,15 +321,15 @@ u32 lfo3_page_sync(void *view)
     wanted=(native_count+1)*4;
     if(end-begin==native_count*4){
         if(capacity-begin<wanted){
-            p=((u32 *(*)(u32))0x40103788u)(wanted);
+            p=((u32 *(*)(u32))0x4010394cu)(wanted);
             if(!p)return 0;
             if(native_count==1){p[0]=30;p[1]=30;}else{p[0]=4;p[1]=5;p[2]=5;}
             FIELD(view,0x7c)=(u32)p;FIELD(view,0x80)=(u32)p+wanted;FIELD(view,0x84)=(u32)p+wanted;
-            ((void (*)(void *))0x40103794u)((void *)begin);
+            ((void (*)(void *))0x40103958u)((void *)begin);
         }else{p[native_count]=p[native_count-1];FIELD(view,0x80)=begin+wanted;}
     }
     index=FIELD(view,0x90);
-    if(index>native_count){FIELD(view,0x90)=0;((void (*)(void *))0x400f6730u)((u8 *)view+0x94);}
+    if(index>native_count){FIELD(view,0x90)=0;((void (*)(void *))0x400f68f4u)((u8 *)view+0x94);}
     return 1;
 }
 u32 lfo3_page_is_third(void *view)
@@ -355,7 +357,7 @@ void lfo3_page_wave(void *view,u32 canvas)
     if(!lfo3_page_is_third(view))return;
     wave=get(view,LFO3_ID+4,&changed);phase=get(view,LFO3_ID+6,&changed);
     mode=get(view,LFO3_ID+7,&changed);speed=get(view,LFO3_ID+0,&changed);depth=get(view,LFO3_ID+8,&changed);
-    ((void (*)(void *,u32,u32,u32,int,int,int,int,int))0x400f322eu)(view,canvas,0,1,wave>>8,phase>>8,mode>>8,speed>>8,depth>>8);
+    ((void (*)(void *,u32,u32,u32,int,int,int,int,int))0x400f33f2u)(view,canvas,0,1,wave>>8,phase>>8,mode>>8,speed>>8,depth>>8);
 }
 const void *lfo3_actions_layout(u32);
 int lfo3_page_native(u32 op,const u32 *a,u32 *result)

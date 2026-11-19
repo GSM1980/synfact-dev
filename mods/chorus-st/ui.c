@@ -17,12 +17,12 @@ typedef unsigned short u16;
 typedef unsigned char u8;
 #define DATA __attribute__((section(".data")))
 #define DRAW ((void (*)(void *,u32,u32,u32,u32,void *,s32,s32))0x40011e74u)
-#define BITMAP ((void (*)(void *,s32,s32,const u32 *,const u32 *))0x400f70fau)
-#define BLIT ((void (*)(void *,void *,s32,s32,u32))0x400f8dacu)
+#define BITMAP ((void (*)(void *,s32,s32,const u32 *,const u32 *))0x400f72beu)
+#define BLIT ((void (*)(void *,void *,s32,s32,u32))0x400f8f70u)
 #define PAGE_DRAW ((void (*)(void *,void *))0x4003a244u)
-#define STRING ((void (*)(void *,const char *,const void *))0x401bf082u)
-#define NEW ((u32 *(*)(u32))0x40103788u)
-#define FREE ((void (*)(void *))0x40103794u)
+#define STRING ((void (*)(void *,const char *,const void *))0x401bf31eu)
+#define NEW ((u32 *(*)(u32))0x4010394cu)
+#define FREE ((void (*)(void *))0x40103958u)
 #include "widgets.h"
 
 static const char *const short_names[7]={"DPTH","SPD","HPF","WDTH","DEL","REV","VOL"};
@@ -145,7 +145,7 @@ u32 chorus_refused DATA=0;
 int chorus_ui_init(const struct st_smz_api *api)
 {
     const struct st_machine_host_api *host;
-    const char allocator=0;u32 i,*a=(u32 *)0x41b9f61cu,*b=(u32 *)0x41b9f648u;
+    const char allocator=0;u32 i,*a=(u32 *)0x41ba061cu,*b=(u32 *)0x41ba0648u;
     static const u32 row[4]={CHORUS_SEND,78,79,80};
     if(!api || !api->ui || api->ui->version<7 || !(host=api->ui->host) || host->version<12){chorus_refused=1;return 0;}
     host->parameter_provider(query);                     /* the settings' codec, always */
@@ -156,6 +156,6 @@ int chorus_ui_init(const struct st_smz_api *api)
     /* AMP's two layouts: E-H become CHO, DEL, REV, PAN; VOL (81) moves to
      * the empty knob of AMP's second page in each. */
     for(i=0;i<4;i++){a[i]=row[i];b[i]=row[i];}
-    *(u32 *)0x41b9f674u=81;*(u32 *)0x41b9f6a0u=81;
+    *(u32 *)0x41ba0674u=81;*(u32 *)0x41ba06a0u=81;
     return 0;
 }

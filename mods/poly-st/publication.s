@@ -9,10 +9,10 @@ poly_fast_publish:
 poly_fast_publish_span:
  move.l 12(%sp),%d0
 publish_enter:
- lea -32(%sp),%sp
- movem.l %d2-%d4/%a2-%a6,(%sp)
- movea.l 36(%sp),%a2
- movea.l 40(%sp),%a5
+ lea -44(%sp),%sp
+ movem.l %d2-%d7/%a2-%a6,(%sp)
+ movea.l 48(%sp),%a2
+ movea.l 52(%sp),%a5
  move.l %d0,%d4
  andi.l #255,%d4
  lsr.l #8,%d0
@@ -50,7 +50,15 @@ publish_sources:
  or.l %d1,%d0
  andi.l #3,%d0
  bne.s publish_halves
- .rept 35
+ | Six scratch registers carry 24 aligned bytes per burst. The track bounds
+ | and cached master remain in D2-D4, so no per-slave spill is needed.
+ .rept 5
+ movem.l (%a3),%d0-%d1/%d5-%d7/%a0
+ movem.l %d0-%d1/%d5-%d7/%a0,(%a1)
+ lea 24(%a3),%a3
+ lea 24(%a1),%a1
+ .endr
+ .rept 5
  move.l (%a3)+,(%a1)+
  .endr
  move.w (%a3)+,(%a1)+
@@ -61,21 +69,22 @@ publish_halves:
  .endr
 publish_aux:
  | Aux rows are 124 bytes, aligned at both ends in the native projection.
- .rept 25
- move.l (%a4)+,(%a6)+
- .endr
- move.b (%a4),(%a6)
- lea 4(%a4),%a4
- lea 4(%a6),%a6
  .rept 4
- move.l (%a4)+,(%a6)+
+ movem.l (%a4),%d0-%d1/%d5-%d7/%a0
+ movem.l %d0-%d1/%d5-%d7/%a0,(%a6)
+ lea 24(%a4),%a4
+ lea 24(%a6),%a6
  .endr
- move.w (%a4)+,(%a6)+
- move.b (%a4)+,(%a6)+
+ move.l (%a4)+,(%a6)+
+ move.b (%a4),(%a6)
+ movem.l 4(%a4),%d0-%d1/%d5-%d6
+ movem.l %d0-%d1/%d5-%d6,4(%a6)
+ move.w 20(%a4),20(%a6)
+ move.b 22(%a4),22(%a6)
  | Reuse the master pointers for the next member; destination advances.
  lea -142(%a3),%a3
- lea -123(%a4),%a4
- addq.l #1,%a6
+ lea -100(%a4),%a4
+ lea 24(%a6),%a6
  bra.s publish_advance
 publish_next:
  lea 142(%a1),%a1
@@ -84,19 +93,19 @@ publish_advance:
  addq.l #1,%d2
  bra.w publish_track
 publish_done:
- movem.l (%sp),%d2-%d4/%a2-%a6
- lea 32(%sp),%sp
+ movem.l (%sp),%d2-%d7/%a2-%a6
+ lea 44(%sp),%sp
  rts
 
 | A single shared slave is always adjacent to its master (opposite parity).
 | No per-block owner loop or alignment test is needed for this topology.
 .globl poly_fast_publish_one
 poly_fast_publish_one:
- lea -20(%sp),%sp
- movem.l %d2/%a2-%a5,(%sp)
- movea.l 24(%sp),%a2
- movea.l 28(%sp),%a3
- move.l 32(%sp),%d2
+ lea -32(%sp),%sp
+ movem.l %d2/%d5-%d7/%a2-%a5,(%sp)
+ movea.l 36(%sp),%a2
+ movea.l 40(%sp),%a3
+ move.l 44(%sp),%d2
  lsr.l #8,%d2
  moveq #0,%d1
  move.b (%a3,%d2.l),%d1
@@ -117,17 +126,18 @@ poly_fast_publish_one:
  .rept 71
  move.w (%a0)+,(%a1)+
  .endr
- .rept 25
- move.l (%a4)+,(%a5)+
- .endr
- move.b (%a4),(%a5)
- lea 4(%a4),%a4
- lea 4(%a5),%a5
  .rept 4
- move.l (%a4)+,(%a5)+
+ movem.l (%a4),%d0-%d1/%d5-%d7/%a0
+ movem.l %d0-%d1/%d5-%d7/%a0,(%a5)
+ lea 24(%a4),%a4
+ lea 24(%a5),%a5
  .endr
- move.w (%a4)+,(%a5)+
+ move.l (%a4)+,(%a5)+
  move.b (%a4),(%a5)
- movem.l (%sp),%d2/%a2-%a5
- lea 20(%sp),%sp
+ movem.l 4(%a4),%d0-%d1/%d5-%d6
+ movem.l %d0-%d1/%d5-%d6,4(%a5)
+ move.w 20(%a4),20(%a5)
+ move.b 22(%a4),22(%a5)
+ movem.l (%sp),%d2/%d5-%d7/%a2-%a5
+ lea 32(%sp),%sp
  rts

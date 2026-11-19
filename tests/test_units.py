@@ -987,6 +987,31 @@ def test_optional_machine_composition_keeps_exact_directory_checks():
     else:raise AssertionError('accepted lying machine report')
 
 
+def test_os142_bank_allows_only_declared_optional_modules():
+    from copy import deepcopy
+    from test_st_os142 import check_module_composition
+    old={'machines':[66,67,68,69,65], 'modules':[
+        'sp_sampler_input_module','st_stereo_module','fm_tone_module',
+        'recorder_module','lfo3_module','arp_module','poly_module',
+        'system_info_module','sample_manager_module','chorus_module',
+        'playhead_module','modulation_skip_module']}
+    check_module_composition(old)
+    new=deepcopy(old);new['machines'].append(71);new['modules'].append('dm_destination_module')
+    check_module_composition(new)
+    fast=deepcopy(new);fast['modules']+=['mix_fast_module','icache_lock_module']
+    check_module_composition(fast)
+    bad=[]
+    for module in ('recorder_module','dm_destination_module','sp_sampler_input_module'):
+        report=deepcopy(new);report['modules'].remove(module);bad.append(report)
+    for module in ('unknown_module','dm_destination_module'):
+        report=deepcopy(new);report['modules'].append(module);bad.append(report)
+    report=deepcopy(old);report['modules'].append('dm_destination_module');bad.append(report)
+    for report in bad:
+        try:check_module_composition(report)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unexpected OS 1.42 module composition')
+
+
 def test_digimono_audio_change_keeps_every_other_engine_identical():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_audio_change

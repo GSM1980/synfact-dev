@@ -99,5 +99,23 @@ int main(void)
     sp_pcm(&s,out,0);assert(out[0]>4096*65536 && out[1]>out[0]);
     assert(out[0]==-out[2] && out[1]==-out[3]);
     assert(out[1]/65536<4*(out[0]/65536));
-    puts("PASS: source PCM, forward/reverse/loop/fractional bounds, long scaling, REPITCH, SLICE and WERP");return 0;
+    /* The stereo claim (sp_stereo_wanted): on the signal, not "the sample plays". */
+    {int zero[32]={0},loud[32]={0},quiet[32]={0};unsigned heard;
+     loud[5]=0x20000;quiet[3]=270;                         /* 270: the multimode's residual */
+     /* STOP: a loop plays on under a closed envelope, the output is silent: no R */
+     heard=1;assert(!sp_stereo_wanted(zero,zero,loud,loud,0,&heard) && heard==1);
+     assert(!sp_stereo_wanted(quiet,quiet,loud,loud,0,&heard) && heard==1);
+     /* a trig claims at once, whatever came before */
+     assert(sp_stereo_wanted(zero,zero,zero,zero,1,&heard) && heard==0);
+     /* PCM starting after a silent block (an open envelope, a sample's lead-in) */
+     assert(sp_stereo_wanted(zero,zero,loud,zero,0,&heard) && heard==1);
+     /* PCM that went on sounding, under a silent output: no R */
+     assert(!sp_stereo_wanted(zero,zero,zero,loud,0,&heard) && heard==1);
+     /* the previous block sounds on either side: keep R (a tail) */
+     assert(sp_stereo_wanted(loud,zero,zero,zero,0,&heard) && heard==0);
+     assert(sp_stereo_wanted(zero,loud,zero,zero,0,&heard));
+     /* a mono sample: only a stereo tail on R keeps the track stereo */
+     assert(sp_stereo_wanted(loud,loud,loud,0,1,&heard));
+     assert(!sp_stereo_wanted(loud,quiet,loud,0,1,&heard));}
+    puts("PASS: source PCM, forward/reverse/loop/fractional bounds, long scaling, REPITCH, SLICE, WERP and the stereo claim");return 0;
 }

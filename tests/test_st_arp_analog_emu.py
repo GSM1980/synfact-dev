@@ -17,9 +17,9 @@ class AnalogMachine(ProducerMachine):
         self.native_effects=[];self.effect_event=None
         super().__init__(core,bank)
     def code(self,u,pc,n,ctx):
-        if pc==0x400a4244 and self.phase=='effects':
+        if pc==0x400a42bc and self.phase=='effects':
             self.effect_event=list(struct.unpack('>20I',self.read(u.reg_read(UC_M68K_REG_A2),80)))
-        if pc==0x400a3b76 and self.phase=='effects':
+        if pc==0x400a3bee and self.phase=='effects':
             e=self.effect_event;t=e[2]
             self.native_effects.append(dict(track=t,action=e[1],note=e[6],flags=e[9],
                 pitch=self.word(0x800046b8+4*t),gate=self.word(0x80003084+4*t),
@@ -39,7 +39,7 @@ def costs(core,bank,count):
 def off_note_cost(core,bank,t):
     m=ProducerMachine(core,bank)
     # Initialize the analog producer equally even for the digital-only bank.
-    m.call(0x400b3574,0x40a38b34+t*0x499,0);m.call(0x40104fd8,t)
+    m.call(0x400b35ec,0x40a39b34+t*0x499,0);m.call(0x4010519c,t)
     base=m.pool_counts();m.count=0;m.key(60,track=t);press=m.count
     m.frame(0);m.count=0;m.key(60,2,track=t);release=m.count;m.drain(28800,57600)
     assert m.pool_counts()==base
@@ -50,7 +50,7 @@ def verify(core,bank,previous,out):
     for t in range(8,12):
         # Factory producer and full chord lifecycle on each analog track.
         m=AnalogMachine(core,bank);base=m.pool_counts();assert m.tracks==12
-        voice=m.read(0x40253541+t,1)[0];assert voice==t-8;voice_map.append(voice)
+        voice=m.read(0x40253861+t,1)[0];assert voice==t-8;voice_map.append(voice)
         assert m.configure(track=t,range_=0,note_length=0)
         for note in [60,64,67]:m.key(note,track=t)
         for now in [0,5400000,10800000]:m.frame(now)
@@ -111,12 +111,16 @@ def verify(core,bank,previous,out):
     for now in [0,5400000,10800000]:m.frame(now)
     for t in range(12):assert [x['pitch'] for x in m.log if x['track']==t]==[48+t,52+t,55+t]
     assert m.pool_counts()[0]==base[0]-12
-    m.u.mem_write(W+0x140,struct.pack('>6I',0x41525031,0x53544f50,0,0,0,0));m.call(0x4011a722,W+0x140)
+    m.u.mem_write(W+0x140,struct.pack('>6I',0x41525031,0x53544f50,0,0,0,0));m.call(0x4011a8e6,W+0x140)
     assert not m.word(m.sym['arp_running']) and m.pool_counts()==base
     cases.append('twelve-simultaneous-chords-STOP-balanced-pools')
     # Analogs respect the same owner map and MIDI-mode refusal as digitals.
     m=AnalogMachine(core,bank);m.w(LIST+4,OWNER);m.w(LIST+8,0)
     m.call(m.cs['core:core_native_interest_set'],OWNER,1<<15)
+    # This fixture has replaced the core-owned list directly. Publish its
+    # routes explicitly, as the real atomic module binder does. Reasserting
+    # an unchanged callback mask alone is not a list-publication operation.
+    m.call(m.cs['core:core_native_initialize'])
     m.u.mem_write(OWNERMAP,bytes([*range(9),8,10,11]))
     assert not m.configure(track=8) and not m.configure(track=9)
     m.u.mem_write(OWNERMAP,bytes(range(12)));m.u.mem_write(KIT+0x1550,b'\x08\x00')
@@ -128,7 +132,7 @@ def verify(core,bank,previous,out):
         m.track=t;now=t*1000
         assert m.open(now)==1
         assert m.read(m.sym['arp_ui_parameters'],1)==b'\0'
-        m.draw();assert ['text',0x443da230,33,27,2,'MODE'] in m.rows and m.rows[-1]==['indicator',4,2]
+        m.draw();assert ['text',0x443db230,33,27,2,'MODE'] in m.rows and m.rows[-1]==['indicator',4,2]
         assert m.encoder(1,1)==1;m.key(12,1,now+120);m.dispose()
     cases.append('analog-T9-T12-pages-MODE-OFF-edit-YES')
     measured=[costs(core,bank,n) for n in [0,1,4,8,9,10,11,12]]

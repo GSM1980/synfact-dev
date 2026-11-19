@@ -2,7 +2,7 @@
 
 # Syntakt builds (core-st, SMZ banks)
 
-The exact toolchain, flags and commands used for the Syntakt OS 1.41 core
+The exact toolchain, flags and commands used for the Syntakt OS 1.42 core
 (`mods/core-st`) and its SMZ4 machine/module banks. Every command below is run
 from the repository root in Git Bash, with the environment variables set as
 [SETUP.md](SETUP.md) section 2 says. If a step fails, fix the environment;
@@ -15,7 +15,7 @@ do not change flags or the builders to make it pass.
 | Cross compiler | `$SGDK_BIN`: the folder with SGDK 2.11's m68k toolchain (GCC 13.2.0, `m68k-elf`) |
 | Executable names | `gcc`, `as`, `ld`, `objcopy`, `objdump`, `nm`. Unprefixed in the SGDK 2.11 build used for testing; the engine's default prefix is `m68k-elf-` |
 | Python | `$PY` (3.9 or newer). `elekloader` is imported from the repository (run from its root) |
-| Stock OS | `$SYNTAKT_STOCK`: your Syntakt OS 1.41 `.syx` from Elektron |
+| Stock OS | `$SYNTAKT_STOCK`: your Syntakt OS 1.42 `.syx` from Elektron |
 | Elektron firmware tool | `$SYNTAKT_EFT`: the `elektron-firmware-tool` executable |
 | Host compiler for regressions | `$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe` (llvm-mingw, UCRT x86_64) |
 | Digitone OS (optional) | `$DIGITONE_OS`: your Digitone OS 1.44 `.syx`, for FM TONE and the chorus |
@@ -55,6 +55,36 @@ Source of truth: `elekloader/devices/syntakt.py`, `toolchain`.
   instruction forms the MCF54415 accepts.
 - Rationale and review: [mods/core-st/COMPILER-AUDIT.md](../mods/core-st/COMPILER-AUDIT.md).
 
+### The -Os exception (core 2.1.1)
+
+The one exception to `-O3`, agreed with the owner: the core's **cold code**,
+the files whose functions run only at boot, over USB or in a storage
+transaction, is compiled for size, so that the 64 KiB resident reserve keeps
+room. The build flags do not change; each such file includes
+[`mods/core-st/cold.h`](../mods/core-st/cold.h) after its other headers, which
+sets `#pragma GCC optimize("Os","no-tree-loop-distribute-patterns")` for the
+rest of the file (the second option keeps GCC from turning loops into `memset`
+and `memcpy` calls, which the freestanding core does not have).
+
+- Files: `sample-pool.c`, `hzfs.c`, `files.c`, `smz.c`, `storage.c`,
+  `machine-boot.c`, `high-storage.c`, `boot-preimages.c`.
+- A function of those files that a tick, a draw, a key, an encoder or a native
+  path calls is marked `CORE_HOT` (`__attribute__((optimize("O3")))`) and keeps
+  `-O3`: the pool's cursor tick, sample source, name, channels, cursor, cached
+  name, wave storage, code-used, readiness, validity, empty, stock-changed,
+  memory snapshot; the
+  bank's auto-confirm tick; the sample write guard. GCC does not inline a
+  function compiled at another level, so a hot function that calls a cold
+  helper now calls it instead of inlining it (a few bytes either way).
+- Nothing else: machines, modules, pages, parameters, the UI (`sample-wave.c`,
+  `sample-manager.c`), the native routes and every `.s` stay at `-O3`. The SMZ
+  banks and the AUDIO code are not affected.
+- Adding a file to the list, or a function to `CORE_HOT`, is a change to this
+  rule: write it here. A struct assignment in an `-Os` file can still become a
+  `memcpy` call; the link then refuses the core (`imports memcpy`): copy field by
+  field (`storage.c`, `slot_copy`).
+- Host builds (clang, the tests) ignore `cold.h`.
+
 ## Commands
 
 Every output goes to a **new** folder under `out/` (builders refuse an
@@ -86,25 +116,40 @@ MAIN and 7 AUDIO change).
 
 ### SMZ4 bank (machines + modules)
 
+The 1.42 port's POLY kernels must be generated in each checkout:
+
+```bash
+"$PY" tools/import_poly_kernels.py --stock "$SYNTAKT_STOCK"
+```
+
 FM TONE needs its Digitone parts first (once per checkout, or after a change
 to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
 
 ```bash
 "$PY" mods/fm-tone-st/tools/import_digitone.py "$DIGITONE_OS"
+"$PY" mods/chorus-st/tools/import_digitone.py "$DIGITONE_OS"
 ```
 
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
-    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
-    --module mods/modulation-skip-st \
+    --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
+    --module mods/chorus-st \
+    --module mods/mix-fast-st --module mods/icache-lock-st --module mods/modulation-skip-st \
     --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
 - **Module order matters**: `lfo3-st` must come **before** `poly-st` (both
   use the core's native LFO operation; LFO3 is non-consuming and runs first).
-- Modulation skip ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md))
-  goes in every bank, last; it is not a choice (`"always": true` in
-  `js/config/syntakt-normal.json`). The regressions run its host test; with
+  Put `playhead-st` before the optional UI modules: its mode selector must
+  consume KEY/ENC before ARP or the recorder can edit a page behind the modal.
+- The three always-included modules go last, before nothing else, in this
+  order: `mix-fast-st`, `icache-lock-st`, then `modulation-skip-st`. None is a
+  choice (`"always": true` in `js/config/syntakt-normal.json`); they are MAIN
+  CPU optimizations ([mix-fast](../mods/mix-fast-st/README.md),
+  [I-cache lock](../mods/icache-lock-st/README.md)) in every bank, not offered
+  on the web. Modulation skip
+  ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md))
+  stays last. The regressions run its host test; with
   a bank built without it as the reference, the full checks are:
   `"$PY" tests/test_st_modulation_skip.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" --bank <bank> --reference
   <normal bank> --stock "$SYNTAKT_STOCK" --core <main.bin>` and, with the Unicorn
@@ -165,7 +210,7 @@ user sends the SYX with FUNC+POWER and writes the bank with:
 ```
 
 Recovery after a bank that hangs at boot: FUNC+POWER with
-`out/core-st-0.12.9-recovery-no-bank/Syntakt_OS1.41_Elekloader_Core0.12.9_RECOVERY_NO_BANK.syx`
+`out/core-st-0.12.9-recovery-no-bank/Syntakt_OS1.42_Elekloader_Core0.12.9_RECOVERY_NO_BANK.syx`
 (a core that never loads `/mods`), write a good bank, then install the normal
 core SYX again.
 
@@ -191,6 +236,32 @@ with ColdFire MAC-with-load (`LIBUNICORN_PATH`); without one it prints
 ```bash
 "$PY" tests/test_st_bw_filter_emu.py --stock "$SYNTAKT_STOCK" out/core-st-X.Y.Z-name
 ```
+
+The samplers and their stereo engine (samplers-st 1.4) have three checks of
+their own. The regressions run the first, a native host test: the PCM runs of
+`sp_pcm` against the per-sample model they replace, output and cursor, block
+after block (`tests/test_st_sampler_fast.c`). The other two need the m68k
+compiler on `PATH`:
+
+```bash
+# the chain end with stand-ins for the native calls (Unicorn): the R pass's
+# state, L's state restored, D in the window, and an instruction budget
+"$PY" tests/test_st_stereo_engine_emu.py
+# the engine's replacements for native AUDIO calls (the R drive with OVERDRIVE
+# off, the stereo voice tail, the R multimode from its second part) against
+# the natives of a build's audio.bin, word for word, MAIN's EMAC gR x D
+# against a 64-bit model, and the samplers' PCM runs (their hand-written
+# loops) against the per-sample model, on analog-emu's ColdFire core
+"$PY" tests/test_st_stereo_natives_emu.py --core out/core-st-X.Y.Z-name --cfbench "$CFBENCH"
+```
+
+The second runs EMAC code, so it uses analog-emu's `cfbench`, not Unicorn:
+analog-emu models the EMAC on its physical registers, checked against the
+Programmer's Reference Manual, and its documentation reports that the patched
+Unicorn gets the EMAC's arithmetic wrong in both modes the audio engine uses.
+Unicorn counts and the integer checks above are unaffected. Each prints the
+instruction counts it measures; without its tool a test prints `SKIPPED` and
+exits 2.
 
 The core's lock-preview site (0.12.18+) has an in-repository differential
 that runs the real `40039160` of two MAIN images with the same interpreter.
@@ -312,9 +383,10 @@ modulation skip ([its README](../mods/chorus-st/README.md)):
 
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
-    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st \
+    --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st \
     --module mods/system-info-smz-st --module mods/sample-manager-st --module mods/chorus-st \
-    --module mods/modulation-skip-st --out out/core-st-X.Y.Z-name/synfact-machines.smz4
+    --module mods/mix-fast-st --module mods/icache-lock-st --module mods/modulation-skip-st \
+    --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
 The core's three mixer stubs against the stock instructions, and the chorus
@@ -329,7 +401,10 @@ against Synfact's V56 compiled from its pinned sources. V56 is a build in the
 
 Add `--reference <other bank>` when a change must not alter the chorus's
 sound (code moved, not arithmetic): its buses must equal that bank's bit for
-bit (test E). Both banks need their sibling `.work/main.elf`.
+bit (test E). Both banks need their sibling `.work/main.elf`. The chorus's
+cost per block (instructions and DDR lines, per event and scenario) against
+another bank, whose buses it must also equal:
+`"$PY" -B tools/bench_st_chorus.py --bank <bank> --reference <other bank>`.
 
 The chorus's controls on the delivered core image (labels, formats, values,
 codec, page 25, REVERB's pages, AMP's branch, the dials), same environment:

@@ -7,6 +7,8 @@ from elekloader.isa import coldfire as cf
 def verify(folder):
     report=json.loads((folder/'verification.json').read_text());symbols=report['symbols']
     raw=(folder/'main.bin').read_bytes();layout=report['link']
+    for name in ('core_modules_bind','core_machine_load','core_native_initialize'):
+        assert layout['ddr'][0]<=symbols['core:'+name]<layout['ddr'][1], ('nonresident startup entry',name)
     def address(name):return symbols['core:'+name]
     def read(at,n):
         if layout['ddr'][0]<=at<layout['ddr'][1]:at=layout['run_load']+at-layout['ddr'][0]
@@ -55,10 +57,15 @@ def verify(folder):
         assert read(at+8,6)==struct.pack('>HI',0x4a39,address('core_native_interest')+19)
         slow=branch(at+14,0x66);assert slow==stock+14 and branch(stock-2,0x66)==slow
         assert read(stock-8,6)==struct.pack('>HI',0x0139,address('core_native_interest')+18)   # btst d0,abs.l
-    for name,replay in [('publish','49f9800046884285'),('immediate','2479444de4344a8a'),
+    for name,replay in [('publish','49f9800046884285'),('immediate','2479444df4344a8a'),
                         ('sound_set','4e56ffd848d704fc'),('machine_select','4fefffd848d77c7c'),
                         ('modulation','4fefffc448d77cfc'),('lfo','4fefffc048d77cfc')]:
-        at=address('core_native_'+name);interest(at,ops[name])
+        at=address('core_native_'+name)
+        if name in ('modulation','lfo'):
+            assert read(at,6)==struct.pack('>HI',0x4ab9,address('core_audio_idle_active'))
+            assert branch(at+6,0x67)==at+10 and read(at+8,2)==bytes.fromhex('4e75')
+            at+=10
+        interest(at,ops[name])
         target=branch(at+6,0x67)
         if name=='sound_set':   # 0.12.15: the reserved LFO3 ID check precedes the replay
             assert read(target,4)==bytes.fromhex('202f0008') and read(target+4,6)==struct.pack('>HI',0x0480,0x3f9)
@@ -67,8 +74,14 @@ def verify(folder):
     manifest=json.loads(Path('mods/core-st/mod.json').read_text())
     at=address('core_native_note_accept');interest(at,20)
     target=branch(at+6,0x67)
-    assert read(target,12)==bytes.fromhex('202a002472014ef9400a4244')
-    assert len(manifest['sites'])==106 and len(manifest['collections'])==16   # Current hook and mixer event tables.
+    assert read(target,12)==bytes.fromhex('202a002472014ef9400a42bc')
+    # One additional inline UI cleanup site in 1.8.2; all hot paths above
+    # remain pinned. Its relocated branch/call target the original routines.
+    assert read(0x401010f0,6)==bytes.fromhex('420017400022')
+    branch(0x401010f8,0x67,0x40101102)
+    _,cleanup_call=next(cf.disassemble_lengths(read(0x401010fc,4),0x401010fc,0x401010fc,0x40101100))
+    assert cleanup_call.flow==cf.F_JSR and cleanup_call.target==0x40100ca2
+    assert len(manifest['sites'])==119 and len(manifest['collections'])==16   # nine project callback literals; no extra IRQ site.
     assert report['resident_ram']['free']>=0 and '-O3' in report['cflags']
     print('PASS: 23 no-bank/stock-ID lookup exits and 12 per-operation interest native replays; hidden pointers/stack untouched on fast exits; all hooks, extended paths and APIs retained')
 

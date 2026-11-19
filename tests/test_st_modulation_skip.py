@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from elekloader import syx
 
-SITES=((0x40097b04,bytes.fromhex('246f0040260a')),(0x400a30c4,bytes.fromhex('4feffff448d70c04')))
+SITES=((0x40097b7c,bytes.fromhex('246f0040260a')),(0x400a313c,bytes.fromhex('4feffff448d70c04')))
 
 
 def audio(bank):

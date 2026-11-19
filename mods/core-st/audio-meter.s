@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| Minimal port of Synfact audio/system_info_meter.s, Syntakt OS 1.41.
+| Minimal port of Synfact audio/system_info_meter.s, Syntakt OS 1.42.
 | AUDIO CPU, NOT MAIN. Fixed companion in the existing Synfact image padding
 | 40040860..40041050. State is initialized in the image, outside native BSS.
 | No machines, native tables, receiver for writes, boot or vector changes.

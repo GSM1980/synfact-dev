@@ -12,6 +12,8 @@
     "core HZFS validation, CRC, IO, pool and preview services",
     "SP ONE SAMP engine id 0x23c; free pool slots start at 65",
     "no binary overlays, runtime firmware patches or extra hook sites",
-    "original UI/trim and optimized capture/normalization arithmetic retained"
+    "original UI/trim and capture/normalization arithmetic retained",
+    "post-take MAIN idle ownership, PLAY gating, retained-take reentry and explicit owned manual STOP independent of frame limit",
+    "fused MAIN stereo PCM/peak assembly, exact integer EMAC return correction and IRQ-owned zero-bank cache; differential against the prior linked recorder"
   ]
 }

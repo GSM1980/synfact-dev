@@ -28,7 +28,7 @@ def verify(folder):
     def call(name):return jump(name,0x4eb9)
     assert read(0x4001d16a,8)==jump('core_pool_initialize')+bytes.fromhex('4e71')
     # Actual user command, load-handler initializer and current-project clear.
-    for address in (0x40059f5e,0x4005bb98,0x400c19ac):
+    for address in (0x40059fd6,0x4005bc10,0x400c1a58):
         assert read(address,6)==bytes.fromhex('4eb94001d16a')
     entry=symbols['core:core_pool_initialize']
     native_call=struct.pack('>Hh',0x4eba,symbols['core:core_stock_pool_initialize']-(entry+10))

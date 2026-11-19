@@ -37,10 +37,13 @@ class Main(Callback):
         subscribers=[self.sym['lfo3_native'],self.sym['poly_native'],0]
         self.u.mem_write(ARGS+0x4000,struct.pack('>%dI'%len(subscribers),*subscribers))
         self.write32(self.core['core:events']+11*8,ARGS+0x4000)
-        interest=bytearray(20);interest[17]=1
+        # This fixture deliberately enables the entire manually supplied list.
+        # 0x80 requests generic traversal on encoded-route cores and is also
+        # nonzero on legacy boolean cores. Real publication is tested separately.
+        interest=bytearray(20);interest[17]=128
         if on:
-            for op in (3,15,16):interest[op]=1
-            if 'poly_copy_pending' not in self.sym:interest[4]=1
+            for op in (3,15,16):interest[op]=128
+            if 'poly_copy_pending' not in self.sym:interest[4]=128
             if mode=='poly':
                 interest[3]=0
                 if 'poly_copy_pending' in self.sym:interest[15]=interest[16]=0

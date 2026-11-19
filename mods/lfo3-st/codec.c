@@ -17,7 +17,7 @@ u32 lfo3_dest_encode(u32 raw)
 {
     u32 slot=(raw & 0xffffu)>>8;
     if (raw>0xffffu) return 0;
-    if (slot<=53) return ((const u32 *)0x402340a4u)[slot]<<8;
+    if (slot<=53) return ((const u32 *)0x40234344u)[slot]<<8;
     if (slot<=70) return (0x80u+slot-54u)<<8;
     return 0;
 }
@@ -27,7 +27,7 @@ u32 lfo3_dest_decode(u32 stored)
     u32 id;
     if (stored>0xffffu || (stored&255)) return 0;
     id=stored>>8;
-    if (id<=53) return ((const u32 *)0x4023417cu)[id]<<8;
+    if (id<=53) return ((const u32 *)0x4023441cu)[id]<<8;
     if (id>=0x80 && id<=0x90) return (id-0x80u+54u)<<8;
     return 0;
 }

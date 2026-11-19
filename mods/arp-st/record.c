@@ -9,8 +9,8 @@ static struct arp_rec_chord arp_rec_chords[ARP_TRACKS] DATA={{0}};
 
 static arp_u32 arp_rec_active(void)
 {
-    arp_u32 state=*(volatile arp_u32 *)0x43bd7424u|*(volatile arp_u32 *)0x43bd73bcu;
-    arp_u32 object=*(volatile arp_u32 *)0x444e13ecu;
+    arp_u32 state=*(volatile arp_u32 *)0x43bd8424u|*(volatile arp_u32 *)0x43bd83bcu;
+    arp_u32 object=*(volatile arp_u32 *)0x444e23ecu;
     return state==1 && object && *(volatile unsigned char *)(object+0x169u);
 }
 
@@ -19,10 +19,10 @@ static void arp_rec_note(arp_u32 track,arp_u32 note)
     unsigned char position[4];int step;
     const volatile unsigned char *data;
     struct arp_rec_chord *chord;
-    arp_u32 sequence=*(volatile arp_u32 *)0x43bd7430u,length;
+    arp_u32 sequence=*(volatile arp_u32 *)0x43bd8430u,length;
     if(track>=ARP_TRACKS || note>127 || !sequence || !arp_rec_active())return;
     data=(const volatile unsigned char *)sequence+track*ST_CHORD_TRACK_BYTES;
-    ((void (*)(arp_u32,arp_u32,unsigned char *))0x4008da6eu)
+    ((void (*)(arp_u32,arp_u32,unsigned char *))0x4008dae6u)
         (*(volatile arp_u32 *)0x800046ecu,track,position);
     step=(signed char)position[0];
     if(step<0)step=0;if(step>=ST_CHORD_STEPS)step=ST_CHORD_STEPS-1;
@@ -60,10 +60,10 @@ static void arp_rec_ui(void)
     for(t=0;t<ARP_TRACKS;t++){
         chord=&arp_rec_chords[t];
         if(!chord->dirty)continue;
-        if(chord->sequence!=*(volatile arp_u32 *)0x43bd7430u || ++chord->age>2000u){
+        if(chord->sequence!=*(volatile arp_u32 *)0x43bd8430u || ++chord->age>2000u){
             chord->count=0;chord->dirty=0;continue;
         }
-        app=*(volatile arp_u32 *)0x444e13f4u;
+        app=*(volatile arp_u32 *)0x444e23f4u;
         if(!app)continue;
         pattern=((arp_u32 (*)(arp_u32))0x40019000u)(app);
         if(!pattern)continue;

@@ -8,6 +8,14 @@ An optional module uses bounded event subscriptions, never a file-supplied
 firmware patch plan. Transfers, storage and project/sample loading work without
 an SMZ. Missing or invalid files are skipped silently.
 
+Core 2.0 targets OS 1.42 and requires feature 16 with contract `0x53594605`;
+core 2.2 requires `0x53594606` (the bank window grew to 4 MiB and the pool moved:
+a bank built for 2.0/2.1 inlines the old pool address, see SAMPLE-POOL.md).
+The disk layout and checksums are unchanged. Both older contract IDs and
+untagged banks are rejected before relocation or module initialization, because
+their MAIN code can contain OS 1.41 addresses. Build a new bank with the local
+1.42 SDK; do not reuse a bank downloaded for an older core.
+
 ## Source and builds
 
 A machine uses C/assembler SDK sources and a `mod.json`, plus an `smz` description:
@@ -100,11 +108,13 @@ then linked machine code/data/state. Update/render must be even and inside the
 code portion, with the same type set as MAIN. The complete section is padded
 to 2048-byte pages with zeros; the final page ends exactly at EOF.
 
-The AUDIO base is **4204f750h**, reserved through **42100000h**. This is inside
+The AUDIO base is **4204f750h**, reserved through **4244f750h** (core 2.2: 4 MiB,
+sample store pages `4000..47ff`; through `42100000h` before). This is inside
 the native 64 MiB sample store, beyond the stock first-half sample maximum;
 the 64 sample descriptors do not own this extension. MAIN allocation (envelope,
 relocations and image) is capped at **2 MiB**; the AUDIO section is capped at
-**723120 bytes**. The storage endpoint still accepts 16 MiB, but unsupported
+**4 MiB** (723,120 bytes before core 2.2). A bank therefore fits a 8 MiB storage
+slot. The storage endpoint still accepts 16 MiB, but unsupported
 banks are skipped. Allocation uses native malloc/free, retaining a 512 KiB
 reserve during setup for the native sample builder. Allocation failure skips
 the bank. No new RAM is inferred from zeros or missing references.
@@ -134,7 +144,8 @@ the original native geometry. These application paths still need hardware QA.
 ## MAIN/AUDIO transport
 
 The complete bank is validated and resident in MAIN before native project and
-sample loading. The boot sender keeps sample pages unchanged, then appends
+sample loading. From core 2.1.1 its MAIN part stays resident in a block of its
+own, and the file with the AUDIO section is freed after the last sender page. The boot sender keeps sample pages unchanged, then appends
 machine pages `4000+k`. CPU2 copies them to the fixed AUDIO base, runs its native
 sample parser, validates the complete machine section/checksum, pushes its data
 cache and publishes update/render entries before native voice initialization.
@@ -238,8 +249,10 @@ parameter arrays are aligned to four bytes. SDK descriptor types enforce their
 alignment. Numeric fields/layout entries cannot be relocation targets.
 
 Callbacks and the borrowed service API are declared in
-`syntakt/machines.h`. The API exposes cached sample names, 96-bin waveforms,
-bounded idle scanning and asynchronous AUDIO playhead snapshots. Draw never
+`syntakt/machines.h`. The API exposes cached sample names, 96-bin waveforms
+and asynchronous AUDIO playhead snapshots. Core 2.0.1 generates envelopes
+on demand through bounded disk reads in waveform idle; boot only transfers PCM.
+Draw never
 reads storage or waits. Idle returns nonzero only when it needs a redraw.
 From core 0.10, idle callbacks run through `ev_tick`, traversing the native live
 visible list. No native idle vptr is replaced or cloned; no view pointer is

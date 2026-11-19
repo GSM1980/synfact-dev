@@ -141,7 +141,7 @@ s32 lfo3_pattern_get(void *model,u32 track,u32 step,u32 slot)
 {return lfo3_locks_get(lfo3_owned_lookup(matrix_of(model)),track,step,slot-0x58u);}
 static void notify(void *model,u32 track,u32 slot)
 {
-    u32 event[3]={0x401c462c,slot,track};u32 *vt=*(u32 **)model;
+    u32 event[3]={0x401c48cc,slot,track};u32 *vt=*(u32 **)model;
     ((void (*)(void *,const void *))vt[4])(model,event);
 }
 u32 lfo3_pattern_set_body(void *model,u32 track,u32 step,u32 slot,s32 value)
