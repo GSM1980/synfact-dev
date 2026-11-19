@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.1.1.
+Generated from git history by `tools/changelog.py`. Latest version: 2.1.2.
+
+## 2.1.2 (2026-11-19)
+
+- Core 2.1.2: initialize parameter services for module-only banks (`e39f627`, 2026-11-19)
 
 ## 2.1.1 (2026-11-19)
 
 - Core 2.1.1: free the bank's AUDIO copy in MAIN, cold code at -Os (`523dcc2`, 2026-11-19)
+- Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
 
 ## 2.1.0 (2026-11-18)
 

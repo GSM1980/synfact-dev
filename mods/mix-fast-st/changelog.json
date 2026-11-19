@@ -16,6 +16,11 @@
           "sha": "6aa11d2",
           "date": "2026-11-19",
           "subject": "mix-fast and icache-lock are always-in-every-bank, not web options"
+        },
+        {
+          "sha": "2b37c65",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.1"
         }
       ]
     }

@@ -8,6 +8,11 @@
       "date": "2026-11-18",
       "commits": [
         {
+          "sha": "2b37c65",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.1"
+        },
+        {
           "sha": "6bcf23b",
           "date": "2026-11-18",
           "subject": "Fix ARP encoder edits beneath mute and Chorus popup labels"

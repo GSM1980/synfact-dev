@@ -1,8 +1,19 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.1.1",
+  "latest": "2.1.2",
   "entries": [
+    {
+      "version": "2.1.2",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "e39f627",
+          "date": "2026-11-19",
+          "subject": "Core 2.1.2: initialize parameter services for module-only banks"
+        }
+      ]
+    },
     {
       "version": "2.1.1",
       "date": "2026-11-19",
@@ -11,6 +22,11 @@
           "sha": "523dcc2",
           "date": "2026-11-19",
           "subject": "Core 2.1.1: free the bank's AUDIO copy in MAIN, cold code at -Os"
+        },
+        {
+          "sha": "2b37c65",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.1"
         }
       ]
     },
