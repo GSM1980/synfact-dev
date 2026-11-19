@@ -1,0 +1,305 @@
+--- a/src/cpu.rs
++++ b/src/cpu.rs
+@@ -107,6 +107,8 @@
+     /// Guest PC samples, at block entries about every 64 instructions.
+     pub profile: Option<std::collections::HashMap<u32, u64>>,
+     next_sample: u64,
++    /// Exact profile: per-block instructions, inclusive per function, calls.
++    pub xprof: Option<Box<XProf>>,
+     /// A ring of the last executed PCs, when enabled (debugging).
+     pub history: Option<(Vec<u32>, usize)>,
+     /// The block compiler, compiling in line (tests, cfdiff)...
+@@ -180,6 +182,7 @@
+             limit: 0,
+             profile: None,
+             next_sample: 0,
++            xprof: None,
+         }
+     }
+ 
+@@ -605,6 +608,46 @@
+     /// if it has some (compiling it once it runs hot), else its ops.
+     #[inline(always)]
+     fn run_block(&mut self, pc: u32, i: usize) {
++        if self.xprof.is_some() {
++            let a7 = self.a[7];
++            let tcb = self.bus.peek32(0x454E_49A8);
++            let t0 = self.bus.io.now;
++            self.xprof_enter(pc, a7, tcb);
++            let (im0, dm0) = self.bus.cm.as_ref().map_or((0, 0), |c| (c.im, c.dm));
++            self.run_block_inner(pc, i);
++            let d = self.bus.io.now - t0;
++            let last = self.op_pc;
++            let (mut im, mut dm) = (0u64, 0u64);
++            if let Some(c) = &mut self.bus.cm {
++                if pc >= 0x4000_0000 && pc < 0x4800_0000 && last >= pc && last - pc < 0x400 {
++                    let mut l = pc & !15;
++                    while l <= last + 4 { c.i(l); l += 16; }
++                }
++                im = c.im - im0; dm = c.dm - dm0;
++            }
++            let a7b = self.a[7];
++            let npc = self.pc;
++            let ret = if a7b < a7 && a7.wrapping_sub(a7b) <= 0x200 { Some(self.bus.peek32(a7b)) } else { None };
++            let x = self.xprof.as_mut().unwrap();
++            x.account(pc, d, tcb, im, dm);
++            x.leave(pc, a7b, npc, ret, tcb);
++            return;
++        }
++        self.run_block_inner(pc, i);
++    }
++
++    #[inline(always)]
++    fn xprof_enter(&mut self, pc: u32, a7: u32, tcb: u32) {
++        let x = self.xprof.as_mut().unwrap();
++        // Interrupt entry: SP fell by 8 since the last block without a call.
++        if x.last_tcb == tcb && a7 == x.last_a7.wrapping_sub(8) && pc != x.last_npc {
++            x.push(tcb, a7, pc | 1, true);
++        }
++        x.pop_to(tcb, a7);
++    }
++
++    #[inline(always)]
++    fn run_block_inner(&mut self, pc: u32, i: usize) {
+         if let Some(p) = &mut self.profile {
+             if self.bus.io.now >= self.next_sample {
+                 *p.entry(pc).or_insert(0) += 1;
+@@ -650,6 +693,7 @@
+                 || self.last_fault.is_some()
+                 || self.bus.flush_pending
+                 || self.profile.is_some()
++                || self.xprof.is_some()
+             {
+                 return;
+             }
+@@ -2155,3 +2199,71 @@
+         }
+     }
+ }
++
++
++#[derive(Default)]
++pub struct XProf {
++    pub selfc: std::collections::HashMap<u32, u64>,
++    pub incl: std::collections::HashMap<u32, u64>,
++    pub calls: std::collections::HashMap<u32, u64>,
++    pub edges: std::collections::HashMap<(u32, u32), u64>,
++    pub by_tcb: std::collections::HashMap<u32, u64>,
++    pub total: u64,
++    pub tim: u64,
++    pub tdm: u64,
++    pub selfm: std::collections::HashMap<u32, (u64, u64)>,
++    pub inclm: std::collections::HashMap<u32, (u64, u64)>,
++    stacks: std::collections::HashMap<u32, Vec<(u32, u32, bool)>>,
++    pub last_a7: u32,
++    pub last_npc: u32,
++    pub last_tcb: u32,
++    pub overflow: u64,
++}
++
++impl XProf {
++    fn push(&mut self, tcb: u32, sp: u32, f: u32, irq: bool) {
++        let st = self.stacks.entry(tcb).or_default();
++        while let Some(t) = st.last() { if t.0 <= sp { st.pop(); } else { break; } }
++        let caller = st.last().map_or(0, |t| t.1);
++        if st.len() < 256 { st.push((sp, f, irq)); } else { self.overflow += 1; }
++        *self.calls.entry(f).or_insert(0) += 1;
++        *self.edges.entry((caller, f)).or_insert(0) += 1;
++    }
++    fn pop_to(&mut self, tcb: u32, a7: u32) {
++        if let Some(st) = self.stacks.get_mut(&tcb) {
++            while let Some(t) = st.last() {
++                // a frame is gone once SP is above its return slot
++                if a7 > t.0 || a7 < t.0.wrapping_sub(0x10000) { st.pop(); } else { break; }
++            }
++        }
++    }
++    fn account(&mut self, pc: u32, d: u64, tcb: u32, im: u64, dm: u64) {
++        self.total += d;
++        self.tim += im; self.tdm += dm;
++        *self.selfc.entry(pc).or_insert(0) += d;
++        if im + dm > 0 { let e = self.selfm.entry(pc).or_insert((0, 0)); e.0 += im; e.1 += dm; }
++        *self.by_tcb.entry(tcb).or_insert(0) += d;
++        if let Some(st) = self.stacks.get(&tcb) {
++            let mut seen: [u32; 256] = [0; 256];
++            let mut n = 0;
++            for t in st.iter().rev() {
++                if !seen[..n].contains(&t.1) {
++                    *self.incl.entry(t.1).or_insert(0) += d;
++                    if im + dm > 0 { let e = self.inclm.entry(t.1).or_insert((0, 0)); e.0 += im; e.1 += dm; }
++                    seen[n] = t.1; n += 1;
++                }
++                if t.2 { break; }
++            }
++        }
++    }
++    fn leave(&mut self, pc: u32, a7b: u32, npc: u32, ret: Option<u32>, tcb: u32) {
++        if let Some(r) = ret {
++            if r > pc && r < pc.wrapping_add(0x400) && npc != r {
++                self.push(tcb, a7b, npc, false);
++            }
++        }
++        self.last_a7 = a7b;
++        self.last_npc = npc;
++        self.last_tcb = tcb;
++    }
++}
+--- a/src/bus.rs
++++ b/src/bus.rs
+@@ -54,6 +54,7 @@
+ ];
+ 
+ pub struct Bus {
++    pub cm: Option<Box<CacheModel>>,
+     pub ddr: Vec<u8>,
+     ddr_mask: u32,
+     pub sram: Vec<u8>,
+@@ -145,6 +146,7 @@
+         let size = ddr_mb << 20;
+         assert!(size.is_power_of_two());
+         Bus {
++            cm: None,
+             ddr: vec![0; size],
+             ddr_mask: (size - 1) as u32,
+             sram: vec![0; SRAM_SIZE],
+@@ -488,6 +490,7 @@
+ 
+     #[inline(always)]
+     pub fn read8(&mut self, a: u32) -> u8 {
++        if let Some(c) = &mut self.cm { if a >= 0x4000_0000 && a < 0x4800_0000 { c.d(a); } }
+         if let Some(o) = self.ddr_off(a) {
+             if self.watch_reads {
+                 self.check_watch(a, 1, self.ddr[o] as u32);
+@@ -502,6 +505,7 @@
+ 
+     #[inline(always)]
+     pub fn read16(&mut self, a: u32) -> u16 {
++        if let Some(c) = &mut self.cm { if a >= 0x4000_0000 && a < 0x4800_0000 { c.d(a); } }
+         if let Some(o) = self.ddr_off(a) {
+             if o + 2 <= self.ddr.len() {
+                 let v = u16::from_be_bytes([self.ddr[o], self.ddr[o + 1]]);
+@@ -521,6 +525,7 @@
+ 
+     #[inline(always)]
+     pub fn read32(&mut self, a: u32) -> u32 {
++        if let Some(c) = &mut self.cm { if a >= 0x4000_0000 && a < 0x4800_0000 { c.d(a); } }
+         if let Some(o) = self.ddr_off(a) {
+             if o + 4 <= self.ddr.len() {
+                 let v = u32::from_be_bytes(self.ddr[o..o + 4].try_into().unwrap());
+@@ -540,6 +545,7 @@
+ 
+     #[inline(always)]
+     pub fn write8(&mut self, a: u32, v: u8) {
++        if let Some(c) = &mut self.cm { if a >= 0x4000_0000 && a < 0x4800_0000 { c.d(a); } }
+         if let Some(o) = self.ddr_off(a) {
+             self.check_watch(a, 1, v as u32);
+             self.check_code(o as u32, 1);
+@@ -556,6 +562,7 @@
+ 
+     #[inline(always)]
+     pub fn write16(&mut self, a: u32, v: u16) {
++        if let Some(c) = &mut self.cm { if a >= 0x4000_0000 && a < 0x4800_0000 { c.d(a); } }
+         if let Some(o) = self.ddr_off(a) {
+             if o + 2 <= self.ddr.len() {
+                 self.check_watch(a, 2, v as u32);
+@@ -576,6 +583,7 @@
+ 
+     #[inline(always)]
+     pub fn write32(&mut self, a: u32, v: u32) {
++        if let Some(c) = &mut self.cm { if a >= 0x4000_0000 && a < 0x4800_0000 { c.d(a); } }
+         if let Some(o) = self.ddr_off(a) {
+             if o + 4 <= self.ddr.len() {
+                 self.check_watch(a, 4, v);
+@@ -847,3 +855,54 @@
+         assert_eq!(b.strict_pending, None);
+     }
+ }
++
++
++pub struct CacheModel {
++    pub iline: std::collections::HashMap<u32, u64>,
++    pub ifree: std::collections::HashSet<u32>,
++    pub ilock: std::collections::HashSet<u32>,
++    pub ic: [[u32; 4]; 128],
++    pub dc: [[u32; 4]; 128],
++    pub im: u64,
++    pub dm: u64,
++}
++impl CacheModel {
++    pub fn new() -> Self { CacheModel { iline: Default::default(), ifree: Default::default(), ilock: Default::default(), ic: [[u32::MAX; 4]; 128], dc: [[u32::MAX; 4]; 128], im: 0, dm: 0 } }
++    #[inline(always)]
++    fn look(set: &mut [u32; 4], tag: u32) -> bool {
++        // index 0 = most recent
++        for w in 0..4 {
++            if set[w] == tag {
++                let t = set[w];
++                let mut k = w; while k > 0 { set[k] = set[k - 1]; k -= 1; }
++                set[0] = t; return true;
++            }
++        }
++        set[3] = set[2]; set[2] = set[1]; set[1] = set[0]; set[0] = tag; false
++    }
++    #[inline(always)]
++    pub fn d(&mut self, a: u32) { let l = a >> 4; if !Self::look(&mut self.dc[(l & 127) as usize], l) { self.dm += 1; } }
++    #[inline(always)]
++    pub fn i(&mut self, a: u32) {
++        let l = a >> 4;
++        if self.ifree.contains(&l) || self.ilock.contains(&l) { return; }
++        let hit = if self.ilock.is_empty() { Self::look(&mut self.ic[(l & 127) as usize], l) } else { Self::look2(&mut self.ic[(l & 127) as usize], l) };
++        if !hit { self.im += 1; *self.iline.entry(l).or_insert(0) += 1; }
++    }
++    #[inline(always)]
++    fn look2(set: &mut [u32; 4], tag: u32) -> bool {
++        if set[0] == tag { return true; }
++        if set[1] == tag { set[1] = set[0]; set[0] = tag; return true; }
++        set[1] = set[0]; set[0] = tag; false
++    }
++    pub fn load_sets(&mut self) {
++        for (var, lock) in [("XPROF_IFREE", false), ("XPROF_ILOCK", true)] {
++            if let Ok(f) = std::env::var(var) {
++                for t in std::fs::read_to_string(f).unwrap().split_whitespace() {
++                    let l = u32::from_str_radix(t, 16).unwrap();
++                    if lock { self.ilock.insert(l); } else { self.ifree.insert(l); }
++                }
++            }
++        }
++    }
++}
+--- a/src/bin/dtboot.rs
++++ b/src/bin/dtboot.rs
+@@ -387,8 +387,9 @@
+     while target < instr {
+         target = (target + every).min(instr);
+         if let Some(pa) = profile_after {
+-            if m.now() >= pa && m.cpu.profile.is_none() {
+-                m.cpu.profile = Some(Default::default());
++            if m.now() >= pa && m.cpu.xprof.is_none() {
++                m.cpu.xprof = Some(Default::default());
++                if std::env::var_os("XPROF_CACHE").is_some() { let mut c = Box::new(dtemu::bus::CacheModel::new()); c.load_sets(); m.cpu.bus.cm = Some(c); }
+             }
+         }
+         // Key presses and encoder turns scheduled inside this chunk, in time order.
+@@ -707,6 +708,23 @@
+     print!("{}", m.task_report());
+     let vt: Vec<String> = [97u32, 99, 154, 155, 180, 191, 192, 205, 207, 208, 223].iter().map(|v| format!("v{v}={:08x}", m.cpu.bus.peek32(m.cpu.vbr + v * 4))).collect();
+     println!("vectors: {}", vt.join(" "));
++    if let Some(x) = &m.cpu.xprof {
++        if let Ok(f) = std::env::var("XPROF_OUT") {
++            use std::io::Write;
++            let mut o = std::fs::File::create(&f).expect("XPROF_OUT");
++            writeln!(o, "total {}", x.total).unwrap();
++            writeln!(o, "overflow {}", x.overflow).unwrap();
++            writeln!(o, "misses {} {}", x.tim, x.tdm).unwrap();
++            if let Some(c) = &m.cpu.bus.cm { for (l, n) in &c.iline { writeln!(o, "iline {l:07x} {n}").unwrap(); } }
++            for (a, (i, d)) in &x.selfm { writeln!(o, "selfm {a:08x} {i} {d}").unwrap(); }
++            for (a, (i, d)) in &x.inclm { writeln!(o, "inclm {a:08x} {i} {d}").unwrap(); }
++            for (a, n) in &x.selfc { writeln!(o, "self {a:08x} {n}").unwrap(); }
++            for (a, n) in &x.incl { writeln!(o, "incl {a:08x} {n}").unwrap(); }
++            for (a, n) in &x.calls { writeln!(o, "calls {a:08x} {n}").unwrap(); }
++            for ((a, b), n) in &x.edges { writeln!(o, "edge {a:08x} {b:08x} {n}").unwrap(); }
++            for (a, n) in &x.by_tcb { writeln!(o, "tcb {a:08x} {n}").unwrap(); }
++        }
++    }
+     if let Some(p) = &m.cpu.profile {
+         let total: u64 = p.values().sum();
+         let mut by_fn: std::collections::HashMap<u32, u64> = Default::default();

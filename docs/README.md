@@ -28,6 +28,9 @@ and change with the code, so a commit's docs match its code.
   saturation and scan optimization with exact stock/output/cadence comparisons.
 - **[Core MAIN](CORE-MAIN-PERFORMANCE.md)**: native-service dispatch and mixer
   capture, complete-call counts, legacy profiling and cross-core checks.
+- **[Stock MAIN CPU profile](STOCK-MAIN-CPU-PROFILE.md)**: where stock OS 1.42
+  spends MAIN (half of it in instruction-cache misses) and what rewriting or
+  cache locking could recover.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
 - **[Safe core/SMZ4 startup proposal](SAFE-BOOT-SMZ4-07-16.md)**: compatibility
