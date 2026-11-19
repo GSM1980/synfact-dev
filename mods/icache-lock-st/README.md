@@ -1,8 +1,12 @@
-# I-cache lock (`icache-lock-st`) 0.1, experimental
+# I-cache lock (`icache-lock-st`) 0.1
 
 Keeps 4 KB of the stock audio block's hottest code permanently in MAIN's
 instruction cache. It changes no code and no behavior, only how often MAIN
 fetches code from DDR. It has no sites, no patches, no pages and no settings.
+
+Like the modulation skip, it ships in **every** bank and is not an optional
+choice: `"always": true` in `js/config/syntakt-normal.json`. It is a MAIN CPU
+optimization, not a feature, so it is not offered as a module on the website.
 
 ## Why
 

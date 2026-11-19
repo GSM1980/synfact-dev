@@ -1,10 +1,14 @@
-# Mix fast (`mix-fast-st`) 0.1, experimental
+# Mix fast (`mix-fast-st`) 0.1
 
 Redirects the three stock MAIN mix kernels (8-, 9- and 10-track) to versions
 that skip the per-frame gain-ramp additions and the gain store-back when every
 ramp increment is zero, which is the normal steady state. It changes no sound:
 when the gains are ramping, or for any input it cannot prove stable, it runs
 the stock kernel. No UI, no pages, no settings.
+
+Like the modulation skip, it ships in **every** bank and is not an optional
+choice: `"always": true` in `js/config/syntakt-normal.json`. It is a MAIN CPU
+optimization, not a feature, so it is not offered as a module on the website.
 
 ## Why
 

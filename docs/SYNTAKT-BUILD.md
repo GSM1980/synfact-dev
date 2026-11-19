@@ -103,7 +103,8 @@ to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
-    --module mods/chorus-st --module mods/modulation-skip-st \
+    --module mods/chorus-st \
+    --module mods/mix-fast-st --module mods/icache-lock-st --module mods/modulation-skip-st \
     --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
@@ -111,9 +112,14 @@ to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
   use the core's native LFO operation; LFO3 is non-consuming and runs first).
   Put `playhead-st` before the optional UI modules: its mode selector must
   consume KEY/ENC before ARP or the recorder can edit a page behind the modal.
-- Modulation skip ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md))
-  goes in every bank, last; it is not a choice (`"always": true` in
-  `js/config/syntakt-normal.json`). The regressions run its host test; with
+- The three always-included modules go last, before nothing else, in this
+  order: `mix-fast-st`, `icache-lock-st`, then `modulation-skip-st`. None is a
+  choice (`"always": true` in `js/config/syntakt-normal.json`); they are MAIN
+  CPU optimizations ([mix-fast](../mods/mix-fast-st/README.md),
+  [I-cache lock](../mods/icache-lock-st/README.md)) in every bank, not offered
+  on the web. Modulation skip
+  ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md))
+  stays last. The regressions run its host test; with
   a bank built without it as the reference, the full checks are:
   `"$PY" tests/test_st_modulation_skip.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" --bank <bank> --reference
   <normal bank> --stock "$SYNTAKT_STOCK" --core <main.bin>` and, with the Unicorn
@@ -338,7 +344,8 @@ modulation skip ([its README](../mods/chorus-st/README.md)):
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st \
     --module mods/system-info-smz-st --module mods/sample-manager-st --module mods/chorus-st \
-    --module mods/modulation-skip-st --out out/core-st-X.Y.Z-name/synfact-machines.smz4
+    --module mods/mix-fast-st --module mods/icache-lock-st --module mods/modulation-skip-st \
+    --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
 The core's three mixer stubs against the stock instructions, and the chorus
