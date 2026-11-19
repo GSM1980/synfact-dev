@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
-  "title": "SY MONOMACHINE",
-  "latest": "0.5.0",
+  "title": "SY MnM",
+  "latest": "0.5.1",
   "entries": [
+    {
+      "version": "0.5.1",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "e9a6dd4",
+          "date": "2026-11-19",
+          "subject": "Rename Digi Mono to SY MnM and preserve TYPE on SYN reload"
+        }
+      ]
+    },
     {
       "version": "0.5.0",
       "date": "2026-11-19",
@@ -11,6 +22,11 @@
           "sha": "b570b0e",
           "date": "2026-11-19",
           "subject": "Add Digi Mono subtype picker and keep TYPE outside modulation"
+        },
+        {
+          "sha": "1e78098",
+          "date": "2026-11-19",
+          "subject": "Update core 2.3.1 and Digi Mono 0.5.0 changelogs"
         }
       ]
     },

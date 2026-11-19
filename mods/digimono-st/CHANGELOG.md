@@ -1,10 +1,15 @@
-# Changelog: SY MONOMACHINE
+# Changelog: SY MnM
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.5.0.
+Generated from git history by `tools/changelog.py`. Latest version: 0.5.1.
+
+## 0.5.1 (2026-11-19)
+
+- Rename Digi Mono to SY MnM and preserve TYPE on SYN reload (`e9a6dd4`, 2026-11-19)
 
 ## 0.5.0 (2026-11-19)
 
 - Add Digi Mono subtype picker and keep TYPE outside modulation (`b570b0e`, 2026-11-19)
+- Update core 2.3.1 and Digi Mono 0.5.0 changelogs (`1e78098`, 2026-11-19)
 
 ## 0.4.0 (2026-11-19)
 
