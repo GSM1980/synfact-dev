@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.1.2.
+Generated from git history by `tools/changelog.py`. Latest version: 2.2.0.
+
+## 2.2.0 (2026-11-19)
+
+- Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
 
 ## 2.1.2 (2026-11-19)
 
 - Core 2.1.2: initialize parameter services for module-only banks (`e39f627`, 2026-11-19)
+- Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
 
 ## 2.1.1 (2026-11-19)
 

@@ -1,10 +1,15 @@
 # Changelog: SP sample machines
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.5.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.5.2.
+
+## 1.5.2 (2026-11-19)
+
+- Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
 
 ## 1.5.1 (2026-11-17)
 
 - Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
+- Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
 - Changelogs: POLY 1.7 (`c0e44f9`, 2026-11-18)
 - move to OS 1.42 (`276667a`, 2026-11-17)
 - Changelogs: move to OS 1.42 (`3c0cdcb`, 2026-11-17)

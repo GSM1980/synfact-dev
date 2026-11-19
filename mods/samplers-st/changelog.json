@@ -1,8 +1,19 @@
 {
   "id": "samplers-st",
   "title": "SP sample machines",
-  "latest": "1.5.1",
+  "latest": "1.5.2",
   "entries": [
+    {
+      "version": "1.5.2",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "53ac728",
+          "date": "2026-11-19",
+          "subject": "Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06)"
+        }
+      ]
+    },
     {
       "version": "1.5.1",
       "date": "2026-11-17",
@@ -11,6 +22,11 @@
           "sha": "2b37c65",
           "date": "2026-11-19",
           "subject": "Changelogs: core 2.1.1"
+        },
+        {
+          "sha": "84d9065",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.2"
         },
         {
           "sha": "c0e44f9",

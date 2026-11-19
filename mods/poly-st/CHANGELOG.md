@@ -5,6 +5,8 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.7.
 ## 1.7 (2026-11-18)
 
 - Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
+- Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
+- Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
 - POLY 1.7: digital slaves keep and restore their own Sounds (`599d8dd`, 2026-11-18)
 - Changelogs: POLY 1.7 (`c0e44f9`, 2026-11-18)
 

@@ -19,7 +19,7 @@
       "slug": "core-st",
       "id": "core",
       "title": "core",
-      "latest": "2.1.2",
+      "latest": "2.2.0",
       "path": "mods/core-st"
     },
     {
@@ -96,7 +96,7 @@
       "slug": "samplers-st",
       "id": "samplers-st",
       "title": "SP sample machines",
-      "latest": "1.5.1",
+      "latest": "1.5.2",
       "path": "mods/samplers-st"
     },
     {

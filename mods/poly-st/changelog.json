@@ -13,6 +13,16 @@
           "subject": "Changelogs: core 2.1.1"
         },
         {
+          "sha": "84d9065",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.2"
+        },
+        {
+          "sha": "53ac728",
+          "date": "2026-11-19",
+          "subject": "Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06)"
+        },
+        {
           "sha": "599d8dd",
           "date": "2026-11-18",
           "subject": "POLY 1.7: digital slaves keep and restore their own Sounds"

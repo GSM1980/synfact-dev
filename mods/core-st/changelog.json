@@ -1,8 +1,19 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.1.2",
+  "latest": "2.2.0",
   "entries": [
+    {
+      "version": "2.2.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "53ac728",
+          "date": "2026-11-19",
+          "subject": "Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06)"
+        }
+      ]
+    },
     {
       "version": "2.1.2",
       "date": "2026-11-19",
@@ -11,6 +22,11 @@
           "sha": "e39f627",
           "date": "2026-11-19",
           "subject": "Core 2.1.2: initialize parameter services for module-only banks"
+        },
+        {
+          "sha": "84d9065",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.1.2"
         }
       ]
     },
