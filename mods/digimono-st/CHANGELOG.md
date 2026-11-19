@@ -1,10 +1,15 @@
 # Changelog: SY MnM
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.6.0.
+Generated from git history by `tools/changelog.py`. Latest version: 0.6.1.
+
+## 0.6.1 (2026-11-19)
+
+- perf(digimono): preserve exact FM+ output with fewer DDR writes (`b958d5d`, 2026-11-19)
 
 ## 0.6.0 (2026-11-19)
 
 - feat(digimono): replace FM+ with De-Pattern and cut render instructions by 64 percent (`c9f7174`, 2026-11-19)
+- docs(digimono): publish SY MnM 0.6.0 change history (`0907c50`, 2026-11-19)
 
 ## 0.5.1 (2026-11-19)
 
