@@ -134,6 +134,8 @@ counts, compatibility, startup checks and hardware measurement limits.
 
 Host API 16 adds parameter-provider query 32 without extending the API record.
 API 15 retains main's stopped-transport mixer owner and its original ABI.
+Digi Mono's destination module refuses API 15, so an existing main core cannot
+silently accept a bank whose hidden-target filtering requires query 32.
 Only the native destination builder's flags call (return address `400147a0`
 in OS 1.41, borrowed model in A5) uses this query. A bank may filter a target
 using that model's values. Declined queries retain the normal flags/provider
