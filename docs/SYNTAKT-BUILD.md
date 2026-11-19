@@ -179,6 +179,10 @@ When comparing the complete Digi Mono 0.3 bank against 0.2, add
 object set: only Digi Mono's adapter and existing MONO2K DSP object may change.
 The original Digi Mono engine/sine, samplers and FM-TONE objects must match.
 
+For the 0.6.0 FM+ replacement, use `--digimono-fm-changed` instead. It permits
+the new FM+ object and changes to the adapter/MONO2K dispatch only, retaining
+the same machine/module lists and all other AUDIO object hashes.
+
 `--unicorn-python` runs the linked core's safe-boot record writes in Unicorn
 (`tests/test_st_safe_boot_emu.py`; see SETUP.md for Unicorn). Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.
 A comparison that needs an input you did not give is printed as skipped; it is

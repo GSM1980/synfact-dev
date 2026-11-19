@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Extract pinned MONO2K ENS/SID/FM+ generators and regenerate 48 kHz tables.
+"""Extract pinned MONO2K ENS/SID generators and regenerate 48 kHz tables.
 
 No firmware input. The original source snapshots and hashes live in upstream/.
 Keep the 16-sample control interval: two engine blocks per Syntakt render.
@@ -11,8 +11,7 @@ from pathlib import Path
 import re
 
 HERE = Path(__file__).resolve().parent
-TABLES = ('T_SIN', 'T_INC_TOP', 'T_FMR24', 'T_FMB', 'T_FMEC', 'T_FMLP',
-          'T_FMFB', 'T_FMDV', 'T_FMDEC', 'T_FMFEN', 'T_ENS_PCH', 'T_ENS_W', 'T_ENS_G')
+TABLES = ('T_SIN', 'T_INC_TOP', 'T_ENS_PCH', 'T_ENS_W', 'T_ENS_G')
 
 
 def generate(rate=48000):
@@ -21,7 +20,7 @@ def generate(rate=48000):
     for name, digest in provenance['sha256'].items():
         assert hashlib.sha256((upstream / name).read_bytes()).hexdigest() == digest, name
     source = (upstream / 'm2k_dsp.c').read_text()
-    machines = source[source.index('    case M_SID: {'):source.index('    case M_SAW: {')]
+    machines = source[source.index('    case M_SID: {'):source.index('    case M_FMS: {')]
     # An eight-track neighbour supplied by the caller replaces the six-track
     # global lookup. Specialized products below preserve the exact low words.
     machines = machines.replace('inc_of(trk[ti ? ti - 1 : M2K_TRACKS6 - 1].pitch)',

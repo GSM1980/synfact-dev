@@ -118,7 +118,9 @@ python tests/test_monomachine_complex.py
 
 The output includes per-case stereo A/B, unmodified reference/raw WAVs,
 overview/family plots, early and steady-window metrics, and an HTML report.
-SAW/PULSE/VO use Digi Mono; ENS/SID/FM+ use the current MONO2K port. ENS raw
+SAW/PULSE/VO use Digi Mono; ENS/SID use MONO2K. From SY MnM 0.6.0, FM+ uses
+the De-Pattern fixed-point port. `--suite fmplus` selects its 27 fixtures
+without rendering the other families. ENS raw
 captures retain both channels; the other seven families use mono generators.
 Their native source hashes and the original OS/
 reference executable hashes are retained. No firmware changes in this suite.

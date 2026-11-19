@@ -1,11 +1,20 @@
-# SY MnM 0.5.1
+# SY MnM 0.6.0
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
-ENS, SID-6581 and the three FM+ types come from Inigo Hernandez's
+ENS and SID-6581 come from Inigo Hernandez's
 [MONO2K](https://github.com/InigoHernandez/mono2k/tree/95d5763495d961f3ed225f5e4201328934ca4247).
-These are clean-room interpretations of the Monomachine, **not**
-the original Monomachine DSP or a claim of identical sound. MACRO is excluded.
+FM+STAT, FM+PAR and FM+DYN now use the reverse-engineered algorithms from
+[De-Pattern](https://github.com/De-Pattern/dn2mk2-firmware/tree/a0249fc55fd188242c92f377b4cbb2748b851a35/src/dnfw/mnm),
+ported to fixed point with original FM tables. This is a reconstruction, not
+a claim of identical whole-instrument output. MACRO is excluded.
+
+Version 0.6.0 replaces the three FM+ engines in place (TYPE 9/10/11). Existing
+Sounds keep their IDs and values but intentionally sound different. FM+ runs
+at 44.1 kHz / 16 frames with 2x operators and its original allpass decimator,
+then a 160-phase, 16-tap converter feeds Syntakt at 48 kHz. Oscillator phases
+continue on retrigger; the machine's internal envelopes restart. Native Syntakt
+AMP/FLTR/FX remain downstream. See [fmplus/README.md](fmplus/README.md).
 
 SYN has one page with eight positions: TUNE and seven engine parameters.
 Unused positions are empty. TYPE stays in its existing Sound slot but has no
@@ -122,10 +131,12 @@ The MIT engine files under `upstream/` are unchanged, pinned by
 does not include the MACRO engine.
 
 `mono2k/upstream/` pins MONO2K's GPL-3.0-only source and its full licence.
-`mono2k/generate.py` verifies hashes, extracts just the five generators and
+`mono2k/generate.py` verifies hashes, extracts just the ENS/SID generators and
 regenerates their mathematical tables at 48 kHz. No sequencer, UI, filters,
-bus effects or original Elektron code/data is imported into the bank.
-The combined machine and its AUDIO adapter are GPL-3.0-only; MIT notices remain.
+bus effects or Elektron executable code is imported by that generator.
+The FM+ port is AGPL-3.0-or-later; the combined machine is distributed under
+AGPLv3 with the GPL/MIT notices retained. FM tables are included as arrays
+at the owner's request, with their extraction recipe and hashes.
 
 - ENS uses four paired BLEP saw voices, the calibrated WAVE/PW blend, and a
   half-rate chorus delay with two 0.2 Hz modulated taps. CHRL sets the blend;
@@ -138,10 +149,10 @@ The combined machine and its AUDIO adapter are GPL-3.0-only; MIT notices remain.
   a standalone bank folds ENS to centered mono. No core firmware change.
   Stereo is claimed when CHRL and CHRW are nonzero, then retained until the
   track and filter tails are silent, including after TYPE/width changes.
-- Four independent oscillator phases, three FM envelopes and six internal
-  states per digital track, in bank-owned DDR. No core hooks or new SRAM.
+- Independent oscillator/filter/envelope state per digital track in bank-owned
+  DDR. No core hooks or new SRAM.
 - Two 16-sample control blocks per native 32-frame render; envelope timing,
-  FM TONE coefficients, pitch and SID PWM speed are adjusted to 48 kHz.
+  SID PWM speed and pitch are adjusted to 48 kHz. FM+ retains its native clock.
 - Full Q8 ENS/SID/FM+ controls preserve fractional modulation; the other seven
   Digi Mono engines keep their original 7-bit behavior and common TUNE.
 - Native TUNE remains common (-64..+63 semitones), rather than MONO2K's +/-2
@@ -150,13 +161,14 @@ The combined machine and its AUDIO adapter are GPL-3.0-only; MIT notices remain.
   preserving signed/unsigned results without libgcc, FPU or EMAC side effects.
   Hot TONE/phase-depth products split at their fixed-point boundary and use
   two 32-bit multiplies, retaining the original PCM exactly.
-- Known upstream fidelity gaps remain: high FM feedback, deep FM+DYN cuts,
-  and SID MIX spectra. Hardware CPU and listening tests remain owner QA.
+- High self-feedback can diverge on one-bit numerical differences. The new FM+
+  comparison separates these cases from clean signal/error checks. SID MIX
+  retains its prior limitations. Hardware CPU/listening remain owner QA.
 
 - Eight independent `mono_voice` instances live in the bank's owned DDR on
   AUDIO CPU; MAIN only presents controls. No firmware patch sites or new SRAM.
 - 48 kHz, 32 frames per block, Q15 converted exactly to Q31. ENS can be stereo;
-  the other types remain mono. No resampler.
+  the other types remain mono. Only FM+ uses its 44.1-to-48 kHz resampler.
 - Pitch arrives as MIDI Q16; TUNE is Q8, engine pitch is 1/128 semitone.
 - Native TwinShot update prepares declick/gain. Its PCM pointers/second reader
   are disabled. Render runs declick and the two native gain stages on our PCM;
@@ -183,7 +195,7 @@ python tests/test_units.py
 ```
 
 The host runner also tests stereo ramp state, TYPE/width transitions and AMP
-tails, then runs `tests/test_st_mono2k.py`: 6,912 blocks against
+tails, then runs `tests/test_st_mono2k.py`: 3,456 blocks against
 pinned MONO2K with native 64-bit arithmetic, deterministic extraction and
 44.1/48 kHz tables, wide multiply checks, an independent 440 Hz tuning check,
 all five SID waveforms, ENS L/R and chorus continuity across retriggers.

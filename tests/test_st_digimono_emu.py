@@ -40,7 +40,7 @@ def host_engine(cc, out):
                    'unsigned dm_ens_bytes(void){return sizeof(struct dm_ens_voice);}\n')
     dll = (out / 'digimono-host.dll').resolve()
     subprocess.run([str(cc), '-O3', '-shared', '-I', 'mods/digimono-st', str(src),
-                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c',
+                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c',
                     '-o', str(dll)], cwd=ROOT, check=True)
     lib = ctypes.CDLL(str(dll))
     lib.dm_voice_bytes.restype = ctypes.c_uint

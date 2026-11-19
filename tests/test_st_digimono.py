@@ -22,13 +22,13 @@ def main():
     exe = (a.out / 'digimono.exe').resolve()
     subprocess.run([str(a.cc), '-O2', '-Wall', '-Werror', '-I', 'elekloader/sdk/include',
                     '-I', 'mods/digimono-st', 'tests/test_st_digimono.c','mods/digimono-st/picker.c',
-                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c',
+                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c',
                     '-o', str(exe)], cwd=ROOT, check=True)
     subprocess.run([str(exe)], check=True)
     stereo=(a.out/'digimono-stereo.exe').resolve()
     subprocess.run([str(a.cc),'-O2','-Wall','-Werror','-I','elekloader/sdk/include',
                     '-I','mods/digimono-st','tests/test_st_digimono_stereo.c',
-                    'mods/digimono-st/engine.c','mods/digimono-st/sine.c','mods/digimono-st/mono2k.c',
+                    'mods/digimono-st/engine.c','mods/digimono-st/sine.c','mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c',
                     '-o',str(stereo)],cwd=ROOT,check=True)
     subprocess.run([str(stereo)],check=True)
     pages=(a.out/'digimono-pages.exe').resolve()
@@ -42,6 +42,8 @@ def main():
     subprocess.run([str(picker)],check=True)
     subprocess.run(['python','tests/test_st_mono2k.py','--cc',str(a.cc),'--out',str(a.out/'mono2k')],
                    cwd=ROOT,check=True)
+    subprocess.run(['python','tests/test_st_fmplus.py','--cc',str(a.cc),'--out',str(a.out/'fmplus'),
+                    '--arithmetic-only'],cwd=ROOT,check=True)
 
 
 if __name__ == '__main__':

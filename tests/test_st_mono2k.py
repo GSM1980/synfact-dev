@@ -48,11 +48,11 @@ def oracle():
 #define PB8(t,id) 0
 #define PK(t,id,k) ((id)==1 && (k)==64 ? (P8(t,id)*64*441+61440)/122880 : (P8(t,id)*(k))>>8)
 '''
-    for name in ('sat16', 'sinp', 'inc_of', 'mul_sh', 'mulu_hi', 'mul64_sh', 'mul2_q15'):
+    for name in ('sat16', 'sinp', 'inc_of', 'mulu_hi'):
         code += function(core, name)
-    for name in ('blep_saw', 'fmd_at', 'fr24', 'tq_u32_mid', 'tq_u32', 'tq_u16'):
+    for name in ('blep_saw', 'tq_u16'):
         code += function(dsp, name)
-    cases = dsp[dsp.index('    case M_SID: {'):dsp.index('    case M_SAW: {')]
+    cases = dsp[dsp.index('    case M_SID: {'):dsp.index('    case M_FMS: {')]
     # Original previous-track lookup is supplied by the Syntakt adapter.
     code += '''static struct {int32_t pitch;} trk[8];
 #define M2K_TRACKS6 8
@@ -110,7 +110,7 @@ def main():
     reference.write_text(oracle())
     exe = (a.out / 'mono2k.exe').resolve()
     subprocess.run([str(a.cc), '-O2', '-Wall', '-Werror', '-I', str(MOD),
-                    'tests/test_st_mono2k.c', str(reference), '-o', str(exe)], cwd=ROOT, check=True)
+                    'tests/test_st_mono2k.c', 'mods/digimono-st/fmplus.c', str(reference), '-o', str(exe)], cwd=ROOT, check=True)
     subprocess.run([str(exe)], check=True)
     print('PASS: pinned MONO2K hashes, deterministic extraction, original 44.1 kHz tables and regenerated 48 kHz tables', flush=True)
 

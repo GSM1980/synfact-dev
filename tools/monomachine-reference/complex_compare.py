@@ -267,7 +267,7 @@ def main():
     parser.add_argument('--cc',type=Path,required=True)
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--captures',type=Path,help='reanalyze verified captures with identical controls/OS/engine sources')
-    parser.add_argument('--suite',choices=('complex','ens','ens-shape'),default='complex')
+    parser.add_argument('--suite',choices=('complex','ens','ens-shape','fmplus'),default='complex')
     parser.add_argument('--reference-dist',type=int,choices=range(128),default=64,
                         help='original AMP DIST; lower values test extra internal headroom')
     args = parser.parse_args()
@@ -290,7 +290,8 @@ def main():
         lib=None
     else:
         lib,_ = common.host_engine(args.cc,out)
-    fixtures={'complex':cases,'ens':ens_cases,'ens-shape':ens_shape_cases}[args.suite]()
+    fixtures={'complex':cases,'ens':ens_cases,'ens-shape':ens_shape_cases,
+              'fmplus':lambda:[c for c in cases() if c['bank_type']>=9]}[args.suite]()
     result = {'schema':1,'suite':args.suite,'scope':'original neutral track chain vs raw bank OSC',
               'reference_build':build,'os_sha256':common.sha(args.os),
               'reference_executable_sha256':common.sha(args.reference),

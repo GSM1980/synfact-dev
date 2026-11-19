@@ -1084,6 +1084,29 @@ def test_digimono_ens_change_is_limited_to_two_existing_objects():
         else:raise AssertionError('accepted unrelated or incomplete ENS AUDIO change')
 
 
+def test_digimono_fm_replacement_is_limited_to_its_adapter_and_new_engine():
+    from copy import deepcopy
+    from test_st_common_regressions import check_digimono_fm_change
+    old={'machines':[66,67,68,69,65,71],'modules':['dm_destination_module'],
+         'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(4)}}
+    new=deepcopy(old)
+    for n in (0,3):new['object_sha256'][f'audio2-{n}.o']='FM '+str(n)
+    new['object_sha256']['audio2-4.o']='new FM'
+    new['source_sha256']['/mods/digimono-st/fmplus.c']='source'
+    check_digimono_fm_change(new,old)
+    bad=[]
+    for name in ('audio0-0.o','audio1-1.o','audio2-1.o','audio2-2.o','audio9-0.o'):
+        report=deepcopy(new);report['object_sha256'][name]='unexpected';bad.append(report)
+    for name in ('audio0-1.o','audio2-0.o','audio2-3.o','audio2-4.o'):
+        report=deepcopy(new);del report['object_sha256'][name];bad.append(report)
+    report=deepcopy(new);report['source_sha256'].clear();bad.append(report)
+    report=deepcopy(new);report['modules'].append('unexpected');bad.append(report)
+    for report in bad:
+        try:check_digimono_fm_change(report,old)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unrelated or incomplete FM+ replacement')
+
+
 def test_an_smz_source_pins_what_it_incbins():
     from elekloader.sdk.syntakt.smz import source_inputs
     with tempfile.TemporaryDirectory() as tmp:

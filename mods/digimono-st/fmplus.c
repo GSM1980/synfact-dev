@@ -1,0 +1,293 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later
+ * FM+ STAT/PAR/DYN from De-Pattern a0249fc (fmplus/provenance.json).
+ * Integer ColdFire port of fm.py; native 44.1 kHz / 16 frames, 2x operators,
+ * the original sine/ratios/TONE/envelope tables and allpass decimator.
+ * Syntakt's AMP/FLTR/FX remain downstream. No float/library calls on target.
+ */
+#include "fmplus/voice.h"
+#include "fmplus/tables.h"
+#define ONE (1<<27)
+#define TOP (ONE-16)
+#define SIGNAL (1<<29)
+#define SIGNAL_TOP (SIGNAL-64)
+
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+struct mac_state {uint32_t sr,acc,ext;};
+static inline void mac_enter(struct mac_state *s)
+{
+    uint32_t clear;
+    __asm__ volatile("move.l %%macsr,%0\n\tmove.l #0,%%macsr\n\tmove.l %%acc0,%1\n\t"
+                     "move.l %%accext01,%2\n\tmove.l #0x20,%%macsr\n\tmovclr.l %%acc0,%3"
+                     :"=&d"(s->sr),"=&d"(s->acc),"=&d"(s->ext),"=&d"(clear)::"cc");
+}
+static inline void mac_leave(const struct mac_state *s)
+{
+    __asm__ volatile("move.l #0,%%macsr\n\tmove.l %0,%%acc0\n\tmove.l %1,%%accext01\n\tmove.l %2,%%macsr"
+                     ::"d"(s->acc),"d"(s->ext),"d"(s->sr):"cc");
+}
+#endif
+
+/* Exact signed 32x32 product, explicitly split for a CPU without MUL.L hi:lo.
+ * Host oracle builds can select the native wide operation independently. */
+static inline int64_t product(int32_t a,int32_t b)
+{
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    /* MACSR=0x20: signed fractional, truncating. ACC0 supplies p>>31;
+     * the integer multiplier supplies p's low word. Together these retain
+     * every bit of the original 64-bit product. FM operands stay below the
+     * fractional unit's +/-2^62 product limit. Half-block guard owns ACC0. */
+    int32_t top;
+    __asm__ volatile("mac.l %1,%2,%%acc0\n\tmovclr.l %%acc0,%0"
+                     :"=&d"(top):"d"(a),"d"(b):"cc");
+    return (int64_t)(((uint64_t)(uint32_t)(top>>1)<<32)|((uint32_t)a*(uint32_t)b));
+#elif defined(DM_FM_NATIVE_WIDE)
+    return (int64_t)a*b;
+#else
+    uint32_t x=(uint32_t)a,y=(uint32_t)b;
+    uint32_t x0=x&65535u,x1=x>>16,y0=y&65535u,y1=y>>16;
+    uint32_t low=x0*y0,mid=x1*y0+(low>>16),carry=x0*y1+(mid&65535u);
+    uint32_t hi=x1*y1+(mid>>16)+(carry>>16);
+    if(a<0)hi-=y;if(b<0)hi-=x;
+    return (int64_t)(((uint64_t)hi<<32)|((carry<<16)|(low&65535u)));
+#endif
+}
+static inline int32_t mul(int32_t a,int32_t b,unsigned shift)
+{return (int32_t)(product(a,b)>>shift);}
+/* Hot bounded coefficients can be aligned to Q31 before multiplying.
+ * EMAC then returns the complete required result in two instructions:
+ * there is no discarded guard bit and no low-word reconstruction. */
+static inline int32_t mul31(int32_t a,int32_t b)
+{
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    int32_t result;
+    __asm__ volatile("mac.l %1,%2,%%acc0\n\tmovclr.l %%acc0,%0"
+                     :"=&d"(result):"d"(a),"d"(b):"cc");
+    return result;
+#else
+    return (int32_t)(product(a,b)>>31);
+#endif
+}
+static inline int32_t q23(int32_t a,int32_t coefficient){return mul31(a,coefficient*256);}
+static inline int32_t q27(int32_t a,int32_t gain){return mul31(a,gain*16);}
+static inline int32_t sat(int32_t a){return a>TOP?TOP:a< -ONE?-ONE:a;}
+static inline int32_t clip(int32_t a){return a>SIGNAL_TOP?SIGNAL_TOP:a< -SIGNAL?-SIGNAL:a;}
+static inline int32_t clip64(int64_t a){return a>SIGNAL_TOP?SIGNAL_TOP:a< -SIGNAL?-SIGNAL:(int32_t)a;}
+static inline int32_t amp_mix(int32_t prior,int32_t signal,int32_t fb)
+{
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    int32_t top=mul31(signal,fb);
+    if(top>=SIGNAL/8)return SIGNAL_TOP;
+    if(top< -SIGNAL/8)return -SIGNAL;
+    uint32_t low=(uint32_t)signal*(uint32_t)fb;
+    return clip(prior+top*16+(int32_t)((low>>27)&15u));
+#else
+    return clip64(prior+(product(signal,fb)>>27));
+#endif
+}
+static inline int32_t feedback_offset(int32_t signal,int32_t amount)
+{
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    int32_t top=mul31(signal,amount*65536);
+    uint32_t low=(uint32_t)signal*(uint32_t)amount;
+    int32_t value=top*4+(int32_t)((low>>13)&3u);
+    return value+(signal<0 && (low&8191u));
+#else
+    int64_t off=product(signal,amount);
+    return (int32_t)(off>=0?off>>13:-((-off)>>13));
+#endif
+}
+static inline int32_t floor23(int32_t a){return (a>>6)*64;}
+static inline int32_t sin_at(uint32_t phase)
+{
+    unsigned i=phase>>19;
+    /* Adjacent original sine words differ by less than 8192, so <<18 fits. */
+    return dmf_sine[i]*64+mul31((dmf_sine[i+1]-dmf_sine[i])*262144,(int32_t)(phase&0x7ffffu));
+}
+static inline int32_t knob(const uint16_t *p,unsigned k){return p[k]*4096;}
+static int32_t ratio(const uint16_t *p,unsigned k)
+{return dmf_ratios[(6u*(p[k]>>8)+3u)>>5];}
+static int32_t dyn_frq(const uint16_t *p,unsigned k)
+{return p[k]>=0x7f00?TOP:knob(p,k);}
+static int32_t envt(const uint16_t *p,unsigned k)
+{int v=(p[k]>>8)-64;if(v<0)v=-v;return dmf_envt[128-2*v];}
+static int32_t ampfb(const uint16_t *p,unsigned k)
+{int32_t v=knob(p,k)-ONE/2;return v>0?v*16:0;}
+static int32_t level(struct dm_fm_voice *v,const uint16_t *p,unsigned k,unsigned env)
+{
+    unsigned n=p[k]>>8;
+    if(n>=64){unsigned e=n-64,e2=e*e;int32_t d=0x7fffff-(int32_t)((e2*e2+31u)>>5);
+        v->env[env]=mul(v->env[env],d,23);}
+    int32_t x=knob(p,k);
+    return mul(sat(mul(x,x,25)),v->env[env],23);
+}
+void dm_fm_init(struct dm_fm_voice *v)
+{
+    /* One caller-owned voice: no global mutable oscillator state. */
+    unsigned char *b=(unsigned char *)v;
+    for(unsigned i=0;i<sizeof(*v);i++)b[i]=0;
+    v->cursor=16;v->need=1;
+}
+void dm_fm_trig(struct dm_fm_voice *v,unsigned type,const uint16_t *p)
+{
+    /* Original trig resets envelopes only. Oscillator/filter phases continue. */
+    for(unsigned i=0;i<3;i++)v->env[i]=0x7fffff;
+    if(type==11){
+        int32_t b=knob(p,3)-ONE/2;
+        if(b<0)b=mul(b,knob(p,2),27);
+        v->env[1]=sat(b*4)>>4;
+        b=knob(p,1)-ONE/2;if(b<0)b>>=1;
+        v->env[2]=mul(b,b<0?-b:b,27)>>4;
+    }
+}
+static void ramped(struct dm_fm_op *o,int32_t inc,int32_t c,int32_t fb,int32_t *out)
+{
+    int32_t a=o->ramp,step=(int32_t)((uint32_t)inc-(uint32_t)a)>>5;
+    o->ramp=inc;
+    for(unsigned i=0;i<32;i++){
+        a=(int32_t)((uint32_t)a+(uint32_t)step);
+        int32_t s=sin_at(o->phase);o->phase+=(uint32_t)a;
+        int32_t d=clip(s-o->prior);o->prior=s;
+        int32_t prior=o->lp;o->lp+=q23(d-o->lp,c);
+        out[i]=fb?amp_mix(prior,o->fb,fb):prior;o->fb=prior;
+    }
+    o->lp=floor23(o->lp);
+}
+static void feedback(struct dm_fm_op *o,int32_t inc,int32_t c,int32_t amount,int32_t *out)
+{
+    for(unsigned i=0;i<32;i++){
+        o->phase+=(uint32_t)inc;
+        int32_t s=dmf_sine[(o->phase+(uint32_t)o->fb)>>19]*64;
+        /* Truncate toward zero, as the SHARC TRUNC used for the offset. */
+        o->fb=feedback_offset(s,amount);
+        int32_t d=clip(s-o->prior);o->prior=s;
+        out[i]=o->lp;o->lp+=q23(d-o->lp,c);
+    }
+    o->lp=floor23(o->lp);
+}
+static void carrier(struct dm_fm_voice *v,int32_t inc,int32_t c,
+                    int32_t ops[3][32],const int32_t *g,unsigned n,int32_t *out)
+{
+    int32_t a=v->ramp,step=(int32_t)((uint32_t)inc-(uint32_t)a)>>5;v->ramp=inc;
+    for(unsigned i=0;i<32;i++){
+        int32_t mix=clip(q27(ops[0][i],g[0])+q27(ops[1][i],g[1]));
+        if(n==3)mix=clip(mix+q27(ops[2][i],g[2]));
+        int32_t prior=v->lp;v->lp+=q23(mix-v->lp,c);
+        a=(int32_t)((uint32_t)a+(uint32_t)step);
+        out[i]=sin_at(v->phase)>>2;
+        v->phase+=(uint32_t)a+(uint32_t)prior*2u;
+    }
+    v->lp=floor23(v->lp);
+}
+static void decimate(struct dm_fm_voice *v,const int32_t *in,int32_t *out)
+{
+    static const int32_t co[4]={0x2bc9ca,0x0cfce3,0x6f0f12,0x4e63df};
+    int32_t *s=v->dec;
+    for(unsigned i=0;i<16;i++){
+        int32_t e=in[2*i],o=in[2*i+1];
+        int32_t a=clip(s[0]+q23(e-s[2],co[0]));s[0]=e;
+        int32_t b=clip(s[1]+q23(o-s[3],co[1]));s[1]=o;
+        s[4]=clip(s[2]+q23(a-s[4],co[2]));s[2]=a;
+        s[5]=clip(s[3]+q23(b-s[5],co[3]));s[3]=b;
+        out[i]=(s[4]+s[5])>>2;
+    }
+}
+static void half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t pitch,int32_t *out)
+{
+    if(pitch<0)pitch=0;if(pitch>140*64)pitch=140*64;
+    int32_t inc=dmf_inc[pitch],c=type==11?0x400000:dmf_tone[p[6]>>8];
+    int32_t ops[3][32],raw[32],g[3];unsigned n=2;
+    if(type==9){
+        int32_t i2=mul(inc,ratio(p,4),20);
+        ramped(&v->op[0],i2,c,ampfb(p,5),ops[0]);
+        int32_t fine=ONE/2+(knob(p,1)-ONE/2)/4;
+        int32_t i1=mul(inc,sat(mul(fine,ratio(p,0),22)),24);
+        feedback(&v->op[1],i1,c,p[3],ops[1]);
+        g[0]=sat(mul(knob(p,5),knob(p,5),25));g[1]=level(v,p,2,0);
+    }else if(type==10){
+        n=3;
+        for(unsigned j=0;j<3;j++){
+            ramped(&v->op[j],mul(inc,ratio(p,2*j),20),c,ampfb(p,2*j+1),ops[j]);
+            g[j]=level(v,p,2*j+1,j);
+        }
+    }else{
+        /* DYN's signed volume/frequency envelopes decay in the original Q23. */
+        int32_t f=mul(v->env[2]*16,envt(p,1),23);v->env[2]=f>>4;
+        int32_t delta=(int32_t)((uint32_t)inc+(uint32_t)f*8u);
+        int32_t i1=mul(delta,dyn_frq(p,0),26);
+        int32_t ve=mul(v->env[1]*16,envt(p,3),23);v->env[1]=ve>>4;
+        int32_t fb=sat(knob(p,2)+ve-ONE/2);fb=fb>0?fb*16:0;
+        ramped(&v->op[0],i1,c,fb,ops[0]);
+        int32_t r=dyn_frq(p,4);int32_t i2=mul(inc,mul(r,r,27),25);
+        feedback(&v->op[1],i2,c,p[6],ops[1]);
+        g[0]=sat((mul(knob(p,2),knob(p,2),27)+v->env[1]*16)*4);
+        g[1]=level(v,p,5,0);
+    }
+    carrier(v,inc,c,ops,g,n,raw);decimate(v,raw,out);
+}
+void dm_fm_half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t pitch,int32_t *out)
+{
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    struct mac_state s;mac_enter(&s);
+    half(v,type,p,pitch,out);
+    mac_leave(&s);
+#else
+    half(v,type,p,pitch,out);
+#endif
+}
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+static inline int32_t resample(const int32_t *history,const int32_t *co)
+{
+    int32_t x,c,value;
+    /* A fixed 16-tap dot product: contiguous, prealigned operands avoid
+     * ring-index arithmetic and repeated shifts in the sample loop. */
+#define FM_TAP "move.l (%1)+,%2\n\tmove.l (%0)+,%3\n\tmac.l %2,%3,%%acc0\n\t"
+    __asm__ volatile(FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP
+                     FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP
+                     "movclr.l %%acc0,%4"
+                     :"+a"(co),"+a"(history),"=&d"(x),"=&d"(c),"=d"(value)::"cc","memory");
+#undef FM_TAP
+    return value>>14;
+}
+#endif
+void dm_fm_render(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t pitch,int16_t *out)
+{
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    struct mac_state s;mac_enter(&s);
+    int32_t ring[32];
+    for(unsigned j=0;j<16;j++)ring[15-j]=ring[31-j]=v->history[j]*8192;
+#endif
+    for(unsigned i=0;i<32;i++){
+        if(v->need){
+            if(v->cursor==16){half(v,type,p,pitch,v->pending);v->cursor=0;}
+            /* Decimator output is bounded by 0.5. Q17 history x Q15 taps
+             * fits signed 32-bit, avoiding 512 wide multiplies per render.
+             * Two fractional guard bits remain above the final Q15 output. */
+            v->write=(v->write+1)&15u;v->history[v->write]=v->pending[v->cursor++]>>12;
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+            ring[15-v->write]=ring[31-v->write]=v->history[v->write]*8192;
+#endif
+        }
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+        int32_t value;
+        if(!v->frac)value=v->history[(v->write-7)&15u]>>2;
+        else{
+            /* Q17 history <<13, Q15 taps <<15: every product is aligned
+             * by 28 bits. The EMAC's 48-bit accumulator therefore retains
+             * the exact sum; its read is sum>>3, then >>14 is Q15 PCM.
+             * The scale also represents +32768 taps without overflow. */
+            value=resample(ring+15-v->write,dmf_resample_q30+16*v->frac);
+        }
+        int32_t sample=value;
+#else
+        const int32_t *co=dmf_resample+16*v->frac;
+        int64_t sum=0;
+        for(unsigned j=0;j<16;j++)sum+=(int64_t)(v->history[(v->write-j)&15u]*co[j]);
+        int32_t sample=(int32_t)(sum>>17);
+#endif
+        out[i]=(int16_t)(sample>32767?32767:sample< -32768?-32768:sample);
+        v->frac+=147;v->need=v->frac>=160;if(v->need)v->frac-=160;
+    }
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    mac_leave(&s);
+#endif
+}

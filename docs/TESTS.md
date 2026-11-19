@@ -271,6 +271,18 @@ See [RECORDER-CAPTURE-CPU.md](RECORDER-CAPTURE-CPU.md).
 
 ## Digi Mono
 
+SY MnM 0.6 replaces FM+STAT/PAR/DYN with De-Pattern's algorithms. Run
+`tests/test_st_fmplus.py --cc CC [--os MONOMACHINE_OS]` for the 120-case pinned
+float32 DSL comparison and 12,288 split/native-wide arithmetic/resampling
+blocks. Its `--arithmetic-only` mode is explicit in the common suite; the full
+DSL sweep is reported separately. The original comparison bench now accepts
+`--suite fmplus` (27 cases). See [the FM+ port](../mods/digimono-st/fmplus/README.md).
+
+The ColdFire decoder checks EXTB.L D0..D7 before LEA's overlapping mask in
+both Python and TypeScript. Positive tests cover all eight registers; the
+adjacent invalid LEA An remains rejected. No audit rule or compiler flag
+was relaxed for the FM+ build.
+
 The original-Monomachine calibration bench is documented in
 [`tools/monomachine-reference`](../tools/monomachine-reference/README.md).
 It is separate from the port's exactness tests: it needs the owner's Monomachine
@@ -330,8 +342,8 @@ flags and common destinations remain unchanged.
 
 The runner also runs `test_st_mono2k.py`. It verifies pinned MONO2K hashes and
 deterministic extraction; the generated tables at 44.1 kHz match upstream and
-the committed ones regenerate at 48 kHz. The five MONO2K generators compare
-6,912 blocks of PCM/state against the pinned code using native 64-bit maths,
+the committed ones regenerate at 48 kHz. ENS and SID compare
+3,456 blocks of PCM/state against the pinned code using native 64-bit maths,
 including fractional controls, low/high pitches and changing modulation.
 ENS's oracle includes the measured 0.3.1 PW/WAVE laws; its width conversion uses
 independent wide arithmetic. The adapter checks PW=0 remains audible at WAVE127.
@@ -340,6 +352,19 @@ and all five SID waves, ENS L/R and delay/clock continuity across retriggers.
 `test_st_digimono_stereo.c` checks both output channels, single ramp advancement,
 TYPE/width changes, AMP tails and service fallback with stateful native doubles.
 This is not original-Monomachine matching or timing.
+
+FM+ STAT/PAR/DYN use De-Pattern in version 0.6.0. The host runner includes
+12,288 split/native-wide arithmetic blocks and source/table hashes. The
+separate `test_st_fmplus.py --cc HOST_CC --os MONOMACHINE_OS` sweep executes
+120 cases against the pinned float32 DSL (60 dB clean-case SNR or bounded
+absolute error; chaotic feedback uses a 2.5 dB level gate).
+`test_st_fmplus_optim_emu.py --before OLD_BANK --after NEW_BANK --stock OS
+--out OUTPUT` compares 768 linked blocks with exact PCM and full voice state,
+requiring fewer aggregate render instructions in every scene.
+`test_st_fmplus_emac.py --bank BANK --stock OS --out OUTPUT --sgdk-bin SGDK`
+checks all four accumulators, both extension words and MACSR across 96 calls.
+The target tests need `PYTHONPATH` set to the repository and EMAC-capable
+Unicorn. See [FM+ details](../mods/digimono-st/fmplus/README.md).
 
 `test_st_digimono_destinations_emu.py BUILD_FOLDER` executes the native list
 builder and sorter, actual Sound-proxy getter, linked core flags wrapper and

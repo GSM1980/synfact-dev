@@ -105,7 +105,7 @@ static const char *dm_format(const struct st_machine_ui_api *api,const struct co
     }
     if((t==DM_FMSTAT && (p==0 || p==4)) || (t==DM_FMPAR && (p==0 || p==2 || p==4))){
         static const char *const ratios[]={"1/64","1/32","1/16","3/32","1/8","5/32","3/16","1/4","5/16","3/8","7/16","1/2","5/8","3/4","7/8","1","1.25","1.5","1.75","2","2.5","3","3.5","4"};
-        return ratios[(v*24+8)>>7];
+        return ratios[(6*v+3)>>5];
     }
     if(t==DM_ENS && p<3)return T_ENS_PNAME[T_ENS_PIDX[v]];
     if(t==6 && p<3) {

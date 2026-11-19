@@ -1,0 +1,25 @@
+{
+  "repository": "https://github.com/De-Pattern/dn2mk2-firmware",
+  "commit": "a0249fc55fd188242c92f377b4cbb2748b851a35",
+  "license": "AGPL-3.0-or-later",
+  "files": {
+    "fm.py": "src/dnfw/mnm/fm.py",
+    "mnm_core.py": "src/dnfw/mnm/core.py",
+    "md_core.py": "src/dnfw/md/core.py",
+    "dsl.py": "src/dnfw/perc/dsl.py",
+    "mnm_rom.py": "src/dnfw/mnm/rom.py",
+    "md_rom.py": "src/dnfw/md/rom.py",
+    "exact.py": "src/dnfw/mnm/exact.py",
+    "LICENSE": "LICENSE"
+  },
+  "sha256": {
+    "fm.py": "02d0b32388541230097d55368f44c2ae596c88e9cf471b0516121450efcece18",
+    "mnm_core.py": "e88da55c3eb41192fee8c6e86fd7640724cd2a42186ce410794e7678a9ed61f6",
+    "md_core.py": "226c737ece54e306a7384c633847f306225450e7cb200403f350090221794429",
+    "dsl.py": "deed2bf3e7fe5645d9c02fd1072a2a17ddce2eea97fea45c3c58004309ac1d57",
+    "mnm_rom.py": "2cb3e60209ac88c1d29187942ae94234048f0073ba7a2dd1dc6e849e526dd799",
+    "md_rom.py": "885abff051ca77f9dacc7e45893aadc991d1495185f2facc821b64df5f69ecec",
+    "exact.py": "5dd3eb9a8eefe236c26c9706cd2a8f09b6e45eda759bd285718e21d269c44031",
+    "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "os_sha256": "fe13c09f661cdba5fe57813240fa1574de1ee0a3ddd7047fc39d0318cba1a710",
+  "tables_sha256": "58206d5d1df70a8e28fb07bf7dbb7a9c852a0844d6e0c35b2307b7195f217b1f",
+  "lengths": {
+    "sine": 8193,
+    "ratios": 24,
+    "tone": 128,
+    "envt": 129,
+    "inc": 8961,
+    "resample": 2560,
+    "resample_q30": 2560
+  }
+}
