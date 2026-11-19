@@ -20,6 +20,15 @@ def check_bank_modules(report, raw, allowed):
     expected += [names+['chorus_module'] for names in list(expected)]
     expected += [names+['playhead_module'] for names in list(expected)]
     expected += [names+['modulation_skip_module'] for names in list(expected)]
+    # Playhead 1.2's modal must receive global KEY/ENC before the other UI
+    # modules. Machine-owned view callbacks retain their original prefix.
+    prefix={'sp_sampler_input_module','st_stereo_module','fm_tone_module'}
+    for names in list(expected):
+        if 'playhead_module' not in names:continue
+        reordered=[name for name in names if name!='playhead_module']
+        at=next((i for i,name in enumerate(reordered) if name not in prefix),len(reordered))
+        reordered.insert(at,'playhead_module')
+        expected.append(reordered)
     assert modules in expected, ('unexpected module composition/order',modules)
     directory,count=struct.unpack_from('>II',raw,32)
     assert count==len(modules), 'module directory/report count differs'

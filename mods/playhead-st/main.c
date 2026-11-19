@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * playhead-st: the order the active track plays its steps in. TRK + UP / DOWN
- * the next / the previous mode of the cycle FORWARD (stock), REVERSE,
- * PENDULUM, RANDOM, WALK, ANCHOR, STUTTER, FOLD, WALK+. TRK + LEFT /
+ * opens a centered selector for FORWARD (stock), REVERSE, PENDULUM,
+ * RANDOM, WALK, ANCHOR, STUTTER, FOLD, WALK+. TRK + LEFT /
  * RIGHT stay native. Modes belong to the pattern: each pattern's kit keeps
  * its tracks' modes, saved and loaded with it (persist.c).
  *
@@ -18,9 +18,9 @@
  * The cost: nothing in the sequencer while every track goes forwards (the
  * stock code is untouched); while one track is in another mode, a few dozen
  * instructions per track and tick in the sequencer interrupt
- * (seq-direction.s; README.md has the numbers). The key handler runs once
- * per key event in the UI task and returns at its first compare for every
- * key but UP and DOWN.
+ * (seq-direction.s; README.md has the numbers). The selector runs only in
+ * the UI task, with cached drawing. While closed its extra DRAW and ENC
+ * callbacks return at their first state test.
  *
  * The header: while the active track is not FORWARD its mode's 7x7 icon is
  * drawn two pixels left of the metronome, in the MainScreen's own layer (the
@@ -41,13 +41,14 @@
 #include "persist.h"
 typedef unsigned int u32;typedef unsigned char u8;
 #define KEY_TRK 2u
+#define KEY_YES 12u
+#define KEY_NO 13u
 #define KEY_UP 14u
 #define KEY_DOWN 15u
 #define HELD ((u32 (*)(u32))0x40102f40u)
 #define APP ((u8 *(*)(void))0x4016e9c8u)
 #define TRACK_INDEX ((u32 (*)(void *))0x4001ff74u)
 #define UI ((u8 *(*)(void))0x4016e044u)
-#define MESSAGE ((void (*)(u32,const char *,...))0x400c347cu)   /* printf popup */
 #define MAIN_SCREEN 0x401c849cu
 #define FILL ((void (*)(void *,int,int,int,int,int))0x400f7fb6u)    /* x0,y0,x1,y1, colour 0 clear, 1 set,
                                                                       negative XOR (400f7ec4); y grows up */
@@ -55,7 +56,11 @@ typedef unsigned int u32;typedef unsigned char u8;
 #define TEMPO_SPLIT ((u32 (*)(u32,u32,u32,u32))0x40132902u)        /* the whole BPM */
 #define TEXT_WIDTH ((int (*)(u32,int,const void *))0x400f9482u)    /* font, -1, a std::string */
 #define HEADER_FONT 0x443db1f0u
-static u32 taken;                       /* bit k: the press of key 14+k (UP, DOWN) was taken */
+#define BITMAP_CTOR ((void (*)(void *,u32,u32,const void *,const void *))0x400f72beu)
+#define BLIT ((void (*)(void *,const void *,int,int,u32))0x400f8f70u)
+#define COMPOSE ((void (*)(void *))0x40100966u) /* ViewController::requestRedraw, not its root owner */
+static u32 taken[4];                    /* releases of presses consumed by this module */
+static struct {u32 open,kit,track,cursor,opening_key,error,dirty;u8 *view;} playhead_selector;
 static const char *const names[PLAYHEAD_MODES]={"FORWARD","REVERSE","PENDULUM","RANDOM","WALK",
     "ANCHOR","STUTTER","FOLD","WALK+"};
 static u32 word(const void *p,u32 at){return *(const u32 *)((const u8 *)p+at);}
@@ -69,52 +74,68 @@ static u8 *main_screen(void)
     if(!n || n==m+0x14 || !(main=*(u8 **)(n+8)) || word(main,0)!=MAIN_SCREEN)return 0;
     return main;
 }
-/* The popup of the MainScreen's parameter view (as the page popups). */
-static u32 popup_target(void)
+static u32 selector_context(void)
 {
-    u8 *main=main_screen(),*view;u32 vt;
-    if(!main || !(view=*(u8 **)(main+0xc0)))return 0;
-    vt=word(view,0);
-    if(vt<0x40000408u || vt>=0x40339600u || ((const u32 *)vt)[0x88/4]!=0x4003792cu)return 0;
-    return word(view,0x6c);
+    u8 *app;
+    return main_screen()==playhead_selector.view && playhead_active_kit()==playhead_selector.kit &&
+        (app=APP()) && TRACK_INDEX(app+0x30)==playhead_selector.track;
 }
-static void show(u32 t,const char *what)
+static void selector_redraw(void)
 {
-    u32 popup=popup_target();
-    if(!popup)return;
-    if(t<12u)MESSAGE(popup,"TRK %d %s",(int)t+1,what);
-    else MESSAGE(popup,"FX TRK %s",what);
+    u8 *root=UI();
+    if(root)COMPOSE(root+0x40);          /* native compose gate reads (root+40h)+20h */
 }
 static int playhead_key(void *brain,void *event)
 {
-    u32 key=word(event,12),flags=word(event,16),bit,t,k,mode,refused;u8 *app;
+    u32 key=word(event,12),flags=word(event,16),bit,t,k,refused;u8 *app;
     (void)brain;
-    if(key!=KEY_UP && key!=KEY_DOWN)return 0;
-    bit=1u<<(key-KEY_UP);
-    if(!(flags&1u)){                    /* release: the one of a press taken */
-        if(!(taken&bit))return 0;
-        taken&=~bit;return 1;
+    if(key>=128u)return playhead_selector.open!=0;
+    bit=1u<<(key&31u);
+    if(!(flags&1u)){
+        if(key==playhead_selector.opening_key)playhead_selector.opening_key=0;
+        if(!(taken[key>>5]&bit))return 0;
+        taken[key>>5]&=~bit;return 1;
     }
-    if(flags&8u)return (taken&bit)!=0;  /* repeat */
-    if(!HELD(KEY_TRK))return 0;
-    taken|=bit;
-    if(!(app=APP()) || (t=TRACK_INDEX(app+0x30))>=PLAYHEAD_TRACKS ||
-       (k=playhead_active_kit())>=PLAYHEAD_KITS)return 1;
-    playhead_enter();
-    mode=playhead_modes[k][t];
-    if(key==KEY_UP)mode=mode+1u<PLAYHEAD_MODES?mode+1u:0u;
-    else mode=mode?mode-1u:PLAYHEAD_MODES-1u;
-    refused=playhead_seq_set(k,t,mode);
-    playhead_leave();
-    if(!refused)playhead_persist_changed(k);   /* as a native kit edit: kept over a power cycle */
-    if(refused)show(t,"MODES N/A");
-    else show(t,names[mode]);
+    if(flags&8u && !(taken[key>>5]&bit))return 0;
+    if(playhead_selector.open){
+        taken[key>>5]|=bit;
+        if(!selector_context()){
+            playhead_selector.open=0;
+        }else if(key==KEY_UP || key==KEY_DOWN){
+            if(key==playhead_selector.opening_key)return 1; /* held opener: no accidental movement */
+            playhead_selector.cursor=key==KEY_UP?
+                (playhead_selector.cursor?playhead_selector.cursor-1u:PLAYHEAD_MODES-1u):
+                (playhead_selector.cursor+1u<PLAYHEAD_MODES?playhead_selector.cursor+1u:0u);
+            playhead_selector.error=0;playhead_selector.dirty=1;
+        }else if(!(flags&8u) && key==KEY_NO){
+            playhead_selector.open=0;
+        }else if(!(flags&8u) && key==KEY_YES){
+            k=playhead_selector.kit;t=playhead_selector.track;
+            if(playhead_modes[k][t]==playhead_selector.cursor)playhead_selector.open=0;
+            else{
+                playhead_enter();refused=playhead_seq_set(k,t,playhead_selector.cursor);playhead_leave();
+                if(!refused){playhead_persist_changed(k);playhead_selector.open=0;}
+                else {playhead_selector.error=1;playhead_selector.dirty=1;}
+            }
+        }else return 1;                /* modal: underlying pages and tracks cannot be edited */
+    }else{
+        if(key!=KEY_UP && key!=KEY_DOWN)return (taken[key>>5]&bit)!=0;
+        if(flags&8u)return (taken[key>>5]&bit)!=0;
+        if(!HELD(KEY_TRK) || !(app=APP()) || !(playhead_selector.view=main_screen()) ||
+           (t=TRACK_INDEX(app+0x30))>=PLAYHEAD_TRACKS || (k=playhead_active_kit())>=PLAYHEAD_KITS)return 0;
+        taken[key>>5]|=bit;
+        playhead_selector.kit=k;playhead_selector.track=t;
+        playhead_selector.cursor=playhead_modes[k][t];
+        playhead_selector.opening_key=key;playhead_selector.error=0;
+        playhead_selector.dirty=1;playhead_selector.open=1;
+    }
+    selector_redraw();
     return 1;
 }
 /* The icons: one-pixel strokes, centred in the seven rows of the tempo's
  * digits; a row a halfword from the top, bit width-1 the left column. */
 static const struct {u8 width;unsigned short rows[7];} icons[PLAYHEAD_MODES]={
-    {0,{0}},
+    {7,{0x000,0x004,0x002,0x07f,0x002,0x004,0x000}},   /* FORWARD: selector only */
     {7,{0x000,0x010,0x020,0x07f,0x020,0x010,0x000}},   /* REVERSE: an arrow to the left */
     {9,{0x000,0x044,0x082,0x1ff,0x082,0x044,0x000}},   /* PENDULUM: an arrow both ways */
     {7,{0x03e,0x041,0x055,0x049,0x055,0x041,0x03e}},   /* RANDOM: a die's five */
@@ -123,6 +144,105 @@ static const struct {u8 width;unsigned short rows[7];} icons[PLAYHEAD_MODES]={
     {7,{0x000,0x054,0x056,0x057,0x056,0x054,0x000}},   /* STUTTER: repeated bars and play */
     {7,{0x041,0x022,0x014,0x008,0x014,0x022,0x041}},   /* FOLD: outside to centre and back */
     {9,{0x0c0,0x004,0x032,0x00f,0x0c2,0x004,0x030}}};  /* WALK+: footsteps and right arrow */
+/* Borrowed native Bitmap, with our own column-major pixels and mask. Native
+ * FILL/BLIT were checked on OS 1.42: y=0 is bit 31 of column word 0, y=63
+ * is bit 0 of word 1. Build only when the selector changes; one native blit
+ * per rendered frame, no allocation, timer or sequencer/audio work. */
+static u32 selector_pixels[256],selector_mask[256],selector_bitmap[8],selector_ready;
+static u32 selector_cached_track,selector_cached_cursor,selector_cached_error;
+static const u8 selector_font[38][5]={
+ {7,5,5,5,7},{2,6,2,2,7},{7,1,7,4,7},{7,1,7,1,7},{5,5,7,1,1},
+ {7,4,7,1,7},{7,4,7,5,7},{7,1,1,1,1},{7,5,7,5,7},{7,5,7,1,7},
+ {2,5,7,5,5},{6,5,6,5,6},{7,4,4,4,7},{6,5,5,5,6},{7,4,6,4,7},
+ {7,4,6,4,4},{7,4,5,5,7},{5,5,7,5,5},{7,2,2,2,7},{1,1,1,5,7},
+ {5,5,6,5,5},{4,4,4,4,7},{5,7,7,5,5},{5,7,7,7,5},{7,5,5,5,7},
+ {6,5,6,4,4},{7,5,5,7,1},{6,5,6,5,5},{7,4,7,1,7},{7,2,2,2,2},
+ {5,5,5,5,7},{5,5,5,5,2},{5,5,7,7,5},{5,5,2,5,5},{5,5,2,2,2},
+ {7,1,2,4,7},{0,2,7,2,0},{1,1,2,4,4}};
+static void selector_rect(u32 x0,u32 y0,u32 x1,u32 y1,u32 ink)
+{
+    u32 x,w,lo,hi,mask;
+    for(w=y0>>5;w<=y1>>5;w++){
+        lo=w==(y0>>5)?y0&31u:0u;hi=w==(y1>>5)?y1&31u:31u;
+        mask=(0xffffffffu>>lo)&(0xffffffffu<<(31u-hi));
+        for(x=x0;x<=x1;x++)if(ink)selector_pixels[2*x+w]|=mask;else selector_pixels[2*x+w]&=~mask;
+    }
+}
+static void selector_text(u32 x,u32 y,const char *s,u32 ink)
+{
+    u32 r,c,index;const u8 *g;
+    for(;*s;s++,x+=4u){
+        if(*s>='0' && *s<='9')index=(u32)(*s-'0');
+        else if(*s>='A' && *s<='Z')index=10u+(u32)(*s-'A');
+        else if(*s=='+')index=36u;else if(*s=='/')index=37u;else continue;
+        g=selector_font[index];
+        for(r=0;r<5u;r++)for(c=0;c<3u;c++)if(g[r]&(4u>>c))selector_rect(x+c,y-r,x+c,y-r,ink);
+    }
+}
+static void selector_invert_row(u32 mode)
+{
+    u32 x=mode<5u?8u:66u,top=48u-8u*(mode<5u?mode:mode-5u),y0=top-6u,y1=top+1u;
+    u32 w,lo,hi,mask,c;
+    for(w=y0>>5;w<=y1>>5;w++){
+        lo=w==(y0>>5)?y0&31u:0u;hi=w==(y1>>5)?y1&31u:31u;
+        mask=(0xffffffffu>>lo)&(0xffffffffu<<(31u-hi));
+        for(c=x;c<=x+53u;c++)selector_pixels[2*c+w]^=mask;
+    }
+}
+static void selector_render(void)
+{
+    u32 i,r,c,bits,w,x,y,ink;char track[7]={'T','R','K',' ',0,0,0};
+    if(selector_ready && selector_cached_track==playhead_selector.track &&
+       selector_cached_error==playhead_selector.error){
+        if(selector_cached_cursor!=playhead_selector.cursor){
+            selector_invert_row(selector_cached_cursor);selector_invert_row(playhead_selector.cursor);
+            selector_cached_cursor=playhead_selector.cursor;
+        }
+        playhead_selector.dirty=0;return;
+    }
+    if(!selector_ready){
+        for(i=4;i<=123u;i++){selector_mask[2*i]=0x3fffffffu;selector_mask[2*i+1u]=0xfffffffcu;}
+        BITMAP_CTOR(selector_bitmap,128,64,selector_pixels,selector_mask);selector_ready=1;
+    }
+    for(i=0;i<256u;i++)selector_pixels[i]=0;
+    selector_rect(4,2,123,2,1);selector_rect(4,61,123,61,1);
+    selector_rect(4,3,4,60,1);selector_rect(123,3,123,60,1);
+    selector_rect(8,51,119,51,1);
+    selector_text(10,58,playhead_selector.error?"MODES N/A":"PLAYHEAD",1);
+    if(playhead_selector.track<12u){
+        i=playhead_selector.track+1u;
+        if(i>=10u){track[4]='1';track[5]=(char)('0'+i-10u);}else track[4]=(char)('0'+i);
+        selector_text(86,58,track,1);
+    }else selector_text(86,58,"FX TRK",1);
+    for(i=0;i<PLAYHEAD_MODES;i++){
+        x=i<5u?8u:66u;y=48u-8u*(i<5u?i:i-5u);ink=i!=playhead_selector.cursor;
+        if(!ink)selector_rect(x,y-6u,x+53u,y+1u,1);
+        w=icons[i].width;
+        for(r=0;r<7u;r++)for(bits=icons[i].rows[r],c=0;c<w;c++)
+            if(bits&(1u<<(w-1u-c)))selector_rect(x+3u+(9u-w)/2u+c,y-r,x+3u+(9u-w)/2u+c,y-r,ink);
+        selector_text(x+16u,y-1u,names[i],ink);
+    }
+    selector_text(30,8,"YES SET NO CANCEL",1);playhead_selector.dirty=0;
+    selector_cached_track=playhead_selector.track;selector_cached_cursor=playhead_selector.cursor;
+    selector_cached_error=playhead_selector.error;
+}
+/* Global DRAW is after native overlays, unlike the contextual header icon. */
+static void playhead_selector_draw(void *bitmap,void *ctrl)
+{
+    if(!playhead_selector.open)return;
+    if(!selector_context()){
+        playhead_selector.open=0;if(ctrl)COMPOSE(ctrl);return;
+    }
+    if(playhead_selector.dirty)selector_render();
+    BLIT(bitmap,selector_bitmap,0,0,0);
+}
+static int playhead_selector_enc(void *brain,void *event)
+{
+    (void)brain;(void)event;
+    if(!playhead_selector.open)return 0;
+    if(!selector_context()){playhead_selector.open=0;selector_redraw();return 0;}
+    return 1;
+}
 /* A COW std::string the firmware can read (as syntakt/trig-pages.h's titles):
  * length, capacity, a count of -1 (leaked: never written), then the text. */
 static struct {u32 length,capacity;int count;char text[8];} tempo_text={0,7,-1,{0}};
@@ -144,7 +264,7 @@ static void playhead_draw(void *view,void *bitmap,u32 unused)
 {
     u32 t,k,mode,r,c,bits,w;int x;u8 *app;
     (void)unused;
-    if(!playhead_seq_installed)return;   /* every kit's tracks FORWARD */
+    if(!playhead_seq_installed || playhead_selector.open)return;
     if(!view || *(const u32 *)view!=MAIN_SCREEN || view!=main_screen())return;
     if(!(app=APP()) || (t=TRACK_INDEX(app+0x30))>=PLAYHEAD_TRACKS ||
        (k=playhead_active_kit())>=PLAYHEAD_KITS || !(mode=playhead_modes[k][t]) || mode>=PLAYHEAD_MODES)return;
@@ -165,5 +285,7 @@ static int initialize(const struct st_smz_api *api)
 static const struct st_smz_subscription subscriptions[]={
     {ST_EV_KEY,(void (*)(void))playhead_key},
     {ST_EV_DRAW|ST_EV_VIEW,(void (*)(void))playhead_draw},
+    {ST_EV_DRAW,(void (*)(void))playhead_selector_draw},
+    {ST_EV_ENC,(void (*)(void))playhead_selector_enc},
     {ST_EV_NATIVE,(void (*)(void))playhead_native}};
-const struct st_smz_module playhead_module={"PLAYHEAD",initialize,subscriptions,3};
+const struct st_smz_module playhead_module={"PLAYHEAD",initialize,subscriptions,5};

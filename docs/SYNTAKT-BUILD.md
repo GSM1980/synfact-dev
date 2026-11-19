@@ -102,13 +102,15 @@ to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
 
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
-    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
-    --module mods/chorus-st --module mods/playhead-st --module mods/modulation-skip-st \
+    --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
+    --module mods/chorus-st --module mods/modulation-skip-st \
     --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```
 
 - **Module order matters**: `lfo3-st` must come **before** `poly-st` (both
   use the core's native LFO operation; LFO3 is non-consuming and runs first).
+  Put `playhead-st` before the optional UI modules: its mode selector must
+  consume KEY/ENC before ARP or the recorder can edit a page behind the modal.
 - Modulation skip ([mods/modulation-skip-st/README.md](../mods/modulation-skip-st/README.md))
   goes in every bank, last; it is not a choice (`"always": true` in
   `js/config/syntakt-normal.json`). The regressions run its host test; with
@@ -334,7 +336,7 @@ modulation skip ([its README](../mods/chorus-st/README.md)):
 
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
-    --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st \
+    --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st \
     --module mods/system-info-smz-st --module mods/sample-manager-st --module mods/chorus-st \
     --module mods/modulation-skip-st --out out/core-st-X.Y.Z-name/synfact-machines.smz4
 ```

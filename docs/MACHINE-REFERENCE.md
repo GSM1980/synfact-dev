@@ -447,6 +447,23 @@ closed flag at `+30h` is a byte. Provenance and executable checks:
 [TRIG/ARP investigation](TRIG-ARP-MUTE-INVESTIGATION.md) and
 `tests/test_st_arp_native_stack_emu.py`.
 
+OS 1.42's native Bitmap constructor is `400f72be(object, width, height,
+pixels, mask)`; `400f7fb6` fills a clipped rectangle and `400f8f70(dst, src,
+x, y, flags)` blits it. An eight-word owned object can borrow retained pixel
+and mask arrays without heap allocation. For 128x64, each array is 256
+big-endian words: two words per column, with y=0 in bit 31 of the first and
+y=63 in bit 0 of the second. A zero mask bit preserves the destination pixel.
+This layout, clipping and masked blit execute against the supplied 1.42 MAIN
+in `tests/test_st_playhead_emu.py`; Playhead 1.2 caches its selector this way.
+
+On OS 1.42, `4016e044()` returns the root owner from singleton `444e2334`,
+not the controller. Native composition at `4000a21a..4000a220` passes
+`root+0x40` to `4010095c`, which reads the controller's dirty byte at +0x20.
+Request function `40100966(controller)` sets that byte. Thus the effective
+dirty address is `root+0x60`; `root+0x20` is unrelated. Playhead 1.2.1's
+regression executes the real getter, request function and compose gate to
+verify that key-driven redraws reach native composition.
+
 Manager push `40100bc2` calls visibility recomputation `40100ade` before
 the new view's attach callback. Visibility calls `4000a0e6`, which composes
 the UI synchronously and reaches the patched `core_tick` call at `4000a220`.

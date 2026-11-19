@@ -27,6 +27,7 @@ Run with the Unicorn build from docs/SYNTAKT-BUILD.md:
   "$PY" -B tests/test_st_playhead_emu.py --bank <bank with playhead-st> --stock "$SYNTAKT_STOCK"
 """
 import argparse
+import json
 import random
 import struct
 import sys
@@ -584,14 +585,24 @@ def run_persist(stock_path, bank_path):
 
 
 def run_key(stock_path, bank_path):
-    """TRK + UP / DOWN through the real key handler: the playing pattern's kit
-    gets the track's next / previous mode, and the firmware's
-    KitActive::kitChanged (40172250) is called for that kit, as after a native
-    kit edit, so the mirrors (what survives a power cycle) are re-encoded. Not
-    called when the KitActive object is not the stock one."""
-    from unicorn import UC_HOOK_CODE
+    """Real selector: cancel, commit, context ownership, capture and cached blit.
+
+    Only the native app/UI getters, held-key lookup, mutex and kitChanged
+    boundary are doubled. Native Bitmap construction and masked blit execute.
+    """
+    from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_WRITE
     main = syx.Syx.load(stock_path).section(3)
     bank, sym = bank_image(bank_path)
+    # The actual bank must dispatch global modal input before other optional
+    # UI modules. Machine-owned VIEW subscribers can keep their prefix.
+    report = json.loads(Path(str(bank_path) + '.json').read_text())
+    for event_id in (2, 3):
+        subscribers = []
+        for module in report['modules']:
+            _, _, subs, count = struct.unpack_from('>4I', bank, sym[module]-BANK)
+            if any(struct.unpack_from('>I', bank, subs-BANK+8*i)[0] == event_id for i in range(count)):
+                subscribers.append(module)
+        assert subscribers[0] == 'playhead_module', (event_id, subscribers)
     m = Machine(main, bank, sym)
     u = m.u
     u.mem_map(0x40a70000, 0x10000)
@@ -599,51 +610,201 @@ def run_key(stock_path, bank_path):
     kit_active = 0x40a713f0
     m.w32(kit_active, 0x401c3694)
     m.w32(kit_active + 16, KITS)
-    state = {'track': 4, 'changed': []}
+    ui, screen, app = FAKE, FAKE + 0x100, FAKE + 0x200
+    event, bitmap, pixels, mask = FAKE + 0x800, FAKE + 0x5000, FAKE + 0x6000, FAKE + 0x7000
+    m.w32(ui + 0x40 + 0x1c, FAKE + 0x400)
+    m.w32(FAKE + 0x400 + 8, screen)
+    m.w32(screen, 0x401c849c)
+    controller = ui + 0x40
+    # Real singleton getter and native compose gate: root+20h is NOT the
+    # controller's dirty byte. The previous UI double hid this regression.
+    m.w32(0x444e2334, ui)
+    m.w8(ui + 0x20, 0xa5)
+    state = {'track': 4, 'changed': [], 'held': True, 'writes': 0, 'blits': 0, 'instructions': 0}
 
     def hook(uc, at, size, user):
-        stub = {0x40001980: 0, 0x40001aa2: 0, 0x40102f40: 1, 0x4016e9c8: FAKE, 0x4001ff74: None,
-                0x4016e044: 0, 0x40172414: 0}
+        state['instructions'] += 1
+        if at == 0x400f8f70:
+            state['blits'] += 1
+        stub = {0x40001980: 0, 0x40001aa2: 0, 0x40102f40: None, 0x4016e9c8: app,
+                0x4001ff74: None, 0x40172414: 0}
         if at not in stub:
             return
         sp = uc.reg_read(UC_M68K_REG_A7)
         ret, *args = struct.unpack('>4I', bytes(uc.mem_read(sp, 16)))
         if at == 0x40172414:
             state['changed'].append(tuple(args))
-        uc.reg_write(UC_M68K_REG_D0, state['track'] if at == 0x4001ff74 else stub[at])
+        value = state['track'] if at == 0x4001ff74 else int(state['held']) if at == 0x40102f40 else stub[at]
+        uc.reg_write(UC_M68K_REG_D0, value)
         uc.reg_write(UC_M68K_REG_A7, sp + 4)
         uc.reg_write(UC_M68K_REG_PC, ret)
+
+    def write_hook(uc, access, address, size, value, user):
+        state['writes'] += 1
     u.hook_add(UC_HOOK_CODE, hook)
+    u.hook_add(UC_HOOK_MEM_WRITE, write_hook, begin=sym['selector_pixels'], end=sym['selector_pixels']+1023)
     m.song(1, 16, [16] * TRACKS)
-    event = FAKE + 0x800
+    u.mem_write(mask, b'\xff' * 1024)
+    m.call(0x400f72be, bitmap, 128, 64, pixels, mask)
+    selector = sym['playhead_selector']
+
+    def field(offset):
+        return struct.unpack('>I', u.mem_read(selector + offset, 4))[0]
+
+    def send(key, flags, expected=1):
+        m.w32(event + 12, key)
+        m.w32(event + 16, flags)
+        assert m.call(sym['playhead_key'], 0, event) == expected, (key, flags)
 
     def press(key):
-        m.w32(event + 12, key)
-        m.w32(event + 16, 1)
-        assert m.call(sym['playhead_key'], 0, event) == 1
-        m.w32(event + 16, 0x10)
-        assert m.call(sym['playhead_key'], 0, event) == 1
+        m.w8(controller + 0x20, 0)
+        send(key, 1)
+        assert m.call(0x4010095c, controller) & 255 == 1, ('native compose gate not requested', key)
+        assert u.mem_read(ui + 0x20, 1) == b'\xa5', 'root owner must not be modified'
+        send(key, 0x10)
 
-    def mode():
-        return m.u.mem_read(sym['playhead_modes'] + 16 * KIT_INDEX + state['track'], 1)[0]
+    def mode(t=4, k=KIT_INDEX):
+        return m.u.mem_read(sym['playhead_modes'] + 16 * k + t, 1)[0]
+
+    def draw():
+        u.mem_write(pixels, b'\xaa' * 1024)
+        state['writes'] = 0
+        state['instructions'] = 0
+        m.call(sym['playhead_selector_draw'], bitmap, controller)
+        return bytes(u.mem_read(pixels, 1024))
+
+    def lit(frame, x, y):
+        return bool(struct.unpack_from('>I', frame, 8*x+4*(y//32))[0] & (0x80000000 >> (y % 32)))
+
+    # Ordinary arrows and other keys stay native while the selector is closed.
+    state['held'] = False
+    send(14, 1, 0); send(14, 0x10, 0); send(20, 1, 0)
+    assert m.call(sym['playhead_selector_enc'], 0, event) == 0
+    assert draw() == b'\xaa' * 1024 and state['writes'] == state['blits'] == 0
+    state['held'] = True
+    send(14, 1)
+    assert m.call(0x4010095c, controller) & 255 == 1, 'opening must reach the real compose gate'
+    assert u.mem_read(ui + 0x20, 1) == b'\xa5', 'root owner was clobbered'
+    assert field(0) == 1 and field(12) == FORWARDS and mode() == FORWARDS and not state['changed']
+    send(14, 9)  # held opening arrow must not navigate or apply
+    assert field(12) == FORWARDS
+    send(14, 0x10)
+    state['held'] = False
+    send(2, 0x10, 0)  # TRK began before the modal: its release stays native
+    frame = draw()
+    first_draw_cost = state['instructions']
+    assert state['writes'] > 0
+    # All nine icons, including FORWARD, rendered with selection inversion.
+    forward_icon = ['.......', '....x..', '.....x.', 'xxxxxxx', '.....x.', '....x..', '.......']
+    for mode_id in range(9):
+        x = 8 if mode_id < 5 else 66
+        top = 48 - 8 * (mode_id if mode_id < 5 else mode_id - 5)
+        icon = forward_icon if mode_id == 0 else ICONS[mode_id]
+        left = x + 3 + (9-len(icon[0]))//2
+        for r, row in enumerate(icon):
+            for c, ch in enumerate(row):
+                assert lit(frame, left+c, top-r) == ((ch == 'x') != (mode_id == 0)), (mode_id, r, c)
+        assert any(lit(frame, col, top-1-r) != (mode_id == 0)
+                   for col in range(x+16, x+47) for r in range(5)), ('label', mode_id)
+    # The opaque box is centered; every pixel outside its mask stays native.
+    for x in range(128):
+        for y in range(64):
+            if not (4 <= x <= 123 and 2 <= y <= 61):
+                assert lit(frame, x, y) == bool(0xaa & (0x80 >> (y % 8)))
+    assert all(not lit(frame, x, 3) for x in range(5, 123)), 'footer must not touch the border'
+    assert draw() == frame and state['writes'] == 0  # unchanged frame: only one blit
+    cached_draw_cost = state['instructions']
+    assert m.call(sym['playhead_selector_enc'], 0, event) == 1
+    send(15, 1)
+    send(15, 9)  # navigation repeat works after the opener was released
+    send(15, 0x10)
+    assert field(12) == PENDULUM and mode() == FORWARDS and not state['changed']
+    assert draw() != frame and state['writes'] > 0
+    cursor_draw_cost = state['instructions']
+    assert state['writes'] <= 216, 'only the old and new eight-pixel rows may be inverted'
+    assert cursor_draw_cost < first_draw_cost // 3, ('cursor rebuild too expensive', first_draw_cost, cursor_draw_cost)
+    press(13)
+    assert not field(0) and mode() == FORWARDS and not state['changed']
+    assert draw() == b'\xaa' * 1024
+    # Confirming the current option makes no kit edit or persistent write.
+    state['held'] = True
+    press(15); press(12)
+    assert not field(0) and mode() == FORWARDS and not state['changed']
+    # The incremental highlight must equal a clean native-rasterized frame
+    # across every mode and the column/end wrap, in both directions.
+    def highlighted(mode_id):
+        expected = bytearray(frame)
+        for current in (0, mode_id) if mode_id else ():
+            x = 8 if current < 5 else 66
+            top = 48-8*(current if current < 5 else current-5)
+            for col in range(x, x+54):
+                for y in range(top-6, top+2):
+                    expected[8*col+y//8] ^= 0x80 >> (y % 8)
+        return bytes(expected)
     press(14)
-    assert mode() == BACKWARDS and state['changed'] == [(kit_active, KIT_INDEX, 0)], state
-    press(14)
-    assert mode() == PENDULUM and len(state['changed']) == 2
-    press(15)
-    press(15)
-    assert mode() == FORWARDS and state['changed'][-1] == (kit_active, KIT_INDEX, 0)
-    press(15)
-    assert mode() == WALK_PLUS                                  # around the cycle
-    m.w32(kit_active + 16, 0)                                   # not the stock object: no call
-    n = len(state['changed'])
-    press(14)
-    assert mode() == FORWARDS and len(state['changed']) == n
+    assert draw() == frame
+    for key in (15, 14):
+        for _ in range(18):
+            press(key)
+            assert draw() == highlighted(field(12)), ('incremental highlight', key, field(12))
+            assert state['writes'] <= 216
+    press(13)
+    # Commit each option with YES, once, to the track captured at opening.
     for expected in range(1, 9):
         press(14)
-        assert mode() == expected
-    press(14)
-    assert mode() == FORWARDS
+        assert field(12) == mode()
+        press(15)
+        assert field(12) == expected and mode() == expected-1
+        press(12)
+        assert not field(0) and mode() == expected
+        assert len(state['changed']) == expected
+        assert state['changed'][-1] == (kit_active, KIT_INDEX, 0)
+    press(14); press(15)
+    assert field(12) == FORWARDS and mode() == WALK_PLUS
+    press(13)
+    assert mode() == WALK_PLUS
+    # Track or pattern changes dismiss the stale selector, with no selection.
+    press(14); state['track'] = 5; press(12)
+    assert not field(0) and mode() == WALK_PLUS and mode(5) == FORWARDS
+    state['track'] = 4
+    press(14); m.w32(CURRENT_KIT, KITS + (KIT_INDEX+1)*KIT_BYTES)
+    assert draw() == b'\xaa' * 1024 and not field(0)
+    m.w32(CURRENT_KIT, KITS + KIT_INDEX*KIT_BYTES)
+    press(14);m.w32(screen,0x401c9910)
+    assert draw() == b'\xaa' * 1024 and not field(0)
+    send(15,1,0);send(15,0x10,0)  # another opaque view owns its own input
+    m.w32(screen,0x401c849c)
+    # Modal consumes unrelated presses and their releases, even after closing.
+    press(14); send(20, 1); press(13); send(20, 0x10)
+    # FX track owns its own choice, label, icon and highlighted row.
+    state['track'] = 12
+    press(15)
+    for _ in range(FOLD): press(15)
+    preview = draw()
+    preview_dir = Path('out/playhead-selector-preview')
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    (preview_dir/'selector.raw').write_bytes(preview)
+    press(12)
+    assert mode(12) == FOLD and mode() == WALK_PLUS
+    # A bad native KitActive object is never called.
+    m.w32(kit_active + 16, 0)
+    n = len(state['changed'])
+    press(14); press(15); press(12)
+    assert mode(12) == WALK_PLUS and len(state['changed']) == n
+    # Refused patches leave the old mode, show an error and allow NO to exit.
+    m.call(sym['playhead_seq_set'], KIT_INDEX, 4, FORWARDS)
+    m.call(sym['playhead_seq_set'], KIT_INDEX, 12, FORWARDS)
+    original = m.site(SITES[0])
+    u.mem_write(SITES[0], b'\x4e\x71' + original[2:])
+    press(14); press(15); press(12)
+    assert field(0) and field(20) == 1 and mode(12) == FORWARDS
+    press(13)
+    assert not field(0) and len(state['changed']) == n
+    (preview_dir/'latency-validation.json').write_text(json.dumps(dict(
+        native_ui_getter=True, native_compose_gate=True, root_owner_preserved=True,
+        full_draw_instructions=first_draw_cost, cached_draw_instructions=cached_draw_cost,
+        cursor_draw_instructions=cursor_draw_cost, incremental_highlight_cases=36,
+        key_commit_boundary='native kitChanged is doubled; no hardware latency measurement'), indent=2)+'\n')
     return 1
 
 
@@ -659,8 +820,8 @@ def main():
     print(f'PASS: playhead-st modes on {n} tracks: all nine modes as specified, '
           'one step per count for the UI copy, the trig and the LEDs')
     run_key(a.stock, a.bank)
-    print('PASS: playhead-st keys: TRK + UP / DOWN around the cycle on the playing kit, '
-          'KitActive::kitChanged called for it, not with another object')
+    print('PASS: playhead-st selector: no live edits; YES commits, NO cancels; captured track/kit; '
+          'nine icons and labels, native masked blit, cached frames, key/encoder capture and safe refusal')
     run_persist(a.stock, a.bank)
     print('PASS: playhead-st persistence: kit encode/decode in the slot tail, copies, NEW, '
           'PROJECT_NEW, damaged records, per-pattern kits, sites following the modes')

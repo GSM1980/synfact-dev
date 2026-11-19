@@ -34,7 +34,14 @@ def verify(folder,synfact=None):
     rows=[struct.unpack_from('>II',raw,image+subs+8*i) for i in range(n)]
     assert [x[0] for x in rows]==[2,3,0,0x101,10,8,9]
     assert all(not(fn&1) and fn<report['main_bytes'] for event,fn in rows)
-    obj=elf.Elf.load(folder/'synfact-machines.work/main2-1.o');code=obj.section('.text').data
+    # Identify the IRQ owner by its defined symbol, rather than a module
+    # ordinal: Playhead's modal now precedes the recorder in the normal bank.
+    irq=[]
+    for path in report['object_sha256']:
+        obj=elf.Elf.load(Path(path));text=obj.section('.text')
+        if text and any(s.name=='recorder_irq_lock' and s.shndx==text.idx for s in obj.symbols):irq.append(text.data)
+    assert len(irq)==1,'one recorder IRQ object required'
+    code=irq[0]
     assert code==bytes.fromhex('700040c046fc27004e75202f000446c04e75') and audit(code)>0
     assert all(flag in report['cflags'] for flag in ('-O3','-mcpu=54415','-mtune=cfv4'))
     # The new resident service table refers to existing operations only.
