@@ -12,11 +12,12 @@ from elekloader.sdk import elf
 
 class InstructionAudit(unittest.TestCase):
     def test_integer_emac_cache_and_control_remain_allowed(self):
-        for code in ('70014e75','203c123456784e75','a9c0','f468','4e7b0002'):
+        for code in ('70014e75','203c123456784e75','a9c0','f468','4e7b0002',
+                     *('%04x'%(0x49c0+r) for r in range(8))):
             with self.subTest(code=code):self.assertGreater(audit(bytes.fromhex(code)),0)
 
     def test_fpu_linef_and_legacy_instructions_are_rejected(self):
-        for code in ('f2000022','f2000000','f310','ffff','51c8fffc','01080000','4afc'):
+        for code in ('f2000022','f2000000','f310','ffff','51c8fffc','01080000','4afc','49c8'):
             with self.subTest(code=code),self.assertRaisesRegex(ValueError,'unsupported'):
                 audit(bytes.fromhex(code),0x4000)
 
