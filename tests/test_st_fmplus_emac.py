@@ -39,8 +39,9 @@ def main():
                 m.uc.mem_write(knobs,struct.pack('>7H',*(rnd.randrange(0x7f01) for _ in range(7))))
                 m.call(bs['dm_fm_init'],state);m.call(bs['dm_fm_trig'],state,kind,knobs)
                 m.call(symbols['seed'],seed);m.call(symbols['read_state'],first)
-                for callback in ('dm_fm_half','dm_fm_render'):
-                    m.call(bs[callback],state,kind,knobs,60*64,output)
+                for callback in ('dm_fm_trig','dm_fm_half','dm_fm_render'):
+                    if callback=='dm_fm_trig':m.call(bs[callback],state,kind,knobs)
+                    else:m.call(bs[callback],state,kind,knobs,60*64,output)
                     m.call(symbols['read_state'],after)
                     assert bytes(m.uc.mem_read(first,28))==bytes(m.uc.mem_read(after,28)),(kind,sr,callback)
                     cases+=1

@@ -1,4 +1,4 @@
-# SY MnM 0.6.0
+# SY MnM 0.6.1
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
@@ -15,6 +15,12 @@ at 44.1 kHz / 16 frames with 2x operators and its original allpass decimator,
 then a 160-phase, 16-tap converter feeds Syntakt at 48 kHz. Oscillator phases
 continue on retrigger; the machine's internal envelopes restart. Native Syntakt
 AMP/FLTR/FX remain downstream. See [fmplus/README.md](fmplus/README.md).
+
+Version 0.6.1 optimizes the same FM+ arithmetic and memory accesses. A linked
+768-block comparison against 0.6.0 retains exact PCM and complete voice state;
+observed render maxima fall another 9.3–12.3%. Oversampling, conversion taps,
+tables, control timing and truncation points are retained. DYN's standalone
+trigger now also saves/sets/restores the EMAC mode explicitly.
 
 SYN has one page with eight positions: TUNE and seven engine parameters.
 Unused positions are empty. TYPE stays in its existing Sound slot but has no

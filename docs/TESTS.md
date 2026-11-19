@@ -362,7 +362,11 @@ absolute error; chaotic feedback uses a 2.5 dB level gate).
 --out OUTPUT` compares 768 linked blocks with exact PCM and full voice state,
 requiring fewer aggregate render instructions in every scene.
 `test_st_fmplus_emac.py --bank BANK --stock OS --out OUTPUT --sgdk-bin SGDK`
-checks all four accumulators, both extension words and MACSR across 96 calls.
+checks all four accumulators, both extension words and MACSR across 144 calls,
+including triggers. `test_st_fmplus_cfbench.py --cfbench CFBENCH --sgdk-bin SGDK
+--out OUTPUT` independently runs 768 target/split-integer blocks on the physical
+EMAC register model, with eight voices and four incoming modes. PCM, full voice
+state and every incoming accumulator/extension/MACSR word must match exactly.
 The target tests need `PYTHONPATH` set to the repository and EMAC-capable
 Unicorn. See [FM+ details](../mods/digimono-st/fmplus/README.md).
 

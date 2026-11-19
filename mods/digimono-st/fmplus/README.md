@@ -1,4 +1,4 @@
-# De-Pattern FM+ for SY MnM 0.6.0
+# De-Pattern FM+ for SY MnM 0.6.1
 
 TYPE 9/10/11 now select De-Pattern's FM+STAT, FM+PAR and FM+DYN algorithms,
 replacing the previous MONO2K FM engines in place. Their names, control order,
@@ -53,7 +53,7 @@ against the host backend. These are measured instruction counts for a
 FLTR/AMP/FX, scheduler and cache stalls; they are not cycle budgets or CPU
 percentages. See the delivery report for the exact bank hashes and maxima.
 
-| Engine | First port | Optimized | Reduction |
+| Engine | First port | 0.6.0 | Reduction |
 |---|---:|---:|---:|
 | FM+STAT | 46,383 | 16,500 | 64.4% |
 | FM+PAR | 64,739 | 21,999 | 66.0% |
@@ -62,6 +62,44 @@ percentages. See the delivery report for the exact bank hashes and maxima.
 These maxima are observed across the 768-block A/B suite's defaults, zero,
 maximum and changing fractional controls, notes 24/48/60/96 and retriggers.
 They do not establish a global worst-case bound or guarantee eight instances.
+
+### 0.6.1: exact arithmetic and fewer memory accesses
+
+The same linked A/B suite against the shipped 0.6.0 bank retains every PCM
+sample and every byte of voice state, including fractional controls, pitch
+changes, retriggers and buffered source blocks:
+
+| Engine | 0.6.0 | 0.6.1 | Further reduction |
+|---|---:|---:|---:|
+| FM+STAT | 16,500 | 14,752 | 10.6% |
+| FM+PAR | 21,999 | 19,955 | 9.3% |
+| FM+DYN | 16,564 | 14,523 | 12.3% |
+
+The port keeps operator state in locals until the end of each source block,
+allows legal address-register EMAC operands, uses bounded exact Q31 products
+for levels/envelopes, and stores the original sine words already scaled to
+Q29 on target. The original and target sine arrays are alternatives: the
+unused one is removed by the compiler. The resampler combines each MAC with
+the next history load. Only the small feedback loop is unrolled four times;
+compiler flags are unchanged. No quality or control-rate reduction is used.
+
+DYN's standalone trigger previously depended on an incoming fractional EMAC
+mode. It now owns an explicit guard too; the native-chain A/B remains exact.
+The linked guard test covers trigger/half/render in 144 calls. A separate
+physical-register EMAC model compares 768 target/split-integer blocks across
+eight voices and four incoming MACSR modes, checking PCM, full voice state,
+all four accumulators, extension words and MACSR. This independently covers
+the EMAC arithmetic that patched Unicorn cannot generally model correctly.
+
+```sh
+python tests/test_st_fmplus_cfbench.py --cfbench "$CFBENCH" \
+  --sgdk-bin "$SGDK_BIN" --out out/fmplus-cfbench
+```
+
+In an additional 16-block sustained maximum-control fixture, writes to DDR
+addresses fall 31–37%. This counts emulated accesses, including stack and
+native update/gain/mix; it does not model cache/writeback or physical bus
+traffic. Neither metric establishes the safe concurrent voice count on hardware.
 
 ## Tables and reproducibility
 

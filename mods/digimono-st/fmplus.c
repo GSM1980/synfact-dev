@@ -38,7 +38,7 @@ static inline int64_t product(int32_t a,int32_t b)
      * fractional unit's +/-2^62 product limit. Half-block guard owns ACC0. */
     int32_t top;
     __asm__ volatile("mac.l %1,%2,%%acc0\n\tmovclr.l %%acc0,%0"
-                     :"=&d"(top):"d"(a),"d"(b):"cc");
+                     :"=&d"(top):"r"(a),"r"(b):"cc");
     return (int64_t)(((uint64_t)(uint32_t)(top>>1)<<32)|((uint32_t)a*(uint32_t)b));
 #elif defined(DM_FM_NATIVE_WIDE)
     return (int64_t)a*b;
@@ -61,13 +61,17 @@ static inline int32_t mul31(int32_t a,int32_t b)
 #if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
     int32_t result;
     __asm__ volatile("mac.l %1,%2,%%acc0\n\tmovclr.l %%acc0,%0"
-                     :"=&d"(result):"d"(a),"d"(b):"cc");
+                     :"=&d"(result):"r"(a),"r"(b):"cc");
     return result;
 #else
     return (int32_t)(product(a,b)>>31);
 #endif
 }
-static inline int32_t q23(int32_t a,int32_t coefficient){return mul31(a,coefficient*256);}
+static inline int32_t q23(int32_t a,int32_t coefficient)
+{
+    if(__builtin_constant_p(coefficient) && coefficient==0x400000)return a>>1;
+    return mul31(a,coefficient*256);
+}
 static inline int32_t q27(int32_t a,int32_t gain){return mul31(a,gain*16);}
 static inline int32_t sat(int32_t a){return a>TOP?TOP:a< -ONE?-ONE:a;}
 static inline int32_t clip(int32_t a){return a>SIGNAL_TOP?SIGNAL_TOP:a< -SIGNAL?-SIGNAL:a;}
@@ -101,8 +105,14 @@ static inline int32_t sin_at(uint32_t phase)
 {
     unsigned i=phase>>19;
     /* Adjacent original sine words differ by less than 8192, so <<18 fits. */
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+    return dmf_sine_q29[i]+mul31((dmf_sine_q29[i+1]-dmf_sine_q29[i])*4096,(int32_t)(phase&0x7ffffu));
+#else
     return dmf_sine[i]*64+mul31((dmf_sine[i+1]-dmf_sine[i])*262144,(int32_t)(phase&0x7ffffu));
+#endif
 }
+static inline int32_t square_level(int32_t x)
+{return x>=ONE/2?TOP:mul31(x*8,x*8);}
 static inline int32_t knob(const uint16_t *p,unsigned k){return p[k]*4096;}
 static int32_t ratio(const uint16_t *p,unsigned k)
 {return dmf_ratios[(6u*(p[k]>>8)+3u)>>5];}
@@ -116,9 +126,9 @@ static int32_t level(struct dm_fm_voice *v,const uint16_t *p,unsigned k,unsigned
 {
     unsigned n=p[k]>>8;
     if(n>=64){unsigned e=n-64,e2=e*e;int32_t d=0x7fffff-(int32_t)((e2*e2+31u)>>5);
-        v->env[env]=mul(v->env[env],d,23);}
+        v->env[env]=q23(v->env[env],d);}
     int32_t x=knob(p,k);
-    return mul(sat(mul(x,x,25)),v->env[env],23);
+    return q23(square_level(x),v->env[env]);
 }
 void dm_fm_init(struct dm_fm_voice *v)
 {
@@ -132,51 +142,69 @@ void dm_fm_trig(struct dm_fm_voice *v,unsigned type,const uint16_t *p)
     /* Original trig resets envelopes only. Oscillator/filter phases continue. */
     for(unsigned i=0;i<3;i++)v->env[i]=0x7fffff;
     if(type==11){
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+        struct mac_state s;mac_enter(&s);
+#endif
         int32_t b=knob(p,3)-ONE/2;
         if(b<0)b=mul(b,knob(p,2),27);
         v->env[1]=sat(b*4)>>4;
         b=knob(p,1)-ONE/2;if(b<0)b>>=1;
         v->env[2]=mul(b,b<0?-b:b,27)>>4;
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+        mac_leave(&s);
+#endif
     }
 }
 static void ramped(struct dm_fm_op *o,int32_t inc,int32_t c,int32_t fb,int32_t *out)
 {
     int32_t a=o->ramp,step=(int32_t)((uint32_t)inc-(uint32_t)a)>>5;
+    uint32_t phase=o->phase;
+    int32_t previous=o->prior,lp=o->lp,delayed=o->fb;
     o->ramp=inc;
     for(unsigned i=0;i<32;i++){
         a=(int32_t)((uint32_t)a+(uint32_t)step);
-        int32_t s=sin_at(o->phase);o->phase+=(uint32_t)a;
-        int32_t d=clip(s-o->prior);o->prior=s;
-        int32_t prior=o->lp;o->lp+=q23(d-o->lp,c);
-        out[i]=fb?amp_mix(prior,o->fb,fb):prior;o->fb=prior;
+        int32_t s=sin_at(phase);phase+=(uint32_t)a;
+        int32_t d=clip(s-previous);previous=s;
+        int32_t prior=lp;lp+=q23(d-lp,c);
+        out[i]=fb?amp_mix(prior,delayed,fb):prior;delayed=prior;
     }
-    o->lp=floor23(o->lp);
+    o->phase=phase;o->prior=previous;o->lp=floor23(lp);o->fb=delayed;
 }
 static void feedback(struct dm_fm_op *o,int32_t inc,int32_t c,int32_t amount,int32_t *out)
 {
+    uint32_t phase=o->phase;
+    int32_t previous=o->prior,lp=o->lp,delayed=o->fb;
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+#pragma GCC unroll 4
+#endif
     for(unsigned i=0;i<32;i++){
-        o->phase+=(uint32_t)inc;
-        int32_t s=dmf_sine[(o->phase+(uint32_t)o->fb)>>19]*64;
+        phase+=(uint32_t)inc;
+#if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
+        int32_t s=dmf_sine_q29[(phase+(uint32_t)delayed)>>19];
+#else
+        int32_t s=dmf_sine[(phase+(uint32_t)delayed)>>19]*64;
+#endif
         /* Truncate toward zero, as the SHARC TRUNC used for the offset. */
-        o->fb=feedback_offset(s,amount);
-        int32_t d=clip(s-o->prior);o->prior=s;
-        out[i]=o->lp;o->lp+=q23(d-o->lp,c);
+        delayed=feedback_offset(s,amount);
+        int32_t d=clip(s-previous);previous=s;
+        out[i]=lp;lp+=q23(d-lp,c);
     }
-    o->lp=floor23(o->lp);
+    o->phase=phase;o->prior=previous;o->lp=floor23(lp);o->fb=delayed;
 }
 static void carrier(struct dm_fm_voice *v,int32_t inc,int32_t c,
                     int32_t ops[3][32],const int32_t *g,unsigned n,int32_t *out)
 {
     int32_t a=v->ramp,step=(int32_t)((uint32_t)inc-(uint32_t)a)>>5;v->ramp=inc;
+    uint32_t phase=v->phase;int32_t lp=v->lp;
     for(unsigned i=0;i<32;i++){
         int32_t mix=clip(q27(ops[0][i],g[0])+q27(ops[1][i],g[1]));
         if(n==3)mix=clip(mix+q27(ops[2][i],g[2]));
-        int32_t prior=v->lp;v->lp+=q23(mix-v->lp,c);
+        int32_t prior=lp;lp+=q23(mix-lp,c);
         a=(int32_t)((uint32_t)a+(uint32_t)step);
-        out[i]=sin_at(v->phase)>>2;
-        v->phase+=(uint32_t)a+(uint32_t)prior*2u;
+        out[i]=sin_at(phase)>>2;
+        phase+=(uint32_t)a+(uint32_t)prior*2u;
     }
-    v->lp=floor23(v->lp);
+    v->phase=phase;v->lp=floor23(lp);
 }
 static void decimate(struct dm_fm_voice *v,const int32_t *in,int32_t *out)
 {
@@ -202,7 +230,7 @@ static void half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t p
         int32_t fine=ONE/2+(knob(p,1)-ONE/2)/4;
         int32_t i1=mul(inc,sat(mul(fine,ratio(p,0),22)),24);
         feedback(&v->op[1],i1,c,p[3],ops[1]);
-        g[0]=sat(mul(knob(p,5),knob(p,5),25));g[1]=level(v,p,2,0);
+        g[0]=square_level(knob(p,5));g[1]=level(v,p,2,0);
     }else if(type==10){
         n=3;
         for(unsigned j=0;j<3;j++){
@@ -211,18 +239,20 @@ static void half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t p
         }
     }else{
         /* DYN's signed volume/frequency envelopes decay in the original Q23. */
-        int32_t f=mul(v->env[2]*16,envt(p,1),23);v->env[2]=f>>4;
+        int32_t f=q23(v->env[2]*16,envt(p,1));v->env[2]=f>>4;
         int32_t delta=(int32_t)((uint32_t)inc+(uint32_t)f*8u);
         int32_t i1=mul(delta,dyn_frq(p,0),26);
-        int32_t ve=mul(v->env[1]*16,envt(p,3),23);v->env[1]=ve>>4;
+        int32_t ve=q23(v->env[1]*16,envt(p,3));v->env[1]=ve>>4;
         int32_t fb=sat(knob(p,2)+ve-ONE/2);fb=fb>0?fb*16:0;
-        ramped(&v->op[0],i1,c,fb,ops[0]);
+        ramped(&v->op[0],i1,0x400000,fb,ops[0]);
         int32_t r=dyn_frq(p,4);int32_t i2=mul(inc,mul(r,r,27),25);
-        feedback(&v->op[1],i2,c,p[6],ops[1]);
+        feedback(&v->op[1],i2,0x400000,p[6],ops[1]);
         g[0]=sat((mul(knob(p,2),knob(p,2),27)+v->env[1]*16)*4);
         g[1]=level(v,p,5,0);
     }
-    carrier(v,inc,c,ops,g,n,raw);decimate(v,raw,out);
+    if(type==11)carrier(v,inc,0x400000,ops,g,n,raw);
+    else carrier(v,inc,c,ops,g,n,raw);
+    decimate(v,raw,out);
 }
 void dm_fm_half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t pitch,int32_t *out)
 {
@@ -240,10 +270,11 @@ static inline int32_t resample(const int32_t *history,const int32_t *co)
     int32_t x,c,value;
     /* A fixed 16-tap dot product: contiguous, prealigned operands avoid
      * ring-index arithmetic and repeated shifts in the sample loop. */
-#define FM_TAP "move.l (%1)+,%2\n\tmove.l (%0)+,%3\n\tmac.l %2,%3,%%acc0\n\t"
-    __asm__ volatile(FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP
+#define FM_TAP "move.l (%0)+,%3\n\tmac.l %2,%3,(%1)+,%2,%%acc0\n\t"
+    __asm__ volatile("move.l (%1)+,%2\n\t"
                      FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP
-                     "movclr.l %%acc0,%4"
+                     FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP FM_TAP
+                     "move.l (%0)+,%3\n\tmac.l %2,%3,%%acc0\n\tmovclr.l %%acc0,%4"
                      :"+a"(co),"+a"(history),"=&d"(x),"=&d"(c),"=d"(value)::"cc","memory");
 #undef FM_TAP
     return value>>14;
