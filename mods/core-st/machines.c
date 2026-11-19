@@ -71,7 +71,9 @@ int core_machine_bind(const struct core_machine_def *d,u32 count)
 {
     u32 i,j,k,index;void *memory;
     core_machine_active=0;core_machine_definitions=0;core_machine_count=0;core_machine_extended=0;
-    if(!count)return 1;
+    /* A modules-only bank still needs the parameter providers and the active
+     * assembly paths. Initialize an empty directory and valid lane storage
+     * before publishing active; no-bank startup never calls this function. */
     memory=fw_malloc(count*sizeof(*layouts)+71*4+16*4+8*CORE_MACHINE_SHADOW_ROW*4);
     if((u32)memory<0x40000000u)return 0;
     if(layouts)fw_free(layouts);layouts=memory;core_machine_lanes=(u32 *)(layouts+count);

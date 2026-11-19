@@ -17,6 +17,8 @@ and change with the code, so a commit's docs match its code.
 - **[Syntakt builds](SYNTAKT-BUILD.md)**: the flags and the exact commands for
   the core SYX, the SMZ4 bank, the regressions and the emulator checks.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
+- **[LFO3 in module-only banks](LFO3-MODULE-ONLY-INVESTIGATION.md)**: the zero-machine
+  registry bug, core 2.1.2 correction and offline reproduction.
 - **[Project operations and MAIN CPU](PROJECT-OPERATIONS-CPU.md)**: stopped
   transport and reduced MAIN mixing during project commands, independently of
   the recorder, with automatic restoration when the worker returns.

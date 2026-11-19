@@ -2,6 +2,25 @@
 
 # Tests
 
+Core 2.1.2: the registry regression (`tests/test_core_st_machines.c`) includes
+module-only banks (LFO3 metadata with and without a second provider), no-bank
+fallback, empty-directory/lane safety and allocation failure/recovery. It uses
+production registry/page code and explicit metadata/allocator doubles. The
+common regressions run it, or run it alone without firmware from Git Bash:
+
+```bash
+mkdir -p out/module-only-fix
+"$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" -O2 -Wl,--large-address-aware \
+    -I elekloader/sdk/include tests/test_core_st_machines.c \
+    -o out/module-only-fix/registry.exe
+out/module-only-fix/registry.exe
+```
+
+`tests/test_st_module_only_emu.py` runs actual LFO3/ARP initialization and
+native metadata hooks against linked OS 1.42 MAIN, with a zero-machine bank
+and an optional previous-core ERR negative control. Its inputs, scope and
+results are in [the module-only investigation](LFO3-MODULE-ONLY-INVESTIGATION.md).
+
 Core 2.1.0: `test_st_project_operations.py BUILD --emulate` checks the nine
 project worker routes and 324 linked lifecycle/ABI cases, with native workers
 and STOP doubled. `test_st_project_idle_cfbench.py --build BUILD --cfbench

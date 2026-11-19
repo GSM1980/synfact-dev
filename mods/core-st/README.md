@@ -1,4 +1,10 @@
-# Syntakt core 2.1.1
+# Syntakt core 2.1.2
+
+Core **2.1.2** initializes the shared parameter registry for banks containing
+only modules, with zero machines. LFO3 alone or with ARP receives its labels,
+ranges and editor metadata. The empty registry includes valid directory/lane
+storage before activation (700 bytes of native heap). Startup without a bank
+keeps the registry inactive. The bank format, contract and AUDIO are unchanged.
 
 Core **2.1.1** returns the SMZ4 bank's AUDIO section to MAIN's heap once it is on
 AUDIO. Until 2.1.0 the whole bank file stayed in one heap block until reboot,
