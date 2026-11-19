@@ -1,4 +1,4 @@
-# SY MnM 0.6.1
+# SY MnM 0.7.0
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
@@ -6,12 +6,14 @@ ENS and SID-6581 come from Inigo Hernandez's
 [MONO2K](https://github.com/InigoHernandez/mono2k/tree/95d5763495d961f3ed225f5e4201328934ca4247).
 FM+STAT, FM+PAR and FM+DYN now use the reverse-engineered algorithms from
 [De-Pattern](https://github.com/De-Pattern/dn2mk2-firmware/tree/a0249fc55fd188242c92f377b4cbb2748b851a35/src/dnfw/mnm),
-ported to fixed point with original FM tables. This is a reconstruction, not
+ported to fixed point with original FM tables. Version 0.7.0 ships a balanced
+hybrid backend: self-FM stays at 2x; ramped operators and carrier run at 1x.
+This is a reconstruction, not
 a claim of identical whole-instrument output. MACRO is excluded.
 
 Version 0.6.0 replaces the three FM+ engines in place (TYPE 9/10/11). Existing
 Sounds keep their IDs and values but intentionally sound different. FM+ runs
-at 44.1 kHz / 16 frames with 2x operators and its original allpass decimator,
+at 44.1 kHz / 16 frames. The retained HQ reference uses 2x operators and its original allpass decimator,
 then a 160-phase, 16-tap converter feeds Syntakt at 48 kHz. Oscillator phases
 continue on retrigger; the machine's internal envelopes restart. Native Syntakt
 AMP/FLTR/FX remain downstream. See [fmplus/README.md](fmplus/README.md).
@@ -21,6 +23,16 @@ Version 0.6.1 optimizes the same FM+ arithmetic and memory accesses. A linked
 observed render maxima fall another 9.3–12.3%. Oversampling, conversion taps,
 tables, control timing and truncation points are retained. DYN's standalone
 trigger now also saves/sets/restores the EMAC mode explicitly.
+
+Version 0.7.0 trades some high-frequency/strong-modulation fidelity for a
+larger CPU reduction. The sensitive feedback operator retains every original
+2x sample, including both samples in the carrier's phase integration. Tables,
+pitch/ratio laws, 16-frame envelope timing, two filter substeps and the 16-tap
+44.1-to-48 kHz converter remain. Ramped operators use the mean input slope;
+the carrier is sampled at 1x and no longer uses the original 2x allpass
+decimator. This backend is intentionally not bit exact with 0.6.1. The
+`DM_FM_HQ` compile-time reference retains that full-quality implementation for
+comparison; the previous 0.6.1 bank also remains usable without a core change.
 
 SYN has one page with eight positions: TUNE and seven engine parameters.
 Unused positions are empty. TYPE stays in its existing Sound slot but has no

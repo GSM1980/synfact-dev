@@ -24,6 +24,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--cc',type=Path,required=True)
     p.add_argument('--out',type=Path,default=Path('out/fmplus-tests'));p.add_argument('--os',type=Path)
     p.add_argument('--arithmetic-only',action='store_true',help='run split/native-wide and table/source checks; omit the separately reported DSL sweep')
+    p.add_argument('--backend',choices=('hq','balanced'),default='hq',help='strict source DSL comparison uses hq; balanced has a separate quality bench')
     a=p.parse_args();out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
     if a.os:
         from import_tables import generate
@@ -33,6 +34,8 @@ def main():
     table_sha=hashlib.sha256((FM/'tables.h').read_bytes()).hexdigest()
     run=lambda args:subprocess.run([str(x) for x in args],cwd=ROOT,check=True)
     flags=['-O2','-Wall','-Werror','-I','mods/digimono-st']
+    if a.backend=='hq':flags.append('-DDM_FM_HQ')
+    elif not a.arithmetic_only:p.error('balanced has a separate quality bench; the strict DSL sweep requires --backend hq')
     run([cc,*flags,'-c',src,'-o',out/'split.o'])
     run([cc,*flags,'-DDM_FM_NATIVE_WIDE','-Ddm_fm_init=native_init','-Ddm_fm_trig=native_trig',
          '-Ddm_fm_half=native_half','-Ddm_fm_render=native_render','-c',src,'-o',out/'wide.o'])
@@ -76,7 +79,7 @@ def main():
         print('PASS: De-Pattern float32 DSL comparisons, TYPE',kind,flush=True)
     assert source_sha==hashlib.sha256(Path(src).read_bytes()).hexdigest(),'source changed during test'
     assert table_sha==hashlib.sha256((FM/'tables.h').read_bytes()).hexdigest(),'tables changed during test'
-    result=dict(ok=True,cases=len(rows),rows=rows,source_sha256=source_sha,tables_sha256=table_sha,
+    result=dict(ok=True,backend=a.backend,cases=len(rows),rows=rows,source_sha256=source_sha,tables_sha256=table_sha,
                 tables_reproduced=bool(a.os),hardware_tested=False)
     (out/'results.json').write_text(json.dumps(result,indent=2)+'\n')
     print('PASS:',len(rows),'FM+ DSL cases; >=60 dB clean cases, chaotic self-feedback level within 2.5 dB; no device access')

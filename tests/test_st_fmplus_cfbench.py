@@ -11,9 +11,11 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--cfbench',type=Path,required=True)
     p.add_argument('--sgdk-bin',type=Path,default=os.environ.get('SGDK_BIN'))
-    p.add_argument('--out',type=Path,required=True);a=p.parse_args()
+    p.add_argument('--out',type=Path,required=True)
+    p.add_argument('--hq',action='store_true',help='test the retained 2x reference instead of the shipped balanced backend');a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=True);assert a.sgdk_bin
     flags=DEVICE.toolchain['cflags']+['-fno-jump-tables','-I','mods/digimono-st']
+    if a.hq:flags.append('-DDM_FM_HQ')
     def run(args):return subprocess.run([str(x) for x in args],check=True,capture_output=True,text=True)
     objects=[]
     for name,src,extra in (
@@ -31,7 +33,7 @@ def main():
     result=run([a.cfbench,binary,'40001000',f'{syms["check_fm"]:x}:20,65815630'])
     values=re.findall(r'-> d0 ([0-9a-f]{8}): (\d+) instructions',result.stdout)
     assert len(values)==1 and int(values[0][0],16)==0,result.stdout
-    (a.out/'results.json').write_text(json.dumps(dict(ok=True,blocks=768,
+    (a.out/'results.json').write_text(json.dumps(dict(ok=True,backend='hq' if a.hq else 'balanced',blocks=768,
         instructions=int(values[0][1]),physical_emac_model=True,hardware_cycles=False,
         all_accumulators_extensions_and_macsr=True,
         source_sha256=hashlib.sha256(Path('mods/digimono-st/fmplus.c').read_bytes()).hexdigest(),

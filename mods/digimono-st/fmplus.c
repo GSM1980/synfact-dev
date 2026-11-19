@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later
  * FM+ STAT/PAR/DYN from De-Pattern a0249fc (fmplus/provenance.json).
- * Integer ColdFire port of fm.py; native 44.1 kHz / 16 frames, 2x operators,
- * the original sine/ratios/TONE/envelope tables and allpass decimator.
+ * Integer ColdFire port of fm.py; native 44.1 kHz / 16 frames. Balanced:
+ * ramped operators/carrier at 1x, sensitive self-FM operator at original 2x.
+ * DM_FM_HQ retains the full 2x reference and original allpass decimator.
+ * Both use the original sine/ratios/TONE/envelope tables.
  * Syntakt's AMP/FLTR/FX remain downstream. No float/library calls on target.
  */
 #include "fmplus/voice.h"
@@ -10,6 +12,11 @@
 #define TOP (ONE-16)
 #define SIGNAL (1<<29)
 #define SIGNAL_TOP (SIGNAL-64)
+#if defined(DM_FM_HQ)
+#define FM_STEPS 32
+#else
+#define FM_STEPS 16
+#endif
 
 #if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
 struct mac_state {uint32_t sr,acc,ext;};
@@ -161,17 +168,31 @@ static void ramped(struct dm_fm_op *o,int32_t inc,int32_t c,int32_t fb,int32_t *
     uint32_t phase=o->phase;
     int32_t previous=o->prior,lp=o->lp,delayed=o->fb;
     o->ramp=inc;
-    for(unsigned i=0;i<32;i++){
+    for(unsigned i=0;i<FM_STEPS;i++){
         a=(int32_t)((uint32_t)a+(uint32_t)step);
         int32_t s=sin_at(phase);phase+=(uint32_t)a;
+#if !defined(DM_FM_HQ)
+        /* Keep the original pair of phase increments and filter substeps,
+         * approximating their two input differences by the mean slope. */
+        a=(int32_t)((uint32_t)a+(uint32_t)step);phase+=(uint32_t)a;
+        int32_t d=clip((s-previous)>>1);previous=s;
+#else
         int32_t d=clip(s-previous);previous=s;
+#endif
         int32_t prior=lp;lp+=q23(d-lp,c);
-        out[i]=fb?amp_mix(prior,delayed,fb):prior;delayed=prior;
+        out[i]=fb?amp_mix(prior,delayed,fb):prior;
+#if !defined(DM_FM_HQ)
+        delayed=lp;lp+=q23(d-lp,c);
+#else
+        delayed=prior;
+#endif
     }
     o->phase=phase;o->prior=previous;o->lp=floor23(lp);o->fb=delayed;
 }
 static void feedback(struct dm_fm_op *o,int32_t inc,int32_t c,int32_t amount,int32_t *out)
 {
+    /* Self-FM is sensitive to its one-subsample feedback delay: retain all
+     * 32 original samples, even when the carrier is evaluated at 1x. */
     uint32_t phase=o->phase;
     int32_t previous=o->prior,lp=o->lp,delayed=o->fb;
 #if defined(__mcoldfire__) && !defined(DM_FM_SPLIT)
@@ -196,16 +217,30 @@ static void carrier(struct dm_fm_voice *v,int32_t inc,int32_t c,
 {
     int32_t a=v->ramp,step=(int32_t)((uint32_t)inc-(uint32_t)a)>>5;v->ramp=inc;
     uint32_t phase=v->phase;int32_t lp=v->lp;
-    for(unsigned i=0;i<32;i++){
+    for(unsigned i=0;i<FM_STEPS;i++){
+#if defined(DM_FM_HQ)
         int32_t mix=clip(q27(ops[0][i],g[0])+q27(ops[1][i],g[1]));
+#else
+        int32_t first=q27(ops[0][i],g[0]);
+        int32_t mix=clip(first+q27(ops[1][n==2?2*i:i],g[1]));
+#endif
         if(n==3)mix=clip(mix+q27(ops[2][i],g[2]));
         int32_t prior=lp;lp+=q23(mix-lp,c);
         a=(int32_t)((uint32_t)a+(uint32_t)step);
         out[i]=sin_at(phase)>>2;
         phase+=(uint32_t)a+(uint32_t)prior*2u;
+#if !defined(DM_FM_HQ)
+        /* Integrate both original self-FM samples; holding only its even
+         * sample changed the high-feedback spectrum substantially. */
+        if(n==2)mix=clip(first+q27(ops[1][2*i+1],g[1]));
+        prior=lp;lp+=q23(mix-lp,c);
+        a=(int32_t)((uint32_t)a+(uint32_t)step);
+        phase+=(uint32_t)a+(uint32_t)prior*2u;
+#endif
     }
     v->phase=phase;v->lp=floor23(lp);
 }
+#if defined(DM_FM_HQ)
 static void decimate(struct dm_fm_voice *v,const int32_t *in,int32_t *out)
 {
     static const int32_t co[4]={0x2bc9ca,0x0cfce3,0x6f0f12,0x4e63df};
@@ -219,11 +254,12 @@ static void decimate(struct dm_fm_voice *v,const int32_t *in,int32_t *out)
         out[i]=(s[4]+s[5])>>2;
     }
 }
+#endif
 static void half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t pitch,int32_t *out)
 {
     if(pitch<0)pitch=0;if(pitch>140*64)pitch=140*64;
     int32_t inc=dmf_inc[pitch],c=type==11?0x400000:dmf_tone[p[6]>>8];
-    int32_t ops[3][32],raw[32],g[3];unsigned n=2;
+    int32_t ops[3][32],raw[FM_STEPS],g[3];unsigned n=2;
     if(type==9){
         int32_t i2=mul(inc,ratio(p,4),20);
         ramped(&v->op[0],i2,c,ampfb(p,5),ops[0]);
@@ -252,7 +288,13 @@ static void half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t p
     }
     if(type==11)carrier(v,inc,0x400000,ops,g,n,raw);
     else carrier(v,inc,c,ops,g,n,raw);
+#if defined(DM_FM_HQ)
     decimate(v,raw,out);
+#else
+    /* Full decimation has DC gain one half relative to raw[]. Keep that
+     * gain at 1x; the 16-tap 44.1->48 kHz converter remains downstream. */
+    for(unsigned i=0;i<16;i++)out[i]=raw[i]>>1;
+#endif
 }
 void dm_fm_half(struct dm_fm_voice *v,unsigned type,const uint16_t *p,int32_t pitch,int32_t *out)
 {

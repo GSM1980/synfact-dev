@@ -1,4 +1,4 @@
-# De-Pattern FM+ for SY MnM 0.6.1
+# De-Pattern FM+ for SY MnM 0.7.0
 
 TYPE 9/10/11 now select De-Pattern's FM+STAT, FM+PAR and FM+DYN algorithms,
 replacing the previous MONO2K FM engines in place. Their names, control order,
@@ -14,8 +14,10 @@ with the existing GPLv3/MIT parts under AGPLv3 with their notices retained.
 
 ## What runs on Syntakt
 
-- Native 44.1 kHz, 16-frame control interval, 2x operator/carrier rendering,
-  original sine/ratio/TONE/envelope tables and two-pair allpass decimation.
+- Native 44.1 kHz, 16-frame control interval and original sine/ratio/TONE/
+  envelope tables. The shipped balanced backend evaluates ramped operators
+  and carrier at 1x, retaining self-FM at the original 2x. The compile-time
+  `DM_FM_HQ` reference retains all 2x samples and two-pair allpass decimation.
 - Integer Q29 signals with six guard bits above the original Q23 words;
   original block-end lowpass/envelope truncations are retained. Coefficients
   and gains use their explicit Q23/Q27 domains. No FPU or libgcc arithmetic.
@@ -35,23 +37,74 @@ with the existing GPLv3/MIT parts under AGPLv3 with their notices retained.
   resampler dot product. Prealigned taps and a local doubled ring remove
   shifts and wrapping from that dot product. All accumulator/extension words
   and MACSR are restored, including nonzero incoming guard bits. Table bounds
-  are asserted by the importer; oversampling, taps and precision are retained.
+  are asserted by the importer; integer precision and all resampler taps remain.
 - Common Syntakt TUNE is applied once, then quantized to the original pitch
   table. Enum ratios use the original `(6 * knob + 3) >> 5` boundaries on both
   the sound and readout. Fractional scalar controls remain Q8; original table
   selections and decay-law knob positions use the original whole-value steps.
 
 No core firmware change is required: retain core 2.3.2. No concurrent-voice
-cap or automatic reduction in quality is added. Counts from emulation are
+cap or automatic quality switching is added. Counts from emulation are
 not hardware CPU percentages; final safe voice counts require the unit's
 AUDIO meter under sustained notes, retriggers, modulation and effects.
 
-In the same 768-block linked A/B suite, optimization retains identical PCM
-and complete voice state. The 2,300-block full adapter suite also compares
-against the host backend. These are measured instruction counts for a
+For 0.6.0 to 0.6.1, the 768-block linked A/B suite retained identical PCM
+and complete voice state. The 0.7.0 comparison below allows its intentional
+DSP change; the 2,300-block full adapter suite still compares exactly against
+the corresponding host backend. These are measured instruction counts for a
 32-frame render callback, including native gain/mix and excluding update,
 FLTR/AMP/FX, scheduler and cache stalls; they are not cycle budgets or CPU
 percentages. See the delivery report for the exact bank hashes and maxima.
+
+### 0.7.0: a fixed balanced compromise
+
+Hardware feedback showed that one STAT, PAR and DYN plus five mono ONE SHOTs
+still reached 99% AUDIO CPU with 0.6.1. This release intentionally changes the
+DSP evaluation rate. It is not bit exact with the full-quality reference.
+
+Ramped operators evaluate 16 sine samples instead of 32, use their mean input
+slope, and keep both original phase increments/filter substeps. Carrier phase
+also integrates two substeps, using both distinct self-FM samples in STAT/DYN;
+only its even sample is synthesized. The original decimator is omitted, with
+its DC gain retained explicitly. Envelope/parameter laws and native block
+clock remain, followed by the unchanged 16-tap output converter. Strong/high
+register modulation can alias more, and feedback spectra can differ. There is
+no knob-dependent switch between quality modes.
+
+In the 768-block linked comparison (32-frame render callbacks, including
+native gain/mix but excluding update and FLTR/AMP/FX), the observed maxima are:
+
+| Engine | 0.6.1 HQ | 0.7.0 balanced | Reduction |
+|---|---:|---:|---:|
+| FM+STAT | 14,734 | 11,298 | 23.3% |
+| FM+PAR | 19,955 | 13,437 | 32.7% |
+| FM+DYN | 14,548 | 11,058 | 24.0% |
+
+Aggregate render instructions across those fixtures fall 25.4%. This is not
+a hardware CPU percentage or proof that the owner's three-FM pattern fits.
+
+A fully 1x prototype changed high-feedback STAT substantially and was rejected.
+The shipped hybrid keeps that sensitive operator and its one-subsample delay
+at 2x. The 27 original-DSP fixtures compare the tradeoff directly; their mean
+spectral distances are diagnostics, not percentages of fidelity. A separate
+48-case HQ/balanced bench checks tuning, level and low-depth spectra, and
+reports high-register/feedback spectra without claiming sample identity:
+
+```sh
+python tests/test_st_fmplus_quality.py --cc "$LLVM_MINGW_BIN/x86_64-w64-mingw32-clang.exe" \
+  --out out/fmplus-quality
+```
+
+It needs the reference bench's numpy/scipy environment and writes three WAVs
+containing HQ, a pause, then balanced, with a shared gain. The linked cost test
+is `test_st_fmplus_cost_emu.py --before BANK_0_6_1 --after BANK --stock OS
+--out OUTPUT`. PCM correctness of the shipped backend is independently tested
+against its portable arithmetic by the 2,300-block adapter and physical EMAC
+benches. The strict source DSL sweep now explicitly tests `--backend hq`,
+with its previous 60 dB/level thresholds unchanged. The retained HQ also
+compares exactly against 0.6.1 over 12,288 changing-control/state blocks.
+
+The earlier instruction tables below describe the full-quality backend.
 
 | Engine | First port | 0.6.0 | Reduction |
 |---|---:|---:|---:|
@@ -121,10 +174,10 @@ their documented mathematical formula. Building a bank needs no OS extraction.
 ## Validation and limits
 
 ```sh
-python tests/test_st_fmplus.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" --os "$MONOMACHINE_OS"
+python tests/test_st_fmplus.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" --os "$MONOMACHINE_OS" --backend hq
 ```
 
-The independent oracle executes the pinned upstream FM code and float32 DSL;
+For the retained HQ backend, the independent oracle executes the pinned upstream FM code and float32 DSL;
 AST loading selects its complete functions, avoiding unrelated MD table
 construction. The opcode semantics and FM bodies are unmodified. 120 cases
 cover three engines, notes 24/48/60/69/96 and each control at 0/32/64/96/127.

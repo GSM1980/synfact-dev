@@ -370,6 +370,15 @@ state and every incoming accumulator/extension/MACSR word must match exactly.
 The target tests need `PYTHONPATH` set to the repository and EMAC-capable
 Unicorn. See [FM+ details](../mods/digimono-st/fmplus/README.md).
 
+Version 0.7.0 ships the balanced hybrid backend. The runner's arithmetic
+comparison explicitly selects `--backend balanced`; the strict source DSL
+sweep remains HQ with all existing thresholds. `test_st_fmplus_quality.py`
+needs numpy/scipy and compares 48 HQ/balanced tuning, level and spectral cases,
+writing three shared-gain listening WAVs. `test_st_fmplus_cost_emu.py` compares
+768 linked HQ/balanced blocks for callback cost (at least 15% per scene, 20%
+in aggregate), without asserting intentional DSP changes are exact. The
+ordinary 2,300-block linked adapter test still requires exact target/host PCM.
+
 `test_st_digimono_destinations_emu.py BUILD_FOLDER` executes the native list
 builder and sorter, actual Sound-proxy getter, linked core flags wrapper and
 linked bank's destination module. Only the boot objects, empty map header and

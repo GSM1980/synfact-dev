@@ -43,7 +43,7 @@ def main():
     subprocess.run(['python','tests/test_st_mono2k.py','--cc',str(a.cc),'--out',str(a.out/'mono2k')],
                    cwd=ROOT,check=True)
     subprocess.run(['python','tests/test_st_fmplus.py','--cc',str(a.cc),'--out',str(a.out/'fmplus'),
-                    '--arithmetic-only'],cwd=ROOT,check=True)
+                    '--arithmetic-only','--backend','balanced'],cwd=ROOT,check=True)
 
 
 if __name__ == '__main__':
