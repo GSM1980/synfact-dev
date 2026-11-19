@@ -19,6 +19,9 @@ def check_bank_modules(report, raw, allowed):
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
     expected += [names+['chorus_module'] for names in list(expected)]
     expected += [names+['playhead_module'] for names in list(expected)]
+    # mix-fast-st and icache-lock-st (experimental, no UI): before modulation skip.
+    expected += [names+['mix_fast_module'] for names in list(expected)]
+    expected += [names+['icache_lock_module'] for names in list(expected)]
     expected += [names+['modulation_skip_module'] for names in list(expected)]
     # Playhead 1.2's modal must receive global KEY/ENC before the other UI
     # modules. Machine-owned view callbacks retain their original prefix.

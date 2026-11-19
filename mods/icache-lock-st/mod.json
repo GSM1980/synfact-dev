@@ -1,0 +1,5 @@
+{
+  "id":"icache-lock-st","version":"0.1","title":"I-cache lock: stock audio code kept in MAIN's instruction cache",
+  "device":"syntakt","os":"1.42","license":"GPL-2.0-or-later",
+  "sources":["main.c","lock.s","lines.c"],"smz_module":{"descriptor":"icache_lock_module"}
+}
