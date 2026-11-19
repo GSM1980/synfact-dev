@@ -1,10 +1,15 @@
 # Changelog: SY MnM
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.6.1.
+Generated from git history by `tools/changelog.py`. Latest version: 0.7.0.
+
+## 0.7.0 (2026-11-19)
+
+- perf(digimono): balance FM+ CPU cost while retaining 2x self-FM (`04b66e5`, 2026-11-19)
 
 ## 0.6.1 (2026-11-19)
 
 - perf(digimono): preserve exact FM+ output with fewer DDR writes (`b958d5d`, 2026-11-19)
+- docs(digimono): publish SY MnM 0.6.1 change history (`67908e5`, 2026-11-19)
 
 ## 0.6.0 (2026-11-19)
 

@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
   "title": "SY MnM",
-  "latest": "0.6.1",
+  "latest": "0.7.0",
   "entries": [
+    {
+      "version": "0.7.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "04b66e5",
+          "date": "2026-11-19",
+          "subject": "perf(digimono): balance FM+ CPU cost while retaining 2x self-FM"
+        }
+      ]
+    },
     {
       "version": "0.6.1",
       "date": "2026-11-19",
@@ -11,6 +22,11 @@
           "sha": "b958d5d",
           "date": "2026-11-19",
           "subject": "perf(digimono): preserve exact FM+ output with fewer DDR writes"
+        },
+        {
+          "sha": "67908e5",
+          "date": "2026-11-19",
+          "subject": "docs(digimono): publish SY MnM 0.6.1 change history"
         }
       ]
     },
