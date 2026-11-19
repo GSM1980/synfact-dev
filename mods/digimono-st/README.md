@@ -1,4 +1,4 @@
-# SY MONOMACHINE 0.5.0
+# SY MnM 0.5.1
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
@@ -9,7 +9,7 @@ the original Monomachine DSP or a claim of identical sound. MACRO is excluded.
 
 SYN has one page with eight positions: TUNE and seven engine parameters.
 Unused positions are empty. TYPE stays in its existing Sound slot but has no
-dial. Double-tap SYN, highlight **SY MONOMACHINE**, then press **YES** to open
+dial. Double-tap SYN, highlight **SY MnM**, then press **YES** to open
 **CHOOSE A TYPE**. Encoders or UP/DOWN select a subtype; YES loads the machine
 with that subtype, NO returns to the native machine list. FUNC+UP/DOWN jumps
 seven rows. The twelve TYPE values and all existing saved Sounds keep their IDs.
@@ -26,7 +26,10 @@ available in LFO or Sound Setup destinations. Old routes/locks aimed at TYPE
 are ignored by the new core's AUDIO projection; the saved ID and data remain
 intact. TUNE and the parameters actually used by each subtype are modulable.
 
-**Requires OS 1.42 and this branch's core 2.3.1 with host API 17.**
+**Requires OS 1.42 and core 2.3.2 for TYPE-preserving SYN reload.**
+FUNC+YES randomizes the page as before. FUNC+NO reloads the synthesis
+controls while preserving TYPE, including when the saved Sound uses another
+subtype. Explicit machine selection and Sound/project loading still load TYPE.
 Version 0.4.0 integrates remote main's OS/memory contract and preserves the
 0.3.1 AUDIO generators. Rebuild the bank and core together; older 1.41 banks
 are not compatible with the current core contract. The stopped-transport
@@ -105,7 +108,7 @@ Useful starting patches (A..H in the table above, `-` means unused):
 
 SID's PW/PWAD/PWRS affect the pulse sweep; PW=64 silences the pulse. With
 MOD=RING the generator uses two triangles, so WAVE/PW do not alter that mode.
-MSRC=PRCH uses the previous digital SY MONOMACHINE track's last pitch, with
+MSRC=PRCH uses the previous digital SY MnM track's last pitch, with
 T1 wrapping to T8. When that track runs a different machine, it falls back to
 MFRQ: there is no public AUDIO pitch service for other machine backends.
 Native AMP continues to control the note's amplitude; FM+'s ENV/FEN/VEN are

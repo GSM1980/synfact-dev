@@ -384,7 +384,7 @@ one: Sounds saved with the old machine would open as the new one.
 | 68 | SP REPITCH | `mods/samplers-st` |
 | 69 | SP SLICE | `mods/samplers-st` |
 | 70 | MD MACHINEDRUM (reserved) | `mods/md-st`, pending `feat/md-machine` |
-| 71 | SY MONOMACHINE | `mods/digimono-st` |
+| 71 | SY MnM | `mods/digimono-st` |
 
 **Free: 72 to 79.** Take the lowest free type, add your machine to this
 table in the same change, and keep it if the machine is ever renamed.
@@ -638,7 +638,9 @@ Old effective LFO/Sound routes and locks cannot change its AUDIO value.
 Explicit edits and codec storage retain the ordinary ID/slot. Only use this
 marker with API 17 or newer; require it in the module initializer. Ordinary
 controls keep their effective working values. Digi Mono uses it for hidden
-TYPE; see [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md).
+TYPE; see [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md). Core 2.3.2 additionally excludes
+these configuration controls from the shared native SYN reload/randomize list.
+Explicit machine defaults and Sound/project loads still include configuration.
 
 ## Syntakt: live SYN slot maps (core 1.8.1)
 

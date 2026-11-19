@@ -21,7 +21,8 @@ extern int core_parameter_provider(u32,u32 *,void *,u32 *);
  * and invoker +64 (40077ee8: uniform in the control's range, whole steps). */
 static const u32 entry[21]={[15]=0x40074568u,[16]=0x40077f60u};
 static int drawn(const struct core_machine_def *m,u32 index)
-{return m->parameter[index].alias!=SAMPLE_SLOT_ALIAS;}
+{return m->parameter[index].alias!=SAMPLE_SLOT_ALIAS &&
+        m->parameter[index].alias!=ST_MACHINE_CONFIG_PARAMETER;}
 /* 4007b9b2 called from 40014954: the entry, or 0 for the stock path. A bank
  * machine's controls are drawn; any other ID when a provider answers query
  * 31 (host API 14): a module's own controls, or stock IDs on its page. */
@@ -36,7 +37,9 @@ const void *core_machine_randomize_entry(u32 id)
 void *core_machine_randomize_view;
 /* 400146bc for a bank machine type: the native vector (begin, end, capacity)
  * of the engine IDs on the SYN view's current page (all of the machine's
- * outside a SYN randomize), with the firmware's own reserve and push_back. */
+ * outside a SYN randomize), with the firmware's own reserve and push_back.
+ * Native SYN reload (4001e88c) uses this list too: saved configuration must
+ * survive page reload/randomize, while explicit machine defaults still apply. */
 u32 *core_machine_randomize_list(u32 *vector,u32 type)
 {
     const struct core_machine_def *m=core_machine_find(type);u32 i,id,index;

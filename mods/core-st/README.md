@@ -1,4 +1,9 @@
-# Syntakt core 2.3.1
+# Syntakt core 2.3.2
+
+Core **2.3.2** excludes saved configuration controls from the shared native
+SYN reload/randomize parameter list. FUNC+NO can reload the synthesis controls
+without resetting a hidden subtype. Explicit machine defaults and Sound/project
+loading retain their existing behavior. Host API remains 17; AUDIO is unchanged.
 
 Core **2.3.1** / host API 17 adds saved configuration controls for machine
 indices 8..23 through `ST_MACHINE_CONFIG_PARAMETER`. They have no modulation

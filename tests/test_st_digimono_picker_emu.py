@@ -15,7 +15,7 @@ def verify(folder,out):
     m=Destination(folder);u=m.u;s=m.bank_symbols
     view,model,track_model,pages,event,ctrl,bitmap,pixels,mask,ui=[DATA+0x5000+0x800*i for i in range(10)]
     assert ui+64<DATA+0x10000
-    state=dict(track=3,machine=71,selecting=0,held=0,recording=0,value=4<<8,edits=0)
+    state=dict(track=3,machine=71,selecting=0,held=0,recording=0,value=4<<8,edits=0,reloads=0)
     edit=RET+0x80;u.mem_write(edit,b'\x4e\x75')
     def hook(uc,pc,n,data):
         if pc==0x40039160:
@@ -26,6 +26,19 @@ def verify(folder,out):
         elif pc==0x400c3340:m.ret(state['selecting'])
         elif pc==0x400c2dd6:m.ret(state['held'])
         elif pc==0x400c3582:m.ret(state['recording'])
+        # Boot-created kit/track/snapshot boundaries for native SYN reload.
+        elif pc==0x4016e9c8:m.ret(DATA+0x9000)
+        elif pc==0x4000f04c:m.ret(DATA+0x9800)
+        elif pc==0x400249ce:m.ret(71)
+        elif pc==0x4000f642:m.ret(DATA+0xa000)
+        elif pc==0x4001e798:m.ret(71)
+        elif pc==0x4001e412:
+            owner,mode,selector,track,vector=m.args(5)
+            assert mode==1 and track==3
+            begin,end,capacity=struct.unpack('>3I',uc.mem_read(vector,12))
+            ids=list(struct.unpack('>8I',uc.mem_read(begin,end-begin)))
+            assert ids==list(range(ENGINE,ENGINE+8)),'reload includes TYPE or loses synthesis controls'
+            state['reloads']+=1;m.ret(1)
         elif pc==edit:
             raw,id,delta,knob=m.args(4)
             assert raw==view and id==ENGINE+8 and knob==8
@@ -60,6 +73,28 @@ def verify(folder,out):
         (out/(name+'.pbm')).write_bytes(b'P4\n128 64\n'+data)
     out.mkdir(parents=True,exist_ok=True)
     assert m.word(s['dm_ui']+4)==1
+    name=m.invoke(0x400a6704,71)
+    assert bytes(u.mem_read(name,7))==b'SY MnM\0'
+    # Negative control: removing the configuration marker restores TYPE to
+    # the shared list/randomizer. No hardcoded machine/type-ID exception.
+    alias=m.word(s['dm_monomachine']+20)+8*24+20
+    saved=m.word(alias);m.w(alias,0x13)
+    vector=DATA+0x4800;m.invoke(0x400146bc,71,a0=vector)
+    begin,end,capacity=struct.unpack('>3I',u.mem_read(vector,12))
+    assert list(struct.unpack('>9I',u.mem_read(begin,end-begin)))==list(range(ENGINE,ENGINE+9))
+    assert m.invoke(m.sym['core:core_machine_randomize_entry'],ENGINE+8)
+    m.w(alias,saved)
+    # FUNC+NO reaches the native SYN reload. Its actual shared parameter list
+    # must include all eight scalar controls and exclude TYPE for every kind.
+    for kind in range(12):
+        state['value']=kind<<8
+        assert m.invoke(0x4001e88c,DATA+0x8800,0,3)==1
+        assert state['value']==kind<<8
+    assert state['reloads']==12
+    assert not m.invoke(m.sym['core:core_machine_randomize_entry'],ENGINE+8)
+    for index in range(8):
+        assert m.invoke(m.sym['core:core_machine_randomize_entry'],ENGINE+index)
+    state['value']=4<<8
     assert m.invoke(0x4007ba2a,ENGINE+8)==m.invoke(0x4007ba2a,0x13),'configuration lost its native scalar editor'
     layout=m.word(s['dm_ui']+8)
     assert all(m.word(layout+4*i)!=8 for i in range(8))
@@ -118,10 +153,10 @@ def verify(folder,out):
     tag=u.mem_read(0x800021a9,1)[0]
     assert tag!=first and m.word(0x10000c00+(tag&1)*512+20)==4<<24
     result=dict(ok=True,types=12,native_bitmap=True,bank_callbacks=True,
-                configuration_sender=True,
+                configuration_sender=True,native_syn_reload_types=12,
                 scope='Linked bank with native Bitmap fill; explicit UI/model/get/edit doubles, no device/full native selector boot')
     (out/'results.json').write_text(json.dumps(result,indent=2)+'\n')
-    print('PASS: linked ColdFire TYPE selector, YES/NO/track/record guards, native 128x64 bitmap, 12 distinct subtype boxes and 30-tick expiry')
+    print('PASS: SY MnM name; native SYN reload excludes TYPE for 12 kinds, marker-removal negative control; linked ColdFire selector, YES/NO/track/record guards, native 128x64 bitmap and 30-tick expiry')
 
 
 if __name__=='__main__':

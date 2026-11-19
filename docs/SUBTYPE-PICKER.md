@@ -30,7 +30,7 @@ GPL-3.0-only, consistent with its combined clean-room generators.
 ## User flow
 
 1. Double-tap SYN to open the native machine selector.
-2. Highlight **SY MONOMACHINE** and press **YES**. The native selector remains
+2. Highlight **SY MnM** and press **YES**. The native selector remains
    open underneath a list headed **CHOOSE A TYPE**.
 3. Any encoder moves one item per event; UP/DOWN move one item and
    FUNC+UP/DOWN move seven. The list clamps at both ends.
@@ -51,6 +51,10 @@ empty slots. Reopening a saved Sound keeps its TYPE. An old view left on SYN 2
 is clamped to the one current page. TYPE is excluded from LFO and Sound Setup
 destinations. Its ID/storage remain stable, but legacy modulation/locks aimed
 at TYPE no longer reach AUDIO: it is a configuration value, selected explicitly.
+Core 2.3.2 also excludes configuration from the native SYN reload/randomize
+list: FUNC+NO preserves TYPE while reloading synthesis values, and FUNC+YES
+keeps its page randomization. Explicit selection and Sound/project loading
+still load TYPE. Digi Mono 0.5.1 names the machine **SY MnM**.
 Only controls used by the active subtype (and TUNE) appear in its destination
 block. The common native destinations remain available. Audio continues to
 latch an explicit TYPE change on the next trigger.
