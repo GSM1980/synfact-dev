@@ -6,6 +6,7 @@
 #include "boot-preimages.h"
 typedef core_u32 u32;typedef core_u8 u8;
 #include "boot-preimages.inc"
+#include "cold.h"
 #ifdef CORE_ST_NATIVE_TEST
 extern u8 core_boot_byte(u32);
 #else

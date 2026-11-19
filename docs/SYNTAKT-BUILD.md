@@ -55,6 +55,35 @@ Source of truth: `elekloader/devices/syntakt.py`, `toolchain`.
   instruction forms the MCF54415 accepts.
 - Rationale and review: [mods/core-st/COMPILER-AUDIT.md](../mods/core-st/COMPILER-AUDIT.md).
 
+### The -Os exception (core 2.1.1)
+
+The one exception to `-O3`, agreed with the owner: the core's **cold code**,
+the files whose functions run only at boot, over USB or in a storage
+transaction, is compiled for size, so that the 64 KiB resident reserve keeps
+room. The build flags do not change; each such file includes
+[`mods/core-st/cold.h`](../mods/core-st/cold.h) after its other headers, which
+sets `#pragma GCC optimize("Os","no-tree-loop-distribute-patterns")` for the
+rest of the file (the second option keeps GCC from turning loops into `memset`
+and `memcpy` calls, which the freestanding core does not have).
+
+- Files: `sample-pool.c`, `hzfs.c`, `files.c`, `smz.c`, `storage.c`,
+  `machine-boot.c`, `high-storage.c`, `boot-preimages.c`.
+- A function of those files that a tick, a draw, a key, an encoder or a native
+  path calls is marked `CORE_HOT` (`__attribute__((optimize("O3")))`) and keeps
+  `-O3`: the pool's cursor tick, sample source, name, channels, cursor, cached
+  name, wave storage, code-used, readiness, validity, empty, stock-changed; the
+  bank's auto-confirm tick; the sample write guard. GCC does not inline a
+  function compiled at another level, so a hot function that calls a cold
+  helper now calls it instead of inlining it (a few bytes either way).
+- Nothing else: machines, modules, pages, parameters, the UI (`sample-wave.c`,
+  `sample-manager.c`), the native routes and every `.s` stay at `-O3`. The SMZ
+  banks and the AUDIO code are not affected.
+- Adding a file to the list, or a function to `CORE_HOT`, is a change to this
+  rule: write it here. A struct assignment in an `-Os` file can still become a
+  `memcpy` call; the link then refuses the core (`imports memcpy`): copy field by
+  field (`storage.c`, `slot_copy`).
+- Host builds (clang, the tests) ignore `cold.h`.
+
 ## Commands
 
 Every output goes to a **new** folder under `out/` (builders refuse an

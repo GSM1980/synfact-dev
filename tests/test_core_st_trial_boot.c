@@ -42,10 +42,15 @@ const struct st_machine_ui *core_machine_ui_definitions;
 int core_modules_bind(const struct st_smz_module *m,u32 n){assert(m && n);return 1;}
 int core_boot_preimages_ok(const core_u8 *info){assert(info);return 1;}
 void core_native_initialize(void){}
-static u32 allocations;
+static u32 allocations,boot_allocations,fail_allocation;
 void *fw_malloc(u32 n)
-{allocations++;return VirtualAlloc((void *)(0x46000000u+0x1000000u*allocations),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
+{
+    allocations++;
+    if(++boot_allocations==fail_allocation)return 0;     /* the native allocator's failure */
+    return VirtualAlloc((void *)(0x46000000u+0x1000000u*allocations),n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
+}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
+void *fw_memcpy(void *d,const void *s,u32 n){return memcpy(d,s,n);}
 void core_machine_flush(void *p,u32 n){assert(p && n);}
 int core_machine_bind(const struct core_machine_def *d,u32 n)
 {assert(d && n==expected_count);core_machine_active=1;return 1;}
@@ -66,8 +71,9 @@ static u32 state_of(u32 slot)
 /* A power cycle: the resident bank and its machines are gone. */
 static void boot(void)
 {
+    core_machine_audio_release();
     if(retained)fw_free(retained);
-    retained=0;core_machine_active=0;writes=0;core_machine_load();boot_writes=writes;
+    retained=0;core_machine_active=0;writes=0;boot_allocations=0;core_machine_load();boot_writes=writes;
 }
 int main(int argc,char **argv)
 {
@@ -109,9 +115,24 @@ int main(int argc,char **argv)
     boot();assert(core_machine_trial && core_machine_trial_slot==third.slot && boot_writes==1);
     boot();assert(core_machine_active && !core_machine_trial && core_machine_rollback && !boot_writes &&
                   state_of(second.slot)==CORE_MODS_GOOD);cases++;
+    /* 2.1.1: MAIN's part in a block of its own; the whole file, its AUDIO section
+     * read by the page sender, until the sender is done. */
+    boot();assert(core_machine_status==0 && core_machine_active && core_machine_pages);
+    assert(core_machine_transfer && (void *)core_machine_transfer!=retained);
+    assert(core_machine_audio==core_machine_transfer+v.audio && !memcmp(core_machine_audio,bank+v.audio,v.audio_bytes));
+    assert(!memcmp(retained,bank,v.image));                    /* envelope and relocations, unrelocated */
+    core_machine_audio_release();
+    assert(!core_machine_transfer && !core_machine_audio && core_machine_pages && core_machine_active);
+    core_machine_audio_release();cases++;                      /* idempotent */
+    /* Without memory for that block the file stays whole, as before. */
+    fail_allocation=3;boot();fail_allocation=0;
+    assert(core_machine_status==0 && core_machine_active && !core_machine_transfer &&
+           core_machine_audio==(const u8 *)retained+v.audio);
+    core_machine_audio_release();assert(core_machine_audio);cases++;
     if(retained)fw_free(retained);
     free(card);free(bank);free(bad);
     printf("PASS: %u safe-boot cycles on the production loader and slot storage: trial marked TRYING, "
-           "crash rollback, confirmation, corrupt candidate, GOOD restored; boot writes only trial records\n",cases);
+           "crash rollback, confirmation, corrupt candidate, GOOD restored; boot writes only trial records; "
+           "the bank's AUDIO section released after the sender, MAIN's part kept\n",cases);
     return 0;
 }

@@ -31,6 +31,8 @@ static u32 stock_lengths[64],stock_reads,stock_peaks,stock_io_fail;
 static u32 fail_allocations,fail_boot;
 static void *owned[64];
 const unsigned char core_pool_image[4096]={0x45,0x4c,0x50,0x31,0,0,0x10,0};
+/* 2.1.1: only the header and code are resident (pool_audio.py); this one has a header only. */
+const u32 core_pool_image_bytes=64;
 u32 fw_mmc_ready[]={1},fw_mmc_sectors[]={0x3a4000},core_machine_pages;
 void *fw_malloc(u32 n)
 {

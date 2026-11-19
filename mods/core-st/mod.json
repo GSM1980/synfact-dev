@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -865,7 +865,8 @@
   },
   "weak": [
     "core_machine_audio_abi",
-    "core_pool_image"
+    "core_pool_image",
+    "core_pool_image_bytes"
   ],
   "cflags": [
     "-fno-jump-tables"

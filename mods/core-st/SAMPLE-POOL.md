@@ -86,7 +86,8 @@ editing the pool. No autosave or backup is added.
 6. AUDIO parses its native stock descriptors, verifies and installs the core
    service, then installs any valid machine bank before voice initialization.
    After the final sender memcpy into the FPGA mailbox, the task frees the
-   shared 5120-byte MAIN page/read allocation. Core 2.0.1 computes no stock
+   shared 5120-byte MAIN page/read allocation, and from core 2.1.1 the bank
+   file whose AUDIO section the machine pages came from. Core 2.0.1 computes no stock
    or HZFS envelopes during boot and allocates no waveform cache then. Only
    runtime pool metadata remains; no complete PCM copy is retained in MAIN.
 

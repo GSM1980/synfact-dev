@@ -22,6 +22,14 @@ usage. The loop-expansion cap was selected from generated code and the fixed
 AUDIO window; no O2/O3 cycle comparison or cache benchmark has run on the unit.
 Moving code into SMZ frees resident space but alone does not reduce CPU cost.
 
+**Exception (core 2.1.1, owner's decision 2026-11-18):** the core's cold files
+(boot, USB and storage code) are compiled with `-Os` through `mods/core-st/cold.h`;
+their tick, UI and native-path functions are marked `CORE_HOT` and keep `-O3`.
+The resident reserve went from 176 to 11,616 bytes free with it and the pool
+image trim. The list, the reasons and the rules are in
+[docs/SYNTAKT-BUILD.md](../../docs/SYNTAKT-BUILD.md), "The -Os exception". The
+instruction audit covers this code as before.
+
 Primary references:
 
 - [NXP MCF5441x manual](https://www.nxp.com/docs/en/reference-manual/MCF54418RM.pdf),

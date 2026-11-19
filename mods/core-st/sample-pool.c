@@ -9,6 +9,7 @@
 #include "sample-pool.h"
 #include "crc.h"
 #include <syntakt/machines.h>
+#include "cold.h"
 typedef pool_u8 u8;typedef pool_u16 u16;typedef pool_u32 u32;
 #define PROJECT ((u8 *)0x40653514u)
 /* CPU2 is byte-identical in 1.41/1.42. This is an AUDIO address, not MAIN. */
@@ -19,6 +20,7 @@ extern void *fw_malloc(u32);extern void fw_free(void *);
 extern int fw_mmc_read(u32,u32,void *);
 extern u32 fw_mmc_ready[],fw_mmc_sectors[];
 extern u32 core_machine_pages;
+extern const u32 core_pool_image_bytes;  /* 2.1.1: the header and code kept resident (pool_audio.py) */
 struct file_plan {u32 id,first,frames,crc,offset,pages,sum,last,bad,channels;char name[17];};
 struct pool_state {
     u8 image[4096] __attribute__((aligned(16)));
@@ -53,7 +55,7 @@ extern void *fw_memcpy(void *,const void *,u32),*fw_memset(void *,int,u32);
 static u32 adler(const u8 *p,u32 n)
 {u32 a=1,b=0;while(n--){a+=*p++;if(a>=65521)a-=65521;b+=a;if(b>=65521)b-=65521;}return b<<16|a;}
 int core_pool_available(void){return rd(core_pool_image)==IMAGE_MAGIC && rd(core_pool_image+4)==4096;}
-int core_pool_valid(const u8 *project)
+CORE_HOT int core_pool_valid(const u8 *project)
 {
     const u8 *p=project+CORE_POOL_OFFSET;u32 i,v;
     if(rd(p)!=0x504f4f4c || rd(p+4)!=0x00010080u || rd(p+8)!=~crc(0,p+16,256))return 0;
@@ -73,7 +75,7 @@ void core_pool_write(u8 *project,const u16 *entries)
     wr(p,0x504f4f4c);wr(p+4,0x00010080);wr(p+8,~crc(0,p+16,256));wr(p+12,0);
 }
 extern int core_parameter_provider(u32,u32 *,void *,u32 *);
-void core_pool_empty(u8 *p)
+CORE_HOT void core_pool_empty(u8 *p)
 {u16 e[128];u32 i;for(i=0;i<128;i++)e[i]=i<CORE_POOL_STOCK_SLOTS?i+1:0;
  core_pool_write(p,e);
  {u32 a=(u32)p;core_parameter_provider(27,&a,0,0);}}  /* NEW PROJECT (LFO3) */
@@ -145,7 +147,8 @@ void core_pool_prepare(void)
     }
     core_pool_stock_bytes=pos;
     if(!core_pool_available())return;
-    cp(state->image,core_pool_image,4096);core_pool_read(PROJECT,state->wanted);
+    cp(state->image,core_pool_image,core_pool_image_bytes);  /* the rest stays zero until the service pages */
+    core_pool_read(PROJECT,state->wanted);
     if(!core_pool_valid(PROJECT))core_pool_write(PROJECT,state->wanted);
     opened=core_hzfs_open(&fs,&core_hzfs_native_io)==1;
     for(i=0;i<128;i++){
@@ -243,7 +246,7 @@ const void *core_pool_boot_page(u32 ordinal,u32 *wire)
 #define CORE_POOL_SLEEP ((void (*)(u32))0x401162f8u)
 #endif
 static void sleep(void){CORE_POOL_SLEEP(500);}
-int core_pool_ready(void)
+CORE_HOT int core_pool_ready(void)
 {return state && state->boot_finished && !state->fault && !core_pool_busy && *(volatile u32 *)0x43bdd824u;}
 /* Keep one foreground mailbox implementation in the resident core. GCC's
  * constant-argument clone duplicated its entire retry/timeout protocol. */
@@ -339,7 +342,7 @@ int core_pool_sync(void)
     }
 done:if(opened)core_hzfs_close(&fs);account();core_pool_busy=0;return result;
 }
-int core_pool_cached_name(u32 code,char *out)
+CORE_HOT int core_pool_cached_name(u32 code,char *out)
 {
     u32 i;if(!state)return 0;
     for(i=0;i<128;i++)if(state->code[i]==code && state->names[i][0]){cp(out,state->names[i],17);return 1;}
@@ -354,20 +357,20 @@ void core_pool_after_load(u32 index,u32 ok)
     }
     core_pool_sync();
 }
-u32 core_pool_sample_source(u32 slot,const u8 **pcm,u32 *frames)
+CORE_HOT u32 core_pool_sample_source(u32 slot,const u8 **pcm,u32 *frames)
 {
     u32 code;*pcm=0;*frames=0;if(!state || slot>=128)return 0;
     code=state->code[slot];*frames=state->frames[slot];
     return *frames?code:0;
 }
 /* Some pool slot names this sample (stock 1..64 or HZ|id), loaded or not yet. */
-u32 core_pool_code_used(u32 code)
+CORE_HOT u32 core_pool_code_used(u32 code)
 {u32 i;if(state)for(i=0;i<128;i++)if(state->code[i]==code)return 1;return 0;}
-u32 core_pool_sample_channels(u32 slot)
+CORE_HOT u32 core_pool_sample_channels(u32 slot)
 {return state && slot<128 && state->frames[slot] && state->channels[slot]==2?2:1;}
 /* UI-task lazy waveform source: code, frame pairs, channels, first sector, CRC.
  * Never lend boot PCM, and never read a stock file changed since AUDIO load. */
-int core_pool_wave_storage(u32 slot,u32 *out)
+CORE_HOT int core_pool_wave_storage(u32 slot,u32 *out)
 {
     u32 code;if(!state || boot || core_pool_busy || slot>=128 || !state->frames[slot])return 0;
     code=state->code[slot];if(!code)return 0;
@@ -376,9 +379,9 @@ int core_pool_wave_storage(u32 slot,u32 *out)
     else {if(!state->first[slot])return 0;out[3]=state->first[slot]<<10;out[4]=state->file_crc[slot];}
     return 1;
 }
-void core_pool_stock_changed(u32 address)
+CORE_HOT void core_pool_stock_changed(u32 address)
 {if(state && address>=0x400000u && address<0x2400000u)state->stock_changed[(address-0x400000u)>>19]=1;}
-int core_pool_sample_name(u32 slot,char *out)
+CORE_HOT int core_pool_sample_name(u32 slot,char *out)
 {
     u32 code,i;const u8 *pcm;u32 frames;void *fs;
     code=core_pool_sample_source(slot,&pcm,&frames);if(!code)return 0;
@@ -387,13 +390,13 @@ int core_pool_sample_name(u32 slot,char *out)
     pcm=(const u8 *)fs+0x12e28+24*(code-1);
     for(i=0;i<16 && pcm[i];i++)out[i]=(char)pcm[i];out[i]=0;return i!=0;
 }
-const struct st_machine_cursor *core_pool_cursor(u32 track,u32 slot)
+CORE_HOT const struct st_machine_cursor *core_pool_cursor(u32 track,u32 slot)
 {
     const struct st_machine_cursor *c;if(!state || track>=8 || slot>=128)return 0;
     c=state->cursors+track;
     return c->frames==state->frames[slot] && c->pointer==state->pointer[slot]?c:0;
 }
-void core_pool_cursor_tick(void)
+CORE_HOT void core_pool_cursor_tick(void)
 {
     volatile u32 *m=(void *)0x10000800u;u32 i,sum,seq,values[32];
     if(!core_pool_ready())return;

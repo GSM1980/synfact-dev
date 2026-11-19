@@ -1,4 +1,29 @@
-# Syntakt core 2.1.0
+# Syntakt core 2.1.1
+
+Core **2.1.1** returns the SMZ4 bank's AUDIO section to MAIN's heap once it is on
+AUDIO. Until 2.1.0 the whole bank file stayed in one heap block until reboot,
+AUDIO section included (108,640 bytes in the normal bank, 711,152 in a bank with
+the MD machine), although
+only the boot page sender reads it. After validation, the bank's MAIN part
+(envelope, relocations, image) is copied into a block of its own before any
+relocation, and is the copy that is relocated and bound. The whole file is freed
+by the sender's completion hook (`40083026`, with the pool's 5 KiB scratch),
+after the last page is in the FPGA mailbox; the native sender never goes back to
+its page state. Without memory for the second block the file stays whole, as
+before. Boot needs the MAIN part twice for a moment. No ABI, bank contract,
+AUDIO layout or page order changes.
+`tests/test_core_st_trial_boot.c` and `tests/test_st_stock_stream_emu.py` check
+the split, the single release and the fallback.
+
+It also frees resident space: the 64 KiB reserve goes from **176 to 11,616 bytes
+free** (with System info). The core's cold files (boot, USB and storage code) are
+compiled with `-Os` through `cold.h`, the one exception to `-O3`
+([SYNTAKT-BUILD.md](../../docs/SYNTAKT-BUILD.md), "The -Os exception"); their
+tick, UI and native-path functions keep `-O3`. And MAIN keeps only the AUDIO pool
+service's header and code (1,576 of its 4,096 bytes, and their length): the boot copy starts
+zeroed and MAIN already rewrote every channel byte, descriptor and the checksum
+before sending it, so AUDIO receives the same image
+(`tests/test_st_stock_stream_emu.py` compares it with the builder's).
 
 Core **2.1.0** stops a running sequencer and selects reduced MAIN mixing while
 the native project workers save, load, initialize, rename, copy/paste, clear
@@ -48,7 +73,7 @@ See [the memory investigation and validation](../../docs/STOCK-SAMPLE-CORE-OVERL
 Desktop OS 1.42 base release: **2.0.0**, based on remote main `f48f3ab`.
 Use the matching core 2.0 and bank (SMZ4 contract `0x53594605`).
 
-Current desktop target: **OS 1.42 / core 2.0.3**.
+Current desktop target: **OS 1.42 / core 2.1.1**.
 See [the port notes](../../docs/OS142-PORT.md).
 
 1.9.0 adds the stopped-transport preview owner used by Recorder 1.4 for

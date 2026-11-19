@@ -58,10 +58,12 @@ core_pool_map:
         jmp core_machine_page_map
 
 | TASK context, after the last 2048-byte memcpy into the FPGA mailbox.
-| No sender can still read MAIN scratch when it is returned to the heap.
+| No sender can still read MAIN scratch when it is returned to the heap: the
+| pool's page buffers, and the bank's file with its AUDIO section (2.1.1).
         .globl core_pool_sender_done
 core_pool_sender_done:
         jsr core_pool_boot_release
+        jsr core_machine_audio_release
         moveq #4,%d0
         move.l %d0,0x41bb32b0
         rts

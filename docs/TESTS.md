@@ -58,6 +58,12 @@ batch and a disabled pool-service image. It verifies code preservation, exact
 CPU2 pointer agreement and scratch release, with poisoned freed memory.
 Core 2.0.1 also requires zero boot calls to the waveform builder and no cache
 allocation during transfer, then executes lazy disk reads and cache reuse.
+Core 2.1.1 also requires the bank file holding the machine batch's AUDIO section
+to be freed exactly once, by the same hook, after its pages reached the
+receiver. `tests/test_core_st_trial_boot.c` (the regressions' `trial-boot`)
+checks the loader's side: MAIN's part in a block of its own, the AUDIO section
+intact in the file until the release, and the whole file kept when that block
+cannot be allocated.
 Disk, heap, semaphore, notification and mailbox delivery are boundaries, not a full
 RTOS boot or hardware validation. The host project-pool fixture additionally
 covers empty/oversized headers, missing disk, read/allocation failures, exact

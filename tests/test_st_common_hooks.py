@@ -109,8 +109,10 @@ def verify(folder):
     assert read(0x40013730,8)==jump('core_machine_global_parameter_long_label')+bytes.fromhex('4e71')
     assert len(manifest['sites'])==119 and len(manifest['collections'])==16   # nine project callback literals
     assert read(0x40083026,8)==jump('core_pool_sender_done',0x4eb9)+bytes.fromhex('4e71')
-    assert read(address('core_pool_sender_done'),16)==(
-        jump('core_pool_boot_release',0x4eb9)+bytes.fromhex('700423c041bb32b04e75'))
+    # 2.1.1: the sender's end also returns the bank's file (its AUDIO section) to the heap.
+    assert read(address('core_pool_sender_done'),22)==(
+        jump('core_pool_boot_release',0x4eb9)+jump('core_machine_audio_release',0x4eb9)+
+        bytes.fromhex('700423c041bb32b04e75'))
     assert read(address('core_pool_blob'),12)==(
         jump('core_pool_prepare',0x4eb9)+bytes.fromhex('4ef940082e9c'))
     assert len({s['addr'] for s in manifest['sites']})==119

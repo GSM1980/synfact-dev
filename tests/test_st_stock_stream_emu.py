@@ -12,6 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+import zlib
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -143,10 +144,17 @@ def run_case(folder, frames, machine_pages=0, service=True):
     extra = word(sym['core:core_pool_boot_pages'])
     assert extra == (2 if service else 0)
     machine_data = bytes([0x37])*2048*machine_pages
+    bank_file = None
     if machine_pages:
-        u.mem_write(0x47200000, machine_data)
+        # 2.1.1: machine-boot.c leaves the whole bank file (MAIN's part copied out)
+        # as core_machine_transfer, its AUDIO section at core_machine_audio.
+        bank_file, main_part = heap, 0x800
+        heap += main_part+len(machine_data)
+        allocations[bank_file] = main_part+len(machine_data)
+        u.mem_write(bank_file+main_part, machine_data)
         put(sym['core:core_machine_pages'], machine_pages)
-        put(sym['core:core_machine_audio'], 0x47200000)
+        put(sym['core:core_machine_audio'], bank_file+main_part)
+        put(sym['core:core_machine_transfer'], bank_file)
     total_pages = stock_pages+machine_pages+extra
     put(0x41bbf424, 0)
     put(SP, RET)
@@ -157,6 +165,9 @@ def run_case(folder, frames, machine_pages=0, service=True):
     assert kicks == list(range(stock_pages))+list(range(0x4000, 0x4000+machine_pages))+(
         [0x4162, 0x4163] if service else [])
     assert scratch in freed and freed.count(scratch) == 1
+    if machine_pages:  # freed once, after its last page reached the mailbox (the receiver's copy checks it)
+        assert freed.count(bank_file) == 1
+        assert word(sym['core:core_machine_transfer']) == 0 and word(sym['core:core_machine_audio']) == 0
     assert wave_calls == 0  # no sample waveform work during boot
     assert all(n < 100000 for n in allocations.values())  # no waveform cache allocation yet
     assert word(0x41bb32b0) == 4  # native final state after the last mailbox copy
@@ -165,6 +176,14 @@ def run_case(folder, frames, machine_pages=0, service=True):
     assert bytes(audio.mem_read(STOCK_AUDIO+len(expected), padded)) == bytes(padded)
     if machine_pages:
         assert bytes(audio.mem_read(STOCK_AUDIO+0x4000*2048, len(machine_data))) == machine_data
+    if service:
+        # 2.1.1: MAIN keeps only the service's header and code resident and rebuilds
+        # the rest; AUDIO must receive the builder's image (checksum, channel bytes
+        # and descriptors are MAIN's, rewritten at the last pages).
+        template = (folder/'pool-audio'/'core-pool.bin').read_bytes()
+        received = bytes(audio.mem_read(0x42100750, 4096))
+        assert received[:8] == template[:8] and received[12:0xb80] == template[12:0xb80]
+        assert struct.unpack('>I', received[8:12])[0] == zlib.adler32(received[12:]) & 0xffffffff
     for address, code in executable.items():
         assert bytes(u.mem_read(address, len(code))) == code, hex(address)
     # The actual native CPU2 parser must agree with the core's descriptors.
@@ -194,11 +213,12 @@ def run_case(folder, frames, machine_pages=0, service=True):
         call(sym['core:core_pool_wave_idle'], 0, 2048)
         assert reads == before  # cached waveform needs no IO
     call(sym['core:core_pool_boot_release'])  # idempotent
+    call(sym['core:core_machine_audio_release'])  # idempotent
     assert all(at in freed for at,n in allocations.items() if n == 5120)
     return dict(samples=64, pcm_frames=sum(frames), stock_bytes=len(expected),
         stock_pages=stock_pages, machine_pages=machine_pages, service=service,
         native_sender_and_audio_parser=True, core_code_preserved=True,
-        transient_pcm_bytes=allocations[scratch], scratch_freed=True,
+        transient_pcm_bytes=allocations[scratch], scratch_freed=True, bank_file_freed=bool(machine_pages),
         boot_waveform_calls=0, lazy_waveform_verified=service,
         disk_reads=reads, full_boot=False, hardware_validated=False)
 

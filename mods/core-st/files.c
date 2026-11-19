@@ -4,6 +4,7 @@
  */
 #include "file-info.h"
 #include "smz.h"
+#include "cold.h"
 extern u32 fw_mmc_ready[],fw_mmc_sectors[],fw_empty_string[];
 extern int fw_mmc_read(u32,u32,void *),fw_mmc_write(u32,u32,const void *);
 extern void fw_info_copy(void *,const void *),fw_string_ctor(void *,const char *,void *);
@@ -35,7 +36,7 @@ static const struct core_mods_io io={fw_mmc_read,fw_mmc_write,sectors};
 /* A running UI task, completed sample/AUDIO startup and five seconds of
  * normal ticks are the automatic boot-health gate. This does no IO until the
  * one GOOD transition. A stalled startup leaves TRYING for rollback on reboot. */
-void core_mods_auto_confirm_tick(void)
+CORE_HOT void core_mods_auto_confirm_tick(void)
 {
     if(!core_machine_trial || core_machine_status!=0){trial_ready_ticks=0;return;}
     if(!core_mods_audio_ready() || (core_pool_available() && !core_pool_ready())){

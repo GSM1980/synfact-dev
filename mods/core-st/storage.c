@@ -4,6 +4,7 @@
  * The sector record is transport metadata, separate from the file's bytes.
  */
 #include "storage.h"
+#include "cold.h"
 static core_u32 get32(const core_u8 *p)
 {return (core_u32)p[0]<<24|(core_u32)p[1]<<16|(core_u32)p[2]<<8|p[3];}
 static void put32(core_u8 *p,core_u32 n)
@@ -88,6 +89,10 @@ int core_mods_slot_io(const struct core_mods_io *io,core_u32 slot,struct core_mo
     out->bytes=n;out->sequence=get32(b+8);out->state=state;
     out->stamp=get32(b+24);out->slot=slot;return 1;
 }
+/* Field by field: at -Os (cold.h) a struct assignment becomes a memcpy call,
+ * which the freestanding core does not have. */
+static void slot_copy(struct core_mods_slot *d,const struct core_mods_slot *s)
+{d->base=s->base;d->bytes=s->bytes;d->sequence=s->sequence;d->state=s->state;d->stamp=s->stamp;d->slot=s->slot;}
 int core_mods_select_io(const struct core_mods_io *io,struct core_mods_slot *primary,
                         struct core_mods_slot *fallback)
 {
@@ -100,9 +105,9 @@ int core_mods_select_io(const struct core_mods_io *io,struct core_mods_slot *pri
            (!candidate || s[i].sequence>candidate->sequence))candidate=&s[i];
     }
     if(candidate && (!good || candidate->sequence>good->sequence)){
-        *primary=*candidate;if(good)*fallback=*good;else fallback->bytes=0;return 1;
+        slot_copy(primary,candidate);if(good)slot_copy(fallback,good);else fallback->bytes=0;return 1;
     }
-    if(good){*primary=*good;fallback->bytes=0;return 1;}
+    if(good){slot_copy(primary,good);fallback->bytes=0;return 1;}
     primary->bytes=fallback->bytes=0;return 0;
 }
 int core_mods_stage_io(const struct core_mods_io *io,struct core_mods_slot *out)

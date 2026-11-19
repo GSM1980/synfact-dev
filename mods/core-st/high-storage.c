@@ -3,6 +3,7 @@
  */
 #include "file-info.h"
 #include "hzfs.h"
+#include "cold.h"
 #define RAW_FIRST ST_HZ_RAW_FIRST
 #define STOCK_FIRST 0x00400000u
 #define STOCK_END 0x02400000u
@@ -64,7 +65,7 @@ int core_high_route(void *router,const char *const *path,void *out)
     zero(out,8);r[0]=1;*(void **)(r+4)=fw_empty_string;
     fw_info_copy(r+8,&info);return 1;
 }
-int core_sample_write_guard(void *router,const struct info *info,void *out)
+CORE_HOT int core_sample_write_guard(void *router,const struct info *info,void *out)
 {
     u32 address=info->address,k;(void)router;
     /* Header length has ALREADY replaced info.bytes, before writer creation.

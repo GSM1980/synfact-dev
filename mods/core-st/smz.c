@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "smz.h"
+#include "cold.h"
 typedef core_u32 u32;typedef core_u8 u8;
 u32 core_smz_be(const void *data)
 {const u8 *p=data;return (u32)p[0]<<24|(u32)p[1]<<16|(u32)p[2]<<8|p[3];}

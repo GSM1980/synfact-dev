@@ -140,7 +140,8 @@ the original native geometry. These application paths still need hardware QA.
 ## MAIN/AUDIO transport
 
 The complete bank is validated and resident in MAIN before native project and
-sample loading. The boot sender keeps sample pages unchanged, then appends
+sample loading. From core 2.1.1 its MAIN part stays resident in a block of its
+own, and the file with the AUDIO section is freed after the last sender page. The boot sender keeps sample pages unchanged, then appends
 machine pages `4000+k`. CPU2 copies them to the fixed AUDIO base, runs its native
 sample parser, validates the complete machine section/checksum, pushes its data
 cache and publishes update/render entries before native voice initialization.

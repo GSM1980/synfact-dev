@@ -41,9 +41,18 @@ def build(out):
     image[64:64+len(code)]=code
     struct.pack_into('>I',image,8,zlib.adler32(image[12:])&0xffffffff)
     raw=out/'core-pool.bin';raw.write_bytes(image)
+    # Core 2.1.1: MAIN keeps only the header and the code resident. Its boot copy
+    # starts zeroed, and before the service pages are sent MAIN rewrites every
+    # channel byte and descriptor and the checksum (sample-pool.c), so the rest
+    # of the 4096 bytes is not needed in the 64 KiB reserve.
+    kept=(64+len(code)+3)&~3
+    rest=bytearray(image[kept:]);rest[CHANNELS-BASE-kept:CHANNELS-BASE-kept+128]=bytes(128)
+    if any(rest):raise ValueError('pool image has data past its code that MAIN does not rebuild')
+    resident=out/'core-pool-resident.bin';resident.write_bytes(image[:kept])
     assembly=out/'core-pool.s'
-    assembly.write_text('.section .run,"a"\n.balign 16\n.globl core_pool_image\ncore_pool_image:\n'
-                        '.incbin "'+raw.resolve().as_posix()+'"\n')
-    return assembly,dict(bytes=len(code),resident_bytes=len(image),symbols=symbols,
+    assembly.write_text('.section .run,"a"\n.balign 16\n.globl core_pool_image,core_pool_image_bytes\n'
+                        'core_pool_image:\n.incbin "'+resident.resolve().as_posix()+'"\n'
+                        '.balign 4\ncore_pool_image_bytes:\n.long %d\n'%kept)
+    return assembly,dict(bytes=len(code),resident_bytes=kept+4,image_bytes=len(image),symbols=symbols,
                         linked_instructions=linked_audits,
                         source=str(source),source_sha256=__import__('hashlib').sha256(source.read_bytes()).hexdigest())
