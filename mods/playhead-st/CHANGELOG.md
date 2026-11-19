@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.2.1.
 ## 1.2.1 (2026-11-18)
 
 - Playhead 1.2.1: request native composition from the actual UI controller (`4a9012f`, 2026-11-18)
+- Changelogs: Playhead 1.2.1 (`9db6680`, 2026-11-18)
 
 ## 1.2 (2026-11-18)
 

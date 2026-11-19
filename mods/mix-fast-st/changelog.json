@@ -1,0 +1,24 @@
+{
+  "id": "mix-fast-st",
+  "title": "Mix fast: skip zero gain ramps in the stock mix kernels",
+  "latest": "0.1",
+  "entries": [
+    {
+      "version": "0.1",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "9e77668",
+          "date": "2026-11-19",
+          "subject": "MAIN CPU: icache-lock-st and mix-fast-st (experimental, no core change)"
+        },
+        {
+          "sha": "6aa11d2",
+          "date": "2026-11-19",
+          "subject": "mix-fast and icache-lock are always-in-every-bank, not web options"
+        }
+      ]
+    }
+  ],
+  "slug": "mix-fast-st"
+}

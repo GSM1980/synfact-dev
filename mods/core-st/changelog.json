@@ -1,8 +1,19 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.1.0",
+  "latest": "2.1.1",
   "entries": [
+    {
+      "version": "2.1.1",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "523dcc2",
+          "date": "2026-11-19",
+          "subject": "Core 2.1.1: free the bank's AUDIO copy in MAIN, cold code at -Os"
+        }
+      ]
+    },
     {
       "version": "2.1.0",
       "date": "2026-11-18",
@@ -11,6 +22,11 @@
           "sha": "e222ce8",
           "date": "2026-11-18",
           "subject": "Core 2.1: reduce MAIN audio during project operations"
+        },
+        {
+          "sha": "4402653",
+          "date": "2026-11-18",
+          "subject": "Changelogs: core 2.1 project operation CPU headroom"
         }
       ]
     },

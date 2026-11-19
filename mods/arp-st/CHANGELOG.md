@@ -1,9 +1,14 @@
 # Changelog: ARP experiment
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.10.6.
+Generated from git history by `tools/changelog.py`. Latest version: 1.10.7.
+
+## 1.10.7 (2026-11-18)
+
+- Fix ARP encoder edits beneath mute and Chorus popup labels (`6bcf23b`, 2026-11-18)
 
 ## 1.10.6 (2026-11-17)
 
+- Changelogs: POLY 1.7 (`c0e44f9`, 2026-11-18)
 - ARP 1.10.6: RANGE shows the octaves moved (-3..3) (`07c5d2b`, 2026-11-17)
 - Changelogs: ARP 1.10.6 (`3d50e09`, 2026-11-17)
 

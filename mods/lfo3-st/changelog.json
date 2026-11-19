@@ -8,6 +8,11 @@
       "date": "2026-11-17",
       "commits": [
         {
+          "sha": "c0e44f9",
+          "date": "2026-11-18",
+          "subject": "Changelogs: POLY 1.7"
+        },
+        {
           "sha": "276667a",
           "date": "2026-11-17",
           "subject": "move to OS 1.42"

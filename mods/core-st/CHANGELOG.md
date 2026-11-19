@@ -1,10 +1,15 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.1.0.
+Generated from git history by `tools/changelog.py`. Latest version: 2.1.1.
+
+## 2.1.1 (2026-11-19)
+
+- Core 2.1.1: free the bank's AUDIO copy in MAIN, cold code at -Os (`523dcc2`, 2026-11-19)
 
 ## 2.1.0 (2026-11-18)
 
 - Core 2.1: reduce MAIN audio during project operations (`e222ce8`, 2026-11-18)
+- Changelogs: core 2.1 project operation CPU headroom (`4402653`, 2026-11-18)
 
 ## 2.0.3 (2026-11-18)
 

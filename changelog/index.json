@@ -5,7 +5,7 @@
       "slug": "arp-st",
       "id": "arp-st",
       "title": "ARP experiment",
-      "latest": "1.10.6",
+      "latest": "1.10.7",
       "path": "mods/arp-st"
     },
     {
@@ -19,7 +19,7 @@
       "slug": "core-st",
       "id": "core",
       "title": "core",
-      "latest": "2.1.0",
+      "latest": "2.1.1",
       "path": "mods/core-st"
     },
     {
@@ -28,6 +28,13 @@
       "title": "SY FM DTONE",
       "latest": "1.1.2",
       "path": "mods/fm-tone-st"
+    },
+    {
+      "slug": "icache-lock-st",
+      "id": "icache-lock-st",
+      "title": "I-cache lock: stock audio code kept in MAIN's instruction cache",
+      "latest": "0.1",
+      "path": "mods/icache-lock-st"
     },
     {
       "slug": "lfo3-st",
@@ -42,6 +49,13 @@
       "title": "Syntakt machine loader",
       "latest": "1.0.2",
       "path": "mods/machines-st"
+    },
+    {
+      "slug": "mix-fast-st",
+      "id": "mix-fast-st",
+      "title": "Mix fast: skip zero gain ramps in the stock mix kernels",
+      "latest": "0.1",
+      "path": "mods/mix-fast-st"
     },
     {
       "slug": "modulation-skip-st",

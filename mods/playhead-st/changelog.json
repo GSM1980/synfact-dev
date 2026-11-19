@@ -11,6 +11,11 @@
           "sha": "4a9012f",
           "date": "2026-11-18",
           "subject": "Playhead 1.2.1: request native composition from the actual UI controller"
+        },
+        {
+          "sha": "9db6680",
+          "date": "2026-11-18",
+          "subject": "Changelogs: Playhead 1.2.1"
         }
       ]
     },
