@@ -1,10 +1,15 @@
 # Changelog: SY MONOMACHINE
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.4.0.
+Generated from git history by `tools/changelog.py`. Latest version: 0.5.0.
+
+## 0.5.0 (2026-11-19)
+
+- Add Digi Mono subtype picker and keep TYPE outside modulation (`b570b0e`, 2026-11-19)
 
 ## 0.4.0 (2026-11-19)
 
 - Document Digi Mono 0.4.0 OS 1.42 and API 16 integration (`ca7e95d`, 2026-11-19)
+- Refresh merged core and Digi Mono release histories (`f7b1014`, 2026-11-19)
 
 ## 0.3.1 (2026-11-17)
 

@@ -1,11 +1,16 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.3.0.
+Generated from git history by `tools/changelog.py`. Latest version: 2.3.1.
+
+## 2.3.1 (2026-11-19)
+
+- Add Digi Mono subtype picker and keep TYPE outside modulation (`b570b0e`, 2026-11-19)
 
 ## 2.3.0 (2026-11-19)
 
 - Improve Sample Manager sizes, project memory and atomic capacity checks (`ce91a3b`, 2026-11-19)
 - Document Digi Mono 0.4.0 OS 1.42 and API 16 integration (`ca7e95d`, 2026-11-19)
+- Refresh merged core and Digi Mono release histories (`f7b1014`, 2026-11-19)
 
 ## 2.2.0 (2026-11-19)
 

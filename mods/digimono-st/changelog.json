@@ -1,8 +1,19 @@
 {
   "id": "digimono-st",
   "title": "SY MONOMACHINE",
-  "latest": "0.4.0",
+  "latest": "0.5.0",
   "entries": [
+    {
+      "version": "0.5.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "b570b0e",
+          "date": "2026-11-19",
+          "subject": "Add Digi Mono subtype picker and keep TYPE outside modulation"
+        }
+      ]
+    },
     {
       "version": "0.4.0",
       "date": "2026-11-19",
@@ -11,6 +22,11 @@
           "sha": "ca7e95d",
           "date": "2026-11-19",
           "subject": "Document Digi Mono 0.4.0 OS 1.42 and API 16 integration"
+        },
+        {
+          "sha": "f7b1014",
+          "date": "2026-11-19",
+          "subject": "Refresh merged core and Digi Mono release histories"
         }
       ]
     },
