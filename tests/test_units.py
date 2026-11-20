@@ -682,6 +682,20 @@ def test_coresites_groups_the_sites_mods_share():
     assert shared_sites(two, same)[0]['kind'] == 'same routine'
 
 
+def test_the_decoder_tells_extb_from_lea():
+    """extb.l Dn (0x49C0 + n) shares its slot with lea Dn,A4, which is no instruction:
+    GCC emits extb.l, and the bank audit must accept it while lea keeps its checks."""
+    from elekloader.isa import coldfire as cf
+    def one(*words):
+        return cf.decode(lambda o: words[o // 2] if o // 2 < len(words) else 0, 0)
+    for n in range(8):
+        i = one(0x49C0 + n)
+        assert (i.op, i.size, i.length, i.flags & cf.ILLEGAL) == ('extb', 4, 2, 0), (n, i)
+    assert one(0x49D0).op == 'lea' and one(0x41D0).op == 'lea'      # lea (a0),a4 / lea (a0),a0
+    for w in (0x41C0, 0x43C1, 0x4BC2, 0x49C8):                       # lea Dn,An / lea An,A4
+        assert one(w).flags & cf.ILLEGAL, hex(w)
+
+
 def test_bounties_count_only_the_newest_version_of_each_mod():
     """The to-do list counts each mod's newest version, for each device and OS on its own: an
     older file beside it adds nothing (a converted 363861e-intercepts outranks 363861e)."""

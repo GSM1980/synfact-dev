@@ -370,8 +370,9 @@ one: Sounds saved with the old machine would open as the new one.
 | 67 | SP WERP | `mods/samplers-st` |
 | 68 | SP REPITCH | `mods/samplers-st` |
 | 69 | SP SLICE | `mods/samplers-st` |
+| 70 | MD MACHINEDRUM | `mods/md-st` |
 
-**Free: 70 to 79.** Take the lowest free type, add your machine to this
+**Free: 71 to 79.** Take the lowest free type, add your machine to this
 table in the same change, and keep it if the machine is ever renamed.
 `tests/test_units.py` checks that this table names every type the mods
 and examples use.

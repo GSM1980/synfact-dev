@@ -1,0 +1,22 @@
+{
+  "id": "md-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "title": "MD MACHINEDRUM", "category": "Synth", "author": "Synfact port of mdkit (Soejrd, CC0-1.0)",
+  "description": "Machinedrum voices from mdkit on one machine: all 30 of mdkit's voices, 13 TRX, 8 EFM and 9 PI, chosen from a list when the machine is selected (prototype).",
+  "device": "syntakt", "os": "1.42", "sources": ["main.c"],
+  "smz": {
+    "modules": ["md_picker_module"],
+    "features": ["machine-ui-v1"],
+    "machines": [{"descriptor": "md_machinedrum", "ui": "md_machinedrum_ui", "update": "md_update", "render": "md_render"}],
+    "audio": {"sources": ["audio/md.c", "audio/md-runtime.c", "audio/md-tables.c",
+                          "audio/voices/mdkit_trx_bd.c", "audio/voices/mdkit_trx_sd.c", "audio/voices/mdkit_trx_xt.c",
+                          "audio/voices/mdkit_trx_cp.c", "audio/voices/mdkit_trx_rs.c", "audio/voices/mdkit_trx_cb.c",
+                          "audio/voices/mdkit_trx_ch.c", "audio/voices/mdkit_trx_oh.c", "audio/voices/mdkit_trx_cy.c",
+                          "audio/voices/mdkit_trx_ma.c", "audio/voices/mdkit_trx_cl.c", "audio/voices/mdkit_trx_xc.c",
+                          "audio/voices/mdkit_trx_b2.c", "audio/native/efm_bd.c", "audio/voices/mdkit_efm_sd.c",
+                          "audio/voices/mdkit_efm_xt.c", "audio/voices/mdkit_efm_cp.c", "audio/voices/mdkit_efm_rs.c",
+                          "audio/voices/mdkit_efm_cb.c", "audio/voices/mdkit_efm_hh.c", "audio/voices/mdkit_efm_cy.c",
+                          "audio/voices/mdkit_pi_bd.c", "audio/voices/mdkit_pi_sd.c", "audio/voices/mdkit_pi_mt.c",
+                          "audio/voices/mdkit_pi_ml.c", "audio/voices/mdkit_pi_ma.c", "audio/voices/mdkit_pi_rs.c",
+                          "audio/voices/mdkit_pi_rc.c", "audio/voices/mdkit_pi_cc.c", "audio/voices/mdkit_pi_hh.c"]}
+  }
+}

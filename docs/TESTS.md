@@ -168,6 +168,7 @@ python tests/test_units.py        # needs nothing; always run it
 python -B tests/test_st_playhead.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe" # Windows x86; no firmware
 python tests/test_st_fm_recipe.py --digitone Digitone_and_Digitone_Keys_OS1.44.syx   # FM TONE's recipe
 python -B tests/test_st_playhead_emu.py --bank <bank with playhead-st> --stock "$SYNTAKT_STOCK"   # Unicorn
+python tests/test_md_st.py        # the MD machine: $LLVM_MINGW_BIN; Unicorn step also $SGDK_BIN; EMAC step also $MD_CFBENCH (analog-emu's cfbench)
 ```
 
 `test_st_playhead_emu.py` runs the stock sequencer code at playhead-st's five

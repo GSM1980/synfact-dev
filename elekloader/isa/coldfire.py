@@ -217,7 +217,8 @@ def _decode(read16, addr):
                     flags=sf | df)
 
     if line == 4:
-        if (w & 0xF1C0) == 0x41C0:          # lea <ea>,An
+        # lea <ea>,An; 0x49C0..0x49C7 (A4, Dn mode) is extb.l Dn, decoded below
+        if (w & 0xF1C0) == 0x41C0 and (w & 0xFFF8) != 0x49C0:
             if mode in (0, 1, 3, 4) or (mode == 7 and reg == 4):
                 raise _Bad('lea EA')
             ins = _one('lea', w, read16, 4, imm_ok=False)
