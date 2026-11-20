@@ -64,16 +64,17 @@ publishes them.
 
 ## Pages
 
-- **The voice list.** In the machine selector (a SYN double-tap), YES on MD
-  MACHINEDRUM shows the list of the 30 voices ("CHOOSE A VOICE") over the selector,
-  on the voice the track has: any encoder or UP/DOWN moves the cursor (FUNC+UP/DOWN:
-  a page), **YES** loads MD MACHINEDRUM with that voice, **NO** goes back to the
-  machine selector (another NO closes it, as always). A Sound with MD and no voice
-  shows the same list in place of the knobs (YES loads); such a track plays nothing.
+- **The voice list.** Double-tap SYN for the machine selector; YES on MD MACHINEDRUM
+  shows the list of the 30 voices ("CHOOSE A TYPE") over it, on the voice the track has:
+  any encoder or UP/DOWN moves the cursor (FUNC+UP/DOWN: a page), **YES** loads MD
+  MACHINEDRUM with that voice (a track with a voice or without), **NO** goes back to the
+  machine list (another NO closes it, as always). This is the shared subtype picker
+  (`<syntakt/subtype-picker.h>`, [docs/SUBTYPE-PICKER.md](../../docs/SUBTYPE-PICKER.md)),
+  SY MnM's too. A voice that would pass the MD's budget (below) is struck through, the cursor
+  passes it and YES does not take it.
 - **The voice's name.** Arriving at an MD track's SYN page (from another page,
   another track or the machine selector), or loading a voice, shows the voice's
-  name in a box in the middle of the screen for about a second (30 of the core's 30 Hz TICKs,
-  counted by the module; letters of md-st's own, two pixels a dot).
+  name in a box in the middle of the screen for about a second (the picker's).
 - **SYN 1**: the voice's eight knobs, 0 to 127, under the voice's own names.
   The labels follow the voice of the Sound on screen (`main.c`: the core reads
   a control's label through its pointer each time it draws it, and `idle`
@@ -82,31 +83,31 @@ publishes them.
   encoders are taken, so no value or popup changes: md.c sends a voice its own
   controls only (`tests/md_st_spare_knobs.c` checks it).
 
-The voice (TYPE in the table above) is a ninth control on no page, so a Sound
-keeps it, and it cannot be locked per step from the panel. Its default is "none
-chosen" (TYPE 30): the core writes a machine's defaults when another machine is
-replaced by it, never when a Sound or a project loads, so saved Sounds keep their
-voice. The list over the selector never reopens the selector: YES on MD there is taken
-by the module (`md_picker_module`, the global `ST_EV_KEY`/`ST_EV_ENC` before the native,
-whatever view takes the keys) while a track's SYN model shows the selector (predicate
-`400c3340`) and that view's machine is MD (the selector's preview selects the highlighted
-machine); the list is drawn by the module's global `ST_EV_DRAW` over the whole frame (the
-selector's machine list is a view drawn after the SYN view; `ST_EV_DRAW|ST_EV_VIEW` only
-remembers each track's SYN view). YES
-in the list goes on to the native, which confirms MD MACHINEDRUM (with its defaults if
-the track had another machine), and the track's next MD page sets the voice by an
-explicit edit of the hidden control (native Sound/undo path). NO only takes the list
-away. The list on the page follows the sample machines' browser: the machine's draw,
-the view's ENC and pre-native KEY. YES with a trig held, or while recording, does
-nothing (the edit would be a lock). A Sound's first knob values are the first voice's
-defaults.
+The voice (TYPE in the table above) is a ninth control on no page and a configuration
+control (`ST_MACHINE_CONFIG_PARAMETER`, core 2.3.1 and up): a Sound keeps it, it cannot be
+locked or modulated, it is no destination, and FUNC+NO's SYN reload keeps it. Its default
+is the first voice; an older Sound's "none chosen" (TYPE 30) shows and plays as the first
+voice. YES with a trig held, or while recording, does nothing (the edit would be a lock).
+A Sound's first knob values are the first voice's defaults.
+
+**The MD's budget.** A track that is MD replaces a stock machine, about 5.7 points of CPU A
+in a project of different stock machines (the user's readings, WORK.md). A voice's weight is
+its cost over that (`md_voice_weight`, from `tools/md_port.py` `VOICE_POINTS`); the MD tracks'
+weights together stay within `MD_BUDGET`, 12.3 points, what such a project leaves under 95 %.
+Alone, TRX-XT, XC and PI-MA fit on every track; EFM-BD on 4; TRX-BD and EFM-XT, CP and HH on
+3; most TRX and EFM voices on 2; TRX-SD, CP, CY, MA, EFM-CY and every PI voice on 1. The list
+offers only what fits beside the other MD tracks' voices; a project that brings more keeps
+the voice past the budget silent until it fits (`audio/md.c`).
 
 ## How it sounds on the Syntakt (`audio/md.c`)
 
 - **The voice is taken at a note.** A track changes voice when it is triggered.
-  With no voice chosen it rests and its notes play nothing. A knob reaches the
+  A voice past the MD's budget rests and its notes play nothing. A knob reaches the
   voice through mdkit's own control clock, which applies it at the voice's next
-  block.
+  block: a turned knob glides to its value (a quarter of the way every 12 blocks,
+  as in mdkit), and a note plays its knobs as they are from its first block, as the
+  Machinedrum's sequencer gives a p-lock, or a Sound lock that brings another voice
+  (`md_snap`).
 - **44.1 kHz.** Each voice runs at the Machinedrum's rate, block by block, and
   the track reads it at 147/160 of a voice sample per output, through a 4-point
   Hermite interpolator (Q14 weights, `audio/md-weights.h`). The voice itself is

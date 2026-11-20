@@ -71,6 +71,8 @@ rest of the code accepts it.
   and older banks), **10** (a Digitone-style FM machine), **11** (samples, which
   share it with the stock TwinShot machine, `mods/core-st/SMZ4.md`).
   **The names of categories 1 to 14 are not recorded in this repository.**
+  Category 13 (unused by the stock table) shows a machine after the MIDI machines, with no
+  icon (MD KIT, bank 0.46, 2026-11-20).
   Check the unit before you choose one.
 - **Rank** (`rank`). The native menu builder sorts its entries by a rank that it
   asks for per machine type. The core answers that query from the descriptor

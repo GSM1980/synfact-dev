@@ -8,7 +8,8 @@
  * rounded to 16 bits, half a 16-bit step each and a whole one at full scale,
  * times the weights' 1.25); TYPE changes the voice only at a note, and TYPE past
  * the last voice (none chosen: the picker is up) is silent at every note; a
- * knob reaches the voice; a decayed voice rests (silence, inactive)
+ * knob reaches the voice; a note plays its knobs (a p-lock, a Sound lock's voice)
+ * whole from its first block, a turned knob glides; a decayed voice rests (silence, inactive)
  * and sounds again at the next note; a pointer that is no track is ignored.
  * Built and run by tests/test_md_st.py.
  */
@@ -47,13 +48,45 @@ static void block(unsigned t, int trigger, int32_t out[32])
     md_render(out, blocks[t]);
 }
 
-/* the voice's own words: a fresh state, knobs, a note at sample 0 */
+/* a voice's clock as mdkit's init seeds it, from these knobs in place of its defaults:
+ * floats, or integers (the knob; raw, pending and current 128 times it) */
+static void seed(unsigned type, union md_voice_state *st, const unsigned char *knob)
+{
+    mdkit_control_clock *c = (mdkit_control_clock *)(void *)st;
+    for (unsigned i = 0; i < md_voice[type]->control_count; ++i) {
+        if ((MD_FLOAT_CLOCKS >> type) & 1u) c->target[i] = c->raw[i] = c->pending[i] = c->current[i] = (float)knob[i];
+        else {
+            md_clock_word *w = (md_clock_word *)(void *)c;
+            w[1 + i] = knob[i];
+            w[1 + 8 + i] = w[1 + 16 + i] = w[1 + 24 + i] = knob[i] * 128u;
+        }
+    }
+}
+/* the clock's value i for a knob k as it is kept: 128 k, or k as a float */
+static int clock_is(unsigned type, const float *field, unsigned i, unsigned k, int is_target)
+{
+    if ((MD_FLOAT_CLOCKS >> type) & 1u) return field[i] == (float)k;
+    return ((const md_clock_word *)(const void *)field)[i] == (is_target ? k : k * 128u);
+}
+static int clock_at(unsigned t, unsigned type, const unsigned char *knob)
+{
+    const mdkit_control_clock *c = (const mdkit_control_clock *)(const void *)&md_tracks[t].state;
+    int ok = md_tracks[t].loaded == type + 1u;
+    for (unsigned i = 0; i < md_voice[type]->control_count; ++i)
+        ok &= clock_is(type, c->target, i, knob[i], 1) && clock_is(type, c->raw, i, knob[i], 0) &&
+              clock_is(type, c->current, i, knob[i], 0);
+    return ok;
+}
+
+/* the voice's own words: a fresh state, its clock at the knobs (a note plays them as
+ * they are, md.c's md_snap), a note at sample 0 */
 static int32_t *stream(unsigned type, const unsigned char *knob, unsigned n)
 {
     static union md_voice_state st;
     int32_t *s = calloc(n, sizeof *s);
     const mdkit_voice *v = md_voice[type];
     v->init(&st);
+    seed(type, &st, knob);
     for (unsigned i = 0; i < v->control_count; ++i) v->set_control(&st, i, knob[i]);
     v->trigger(&st);
     md_voice_words[type](&st, s, n);
@@ -117,41 +150,90 @@ int main(void)
     for (b = 0; b < 4; ++b) block(7, 0, out + 32 * b);
     CHECK(md_tracks[7].loaded && !md_tracks[7].resting && blocks[7][0x6c4 / 4] == 1, "a loaded voice does not render before its note");
 #endif
-    /* 3. TYPE 1 arrives: nothing changes until the next note, which plays EFM-SD */
+    /* 3. TYPE 1 arrives: nothing changes until the next note, which plays TRX-SD */
     ext_ready = 1; ext_words[0] = 1 << 8;
     for (b = 0; b < 4; ++b) block(2, 0, out + 32 * b);
     CHECK(md_tracks[2].loaded == 1, "TYPE changed the voice without a note");
     for (b = 0; b < N; ++b) block(2, b == 0, out + 32 * b);
     CHECK(md_tracks[2].loaded == 2, "a note did not load TYPE 1");
     free(s); s = stream(1, knob, 32 * N);
-    compare("EFM-SD", out, s, 0, 60, 0);
+    compare("TRX-SD", out, s, 0, 60, 0);
     /* 4. a knob turned before a note reaches the voice */
     params[slot_of[0]] = 100 << 8; knob[0] = 100;
     ext_words[0] = 2 << 8;
     for (b = 0; b < 80; ++b) block(5, b == 0, out + 32 * b);
     free(s); s = stream(2, knob, 32 * 80);
     compare("PI-SD", out, s, 0, 40, 0);
-    /* 5. TYPE past the last voice is no voice (the machine was just selected and its
-     * picker is up): notes play nothing and the track rests, also after a voice sounded;
-     * the voice chosen then plays at the next note */
+    /* 5. TYPE past the last voice (an older Sound's "none chosen yet") is the first voice,
+     * as the page shows it */
     ext_words[0] = MD_VOICES << 8;
-    for (b = 0; b < 8; ++b) block(6, b % 2 == 0, out + 32 * b);
-    for (i = 0; i < 32 * 8; ++i) CHECK(out[i] == 0, "no voice chosen, yet sample %u is %d", i, out[i]);
-    CHECK(md_tracks[6].resting && blocks[6][0x6c4 / 4] == 0, "no voice chosen, yet the track is active");
-    ext_words[0] = 99 << 8;
-    block(5, 1, out);
-    for (b = 0; b < 8; ++b) block(5, 0, out + 32 * b);
-    CHECK(md_tracks[5].resting && out[32 * 7 + 31] == 0, "TYPE 99 did not silence a sounding track");
-    ext_words[0] = 0;
     for (b = 0; b < N; ++b) block(6, b == 0, out + 32 * b);
-    CHECK(md_tracks[6].loaded == 1, "the chosen voice did not load at its note");
+    CHECK(md_tracks[6].loaded == 1 && !md_tracks[6].blocked, "an old none did not play the first voice");
     free(s); s = stream(0, knob, 32 * N);
-    compare("TRX-BD after none", out, s, 0, 60, 0);
+    compare("TRX-BD from an old none", out, s, 0, 60, 0);
+    /* 6. the budget: PI-RC sounds on track 6; PI-SD brought to track 5 beside it stays
+     * silent and inactive; once track 6 is no MD track (no longer updated), it plays */
+    {
+        unsigned rc = MD_VOICES, sd = MD_VOICES, v, loud = 0;
+        static int32_t other[32];
+        for (v = 0; v < MD_VOICES; ++v) {
+            if (!strcmp(md_voice[v]->name, "PI-RC")) rc = v;
+            if (!strcmp(md_voice[v]->name, "PI-SD")) sd = v;
+        }
+        CHECK(rc < MD_VOICES && sd < MD_VOICES && md_voice_weight[rc] + md_voice_weight[sd] > MD_BUDGET, "PI-RC and PI-SD should not fit together");
+        for (b = 0; b < 16; ++b) {
+            ext_words[0] = (unsigned short)(rc << 8); block(6, b == 0, other);
+            ext_words[0] = (unsigned short)(sd << 8); block(5, b == 0, out + 32 * b);
+        }
+        CHECK(md_tracks[6].loaded == rc + 1u && !md_tracks[6].blocked, "PI-RC did not keep its place");
+        CHECK(md_tracks[5].blocked && md_tracks[5].resting && blocks[5][0x6c4 / 4] == 0, "PI-SD past the budget is not silent");
+        /* from the second block: the first ends the resampler's words of what track 5 played before */
+        for (i = 32 * 2; i < 32 * 16; ++i) CHECK(out[i] == 0, "PI-SD past the budget: sample %u is %d", i, out[i]);
+        for (b = 0; b < 40; ++b) { ext_words[0] = (unsigned short)(sd << 8); block(5, b == 4, out + 32 * b); }
+        for (i = 32 * 5; i < 32 * 40; ++i) loud |= out[i] != 0;
+        CHECK(!md_tracks[5].blocked && md_tracks[5].loaded == sd + 1u && loud, "PI-SD did not play once the budget was free");
+    }
+    /* 7. a note plays its knobs as they are, from its first block: a p-lock on the same
+     * voice (TRX-BD's pitch, after a note at other values), a Sound lock that brings
+     * another voice (TRX-CP) and an EFM voice (floats); a knob turned between notes
+     * glides there (mdkit's clock), the next note takes it whole */
+    {
+        unsigned bd = MD_VOICES, cp = MD_VOICES, efm = MD_VOICES, v;
+        const mdkit_control_clock *c = (const mdkit_control_clock *)(const void *)&md_tracks[4].state;
+        for (v = 0; v < MD_VOICES; ++v) {
+            if (!strcmp(md_voice[v]->name, "TRX-BD")) bd = v;
+            if (!strcmp(md_voice[v]->name, "TRX-CP")) cp = v;
+            if (!strcmp(md_voice[v]->name, "EFM-SD")) efm = v;
+        }
+        CHECK(bd < MD_VOICES && cp < MD_VOICES && efm < MD_VOICES && ((MD_FLOAT_CLOCKS >> efm) & 1u) && !((MD_FLOAT_CLOCKS >> bd) & 1u),
+              "TRX-BD, TRX-CP or EFM-SD not found, or their clocks not as md-voices.h says");
+        for (i = 0; i < 8; ++i) { knob[i] = (unsigned char)(i * 9 + 30); params[slot_of[i]] = (unsigned short)(knob[i] << 8); }
+        ext_words[0] = (unsigned short)(bd << 8);
+        for (b = 0; b < 32; ++b) block(4, b == 2, out);       /* two blocks first: track 5 (6.) leaves the budget */
+        CHECK(clock_at(4, bd, knob), "TRX-BD: a note did not take its knobs");
+        knob[0] = 120; params[slot_of[0]] = 120 << 8;          /* PTCH p-locked on the next note */
+        block(4, 1, out);
+        CHECK(clock_at(4, bd, knob), "TRX-BD: a p-locked note did not take PTCH whole");
+        knob[0] = 10; params[slot_of[0]] = 10 << 8;             /* turned, no note: it glides */
+        for (b = 0; b < 13; ++b) block(4, 0, out);
+        CHECK(clock_is(bd, c->target, 0, 10, 1) && !clock_is(bd, c->current, 0, 10, 0), "TRX-BD: a turned knob did not glide");
+        block(4, 1, out);
+        CHECK(clock_at(4, bd, knob), "TRX-BD: the note after a turn did not take it whole");
+        for (i = 0; i < 8; ++i) { knob[i] = (unsigned char)(127 - i * 11); params[slot_of[i]] = (unsigned short)(knob[i] << 8); }
+        ext_words[0] = (unsigned short)(cp << 8);               /* a Sound lock: TRX-CP and its knobs */
+        block(4, 1, out);
+        CHECK(clock_at(4, cp, knob), "TRX-CP: the note that brought it did not take its knobs");
+        ext_words[0] = (unsigned short)(efm << 8);
+        block(4, 1, out);
+        CHECK(clock_at(4, efm, knob), "EFM-SD: the note that brought it did not take its knobs");
+        block(4, 0, out);
+        CHECK(clock_at(4, efm, knob), "EFM-SD: its knobs moved without a turn");
+    }
     /* a pointer that is no track is ignored */
     md_update(0, (unsigned char *)blocks[1] + 4, params);
     md_render(out, (unsigned char *)blocks[1] + 4);
     CHECK(!md_tracks[1].loaded, "a pointer inside a block was taken for a track");
     free(s);
-    if (!bad) printf("PASS md.c (MD_REST %d): resampling, TYPE at the note, no voice chosen, knobs, rest, track bounds\n", MD_REST);
+    if (!bad) printf("PASS md.c (MD_REST %d): resampling, TYPE at the note, an old none, the budget, knobs, a note's knobs whole, rest, track bounds\n", MD_REST);
     return bad;
 }

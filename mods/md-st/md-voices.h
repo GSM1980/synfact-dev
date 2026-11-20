@@ -80,4 +80,8 @@ static const unsigned char md_voice_defaults[MD_VOICES][8]={
 #define MD_FIRST_DEFAULT_5 0
 #define MD_FIRST_DEFAULT_6 0
 #define MD_FIRST_DEFAULT_7 0
+/* the MD's budget (tools/md_port.py VOICE_POINTS): a voice's weight, tenths of a point of CPU A
+ * over an average stock track; the MD tracks' weights stay within MD_BUDGET */
+#define MD_BUDGET 123
+static const unsigned char md_voice_weight[MD_VOICES]={40,62,1,62,52,61,53,53,83,64,42,0,47,25,46,41,33,48,46,41,85,97,114,109,82,8,113,123,123,123};
 #endif

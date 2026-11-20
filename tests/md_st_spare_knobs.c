@@ -33,7 +33,7 @@ static void play(unsigned type, unsigned t, unsigned spare, unsigned turn, int32
     unsigned short params[71];
     unsigned b, i, n = md_voice[type]->control_count;
     memset(params, 0, sizeof params);
-    memset(&md_tracks[t], 0, sizeof md_tracks[t]);
+    memset(md_tracks, 0, sizeof md_tracks);   /* one track at a time: no other counts in the MD's budget */
     ext_words[0] = (unsigned short)(type << 8);
     for (i = 0; i < 8; ++i) params[slot_of[i]] = (unsigned short)((i < n ? 40 + 9 * i : spare) << 8);
     for (b = 0; b < BLOCKS; ++b) {

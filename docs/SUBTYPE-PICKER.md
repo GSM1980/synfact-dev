@@ -77,6 +77,20 @@ requires host API 17 for the non-modulated TYPE. Its existing
 module symbol remains `dm_destination_module`, now named **MONO TYPE SELECTOR**.
 There is no second registry, core event site or additional module slot.
 
+Two optional definitions extend it without changing a machine that leaves them out:
+
+- `STP_ENABLED(track, index)`: 0 for a subtype that cannot be chosen on that track now.
+  The list draws its name struck through (a line across its middle row), the cursor passes it
+  (encoders, UP/DOWN, FUNC+UP/DOWN stop on the next one that can be chosen, or stay), YES
+  takes nothing, and the list opens on the stored subtype or the nearest one that can be
+  chosen. MD KIT uses it for its CPU budget (`mods/md-st/main.c`).
+- `STP_VIEW_ENCODER`: a function `(view, event, id)` added as an `ENC | VIEW` subscription,
+  for a machine's own handling of its knobs (MD's knobs past a voice's last control).
+
+MD KIT (type 70) uses the helper for its thirty voices since its branch merged this
+one: `md_picker_module`, **MD TYPE SELECTOR**, six subscriptions. Its TYPE is a configuration
+control as SY MnM's; an older Sound's out-of-range TYPE shows and plays as the first voice.
+
 The separate user requirement that TYPE cannot be modulated needs core 2.3.1:
 the generic alias marker `ST_MACHINE_CONFIG_PARAMETER` (`fffffffe`) identifies
 an extended control at index 8..23 as saved configuration. Metadata returns

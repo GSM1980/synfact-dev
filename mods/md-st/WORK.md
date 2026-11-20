@@ -750,9 +750,9 @@ voice limits are set at the end.
   16-byte line. **Bank 0.36** (`out/md-st-0.36-core-2.2.0/`, the same 2.2.0 SYX, sha 8faaf194):
   this metal, everything else as 0.35; AUDIO 844,272 bytes. The 2.2.0 parser
   (`out/md-st-0.35-core-2.2.0/smz-parser.exe`), smz-boot and trial-boot PASS. The regression
-  runner now stops earlier, at common-events, for 0.35 too: that host test keeps pointers in
-  32-bit words and the test program now loads above 4 GB (a pointer truncated to 0xeb81e050,
-  AddressSanitizer), unrelated to the bank. A/B renders of RC, CC and HH redone.
+  runner stopped at common-events, for 0.35 too, because it was run with the 64-bit host
+  compiler: that host test keeps pointers in 32-bit words; docs/TESTS.md gives the i686 one,
+  with which it passes. A/B renders of RC, CC and HH redone.
 - **Rendered always** (the user, 2026-11-20: "que consuma siempre, al menos ahora para medir"):
   `MD_REST 0` in md.c, a chosen voice renders on every block from its load, as the stock
   machines do; `MD_REST 1` keeps the old rule (tests/md_st_glue_check.c is built both ways).
@@ -930,10 +930,8 @@ voice limits are set at the end.
   AUDIO 836,080 bytes; parser, smz-boot and trial-boot PASS.
   The unit on 0.42: the user's project (2 SWARM, CY ALLOY, ONE SHOT, SY TOY, SY CHORD, SY TONE)
   with PI-RC 95 %, with PI-RS 95 %, neither breaking up: every PI voice fits there now.
-- **Closed here** (the user: if one voice fits beside the other machines, this is enough): no
-  instance limits. Not done: the level of the metal at high knob settings (5-6 dB low), the
-  regression runner's common-events
-  host test, which truncates pointers to 32 bits and now crashes (not the bank). PI-SD's cost is
+- Every PI voice fits beside seven stock machines now. Not done: the level of the metal at
+  high knob settings (5-6 dB low). PI-SD's cost is
   spread (no line over 570 a block; its modes already take shifted operands): nothing as large
   left there without touching the sound. Cache locking on AUDIO: not now (the user, 2026-11-20);
   the cold-cache model gave about a third fewer cycles with half of each cache held by the
@@ -1014,3 +1012,47 @@ For each voice:
   voice receives (host, scenarios + sweeps) - how the table sizes were found;
   `dfuncs.py`, `survey.py`: which functions still need doubles.
 - The scripts hold the paths of this machine; `LOCAL.md` there lists them.
+
+### Instance limits and the shared picker (2026-11-20)
+
+- The user: limits on the MD tracks only; the voices that do not fit shown disabled in the
+  subtype list, not selectable. One list only: double-tap SYN, the machine list, YES on MD
+  MACHINEDRUM, the list of voices, YES loads (a track with a voice or without), NO back to the
+  machine list. The page's numbered list ("01 TRX-BD") and TYPE's "none chosen" are gone.
+- feat/md-machine: the MD work committed (4975b42) and origin/feat/digimono-st merged (ade9bcf):
+  core 2.3.2, where TYPE is a configuration control (ST_MACHINE_CONFIG_PARAMETER, host API 17:
+  not modulated, not a destination, kept by FUNC+NO's SYN reload, AUDIO given the Sound's
+  mirror), and <syntakt/subtype-picker.h>, the MD prototype's selector made shared (SY MnM uses
+  it). The ColdFire decoder took that branch's EXTB fix; both branches' tests of it stay.
+- The picker takes two optional parts (docs/SUBTYPE-PICKER.md): STP_ENABLED(track, index), a
+  subtype that cannot be chosen there drawn dimmed (every other column), passed by the cursor,
+  refused by YES, the list opening on the nearest that can; STP_VIEW_ENCODER, a view ENC
+  subscription of the machine's own (MD's spare knobs). SY MnM defines neither: no change there.
+- main.c on the picker: TYPE 0..29 as configuration, the first voice by default; labels, spare
+  knobs and the name box as before.
+- The budget (5.7, the user's choice): a voice's weight is its cost over an average stock track
+  of a mixed project, 5.7 points; the MD tracks' weights stay within 12.3 (95 % - 37 % - 8 x 5.7).
+  Costs from the cache model of every voice as built (bank 0.42) fitted to the unit's readings,
+  the metal with the 1.7 the unit read over the fit (tools/md_port.py VOICE_POINTS, generated into
+  md-voices.h as md_voice_weight and MD_BUDGET). A weight is capped at the budget: PI-CC and HH
+  (18.5 in the model, not read on the unit) fit alone as PI-RC does. MAIN reads each digital
+  track's machine (0x80002f50 + t) and TYPE (the Sound mirror, slot 0x36), as the core's sender.
+  Alone: TRX-XT, XC, PI-MA 8; EFM-BD 4; TRX-BD, EFM-XT, CP, HH 3; most TRX and EFM 2; TRX-SD, CP,
+  CY, MA, EFM-CY and every PI voice 1.
+- AUDIO (md.c): a voice a project brings past the budget stays silent and unrendered until it
+  fits; the track first in the block's order keeps its voice. A TYPE past the last voice (an
+  older Sound's "none") is the first voice.
+- Tests: tests/md_st_picker_check.c rewritten on the picker (YES/NO/encoders, a voice loaded or
+  not, dimmed and refused voices, spare knobs, labels, format), tests/md_st_glue_check.c's
+  budget and old-none cases; tests/st_bank_modules.py accepts MD (type 70 after FM, its
+  md_picker_module "MD TYPE SELECTOR" with six subscriptions and main.c pinned).
+- A note plays its knobs whole (the unit, 2026-11-20: a Sound lock from TRX-BD to TRX-CP played
+  its first note with other settings, the second right; a p-locked PTCH slid). mdkit's control
+  clock moves raw a quarter of the way to the knob every 12 blocks, and a trigger publishes raw:
+  a note right after a p-lock, or after a voice is loaded (its defaults), plays the glide.
+  md.c's md_snap, at a note, sets the voice's knobs in the clock: target the knob, raw, pending
+  and current the same (integers: 128 times it; EFM's floats: the float, MD_FLOAT_CLOCKS from
+  md_port's FLOAT_CLOCK), pending published at the next block so the voice rebuilds its
+  coefficients. A knob turned between notes still glides. tests/md_st_glue_check.c's
+  reference voice starts its clock at the knobs; its case 7 (a p-lock, a turn, a Sound lock to
+  TRX-CP, EFM-SD) fails without md_snap.

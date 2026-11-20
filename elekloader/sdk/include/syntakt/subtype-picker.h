@@ -4,6 +4,11 @@
  * Include once per MAIN translation unit with STP_MACHINE, STP_CONTROL_ID,
  * STP_CONTROL_INDEX, STP_COUNT, STP_NAMES, STP_DEFAULT, STP_MODULE,
  * STP_MODULE_NAME and STP_CONFIG_INIT(api). No core hooks or AUDIO work.
+ * Optional: STP_ENABLED(track, index), 0 for a subtype that cannot be chosen on that
+ * track now (struck through, the cursor passes it, YES takes nothing); STP_VIEW_ENCODER,
+ * a view's ENC subscription of the machine's own (event view, event, id); STP_LIST_ART(bitmap),
+ * a drawing of the machine's own right of the names, with STP_LIST_RIGHT the cursor bar's right
+ * edge (x, default 123) so that it leaves the drawing alone.
  */
 #ifndef SYNTAKT_SUBTYPE_PICKER_IMPLEMENTATION_H
 #define SYNTAKT_SUBTYPE_PICKER_IMPLEMENTATION_H
@@ -25,6 +30,12 @@ typedef st_u32 stp_u32;typedef unsigned char stp_u8;
 #define STP_KEY_UP 14u
 #define STP_KEY_DOWN 15u
 #define STP_ROWS (STP_COUNT < 7u ? STP_COUNT : 7u)
+#ifndef STP_ENABLED
+#define STP_ENABLED(track, index) 1
+#endif
+#ifndef STP_LIST_RIGHT
+#define STP_LIST_RIGHT 123
+#endif
 
 
 /* the Sound's (or the lock's) value of a control, as the sample machines read it */
@@ -87,12 +98,31 @@ static int stp_pending(stp_u32 track)
 }
 
 
-static stp_u32 stp_step(stp_u32 cursor, int delta)
+/* the cursor moved by delta on the track's list, past the subtypes that cannot be chosen:
+ * the first one from the target on, else the nearest between it and the cursor, else none */
+static stp_u32 stp_step(stp_u32 track, stp_u32 cursor, int delta)
 {
-    int next = (int)cursor + delta;
+    const int dir = delta < 0 ? -1 : 1;
+    int next = (int)cursor + delta, i;
+    (void)track;
     if (next < 0) next = 0;
     if (next > (int)STP_COUNT - 1) next = STP_COUNT - 1;
-    return (stp_u32)next;
+    for (i = next; i >= 0 && i < (int)STP_COUNT; i += dir) if (STP_ENABLED(track, (stp_u32)i)) return (stp_u32)i;
+    for (i = next - dir; i != (int)cursor && i >= 0 && i < (int)STP_COUNT; i -= dir)
+        if (STP_ENABLED(track, (stp_u32)i)) return (stp_u32)i;
+    return cursor;
+}
+/* where the list opens: the stored subtype, else the nearest that can be chosen */
+static stp_u32 stp_open_at(stp_u32 track, stp_u32 type)
+{
+    stp_u32 d;
+    (void)track;
+    if (STP_ENABLED(track, type)) return type;
+    for (d = 1; d < STP_COUNT; ++d) {
+        if (type + d < STP_COUNT && STP_ENABLED(track, type + d)) return type + d;
+        if (type >= d && STP_ENABLED(track, type - d)) return type - d;
+    }
+    return type;
 }
 
 
@@ -127,6 +157,14 @@ static const struct stp_glyph *stp_glyph(char c)
     stp_u32 i;
     for (i = 0; i < sizeof stp_glyphs / sizeof stp_glyphs[0]; ++i) if (stp_glyphs[i].c == c) return stp_glyphs + i;
     return 0;
+}
+/* text's width at one pixel a dot, one dot between letters */
+static int stp_text_width(const char *s)
+{
+    int w = 0;
+    const struct stp_glyph *g;
+    for (; *s; ++s) if ((g = stp_glyph(*s))) w += g->w + 1;
+    return w ? w - 1 : 0;
 }
 /* text at one pixel a dot, its top row at y (LCD y up), in ink 1 or 0 */
 static void stp_print(void *ctx, int x, int top, const char *s, stp_u32 ink)
@@ -176,9 +214,10 @@ static int stp_key_global(void *brain, void *event)
         if (key == STP_KEY_FUNC) return 0;
         if (!pressed) return 1;
         if (key == STP_KEY_UP || key == STP_KEY_DOWN) {
-            stp_sel.cursor = stp_step(stp_sel.cursor, (key == STP_KEY_UP ? -1 : 1) * (flags & 2u ? (int)STP_ROWS : 1));
+            stp_sel.cursor = stp_step(stp_sel.track, stp_sel.cursor, (key == STP_KEY_UP ? -1 : 1) * (flags & 2u ? (int)STP_ROWS : 1));
             stp_sel.dirty = 1;
         } else if (key == STP_KEY_YES && !(flags & 8u)) {
+            if (!STP_ENABLED(stp_sel.track, stp_sel.cursor)) return 1;   /* nothing to choose */
             if ((stp_u8)STP_TRIG(stp_models[stp_sel.track]) ||
                 (stp_u8)STP_RECORD(stp_models[stp_sel.track])) return 1;
             /* Native confirmation loads the machine; its next SYN page sets the subtype. */
@@ -202,7 +241,7 @@ static int stp_key_global(void *brain, void *event)
         stp_models[t] = stp_model(view); stp_views[t] = view;
         stp_sel.active = 1; stp_sel.track = t; stp_sel.dirty = 1; stp_sel.swallow = key;
         stp_tag.view=0;
-        stp_sel.cursor = stp_type_of(view) < STP_COUNT ? stp_type_of(view) : 0;
+        stp_sel.cursor = stp_open_at(t, stp_type_of(view) < STP_COUNT ? stp_type_of(view) : 0);
         return 1;
     }
 }
@@ -217,7 +256,7 @@ static int stp_enc_global(void *brain, void *event)
     if (stp_pend.applied) stp_pend.track = 0;
     if (!stp_sel_up()) return 0;
     delta = (int)words[4];
-    if (delta) { stp_sel.cursor = stp_step(stp_sel.cursor, delta > 0 ? 1 : -1); stp_sel.dirty = 1; }
+    if (delta) { stp_sel.cursor = stp_step(stp_sel.track, stp_sel.cursor, delta > 0 ? 1 : -1); stp_sel.dirty = 1; }
     return 1;
 }
 
@@ -234,9 +273,14 @@ static void stp_sel_draw(void *bitmap)
     for (i = 0; i < STP_ROWS; ++i) {
         n = first + i;
         top = 49 - (int)i * 7;        /* 49 .. 7 */
-        if (n == stp_sel.cursor) { STP_FILL(bitmap, 20, top - 5, 123, top + 1, 1); stp_print(bitmap, 24, top, STP_NAMES[n], 0); }
+        if (n == stp_sel.cursor) { STP_FILL(bitmap, 20, top - 5, STP_LIST_RIGHT, top + 1, 1); stp_print(bitmap, 24, top, STP_NAMES[n], 0); }
         else stp_print(bitmap, 24, top, STP_NAMES[n], 1);
+        if (!STP_ENABLED(stp_sel.track, n))       /* cannot be chosen: its name struck through */
+            STP_FILL(bitmap, 23, top - 2, 24 + stp_text_width(STP_NAMES[n]), top - 2, n == stp_sel.cursor ? 0u : 1u);
     }
+#ifdef STP_LIST_ART
+    STP_LIST_ART(bitmap);
+#endif
     for (y = 1; y <= 51; ++y) { STP_FILL(bitmap, 126, y, 126, y, (stp_u32)y & 1u); STP_FILL(bitmap, 127, y, 127, y, ((stp_u32)y ^ 1u) & 1u); }
     thumb = 48 - (int)(first * 47u / (STP_COUNT > STP_ROWS ? STP_COUNT - STP_ROWS : 1u));
     STP_FILL(bitmap, 125, thumb, 127, thumb + 3, 1);
@@ -360,10 +404,13 @@ static void stp_tick(void *ctrl)
     if (stp_sel.dirty) {stp_sel.dirty=0;((stp_u8 *)ctrl)[0x20]=1;}
 }
 static const struct st_smz_subscription stp_events[]={
+#ifdef STP_VIEW_ENCODER
+    {ST_EV_ENC|ST_EV_VIEW,(void (*)(void))STP_VIEW_ENCODER},
+#endif
     {ST_EV_TICK,(void (*)(void))stp_tick},
     {ST_EV_KEY,(void (*)(void))stp_key_global},
     {ST_EV_ENC,(void (*)(void))stp_enc_global},
     {ST_EV_DRAW|ST_EV_VIEW,(void (*)(void))stp_view_draw},
     {ST_EV_DRAW,(void (*)(void))stp_frame_draw}};
-const struct st_smz_module STP_MODULE={STP_MODULE_NAME,stp_init,stp_events,5};
+const struct st_smz_module STP_MODULE={STP_MODULE_NAME,stp_init,stp_events,sizeof stp_events/sizeof stp_events[0]};
 #endif

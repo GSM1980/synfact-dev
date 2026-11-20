@@ -18,6 +18,11 @@ def check_bank_machines(report, raw, baseline=(66,67,68,69,65)):
         path=digimono[0]
         assert hashlib.sha256(path.read_bytes()).hexdigest()==report['source_sha256'][str(path)]
         expected.append(71)
+    md=[Path(p) for p in report['source_sha256'] if Path(p).as_posix().endswith('/mods/md-st/mod.json')]
+    if md:
+        assert len(md)==1
+        assert hashlib.sha256(md[0].read_bytes()).hexdigest()==report['source_sha256'][str(md[0])]
+        expected.append(70)
     assert report['machines']==expected, ('unexpected machine composition/order',report['machines'],expected)
     image=80+4*struct.unpack_from('>I',raw,56)[0]
     directory,count=struct.unpack_from('>II',raw,40)
@@ -59,6 +64,20 @@ def check_digimono_module(report,raw,entry,image):
         assert all(fn<report['main_bytes'] and not fn&1 for event,fn in events)
 
 
+def check_md_module(report,raw,entry,image):
+    """MD KIT's TYPE picker: the shared subtype picker with its view encoder."""
+    name,init,subs,n=struct.unpack_from('>4I',raw,entry)
+    assert raw[image+name:raw.index(0,image+name)]==b'MD TYPE SELECTOR'
+    assert init<report['main_bytes'] and not init&1
+    assert n==6 and subs+8*n<=report['main_bytes'] and not subs&3
+    main=[(Path(p),h) for p,h in report['source_sha256'].items()
+          if Path(p).as_posix().endswith('/mods/md-st/main.c')]
+    assert len(main)==1
+    assert hashlib.sha256(main[0][0].read_bytes()).hexdigest()==main[0][1]
+    events=[struct.unpack_from('>II',raw,image+subs+8*i) for i in range(n)]
+    assert [event for event,fn in events]==[0x103,0,2,3,0x101,1]
+
+
 def check_bank_modules(report, raw, allowed):
     """Keep order/count checks; accept the new sampler prefix and legacy banks.
 
@@ -73,6 +92,10 @@ def check_bank_modules(report, raw, allowed):
     # Digi Mono 0.1.2: its UI-only destination provider follows FM's module.
     expected += [names[:names.index('fm_tone_module')+1]+['dm_destination_module']+
                  names[names.index('fm_tone_module')+1:] for names in list(expected) if 'fm_tone_module' in names]
+    # MD KIT: its TYPE picker follows FM's module (and Digi Mono's).
+    expected += [names[:names.index(after)+1]+['md_picker_module']+names[names.index(after)+1:]
+                 for names in list(expected) for after in ('dm_destination_module' if 'dm_destination_module' in names else 'fm_tone_module',)
+                 if after in names]
     expected += [names+['sample_manager_module'] for names in list(expected)]
     # Optional modules in bank order: Chorus, Playhead, then Modulation Skip.
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
@@ -84,7 +107,7 @@ def check_bank_modules(report, raw, allowed):
     expected += [names+['modulation_skip_module'] for names in list(expected)]
     # Playhead 1.2's modal must receive global KEY/ENC before the other UI
     # modules. Machine-owned view callbacks retain their original prefix.
-    prefix={'sp_sampler_input_module','st_stereo_module','fm_tone_module','dm_destination_module'}
+    prefix={'sp_sampler_input_module','st_stereo_module','fm_tone_module','dm_destination_module','md_picker_module'}
     for names in list(expected):
         if 'playhead_module' not in names:continue
         reordered=[name for name in names if name!='playhead_module']
@@ -100,6 +123,9 @@ def check_bank_modules(report, raw, allowed):
         image=80+4*struct.unpack_from('>I',raw,56)[0]
         at=image+directory+16*modules.index('dm_destination_module')
         check_digimono_module(report,raw,at,image)
+    if 'md_picker_module' in modules:
+        image=80+4*struct.unpack_from('>I',raw,56)[0]
+        check_md_module(report,raw,image+directory+16*modules.index('md_picker_module'),image)
     if 'sp_sampler_input_module' not in modules:return
     assert any(Path(name).as_posix().endswith('/mods/samplers-st/input.c')
                for name in report['source_sha256']), 'sampler input source not pinned'

@@ -383,7 +383,7 @@ one: Sounds saved with the old machine would open as the new one.
 | 67 | SP WERP | `mods/samplers-st` |
 | 68 | SP REPITCH | `mods/samplers-st` |
 | 69 | SP SLICE | `mods/samplers-st` |
-| 70 | MD MACHINEDRUM | `mods/md-st` |
+| 70 | MD KIT | `mods/md-st` |
 | 71 | SY MnM | `mods/digimono-st` |
 
 **Free: 72 to 79.** Take the lowest free type, add your machine to this

@@ -6,7 +6,8 @@
  * Controls 0..7 are the voice's eight knobs (0..127 in the Sound word's high
  * byte); control 8 is TYPE, which a note latches, as on the Machinedrum: a
  * p-locked TYPE changes the voice step by step. The knobs reach the voice
- * through its own control clock (mdkit), which applies them at its blocks.
+ * through its own control clock (mdkit), which applies them at its blocks: a
+ * turned knob glides there, a note takes them at once (md_snap).
  *
  * A track with a voice chosen renders it on every block, from the moment the
  * voice is loaded, sounding or not, as the stock machines do: loading a voice
@@ -52,9 +53,28 @@ struct md_track {
     uint32_t at;                          /* next sample of block; 32: render one */
     uint32_t quiet;                       /* blocks in a row within MD_REST_LEVEL */
     uint32_t resting;
+    uint32_t blocked;                     /* its voice is past the MD's budget: silent */
     union md_voice_state state __attribute__((aligned(4)));
 };
 static struct md_track md_tracks[MD_TRACKS];
+
+/* The MD's budget (md-voices.h, main.c): the MD tracks' voices' weights stay within
+ * MD_BUDGET. MAIN's list offers only voices that fit; a project or a kit can still bring
+ * more, and the voice that would pass it stays silent, unrendered, until it fits (a track
+ * ahead of it in the block's order keeps its voice). A track counts while md_update
+ * sees it: md_round counts the block's passes over the MD tracks (a track index that does
+ * not grow starts one), md_seen when each was last updated. */
+static uint32_t md_round, md_last = MD_TRACKS, md_seen[MD_TRACKS];
+static int md_budget_fits(int t, uint32_t voice)
+{
+    uint32_t u, sum = md_voice_weight[voice];
+    for (u = 0; u < MD_TRACKS; ++u) {
+        const struct md_track *o = md_tracks + u;
+        if ((int)u == t || md_round - md_seen[u] > 2u || !o->loaded || o->blocked || o->type >= MD_VOICES) continue;
+        sum += md_voice_weight[o->loaded - 1u];
+    }
+    return sum <= MD_BUDGET;
+}
 
 /* 4-point, third-order Hermite weights for each of the 160 phases, Q14:
  * w[p] = {w(-1), w(0), w(1), w(2)} at f = p / 160 (tools/md_port.py). */
@@ -133,6 +153,38 @@ static void md_load(struct md_track *s, uint32_t type)
     s->phase = 0; s->at = 32u; s->quiet = 0; s->resting = 1;
 }
 
+/* A note plays its knobs as they are: a p-lock, or a Sound that a note brings, is
+ * the voice's from that note's first block, as the Machinedrum's sequencer gives
+ * them. mdkit's control clock moves its values a quarter of the way to the knobs
+ * every 12 blocks, the way a turned knob glides; at a note that would be a slide
+ * from the last note's values, or from a voice's defaults just after it is
+ * loaded. So the note sets the knobs in the clock itself: target the knob, raw,
+ * pending and current the same, and pending published at the voice's next block,
+ * so the voice works its coefficients out again from them. Every voice's state
+ * begins with the clock; it keeps floats or integers (MD_FLOAT_CLOCKS, md-voices.h:
+ * the integers are the knob, and 128 times it for raw, pending and current). */
+typedef uint32_t __attribute__((may_alias)) md_clock_word;
+static uint32_t md_float_bits(uint32_t k)       /* (float)k, 0..127, as its bits */
+{
+    uint32_t e = 0;
+    if (!k) return 0;
+    while (k >> (e + 1u)) ++e;
+    return (127u + e) << 23 | ((k << (23u - e)) & 0x7fffffu);
+}
+static void md_snap(struct md_track *s, uint32_t controls)
+{
+    mdkit_control_clock *c = (mdkit_control_clock *)(void *)&s->state;
+    md_clock_word *target = (md_clock_word *)(void *)c->target, *raw = (md_clock_word *)(void *)c->raw,
+                  *pending = (md_clock_word *)(void *)c->pending, *current = (md_clock_word *)(void *)c->current;
+    const uint32_t floats = (MD_FLOAT_CLOCKS >> (s->loaded - 1u)) & 1u;
+    uint32_t i;
+    for (i = 0; i < controls && i < MDKIT_MAX_CONTROLS; ++i) {
+        const uint32_t k = s->knob[i], t = floats ? md_float_bits(k) : k, r = floats ? t : k * 128u;
+        target[i] = t; raw[i] = pending[i] = current[i] = r;
+    }
+    c->pending_valid = 1; c->publish_block = c->block;
+}
+
 /* the voice's next n words at 44.1 kHz, rounded to 16 bits (|error| <= 1/2;
  * 0x7fff80 and up kept at 32767), into x */
 static void md_pull(struct md_track *s, short *x, uint32_t n)
@@ -175,19 +227,22 @@ void md_update(uint32_t pitch, void *voice, const unsigned short *params)
     if (t < 0) return;
     md_pick_voices();
     s = md_tracks + t;
+    if ((uint32_t)t <= md_last) ++md_round;
+    md_last = (uint32_t)t; md_seen[t] = md_round;
     trigger = v[0x38 / 4] != 0;
     ext = MD_EXTENDED(params);
-    /* TYPE past the last voice is "none chosen yet" (main.c: the machine was just
-     * selected and its picker is up): the track keeps a voice loaded and rests. */
-    if (ext) { type = ext[0] >> 8; s->type = type < MD_VOICES ? type : MD_VOICES; }
+    /* TYPE is a configuration control (main.c); past the last voice (an older Sound's "none
+     * chosen yet") it is the first voice, as the page shows it */
+    if (ext) { type = ext[0] >> 8; s->type = type < MD_VOICES ? type : 0; }
     else if (!s->loaded) s->type = 0;       /* not arrived yet */
+    s->blocked = s->type < MD_VOICES && !md_budget_fits(t, s->type);
     {
 #ifdef MD_EMAC
         struct md_emac_saved emac;
         md_emac_begin(&emac);           /* a voice's init, knobs or note may multiply */
 #endif
         const mdkit_voice *d;
-        const uint32_t none = s->type >= MD_VOICES;
+        const uint32_t none = s->type >= MD_VOICES || s->blocked;
         if (!s->loaded || (trigger && !none && s->loaded != s->type + 1u)) md_load(s, none ? 0u : s->type);
         d = MD_VOICE(s->loaded - 1u);
         for (i = 0; i < d->control_count; ++i) {
@@ -196,7 +251,7 @@ void md_update(uint32_t pitch, void *voice, const unsigned short *params)
             if (k != s->knob[i]) { d->set_control(&s->state, i, k); s->knob[i] = k; }
         }
         if (none) s->resting = 1;
-        else if (trigger) { d->trigger(&s->state); s->resting = 0; s->quiet = 0; }
+        else if (trigger) { md_snap(s, d->control_count); d->trigger(&s->state); s->resting = 0; s->quiet = 0; }
         else if (!MD_REST) s->resting = 0;  /* a chosen voice renders from its load */
 #ifdef MD_EMAC
         md_emac_end(&emac);
