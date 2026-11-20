@@ -146,23 +146,29 @@
 +}
 --- a/src/bus.rs
 +++ b/src/bus.rs
-@@ -54,6 +54,7 @@
+@@ -54,6 +54,10 @@
  ];
  
  pub struct Bus {
 +    pub cm: Option<Box<CacheModel>>,
++    pub xio: Option<Vec<(u32, u32, u32)>>,
++    pub xio_suppress: bool,
++    pub xior: Option<Vec<(u32, u32, u32)>>,
      pub ddr: Vec<u8>,
      ddr_mask: u32,
      pub sram: Vec<u8>,
-@@ -145,6 +146,7 @@
+@@ -145,6 +149,10 @@
          let size = ddr_mb << 20;
          assert!(size.is_power_of_two());
          Bus {
 +            cm: None,
++            xio: None,
++            xio_suppress: false,
++            xior: None,
              ddr: vec![0; size],
              ddr_mask: (size - 1) as u32,
              sram: vec![0; SRAM_SIZE],
-@@ -488,6 +490,7 @@
+@@ -488,6 +496,7 @@
  
      #[inline(always)]
      pub fn read8(&mut self, a: u32) -> u8 {
@@ -170,7 +176,7 @@
          if let Some(o) = self.ddr_off(a) {
              if self.watch_reads {
                  self.check_watch(a, 1, self.ddr[o] as u32);
-@@ -502,6 +505,7 @@
+@@ -502,6 +511,7 @@
  
      #[inline(always)]
      pub fn read16(&mut self, a: u32) -> u16 {
@@ -178,7 +184,7 @@
          if let Some(o) = self.ddr_off(a) {
              if o + 2 <= self.ddr.len() {
                  let v = u16::from_be_bytes([self.ddr[o], self.ddr[o + 1]]);
-@@ -521,6 +525,7 @@
+@@ -521,6 +531,7 @@
  
      #[inline(always)]
      pub fn read32(&mut self, a: u32) -> u32 {
@@ -186,7 +192,7 @@
          if let Some(o) = self.ddr_off(a) {
              if o + 4 <= self.ddr.len() {
                  let v = u32::from_be_bytes(self.ddr[o..o + 4].try_into().unwrap());
-@@ -540,6 +545,7 @@
+@@ -540,6 +551,7 @@
  
      #[inline(always)]
      pub fn write8(&mut self, a: u32, v: u8) {
@@ -194,7 +200,7 @@
          if let Some(o) = self.ddr_off(a) {
              self.check_watch(a, 1, v as u32);
              self.check_code(o as u32, 1);
-@@ -556,6 +562,7 @@
+@@ -556,6 +568,7 @@
  
      #[inline(always)]
      pub fn write16(&mut self, a: u32, v: u16) {
@@ -202,7 +208,7 @@
          if let Some(o) = self.ddr_off(a) {
              if o + 2 <= self.ddr.len() {
                  self.check_watch(a, 2, v as u32);
-@@ -576,6 +583,7 @@
+@@ -576,6 +589,7 @@
  
      #[inline(always)]
      pub fn write32(&mut self, a: u32, v: u32) {
@@ -210,7 +216,28 @@
          if let Some(o) = self.ddr_off(a) {
              if o + 4 <= self.ddr.len() {
                  self.check_watch(a, 4, v);
-@@ -847,3 +855,54 @@
+@@ -660,6 +674,11 @@
+ 
+     #[cold]
+     fn read_slow(&mut self, a: u32, size: u32) -> u32 {
++        let v = self.read_slow_inner(a, size);
++        if let Some(l) = self.xior.as_mut() { l.push((a, size, v)); }
++        v
++    }
++    fn read_slow_inner(&mut self, a: u32, size: u32) -> u32 {
+         if let Some(d) = self.io.dsp.as_ref() {
+             if a.wrapping_sub(crate::syntakt::MBOX_BASE) < crate::syntakt::MBOX_SIZE {
+                 return d.read(a, size);
+@@ -764,6 +783,8 @@
+ 
+     #[cold]
+     fn write_slow(&mut self, a: u32, size: u32, v: u32) {
++        if let Some(l) = self.xio.as_mut() { l.push((a, size, v)); }
++        if self.xio_suppress { return; }
+         if let Some(d) = self.io.dsp.as_mut() {
+             if a.wrapping_sub(crate::syntakt::MBOX_BASE) < crate::syntakt::MBOX_SIZE {
+                 return d.write(a, size, v);
+@@ -847,3 +868,60 @@
          assert_eq!(b.strict_pending, None);
      }
  }
@@ -218,15 +245,17 @@
 +
 +pub struct CacheModel {
 +    pub iline: std::collections::HashMap<u32, u64>,
++    pub dline: std::collections::HashMap<u32, u64>,
 +    pub ifree: std::collections::HashSet<u32>,
 +    pub ilock: std::collections::HashSet<u32>,
 +    pub ic: [[u32; 4]; 128],
 +    pub dc: [[u32; 4]; 128],
 +    pub im: u64,
 +    pub dm: u64,
++    pub dhalf: bool,
 +}
 +impl CacheModel {
-+    pub fn new() -> Self { CacheModel { iline: Default::default(), ifree: Default::default(), ilock: Default::default(), ic: [[u32::MAX; 4]; 128], dc: [[u32::MAX; 4]; 128], im: 0, dm: 0 } }
++    pub fn new() -> Self { CacheModel { iline: Default::default(), dline: Default::default(), ifree: Default::default(), ilock: Default::default(), ic: [[u32::MAX; 4]; 128], dc: [[u32::MAX; 4]; 128], im: 0, dm: 0, dhalf: std::env::var_os("XPROF_DHALF").is_some() } }
 +    #[inline(always)]
 +    fn look(set: &mut [u32; 4], tag: u32) -> bool {
 +        // index 0 = most recent
@@ -240,7 +269,11 @@
 +        set[3] = set[2]; set[2] = set[1]; set[1] = set[0]; set[0] = tag; false
 +    }
 +    #[inline(always)]
-+    pub fn d(&mut self, a: u32) { let l = a >> 4; if !Self::look(&mut self.dc[(l & 127) as usize], l) { self.dm += 1; } }
++    pub fn d(&mut self, a: u32) {
++        let l = a >> 4;
++        let hit = if self.dhalf { Self::look2(&mut self.dc[(l & 127) as usize], l) } else { Self::look(&mut self.dc[(l & 127) as usize], l) };
++        if !hit { self.dm += 1; *self.dline.entry(l).or_insert(0) += 1; }
++    }
 +    #[inline(always)]
 +    pub fn i(&mut self, a: u32) {
 +        let l = a >> 4;
@@ -265,24 +298,1704 @@
 +        }
 +    }
 +}
+--- a/src/machine.rs
++++ b/src/machine.rs
+@@ -80,6 +80,7 @@
+     pub log: Vec<String>,
+     /// Addresses at which `run_until` stops and returns `Stop::Hook`.
+     pub breakpoints: Vec<u32>,
++    pub xdiff: Option<Box<crate::xdiff::XDiff>>,
+     /// Hit counters: address -> count.
+     pub counters: Vec<(u32, u64)>,
+     /// The force a pad press reports (0..255; the OS ignores 10 and below).
+@@ -203,6 +204,7 @@
+             frame_seq: 0,
+             log: Vec::new(),
+             breakpoints: Vec::new(),
++            xdiff: None,
+             counters: Vec::new(),
+             pad_force: 100,
+             usb_call: None,
+@@ -1249,6 +1251,11 @@
+                     }
+                 }
+                 Stop::Hook(pc) => {
++                    if self.xdiff.as_ref().is_some_and(|x| x.start == pc) {
++                        crate::xdiff::case(self);
++                        self.cpu.skip_hook = Some(pc);
++                        continue;
++                    }
+                     if self.breakpoints.contains(&pc) {
+                         self.breakpoints.retain(|&b| b != pc);
+                         self.cpu.skip_hook = Some(pc);
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -3,6 +3,7 @@
+ pub mod firmware;
+ pub mod bus;
+ pub mod cpu;
++pub mod xdiff;
+ pub mod io;
+ pub mod edma;
+ pub mod symbols;
+--- a/src/symbols.rs
++++ b/src/symbols.rs
+@@ -200,6 +200,13 @@
+                 Ok(p)
+             }
+             ST_142_SHA256 => Ok(Self::syntakt_142(h, idle_spins)),
++            // Opt-in: a Syntakt OS 1.42 build patched by synfact-dev's core,
++            // run on the 1.42 profile (the RTOS/idle it hooks stays stock).
++            _ if std::env::var_os("DTEMU_ST142_MODIFIED").is_some() => {
++                let mut p = Self::syntakt_142(h, idle_spins);
++                p.name = "Syntakt OS 1.42 (modified, DTEMU_ST142_MODIFIED)";
++                Ok(p)
++            }
+             // Opt-in: a Syntakt OS 1.41 build patched by synfact-dev's core,
+             // run on the 1.41 profile (its hooked functions must stay stock).
+             _ if std::env::var_os("DTEMU_ST141_MODIFIED").is_some() => {
+--- a/src/syntakt.rs
++++ b/src/syntakt.rs
+@@ -96,7 +96,7 @@
+         match h.as_str() {
+             DSP_142_SHA256 | DSP_V12_LONG_POOL_SHA256 => Ok(DspProfile { sha256: h, entry: 0x4000_1070, idle_spins: vec![0x4000_106E, 0x4000_0B34] }),
+             // Opt-in: synfact-dev's AUDIO companion keeps the entry and both spins stock.
+-            _ if std::env::var_os("DTEMU_ST141_MODIFIED").is_some() => Ok(DspProfile { sha256: h, entry: 0x4000_1070, idle_spins: vec![0x4000_106E, 0x4000_0B34] }),
++            _ if std::env::var_os("DTEMU_ST142_MODIFIED").is_some() || std::env::var_os("DTEMU_ST141_MODIFIED").is_some() => Ok(DspProfile { sha256: h, entry: 0x4000_1070, idle_spins: vec![0x4000_106E, 0x4000_0B34] }),
+             _ => Err(format!("DSP program (section 7) sha256 {h} has no profile here; known: Syntakt OS 1.41/1.42 and V12 LONG POOL")),
+         }
+     }
 --- a/src/bin/dtboot.rs
 +++ b/src/bin/dtboot.rs
-@@ -387,8 +387,9 @@
-     while target < instr {
-         target = (target + every).min(instr);
-         if let Some(pa) = profile_after {
+@@ -1,887 +1,944 @@
+-//! Headless boot: run the firmware and report progress.
+-//!
+-//!     dtboot [FIRMWARE.syx] [options]   (see --help)
+-
+-use dtemu::cpu::Stop;
+-use dtemu::firmware::Firmware;
+-use dtemu::machine::Machine;
+-use std::time::Instant;
+-
+-fn num(s: &str) -> u64 {
+-    let s = s.replace('_', "");
+-    let (n, mul) = match s.chars().last() {
+-        Some('M') => (&s[..s.len() - 1], 1_000_000),
+-        Some('G') => (&s[..s.len() - 1], 1_000_000_000),
+-        Some('k') => (&s[..s.len() - 1], 1_000),
+-        _ => (&s[..], 1),
+-    };
+-    n.parse::<f64>().map(|v| (v * mul as f64) as u64).expect("number")
+-}
+-
+-const USAGE: &str = "\
+-usage: dtboot [FIRMWARE.syx] [options]
+-
+-Runs the firmware headless and reports progress. Clocks are instruction
+-counts (suffixes k, M, G).
+-
+-  --instr N            run N instructions (default 100M)
+-  --every N            report every N (default 10M)
+-  --ips N              instructions per emulated second (default 200M)
+-  --load SNAP          resume a snapshot
+-  --save SNAP          save a snapshot at the end
+-  --card IMAGE         back the eMMC with an image file (read only: changes
+-                       are not written back; a missing image starts formatted)
+-  --card-save          write the card (as the run left it) back to --card's
+-                       image at the end; with --load, the snapshot's card
+-  --power-off AT       switch the power off at clock AT (Rytm): the firmware's
+-                       power-fail handler saves the working state to the card
+-                       (raw eMMC slots 0x7a000/0x7c000), then the run ends and
+-                       the card is written back (implies --card-save); a cold
+-                       boot on that card comes up in the saved state
+-  --press KEY@AT[:HOLD]
+-                       press KEY at clock AT for HOLD (default 30M): a control
+-                       code (Digitakt) or a key name (Rytm: panel::RYTM_KEYS,
+-                       e.g. YES, FUNC, T1, BD, BANK_A, PUSH_A)
+-  --turn ENC:DELTA@ATxCOUNT[/SPACING]
+-                       turn encoder ENC by DELTA, COUNT times, SPACING apart
+-  --raw HEX@AT         send raw panel-MCU bytes at clock AT (e.g. 4064@5G)
+-  --midi HEX@AT        DIN MIDI in at clock AT, at 31250 baud (e.g. 903c64@5G)
+-  --midi-file F@AT     a file's bytes on DIN MIDI in (a .syx dump)
+-  --wav OUT.wav        record the audio output (every DAC word of the codec frame)
+-  --main-wav OUT.wav   record the speakers' stereo mix (Machine::speaker_pair; the
+-                       Syntakt's adds its modelled analog voices and FX block)
+-  --dsp-wav OUT.wav    (Syntakt) record tracks 1..8 as the second CPU renders
+-                       them, one channel each
+-  --break ADDR         stop at a PC (hex); --break-after N arms it after N
+-  --poke ADDR=VALUE    write a 32-bit word (hex) once before the run
+-  --watch ADDR         log writes to a DDR or SRAM (0x8000....) address (hex;
+-                       SRAM writes are seen with DTEMU_NO_JIT=1 only)
+-  --midi-out FILE      write everything sent on MIDI out to FILE
+-  --usb-midi HEX@AT    bytes on the USB MIDI port (Rytm)
+-  --usb-midi-file F@AT[xN/SPACING]  a file's bytes on the USB MIDI port, N times
+-  --analog-wav FILE    record the modelled analog voices' mix (Rytm; A4 with its
+-                       effects' return; Syntakt: tracks 9..12 and the analog FX
+-                       block, without the DAC's main pair), stereo
+-  --usb-wav FILE       record the USB audio stream (12 channels: MAIN L/R, voices, AUDIO IN L/R)
+-  --audio-in FILE.wav  play a 16-bit WAV into AUDIO IN L/R from the start (Rytm)
+-  --ob-in FILE.wav[:CH]  a WAV's first channel as Overbridge input channel CH
+-                       (4..11 = BD SD RS/CP BT LT MT/HT CH/OH CY/CB; default 4)
+-  --nudge ENC:DIR[:F|:8]@CLOCK[xN/SPACING]  one value step on an encoder, as the
+-                       window's arrow keys make it (F: with FUNC held; 8: 8 steps)
+-  --usb-host           attach a simulated USB host (usbhost.rs): enumerates the
+-                       Rytm and, in OVERBRIDGE mode, runs the audio stream
+-                       (DTEMU_USB_LOG=1 logs it)
+-  --usb-midi-real      run the firmware's own USB MIDI sender and its request
+-                       pool: the USB host reads MIDI IN (endpoint 0x81) and the
+-                       requests complete as it does (needs --usb-host; also
+-                       DTEMU_USB_MIDI_REAL=1). Lists waits from interrupt level.
+-  --usb-host-sleep FROM[:TO]  the USB host suspends the bus between these clocks
+-                       (a sleeping laptop: no SOF, no transfers); no TO: to the end
+-  --usb-host-noread FROM[:TO]  the host keeps the bus running but stops reading
+-                       MIDI IN (an application with the port closed)
+-  --ob-link [ADDR]     serve the Overbridge input to a host over TCP (oblink.rs;
+-                       default 127.0.0.1:7301)
+-  --ext-in FILE.wav    play a 16-bit WAV into EXT IN L/R from the start (Rytm)
+-  --watch-read ADDR LEN  log CPU reads and writes of LEN bytes at ADDR (hex)
+-  --count ADDR         count visits to a PC (hex)
+-  --trace N            keep the last N PCs for fault reports
+-  --profile-after N    sample guest PCs from clock N on
+-  --no-masks           ignore interrupt masks
+-
+-Environment:
+-  DTBOOT_OLED          end with the panel MCU's OLED, not the last captured frame
+-  DTBOOT_END_PNG=FILE  the screen at the end of the run as a PNG
+-  DTBOOT_DSP_STREAM=F  (Syntakt) write the bytes CPU1 streamed to the DSP's boot port
+-  DTEMU_SYNTAKT_DSP=stub  (Syntakt) the stage 1 stand-in instead of the second CPU
+-  DTEMU_DSP_PROFILE=1  (Syntakt) sample the second CPU's PCs; the hottest are listed
+-  DTBOOT_LEDS          (=rgb: also each LED's colour) print the LED selector byte of each group at the end
+-  DTBOOT_PEEK=A,B,..   print those words (hex addresses) on each status line
+-  DTBOOT_STEPS         after each key release, settle 40M and show the screen
+-                       (as PNGs in DTBOOT_PNG_DIR if set)
+-  DTBOOT_TURN_PNG=DIR  a PNG after each turn, DTBOOT_TURN_SETTLE (3M) later
+-  DTEMU_STRICT=1       unmapped pages and the SRAM mirror beyond 64 KB raise an
+-                       access error (interpreter only); listed as `strict:` lines
+-                       (DTEMU_STRICT=log: listed only, no fault)
+-";
+-
+-fn main() {
+-    let args: Vec<String> = std::env::args().skip(1).collect();
+-    let mut syx = None;
+-    let mut instr = 100_000_000u64;
+-    let mut every = 10_000_000u64;
+-    let mut ips = None;
+-    let mut no_masks = false;
+-    let mut watch: Option<u32> = None;
+-    let mut pokes: Vec<(u32, u32)> = Vec::new();
+-    let mut watch_read: Option<(u32, u32)> = None;
+-    let mut midi_out_file: Option<String> = None;
+-    let mut usb_midis: Vec<(Vec<u8>, u64)> = Vec::new();
+-    let mut analog_wav: Option<String> = None;
+-    let mut audio_in: Option<String> = None;
+-    let mut ob_in: Option<String> = None;
+-    let mut ob_link: Option<String> = None;
+-    let mut usb_host = false;
+-    let mut usb_midi_real = false;
+-    let mut usb_sleep: Option<(u64, u64)> = None;
+-    let mut usb_noread: Option<(u64, u64)> = None;
+-    let mut nudges: Vec<(u64, u8, i8, bool, bool)> = Vec::new();
+-    let mut usb_wav: Option<String> = None;
+-    let mut ext_in: Option<String> = None;
+-    let mut analog: Vec<i32> = Vec::new();
+-    let mut analog_mix: Vec<(f32, f32)> = Vec::new();
+-    let mut breaks: Vec<u32> = Vec::new();
+-    let mut trace = 0usize;
+-    let mut break_after = 0u64;
+-    let mut counts: Vec<u32> = Vec::new();
+-    let mut profile_after: Option<u64> = None;
+-    let mut save: Option<String> = None;
+-    let mut wav: Option<String> = None;
+-    let mut main_wav: Option<String> = None;
+-    let mut dsp_wav: Option<String> = None;
+-    let mut card: Option<String> = None;
+-    let mut card_save = false;
+-    let mut power_off: Option<u64> = None;
+-    let mut pcm: Vec<i32> = Vec::new();
+-    let mut presses: Vec<(String, u64, u64)> = Vec::new();
+-    let mut raws: Vec<(Vec<u8>, u64)> = Vec::new();
+-    let mut midis: Vec<(Vec<u8>, u64)> = Vec::new();
+-    let mut step_no = 0;
+-    let mut turns: Vec<(u64, u8, i8)> = Vec::new();
+-    let mut load: Option<String> = None;
+-    let mut it = args.iter();
+-    while let Some(a) = it.next() {
+-        match a.as_str() {
+-            "--instr" => instr = num(it.next().unwrap()),
+-            "--every" => every = num(it.next().unwrap()),
+-            "--ips" => ips = Some(num(it.next().unwrap())),
+-            "--no-masks" => no_masks = true,
+-            "-h" | "--help" => {
+-                print!("{USAGE}");
+-                return;
+-            }
+-            "--break" => {
+-                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
+-                breaks.push(a);
+-            }
+-            "--press" => {
+-                // --press CODE@CLOCK[:HOLD]  e.g. 6@4100M:50M
+-                let v = it.next().unwrap();
+-                let (code, rest) = v.split_once('@').unwrap();
+-                let (at, hold) = rest.split_once(':').unwrap_or((rest, "30M"));
+-                presses.push((code.to_string(), num(at), num(hold)));
+-            }
+-            "--midi-out" => midi_out_file = it.next().cloned(),
+-            "--analog-wav" => analog_wav = it.next().cloned(),
+-            "--audio-in" => audio_in = it.next().cloned(),
+-            "--ob-in" => ob_in = it.next().cloned(),
+-            "--ob-link" => ob_link = Some(it.next().cloned().unwrap_or_else(|| "127.0.0.1:7301".into())),
+-            "--usb-host" => usb_host = true,
+-            "--nudge" => {
+-                // --nudge ENC:DIR[:F]@CLOCK[xCOUNT/SPACING]: one value step (F: with FUNC)
+-                let v = it.next().unwrap();
+-                let (ed, rest) = v.split_once('@').unwrap();
+-                let mut f = ed.split(':');
+-                let e: u8 = f.next().unwrap().parse().unwrap();
+-                let d: i8 = f.next().unwrap().parse().unwrap();
+-                let flag = f.next();
+-                let func = flag == Some("F");
+-                let big = flag == Some("8");
+-                let (rest, spacing) = rest.split_once('/').map(|(a, b)| (a, num(b))).unwrap_or((rest, 100_000_000));
+-                let (at, count) = rest.split_once('x').unwrap_or((rest, "1"));
+-                for k in 0..count.parse::<u64>().unwrap() {
+-                    nudges.push((num(at) + k * spacing, e, d, func, big));
+-                }
+-            }
+-            "--usb-wav" => usb_wav = it.next().cloned(),
+-            "--ext-in" => ext_in = it.next().cloned(),
+-            "--usb-midi" => {
+-                // --usb-midi HEX@CLOCK: bytes on the USB MIDI port
+-                let v = it.next().unwrap();
+-                let (what, at) = v.rsplit_once('@').unwrap();
+-                let bytes: Vec<u8> = (0..what.len()).step_by(2).map(|i| u8::from_str_radix(&what[i..i + 2], 16).unwrap()).collect();
+-                usb_midis.push((bytes, num(at)));
+-            }
+-            "--usb-midi-file" => {
+-                // --usb-midi-file FILE@CLOCK[xCOUNT/SPACING]: a file's bytes on the
+-                // USB MIDI port, optionally repeated COUNT times SPACING apart.
+-                let v = it.next().unwrap();
+-                let (what, when) = v.rsplit_once('@').unwrap();
+-                let bytes = std::fs::read(what).unwrap_or_else(|e| panic!("{what}: {e}"));
+-                let (at, rep) = match when.split_once('x') {
+-                    Some((at, r)) => (at, Some(r)),
+-                    None => (when, None),
+-                };
+-                let (count, spacing) = match rep {
+-                    Some(r) => {
+-                        let (c, sp) = r.split_once('/').expect("xCOUNT/SPACING");
+-                        (c.parse::<u64>().unwrap(), num(sp))
+-                    }
+-                    None => (1, 0),
+-                };
+-                for k in 0..count {
+-                    usb_midis.push((bytes.clone(), num(at) + k * spacing));
+-                }
+-            }
+-            "--midi" | "--midi-file" => {
+-                // --midi HEX@CLOCK: bytes on the DIN MIDI input, e.g. 903c64@5G
+-                // --midi-file FILE.syx@CLOCK: a file's bytes (a SysEx dump)
+-                let file = a == "--midi-file";
+-                let v = it.next().unwrap();
+-                let (what, at) = v.rsplit_once('@').unwrap();
+-                let bytes: Vec<u8> = if file {
+-                    std::fs::read(what).unwrap_or_else(|e| panic!("{what}: {e}"))
+-                } else {
+-                    (0..what.len()).step_by(2).map(|i| u8::from_str_radix(&what[i..i + 2], 16).unwrap()).collect()
+-                };
+-                midis.push((bytes, num(at)));
+-            }
+-            "--raw" => {
+-                // --raw HEX@CLOCK: bytes as the panel MCU would send them, e.g. 4064@5150M
+-                let v = it.next().unwrap();
+-                let (hex, at) = v.split_once('@').unwrap();
+-                let bytes = (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect();
+-                raws.push((bytes, num(at)));
+-            }
+-            "--wav" => wav = it.next().cloned(),
+-            "--main-wav" => main_wav = it.next().cloned(),
+-            "--dsp-wav" => dsp_wav = it.next().cloned(),
+-            "--card" => card = it.next().cloned(),
+-            "--card-save" => card_save = true,
+-            "--power-off" => power_off = Some(num(it.next().unwrap())),
+-            "--usb-midi-real" => usb_midi_real = true,
+-            "--usb-host-sleep" | "--usb-host-noread" => {
+-                let v = it.next().unwrap();
+-                let (x, y) = v.split_once(':').map_or((v.as_str(), None), |(x, y)| (x, Some(y)));
+-                let w = Some((num(x), y.map_or(u64::MAX, num)));
+-                if a == "--usb-host-sleep" {
+-                    usb_sleep = w;
+-                } else {
+-                    usb_noread = w;
+-                }
+-            }
+-            "--turn" => {
+-                // --turn ENC:DELTA@CLOCKxCOUNT[/SPACING], one turn every SPACING (4M)
+-                let v = it.next().unwrap();
+-                let (ed, rest) = v.split_once('@').unwrap();
+-                let (e, d) = ed.split_once(':').unwrap();
+-                let (rest, spacing) = rest.split_once('/').map(|(a, b)| (a, num(b))).unwrap_or((rest, 4_000_000));
+-                let (at, count) = rest.split_once('x').unwrap_or((rest, "1"));
+-                for k in 0..count.parse::<u64>().unwrap() {
+-                    turns.push((num(at) + k * spacing, e.parse().unwrap(), d.parse().unwrap()));
+-                }
+-            }
+-            "--save" => save = it.next().cloned(),
+-            "--load" => load = it.next().cloned(),
+-            "--profile-after" => profile_after = Some(num(it.next().unwrap())),
+-            "--count" => {
+-                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
+-                counts.push(a);
+-            }
+-            "--break-after" => break_after = num(it.next().unwrap()),
+-            "--trace" => trace = num(it.next().unwrap()) as usize,
+-            "--poke" => {
+-                // ADDR=VALUE (hex, 32-bit), written once before the run starts.
+-                let v = it.next().unwrap();
+-                let (a, x) = v.split_once('=').expect("--poke ADDR=VALUE");
+-                let h = |t: &str| u32::from_str_radix(t.trim_start_matches("0x"), 16).expect("--poke hex");
+-                pokes.push((h(a), h(x)));
+-            }
+-            "--watch" => {
+-                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
+-                watch = Some(a);
+-            }
+-            "--watch-read" => {
+-                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
+-                watch_read = Some((a, num(it.next().unwrap()) as u32));
+-            }
+-            _ => syx = Some(a.clone()),
+-        }
+-    }
+-    let syx = syx.unwrap_or_else(|| "fw/Digitakt_OS1.53.syx".into());
+-    let fw = Firmware::from_file(std::path::Path::new(&syx)).unwrap();
+-    let mut m = Machine::new(&fw, 128).unwrap();
+-    if let Some(i) = ips {
+-        m.cpu.bus.io.ips = i as f64;
+-    }
+-    m.cpu.bus.io.ignore_masks = no_masks;
+-    if !breaks.is_empty() {
+-        m.cpu.history = Some((vec![0; 48], 0));
+-    }
+-    for c in &counts {
+-        m.add_counter(*c);
+-    }
+-    if break_after > 0 {
+-        m.run_until(break_after);
+-    }
+-    for b in &breaks {
+-        m.add_breakpoint(*b);
+-    }
+-    if let Some(a) = watch {
+-        if a >> 28 == 8 {
+-            let o = a & 0xFFFF;
+-            m.cpu.bus.sram_watch = Some((o, o + 4));
+-        } else {
+-            let o = a & 0x07FF_FFFF;
+-            m.cpu.bus.watch = Some((o, o + 4));
+-        }
+-    }
+-    if let Some((a, n)) = watch_read {
+-        let o = a & 0x07FF_FFFF;
+-        m.cpu.bus.watch = Some((o, o + n));
+-        m.cpu.bus.watch_reads = true;
+-    }
+-    if let Some(p) = &card {
+-        let fresh = m.attach_card(std::path::Path::new(p)).unwrap();
+-        println!("card {p}: {} sectors in use{}", m.cpu.bus.io.esdhc.card.sectors.len(), if fresh { " (new, sample area formatted)" } else { "" });
+-    }
+-    if let Some(p) = &load {
+-        dtemu::snapshot::load(&mut m, std::path::Path::new(p)).unwrap();
+-        println!("restored {p} at clock {}", m.now());
+-        instr += m.now();
+-    }
+-    // --ob-in FILE.wav[:CH]: a 16-bit WAV's first channel as Overbridge input
+-    // channel CH (default 4, BD), from the start, at 48 kHz.
+-    if let Some(spec) = &ob_in {
+-        let (path, ch) = match spec.rsplit_once(':') {
+-            Some((p, c)) if c.parse::<usize>().is_ok() => (p, c.parse::<usize>().unwrap()),
+-            _ => (spec.as_str(), 4),
+-        };
+-        for (l, _) in read_wav16(path) {
+-            let mut f = [0i32; dtemu::oblink::CHANNELS];
+-            f[ch.min(dtemu::oblink::CHANNELS - 1)] = (l * 2_147_483_647.0) as i32;
+-            m.ob_in.push_back(f);
+-        }
+-        println!("overbridge in: {} frames from {path} on channel {ch}", m.ob_in.len());
+-    }
+-    if usb_host {
+-        let mut h = dtemu::usbhost::UsbHost::new();
+-        h.suspend = usb_sleep;
+-        h.midi_sleep = usb_noread;
+-        m.usb_host = Some(h);
+-    }
+-    if usb_midi_real {
+-        m.set_usb_midi_real(true);
+-    }
+-    if let Some(a) = &ob_link {
+-        m.ob_link = Some(dtemu::oblink::ObLink::listen(a).unwrap_or_else(|e| panic!("{a}: {e}")));
+-        println!("overbridge link: listening on {a}");
+-    }
+-    for (path, ext) in [(&audio_in, false), (&ext_in, true)] {
+-        if let Some(p) = path {
+-            let frames = read_wav16(p);
+-            println!("{} {p}: {} frames", if ext { "ext in" } else { "audio in" }, frames.len());
+-            let q = if ext { &mut m.cpu.bus.io.ssi.ext_in } else { &mut m.cpu.bus.io.ssi.audio_in };
+-            q.extend(frames);
+-        }
+-    }
+-    m.cpu.bus.io.usb_audio_capture = usb_wav.is_some();
+-    m.dsp_capture = dsp_wav.is_some();
+-    let mut dsp_pcm: Vec<i32> = Vec::new();
+-    for &(a, x) in &pokes {
+-        m.cpu.bus.poke32(a, x);
+-    }
+-    let t0 = Instant::now();
+-    let (clock0, idle0) = (m.now(), m.stats.idle_skipped);
+-    let mut logged = 0;
+-    let mut target = m.now();
+-    while target < instr {
+-        target = (target + every).min(instr);
+-        if let Some(pa) = profile_after {
 -            if m.now() >= pa && m.cpu.profile.is_none() {
 -                m.cpu.profile = Some(Default::default());
+-            }
+-        }
+-        // Key presses and encoder turns scheduled inside this chunk, in time order.
+-        // kind: 0 = key down, 1 = key up, 2 = turn
+-        // For keys the third field indexes `presses`; for turns it is the encoder.
+-        let mut events: Vec<(u64, u8, usize, i8)> = Vec::new();
+-        for (i, (_, at, hold)) in presses.iter().enumerate() {
+-            events.push((*at, 0, i, 0));
+-            events.push((at + hold, 1, i, 0));
+-        }
+-        for &(at, e, d) in &turns {
+-            events.push((at, 2, e as usize, d));
+-        }
+-        for (i, (_, at)) in raws.iter().enumerate() {
+-            events.push((*at, 3, i, 0));
+-        }
+-        for (i, (_, at)) in midis.iter().enumerate() {
+-            events.push((*at, 4, i, 0));
+-        }
+-        for (i, (_, at)) in usb_midis.iter().enumerate() {
+-            events.push((*at, 5, i, 0));
+-        }
+-        for (i, n) in nudges.iter().enumerate() {
+-            events.push((n.0, 6, i, 0));
+-        }
+-        if let Some(at) = power_off {
+-            events.push((at, 7, 0, 0));
+-        }
+-        events.sort();
+-        // A breakpoint or fault before an event ends the run there.
+-        let mut early: Option<Stop> = None;
+-        let mut powered_off = false;
+-        for (at, kind, code, d) in events {
+-            if at < m.now() || at >= target {
+-                continue;
+-            }
+-            let s = m.run_until(at);
+-            if matches!(s, Stop::Hook(_) | Stop::Fault(..)) {
+-                early = Some(s);
+-                break;
+-            }
+-            if kind == 7 {
+-                let r = m.power_off(2_000_000_000);
+-                println!(
+-                    "[{:>12}] power off: handler {} after {:.1}M instructions, {} sectors written, state slots 0x7a000 {} 0x7c000 {}{}",
+-                    m.now(),
+-                    if r.done { "finished" } else if r.armed { "DID NOT FINISH" } else { "not armed (EPORT IRQ2 off: no OS yet?)" },
+-                    r.instructions as f64 / 1e6,
+-                    r.sectors_written,
+-                    if r.slots[0] { "valid" } else { "-" },
+-                    if r.slots[1] { "valid" } else { "-" },
+-                    if matches!(r.stop, Stop::Fault(..)) { format!(" ({:?})", r.stop) } else { String::new() }
+-                );
+-                if card.is_some() {
+-                    card_save = true;
+-                }
+-                early = Some(r.stop);
+-                powered_off = true;
+-                break;
+-            }
+-            if kind == 6 {
+-                let (_, e, d, func, big) = nudges[code];
+-                m.nudge_steps(e, d, if big { 8 } else { 1 }, func);
+-                continue;
+-            }
+-            if kind == 5 {
+-                m.usb_midi_send(&usb_midis[code].0.clone());
+-                if std::env::var_os("DTBOOT_QUIET_USB").is_none() {
+-                    println!("[{:>12}] usb midi in: {} bytes", m.now(), usb_midis[code].0.len());
+-                }
+-                continue;
+-            }
+-            if kind == 4 {
+-                m.midi_send(&midis[code].0.clone());
+-                println!("[{:>12}] midi in: {} bytes", m.now(), midis[code].0.len());
+-                continue;
+-            }
+-            if kind == 3 {
+-                m.panel_send(&raws[code].0.clone());
+-                println!("[{:>12}] raw {:02x?}", m.now(), raws[code].0);
+-                continue;
+-            }
+-            if kind == 2 {
+-                m.turn(code as u8, d);
+-                if let Some(dir) = std::env::var_os("DTBOOT_TURN_PNG") {
+-                    let settle = m.now() + std::env::var("DTBOOT_TURN_SETTLE").ok().and_then(|v| v.parse().ok()).unwrap_or(3_000_000);
+-                    m.run_until(settle);
+-                    step_no += 1;
+-                    oled_png(&m, &std::path::Path::new(&dir).join(format!("turn{step_no:02}.png")));
+-                }
+-                continue;
+-            }
+-            let down = kind == 0;
+-            // A number is an upstream control code (Digitakt); anything else a key name.
+-            let spec = presses[code].0.clone();
+-            let label = match spec.parse::<u8>() {
+-                Ok(c) => {
+-                    m.key(c, down);
+-                    dtemu::panel::key_name(c).unwrap_or("?").to_string()
+-                }
+-                Err(_) => {
+-                    if !m.key_named(&spec, down) {
+-                        eprintln!("no key named {spec:?} on this machine");
+-                    }
+-                    spec.to_uppercase()
+-                }
+-            };
+-            println!("[{:>12}] key {} {}", m.now(), label, if down { "down" } else { "up" });
+-            if !down && std::env::var_os("DTBOOT_STEPS").is_some() {
+-                let settle = m.now() + 40_000_000;
+-                m.run_until(settle);
+-                if let Some(dir) = std::env::var_os("DTBOOT_PNG_DIR") {
+-                    step_no += 1;
+-                    oled_png(&m, &std::path::Path::new(&dir).join(format!("step{step_no:02}_{label}.png")));
+-                } else {
+-                    print!("{}", Machine::pixels_ascii(&m.panel_pixels()));
+-                }
+-            }
+-        }
+-        let stop = match early {
+-            Some(s) => s,
+-            None => m.run_until(target),
+-        };
+-        {
+-            // The Syntakt's speakers' mix adds its analog side (stanalog.rs).
+-            let st = m.cpu.bus.st.is_some() && main_wav.is_some();
+-            let v = &mut m.cpu.bus.io.ssi.voices;
+-            if st {
+-                analog_mix.extend(v.iter().copied());
+-            }
+-            if analog_wav.is_some() {
+-                for (l, r) in v.drain(..) {
+-                    analog.push((l.clamp(-1.0, 1.0) * 8_388_607.0) as i32);
+-                    analog.push((r.clamp(-1.0, 1.0) * 8_388_607.0) as i32);
+-                }
+-            } else {
+-                v.clear();
+-            }
+-        }
+-        if dsp_wav.is_some() {
+-            dsp_pcm.extend(m.dsp_take_capture());
+-        }
+-        if wav.is_some() || main_wav.is_some() {
+-            // Whole frames only, so channels keep their places.
+-            let fw = m.cpu.bus.io.ssi_frame_words().max(1) as usize;
+-            let out = &mut m.cpu.bus.io.ssi.out;
+-            let n = out.len() - out.len() % fw;
+-            pcm.extend(out.drain(..n));
+-        }
+-        for l in &m.log[logged..] {
+-            println!("{l}");
+-        }
+-        logged = m.log.len();
+-        let io = &m.cpu.bus.io;
+-        let mut top: Vec<(usize, u64)> = io.irq_taken.iter().copied().enumerate().filter(|x| x.1 > 0).collect();
+-        top.sort_by_key(|b| std::cmp::Reverse(b.1));
+-        let irqs: Vec<String> = top.iter().take(8).map(|(v, n)| format!("v{v}:{n}")).collect();
+-        let lit = m.frame.as_ref().map(|f| Machine::lit(f)).unwrap_or(0);
+-        println!(
+-            "{:>6.0}M pc={:08x} sr={:04x} idle={} frames={} lit={} tasks={} mainloop={} irq[{}] {:.1}s {}",
+-            m.now() as f64 / 1e6,
+-            m.cpu.pc,
+-            m.cpu.sr,
+-            m.stats.idle_hits,
+-            m.stats.frames,
+-            lit,
+-            m.stats.tasks.len(),
+-            m.stats.mainloop,
+-            irqs.join(" "),
+-            t0.elapsed().as_secs_f64(),
+-            m.counters.iter().map(|(a, n)| format!("{a:08x}:{n}")).collect::<Vec<_>>().join(" ")
+-        );
+-        if let Ok(list) = std::env::var("DTBOOT_PEEK") {
+-            // DTBOOT_PEEK=ADDR,ADDR,...: those words (hex) on each status line
+-            let w: Vec<String> = list
+-                .split(',')
+-                .filter_map(|a| u32::from_str_radix(a.trim_start_matches("0x"), 16).ok())
+-                .map(|a| format!("[{a:08x}]={:08x}", m.cpu.bus.peek32(a)))
+-                .collect();
+-            println!("  peek {} usb_midi_out={}", w.join(" "), m.cpu.bus.io.usb_midi_out.len());
+-        }
+-        if let Stop::Fault(v, p) = stop {
+-            println!("FAULT vector {v} at 0x{p:08x}");
+-            break;
+-        }
+-        if let Stop::Hook(pc) = stop {
+-            println!("BREAK at 0x{pc:08x}");
+-            let sp = m.cpu.a[7];
+-            let st: Vec<String> = (0..6).map(|k| format!("{:08x}", m.cpu.bus.peek32(sp + 4 * k))).collect();
+-            println!("stack at a7={sp:08x}: {}", st.join(" "));
+-            if let Some((h, i)) = &m.cpu.history {
+-                let n = h.len();
+-                let from = i.saturating_sub(n);
+-                let pcs: Vec<String> = (from..*i).map(|k| format!("{:08x}", h[k % n])).collect();
+-                println!("history: {}", pcs.join(" "));
+-            }
+-            for _ in 0..trace {
+-                let c = &m.cpu;
+-                let op = c.bus.peek16(c.pc);
+-                println!("  {:08x} {:04x}  sr={:04x} d0={:08x} d1={:08x} a0={:08x} a7={:08x}", c.pc, op, c.sr, c.d[0], c.d[1], c.a[0], c.a[7]);
+-                m.cpu.step();
+-            }
+-            break;
+-        }
+-        if let Stop::Stopped = stop {
+-            println!("STOPPED with nothing to wake it at pc=0x{:08x}", m.cpu.pc);
+-            break;
+-        }
+-        if powered_off {
+-            break;
+-        }
+-    }
+-    if let Some(p) = &main_wav {
+-        let fw = m.cpu.bus.io.ssi_frame_words().max(2) as usize;
+-        let st: Vec<i32> = pcm.chunks(fw).enumerate().flat_map(|(i, f)| {
+-            let (l, r) = m.speaker_pair(f);
+-            let (al, ar) = analog_mix.get(i).copied().unwrap_or((0.0, 0.0));
+-            [l + al, r + ar].map(|x| (x.clamp(-1.0, 1.0) * 8_388_607.0) as i32)
+-        }).collect();
+-        write_wav(p, &st, 2);
+-        let peak = st.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
+-        println!("wrote {p}: {} stereo frames (the speakers' mix), peak {peak} (of 8388607)", st.len() / 2);
+-    }
+-    if let Some(p) = &dsp_wav {
+-        // The DSP's words are 32-bit; write_wav takes 24.
+-        let w: Vec<i32> = dsp_pcm.iter().map(|&x| x >> 8).collect();
+-        write_wav(p, &w, dtemu::syntakt::TRACKS as u16);
+-        let peak = dsp_pcm.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
+-        println!("wrote {p}: {} frames of tracks 1..8 as the DSP rendered them, peak {peak} (of 2^31)", dsp_pcm.len() / dtemu::syntakt::TRACKS);
+-    }
+-    if let Some(p) = &wav {
+-        write_wav(p, &pcm, m.cpu.bus.io.ssi_frame_words().max(2) as u16);
+-        let peak = pcm.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
+-        let nz = pcm.iter().filter(|&&x| x != 0).count();
+-        println!("wrote {p}: {} frames, peak {peak} (of 8388607), {nz} nonzero samples", pcm.len() / 2);
+-    }
+-    if card_save {
+-        m.cpu.bus.io.esdhc.card.dirty = true;
+-        m.flush_card().expect("--card-save");
+-        println!("card written back ({} sectors)", m.cpu.bus.io.esdhc.card.sectors.len());
+-    }
+-    if let Some(p) = &save {
+-        dtemu::snapshot::save(&m, std::path::Path::new(p)).unwrap();
+-        println!("saved {p} ({} bytes)", std::fs::metadata(p).unwrap().len());
+-    }
+-    let secs = t0.elapsed().as_secs_f64();
+-    let executed = (m.now() - clock0) - (m.stats.idle_skipped - idle0);
+-    println!(
+-        "{} instructions ({} executed, {} idle-skipped) in {:.2}s = {:.1} MIPS executed, {:.0}% of real time",
+-        m.now() - clock0,
+-        executed,
+-        m.stats.idle_skipped - idle0,
+-        secs,
+-        executed as f64 / secs / 1e6,
+-        (m.now() - clock0) as f64 / m.cpu.bus.io.ips / secs * 100.0
+-    );
+-    let exc: Vec<String> = m.cpu.exc_counts.iter().enumerate().filter(|x| *x.1 > 0 && x.0 < 64).map(|(v, n)| format!("{v}:{n}")).collect();
+-    println!("cpu exceptions: {}", exc.join(" "));
+-    for (v, pc, op, t) in &m.cpu.fault_log {
+-        println!("  fault vector {v} at 0x{pc:08x} opcode {op:04x} (clock {t})");
+-    }
+-    if m.usb_midi_real && m.prof.name.contains("1.73") {
+-        let b = &m.cpu.bus;
+-        // The sender's request pool (OS 1.73): free list 0x413db390, next at +52.
+-        let (mut free, mut r) = (0, b.peek32(0x413D_B390));
+-        while r != 0 && free < 64 {
+-            free += 1;
+-            r = b.peek32(r + 52);
+-        }
+-        println!("usb midi real: free requests {free}, sender ring fill {}, waits from interrupt level: {}", b.peek32(0x413D_B258), m.isr_pends.len());
+-        for ((lv, sem, ret), (t, n)) in &m.isr_pends {
+-            println!("  BLOCKING sem_pend(0x{sem:08x}) at level {lv}, return 0x{ret:08x}: first at clock {t}, {n} times");
+-        }
+-    }
+-    if let Some(h) = &m.usb_host {
+-        println!("usb host: streaming={} {:?}", h.streaming(), h.stats);
+-        println!("usb host: device descriptor {:02x?}", h.device_desc);
+-        println!("usb host: configuration ({} bytes) {:02x?}", h.config_desc.len(), h.config_desc);
+-    }
+-    let uo = &m.cpu.bus.io.usb_midi_out;
+-    if !uo.is_empty() {
+-        println!("usb midi out ({} bytes): {}", uo.len(), uo.iter().take(64).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));        // DTBOOT_USB_OUT=FILE: all of it, raw.
+-        if let Ok(f) = std::env::var("DTBOOT_USB_OUT") {
+-            let v: Vec<u8> = uo.iter().copied().collect();
+-            std::fs::write(&f, v).expect("DTBOOT_USB_OUT");
+-        }
+-    }
+-    let mo = &m.cpu.bus.io.midi_out;
+-    if let Some(p) = &usb_wav {
+-        let s = &m.cpu.bus.io.usb_audio;
+-        Machine::write_wav16(std::path::Path::new(p), s, 12).unwrap();
+-        println!("usb audio: {} frames to {p}", s.len() / 12);
+-    }
+-    if let Some(p) = &analog_wav {
+-        write_wav(p, &analog, 2);
+-    }
+-    if let Some(f) = &midi_out_file {
+-        std::fs::write(f, mo.iter().copied().collect::<Vec<u8>>()).unwrap();
+-    }
+-    if !mo.is_empty() {
+-        println!("midi out ({} bytes): {}", mo.len(), mo.iter().take(64).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
+-    }
+-    let p = &m.cpu.bus.io.panel;
+-    if p.unknown > 0 {
+-        println!("panel: {} messages not understood; last ones: {:02x?}", p.unknown, p.unknown_log.iter().rev().take(12).collect::<Vec<_>>());
+-    }
+-    let pages: Vec<String> = m.cpu.bus.unmapped_touch.iter().filter(|(p, _)| **p >= 0xE000_0000).map(|(p, (pc, n))| format!("{p:08x}(pc {pc:08x} x{n})")).collect();
+-    println!("unmodelled io pages: {}", pages.join(" "));
+-    // Every page no model claims that was touched, I/O or not (first pc).
+-    for (p, (pc, n)) in &m.cpu.bus.unmapped_touch {
+-        println!("unmapped_touch: page {p:08x} first pc {pc:08x} io-count {n}");
+-    }
+-    for ((pc, page, w), (a, n)) in &m.cpu.bus.strict_log {
+-        println!("strict: pc {pc:08x} {} page {page:08x} first {a:08x} x{n}", if *w { "write" } else { "read " });
+-    }
+-    print!("{}", m.task_report());
+-    let vt: Vec<String> = [97u32, 99, 154, 155, 180, 191, 192, 205, 207, 208, 223].iter().map(|v| format!("v{v}={:08x}", m.cpu.bus.peek32(m.cpu.vbr + v * 4))).collect();
+-    println!("vectors: {}", vt.join(" "));
+-    if let Some(p) = &m.cpu.profile {
+-        let total: u64 = p.values().sum();
+-        let mut by_fn: std::collections::HashMap<u32, u64> = Default::default();
+-        for (pc, n) in p {
+-            *by_fn.entry(pc & !0xFF).or_insert(0) += n;
+-        }
+-        let mut v: Vec<_> = by_fn.into_iter().collect();
+-        v.sort_by_key(|b| std::cmp::Reverse(b.1));
+-        let mut ops: std::collections::HashMap<u16, u64> = Default::default();
+-        for (pc, n) in p {
+-            *ops.entry(m.cpu.bus.peek16(*pc)).or_insert(0) += n;
+-        }
+-        let mut ov: Vec<_> = ops.into_iter().collect();
+-        ov.sort_by_key(|b| std::cmp::Reverse(b.1));
+-        let mut acc = 0.0;
+-        println!("opcodes:");
+-        for (o, n) in ov.iter().take(40) {
+-            let f = *n as f64 * 100.0 / total as f64;
+-            acc += f;
+-            println!("  {o:04x} {f:5.2}% (cum {acc:5.1}%)");
+-        }
+-        println!("distinct opcodes: {}", ov.len());
+-        let mut blocks: Vec<(u32, u64)> = p.iter().map(|(a, n)| (*a, *n)).collect();
+-        blocks.sort_by_key(|b| std::cmp::Reverse(b.1));
+-        println!("hottest blocks:");
+-        for (a, n) in blocks.iter().take(20) {
+-            println!("  {a:08x} {:5.1}%", *n as f64 * 100.0 / total as f64);
+-        }
+-        println!("guest profile ({total} samples), by 256-byte region:");
+-        for (a, n) in v.iter().take(25) {
+-            println!("  {a:08x} {:5.1}%", *n as f64 * 100.0 / total as f64);
+-        }
+-    }
+-    println!("+Drive mounted: {}", m.drive_mounted());
+-    if let Some(d) = m.cpu.bus.io.dsp.as_ref() {
+-        println!(
+-            "dsp link: {:?}, version {:#06x}, boot stream {} B, kicks {}, irqs {}, data blocks {}, audio blocks {}",
+-            d.dsp.phase, d.dsp.version, d.boot_stream.len(), d.kicks, d.irqs, d.dsp.blocks, d.dsp.frames
+-        );
+-        if let Some(c) = m.dsp.as_ref() {
+-            let st = &m.dsp_stats;
+-            let ran = c.bus.io.now - st.started_at;
+-            println!(
+-                "dsp core: boots {}, pc {:08x}, sr {:04x}, ran {} (idle {}: {:.1}% busy), kicks taken {}, irq edges {}, mbox +0..+10 {:02x?}, fault {:?}",
+-                st.boots,
+-                c.pc,
+-                c.sr,
+-                ran,
+-                st.idle_skipped,
+-                100.0 * (ran - st.idle_skipped.min(ran)) as f64 / ran.max(1) as f64,
+-                c.bus.io.dsp_side.as_ref().map_or(0, |s| s.kicks_taken),
+-                d.irqs,
+-                &d.mbox[0..16],
+-                st.fault
+-            );
+-            if let Some(p) = c.profile.as_ref() {
+-                let total: u64 = p.values().sum();
+-                let mut v: Vec<(u32, u64)> = p.iter().map(|(a, n)| (*a, *n)).collect();
+-                v.sort_by_key(|b| std::cmp::Reverse(b.1));
+-                println!("dsp hottest blocks ({total} samples):");
+-                for (a, n) in v.iter().take(20) {
+-                    println!("  {a:08x} {:5.1}%", *n as f64 * 100.0 / total.max(1) as f64);
+-                }
+-            }
+-        } else if m.dsp_real() {
+-            println!("dsp core: not started");
+-        }
+-        if let Ok(f) = std::env::var("DTBOOT_DSP_STREAM") {
+-            std::fs::write(&f, &d.boot_stream).expect("DTBOOT_DSP_STREAM");
+-        }
+-    }
+-    println!("icache: {} decodes, {} invalidating stores", m.cpu.bus.icache_decodes, m.cpu.bus.icache_invalidations);
+-    let c = &m.cpu;
+-    for (pc, a, n, v) in c.bus.watch_log.iter().take(40) {
+-        println!("watch: pc={pc:08x} [{a:08x}].{n} <- {v:08x}");
+-    }
+-    println!("d: {}", c.d.iter().map(|v| format!("{v:08x}")).collect::<Vec<_>>().join(" "));
+-    println!("a: {}", c.a.iter().map(|v| format!("{v:08x}")).collect::<Vec<_>>().join(" "));
+-    println!("macsr: {:08x}", c.macsr);
+-    let sp = c.a[7];
+-    println!("stack: {}", (0..24).map(|i| format!("{:08x}", c.bus.peek32(sp + 4 * i))).collect::<Vec<_>>().join(" "));
+-    println!("uart8 tx ({} bytes): {}", c.bus.io.uart8.tx.len(), c.bus.io.uart8.tx.iter().take(64).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
+-    let el = &c.bus.io.esdhc.log;
+-    let log: Vec<String> = el.iter().skip(el.len().saturating_sub(24)).map(|(i, a)| format!("CMD{i}({a:x})")).collect();
+-    println!("esdhc: {} commands: {}", c.bus.io.esdhc.log.len(), log.join(" "));
+-    for (i, ic) in c.bus.io.intc.iter().enumerate() {
+-        let lv: Vec<String> = ic.icr.iter().enumerate().filter(|x| *x.1 != 0).map(|(s, l)| format!("{s}:{l}")).collect();
+-        println!("intc{i}: imr={:016x} frc={:016x} lines={:016x} icr {}", ic.imr, ic.frc, ic.lines, lv.join(" "));
+-    }
+-    for (i, p) in c.bus.io.pit.iter().enumerate() {
+-        println!("pit{i}: pcsr={:04x} pmr={:04x} fired={}", p.pcsr, p.pmr, p.fired);
+-    }
+-    for (i, d) in c.bus.io.dtim.iter().enumerate() {
+-        println!("dtim{i}: dtmr={:04x} dter={:02x} dtrr={:08x} fired={}", d.dtmr, d.dter, d.dtrr, d.fired);
+-    }
+-    let ssi = &c.bus.io.ssi;
+-    let nz = ssi.out.iter().filter(|&&x| x != 0).count();
+-    let peak = ssi.out.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
+-    println!("ssi: frames={} buffered={} nonzero={} peak={} tx_pending={}", ssi.frames, ssi.out.len(), nz, peak, ssi.tx_pending);
+-    println!("edma: erq={:016x} int={:016x} majors[34]={} [35]={} [59]={}", c.bus.io.edma.erq, c.bus.io.edma.int, c.bus.io.edma.majors[34], c.bus.io.edma.majors[35], c.bus.io.edma.majors[59]);
+-    if std::env::var_os("DTBOOT_OLED").is_some() {
+-        println!("panel MCU OLED ({} frames):", m.cpu.bus.io.panel.oled_frames);
+-        print!("{}", Machine::pixels_ascii(&m.panel_pixels()));
+-    } else if let Some(f) = &m.frame {
+-        print!("{}", Machine::frame_ascii(f));
+-    }
+-    if let Some(p) = std::env::var_os("DTBOOT_END_PNG") {
+-        oled_png(&m, std::path::Path::new(&p));
+-    }
+-    if std::env::var_os("DTBOOT_LEDS").is_some() {
+-        // The LED selector bytes per group (`0x2g`/`0x3g`): on the MKI units
+-        // each is 8 single-colour LEDs, one bit each.
+-        let sel: Vec<String> = m.cpu.bus.io.panel.selectors.iter().map(|s| s.map_or("--".into(), |v| format!("{v:02x}"))).collect();
+-        println!("led groups: {}", sel.join(" "));
+-        if std::env::var("DTBOOT_LEDS").is_ok_and(|v| v == "rgb") {
+-            // DTBOOT_LEDS=rgb: every colour LED that is defined, as 8-bit RGB.
+-            let p = &m.cpu.bus.io.panel;
+-            let lit: Vec<String> = (0..dtemu::panel::ALL_LEDS).filter_map(|i| p.led_rgb(i).map(|(r, g, b)| format!("{i}:{r:02x}{g:02x}{b:02x}"))).collect();
+-            println!("led rgb: {}", lit.join(" "));
+-        }
+-    }
+-}
+-
+-/// 16-bit stereo WAV at 48 kHz from 24-bit samples.
+-/// One channel per SSI frame word: 2 on the Digitakt, 16 on the Rytm (digital
+-/// layers 0..7, tom exciters 8..10, effect returns 12..15).
+-fn write_wav(path: &str, pcm: &[i32], chans: u16) {
+-    let data: Vec<u8> = pcm.iter().flat_map(|&s| ((s >> 8) as i16).to_le_bytes()).collect();
+-    let mut f = Vec::new();
+-    f.extend_from_slice(b"RIFF");
+-    f.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
+-    f.extend_from_slice(b"WAVEfmt ");
+-    f.extend_from_slice(&16u32.to_le_bytes());
+-    f.extend_from_slice(&1u16.to_le_bytes());
+-    f.extend_from_slice(&chans.to_le_bytes());
+-    f.extend_from_slice(&48_000u32.to_le_bytes());
+-    f.extend_from_slice(&(48_000u32 * 2 * chans as u32).to_le_bytes());
+-    f.extend_from_slice(&(2 * chans).to_le_bytes());
+-    f.extend_from_slice(&16u16.to_le_bytes());
+-    f.extend_from_slice(b"data");
+-    f.extend_from_slice(&(data.len() as u32).to_le_bytes());
+-    f.extend_from_slice(&data);
+-    std::fs::write(path, f).unwrap();
+-}
+-
+-fn oled_png(m: &Machine, path: &std::path::Path) {
+-    // The MKII's 128x64 OLED, or the MKI's 122x32 LCD.
+-    let rows = m.panel_pixels();
+-    let (w, h) = (rows[0].len(), rows.len());
+-    let mut cv = dtemu::gui::Canvas::new(w * 3, h * 3);
+-    for (y, row) in rows.iter().enumerate() {
+-        for (x, &on) in row.iter().enumerate() {
+-            cv.fill(x as i32 * 3, y as i32 * 3, 3, 3, if on { 0xFFFFFF } else { 0 });
+-        }
+-    }
+-    dtemu::gui::save_png(&cv, path).unwrap();
+-}
+-
+-/// A 16-bit PCM WAV as stereo frames at its own rate (mono is doubled).
+-fn read_wav16(path: &str) -> Vec<(f32, f32)> {
+-    let b = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+-    let mut i = 12;
+-    let mut chans = 2usize;
+-    while i + 8 <= b.len() {
+-        let id = &b[i..i + 4];
+-        let n = u32::from_le_bytes(b[i + 4..i + 8].try_into().unwrap()) as usize;
+-        if id == b"fmt " {
+-            chans = u16::from_le_bytes([b[i + 10], b[i + 11]]) as usize;
+-        }
+-        if id == b"data" {
+-            let d = &b[i + 8..(i + 8 + n).min(b.len())];
+-            let s: Vec<f32> = d.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect();
+-            return s.chunks(chans.max(1)).map(|f| (f[0], *f.get(1).unwrap_or(&f[0]))).collect();
+-        }
+-        i += 8 + n + (n & 1);
+-    }
+-    Vec::new()
+-}
++//! Headless boot: run the firmware and report progress.
++//!
++//!     dtboot [FIRMWARE.syx] [options]   (see --help)
++
++use dtemu::cpu::Stop;
++use dtemu::firmware::Firmware;
++use dtemu::machine::Machine;
++use std::time::Instant;
++
++fn num(s: &str) -> u64 {
++    let s = s.replace('_', "");
++    let (n, mul) = match s.chars().last() {
++        Some('M') => (&s[..s.len() - 1], 1_000_000),
++        Some('G') => (&s[..s.len() - 1], 1_000_000_000),
++        Some('k') => (&s[..s.len() - 1], 1_000),
++        _ => (&s[..], 1),
++    };
++    n.parse::<f64>().map(|v| (v * mul as f64) as u64).expect("number")
++}
++
++const USAGE: &str = "\
++usage: dtboot [FIRMWARE.syx] [options]
++
++Runs the firmware headless and reports progress. Clocks are instruction
++counts (suffixes k, M, G).
++
++  --instr N            run N instructions (default 100M)
++  --every N            report every N (default 10M)
++  --ips N              instructions per emulated second (default 200M)
++  --load SNAP          resume a snapshot
++  --save SNAP          save a snapshot at the end
++  --card IMAGE         back the eMMC with an image file (read only: changes
++                       are not written back; a missing image starts formatted)
++  --card-save          write the card (as the run left it) back to --card's
++                       image at the end; with --load, the snapshot's card
++  --power-off AT       switch the power off at clock AT (Rytm): the firmware's
++                       power-fail handler saves the working state to the card
++                       (raw eMMC slots 0x7a000/0x7c000), then the run ends and
++                       the card is written back (implies --card-save); a cold
++                       boot on that card comes up in the saved state
++  --press KEY@AT[:HOLD]
++                       press KEY at clock AT for HOLD (default 30M): a control
++                       code (Digitakt) or a key name (Rytm: panel::RYTM_KEYS,
++                       e.g. YES, FUNC, T1, BD, BANK_A, PUSH_A)
++  --turn ENC:DELTA@ATxCOUNT[/SPACING]
++                       turn encoder ENC by DELTA, COUNT times, SPACING apart
++  --raw HEX@AT         send raw panel-MCU bytes at clock AT (e.g. 4064@5G)
++  --midi HEX@AT        DIN MIDI in at clock AT, at 31250 baud (e.g. 903c64@5G)
++  --midi-file F@AT     a file's bytes on DIN MIDI in (a .syx dump)
++  --wav OUT.wav        record the audio output (every DAC word of the codec frame)
++  --main-wav OUT.wav   record the speakers' stereo mix (Machine::speaker_pair; the
++                       Syntakt's adds its modelled analog voices and FX block)
++  --dsp-wav OUT.wav    (Syntakt) record tracks 1..8 as the second CPU renders
++                       them, one channel each
++  --break ADDR         stop at a PC (hex); --break-after N arms it after N
++  --poke ADDR=VALUE    write a 32-bit word (hex) once before the run
++  --watch ADDR         log writes to a DDR or SRAM (0x8000....) address (hex;
++                       SRAM writes are seen with DTEMU_NO_JIT=1 only)
++  --midi-out FILE      write everything sent on MIDI out to FILE
++  --usb-midi HEX@AT    bytes on the USB MIDI port (Rytm)
++  --usb-midi-file F@AT[xN/SPACING]  a file's bytes on the USB MIDI port, N times
++  --analog-wav FILE    record the modelled analog voices' mix (Rytm; A4 with its
++                       effects' return; Syntakt: tracks 9..12 and the analog FX
++                       block, without the DAC's main pair), stereo
++  --usb-wav FILE       record the USB audio stream (12 channels: MAIN L/R, voices, AUDIO IN L/R)
++  --audio-in FILE.wav  play a 16-bit WAV into AUDIO IN L/R from the start (Rytm)
++  --ob-in FILE.wav[:CH]  a WAV's first channel as Overbridge input channel CH
++                       (4..11 = BD SD RS/CP BT LT MT/HT CH/OH CY/CB; default 4)
++  --nudge ENC:DIR[:F|:8]@CLOCK[xN/SPACING]  one value step on an encoder, as the
++                       window's arrow keys make it (F: with FUNC held; 8: 8 steps)
++  --usb-host           attach a simulated USB host (usbhost.rs): enumerates the
++                       Rytm and, in OVERBRIDGE mode, runs the audio stream
++                       (DTEMU_USB_LOG=1 logs it)
++  --usb-midi-real      run the firmware's own USB MIDI sender and its request
++                       pool: the USB host reads MIDI IN (endpoint 0x81) and the
++                       requests complete as it does (needs --usb-host; also
++                       DTEMU_USB_MIDI_REAL=1). Lists waits from interrupt level.
++  --usb-host-sleep FROM[:TO]  the USB host suspends the bus between these clocks
++                       (a sleeping laptop: no SOF, no transfers); no TO: to the end
++  --usb-host-noread FROM[:TO]  the host keeps the bus running but stops reading
++                       MIDI IN (an application with the port closed)
++  --ob-link [ADDR]     serve the Overbridge input to a host over TCP (oblink.rs;
++                       default 127.0.0.1:7301)
++  --ext-in FILE.wav    play a 16-bit WAV into EXT IN L/R from the start (Rytm)
++  --watch-read ADDR LEN  log CPU reads and writes of LEN bytes at ADDR (hex)
++  --count ADDR         count visits to a PC (hex)
++  --trace N            keep the last N PCs for fault reports
++  --profile-after N    sample guest PCs from clock N on
++  --no-masks           ignore interrupt masks
++
++Environment:
++  DTBOOT_OLED          end with the panel MCU's OLED, not the last captured frame
++  DTBOOT_END_PNG=FILE  the screen at the end of the run as a PNG
++  DTBOOT_DSP_STREAM=F  (Syntakt) write the bytes CPU1 streamed to the DSP's boot port
++  DTEMU_SYNTAKT_DSP=stub  (Syntakt) the stage 1 stand-in instead of the second CPU
++  DTEMU_DSP_PROFILE=1  (Syntakt) sample the second CPU's PCs; the hottest are listed
++  DTBOOT_LEDS          (=rgb: also each LED's colour) print the LED selector byte of each group at the end
++  DTBOOT_PEEK=A,B,..   print those words (hex addresses) on each status line
++  DTBOOT_STEPS         after each key release, settle 40M and show the screen
++                       (as PNGs in DTBOOT_PNG_DIR if set)
++  DTBOOT_TURN_PNG=DIR  a PNG after each turn, DTBOOT_TURN_SETTLE (3M) later
++  DTEMU_STRICT=1       unmapped pages and the SRAM mirror beyond 64 KB raise an
++                       access error (interpreter only); listed as `strict:` lines
++                       (DTEMU_STRICT=log: listed only, no fault)
++";
++
++fn main() {
++    let args: Vec<String> = std::env::args().skip(1).collect();
++    let mut syx = None;
++    let mut instr = 100_000_000u64;
++    let mut every = 10_000_000u64;
++    let mut ips = None;
++    let mut no_masks = false;
++    let mut watch: Option<u32> = None;
++    let mut pokes: Vec<(u32, u32)> = Vec::new();
++    let mut pokes16: Vec<(u32, u16)> = Vec::new();
++    let mut poke_files: Vec<(u32, String)> = Vec::new();
++    let mut watch_read: Option<(u32, u32)> = None;
++    let mut midi_out_file: Option<String> = None;
++    let mut usb_midis: Vec<(Vec<u8>, u64)> = Vec::new();
++    let mut analog_wav: Option<String> = None;
++    let mut audio_in: Option<String> = None;
++    let mut ob_in: Option<String> = None;
++    let mut ob_link: Option<String> = None;
++    let mut usb_host = false;
++    let mut usb_midi_real = false;
++    let mut usb_sleep: Option<(u64, u64)> = None;
++    let mut usb_noread: Option<(u64, u64)> = None;
++    let mut nudges: Vec<(u64, u8, i8, bool, bool)> = Vec::new();
++    let mut usb_wav: Option<String> = None;
++    let mut ext_in: Option<String> = None;
++    let mut analog: Vec<i32> = Vec::new();
++    let mut analog_mix: Vec<(f32, f32)> = Vec::new();
++    let mut breaks: Vec<u32> = Vec::new();
++    let mut trace = 0usize;
++    let mut break_after = 0u64;
++    let mut counts: Vec<u32> = Vec::new();
++    let mut profile_after: Option<u64> = None;
++    let mut save: Option<String> = None;
++    let mut wav: Option<String> = None;
++    let mut main_wav: Option<String> = None;
++    let mut dsp_wav: Option<String> = None;
++    let mut card: Option<String> = None;
++    let mut card_save = false;
++    let mut power_off: Option<u64> = None;
++    let mut pcm: Vec<i32> = Vec::new();
++    let mut presses: Vec<(String, u64, u64)> = Vec::new();
++    let mut raws: Vec<(Vec<u8>, u64)> = Vec::new();
++    let mut midis: Vec<(Vec<u8>, u64)> = Vec::new();
++    let mut step_no = 0;
++    let mut turns: Vec<(u64, u8, i8)> = Vec::new();
++    let mut load: Option<String> = None;
++    let mut it = args.iter();
++    while let Some(a) = it.next() {
++        match a.as_str() {
++            "--instr" => instr = num(it.next().unwrap()),
++            "--every" => every = num(it.next().unwrap()),
++            "--ips" => ips = Some(num(it.next().unwrap())),
++            "--no-masks" => no_masks = true,
++            "-h" | "--help" => {
++                print!("{USAGE}");
++                return;
++            }
++            "--break" => {
++                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
++                breaks.push(a);
++            }
++            "--press" => {
++                // --press CODE@CLOCK[:HOLD]  e.g. 6@4100M:50M
++                let v = it.next().unwrap();
++                let (code, rest) = v.split_once('@').unwrap();
++                let (at, hold) = rest.split_once(':').unwrap_or((rest, "30M"));
++                presses.push((code.to_string(), num(at), num(hold)));
++            }
++            "--midi-out" => midi_out_file = it.next().cloned(),
++            "--analog-wav" => analog_wav = it.next().cloned(),
++            "--audio-in" => audio_in = it.next().cloned(),
++            "--ob-in" => ob_in = it.next().cloned(),
++            "--ob-link" => ob_link = Some(it.next().cloned().unwrap_or_else(|| "127.0.0.1:7301".into())),
++            "--usb-host" => usb_host = true,
++            "--nudge" => {
++                // --nudge ENC:DIR[:F]@CLOCK[xCOUNT/SPACING]: one value step (F: with FUNC)
++                let v = it.next().unwrap();
++                let (ed, rest) = v.split_once('@').unwrap();
++                let mut f = ed.split(':');
++                let e: u8 = f.next().unwrap().parse().unwrap();
++                let d: i8 = f.next().unwrap().parse().unwrap();
++                let flag = f.next();
++                let func = flag == Some("F");
++                let big = flag == Some("8");
++                let (rest, spacing) = rest.split_once('/').map(|(a, b)| (a, num(b))).unwrap_or((rest, 100_000_000));
++                let (at, count) = rest.split_once('x').unwrap_or((rest, "1"));
++                for k in 0..count.parse::<u64>().unwrap() {
++                    nudges.push((num(at) + k * spacing, e, d, func, big));
++                }
++            }
++            "--usb-wav" => usb_wav = it.next().cloned(),
++            "--ext-in" => ext_in = it.next().cloned(),
++            "--usb-midi" => {
++                // --usb-midi HEX@CLOCK: bytes on the USB MIDI port
++                let v = it.next().unwrap();
++                let (what, at) = v.rsplit_once('@').unwrap();
++                let bytes: Vec<u8> = (0..what.len()).step_by(2).map(|i| u8::from_str_radix(&what[i..i + 2], 16).unwrap()).collect();
++                usb_midis.push((bytes, num(at)));
++            }
++            "--usb-midi-file" => {
++                // --usb-midi-file FILE@CLOCK[xCOUNT/SPACING]: a file's bytes on the
++                // USB MIDI port, optionally repeated COUNT times SPACING apart.
++                let v = it.next().unwrap();
++                let (what, when) = v.rsplit_once('@').unwrap();
++                let bytes = std::fs::read(what).unwrap_or_else(|e| panic!("{what}: {e}"));
++                let (at, rep) = match when.split_once('x') {
++                    Some((at, r)) => (at, Some(r)),
++                    None => (when, None),
++                };
++                let (count, spacing) = match rep {
++                    Some(r) => {
++                        let (c, sp) = r.split_once('/').expect("xCOUNT/SPACING");
++                        (c.parse::<u64>().unwrap(), num(sp))
++                    }
++                    None => (1, 0),
++                };
++                for k in 0..count {
++                    usb_midis.push((bytes.clone(), num(at) + k * spacing));
++                }
++            }
++            "--midi" | "--midi-file" => {
++                // --midi HEX@CLOCK: bytes on the DIN MIDI input, e.g. 903c64@5G
++                // --midi-file FILE.syx@CLOCK: a file's bytes (a SysEx dump)
++                let file = a == "--midi-file";
++                let v = it.next().unwrap();
++                let (what, at) = v.rsplit_once('@').unwrap();
++                let bytes: Vec<u8> = if file {
++                    std::fs::read(what).unwrap_or_else(|e| panic!("{what}: {e}"))
++                } else {
++                    (0..what.len()).step_by(2).map(|i| u8::from_str_radix(&what[i..i + 2], 16).unwrap()).collect()
++                };
++                midis.push((bytes, num(at)));
++            }
++            "--raw" => {
++                // --raw HEX@CLOCK: bytes as the panel MCU would send them, e.g. 4064@5150M
++                let v = it.next().unwrap();
++                let (hex, at) = v.split_once('@').unwrap();
++                let bytes = (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect();
++                raws.push((bytes, num(at)));
++            }
++            "--wav" => wav = it.next().cloned(),
++            "--main-wav" => main_wav = it.next().cloned(),
++            "--dsp-wav" => dsp_wav = it.next().cloned(),
++            "--card" => card = it.next().cloned(),
++            "--card-save" => card_save = true,
++            "--power-off" => power_off = Some(num(it.next().unwrap())),
++            "--usb-midi-real" => usb_midi_real = true,
++            "--usb-host-sleep" | "--usb-host-noread" => {
++                let v = it.next().unwrap();
++                let (x, y) = v.split_once(':').map_or((v.as_str(), None), |(x, y)| (x, Some(y)));
++                let w = Some((num(x), y.map_or(u64::MAX, num)));
++                if a == "--usb-host-sleep" {
++                    usb_sleep = w;
++                } else {
++                    usb_noread = w;
++                }
++            }
++            "--turn" => {
++                // --turn ENC:DELTA@CLOCKxCOUNT[/SPACING], one turn every SPACING (4M)
++                let v = it.next().unwrap();
++                let (ed, rest) = v.split_once('@').unwrap();
++                let (e, d) = ed.split_once(':').unwrap();
++                let (rest, spacing) = rest.split_once('/').map(|(a, b)| (a, num(b))).unwrap_or((rest, 4_000_000));
++                let (at, count) = rest.split_once('x').unwrap_or((rest, "1"));
++                for k in 0..count.parse::<u64>().unwrap() {
++                    turns.push((num(at) + k * spacing, e.parse().unwrap(), d.parse().unwrap()));
++                }
++            }
++            "--save" => save = it.next().cloned(),
++            "--load" => load = it.next().cloned(),
++            "--profile-after" => profile_after = Some(num(it.next().unwrap())),
++            "--count" => {
++                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
++                counts.push(a);
++            }
++            "--break-after" => break_after = num(it.next().unwrap()),
++            "--trace" => trace = num(it.next().unwrap()) as usize,
++            "--poke" => {
++                // ADDR=VALUE (hex, 32-bit), written once before the run starts.
++                let v = it.next().unwrap();
++                let (a, x) = v.split_once('=').expect("--poke ADDR=VALUE");
++                let h = |t: &str| u32::from_str_radix(t.trim_start_matches("0x"), 16).expect("--poke hex");
++                pokes.push((h(a), h(x)));
++            }
++            "--poke16" => {
++                let v = it.next().unwrap();
++                let (a, x) = v.split_once('=').expect("--poke16 ADDR=VALUE");
++                let h = |t: &str| u32::from_str_radix(t.trim_start_matches("0x"), 16).expect("--poke16 hex");
++                pokes16.push((h(a), h(x) as u16));
++            }
++            "--poke-file" => {
++                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
++                poke_files.push((a, it.next().unwrap().clone()));
++            }
++            "--watch" => {
++                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
++                watch = Some(a);
++            }
++            "--watch-read" => {
++                let a = u32::from_str_radix(it.next().unwrap().trim_start_matches("0x"), 16).unwrap();
++                watch_read = Some((a, num(it.next().unwrap()) as u32));
++            }
++            _ => syx = Some(a.clone()),
++        }
++    }
++    let syx = syx.unwrap_or_else(|| "fw/Digitakt_OS1.53.syx".into());
++    let fw = Firmware::from_file(std::path::Path::new(&syx)).unwrap();
++    let mut m = Machine::new(&fw, 128).unwrap();
++    if let Some(i) = ips {
++        m.cpu.bus.io.ips = i as f64;
++    }
++    m.cpu.bus.io.ignore_masks = no_masks;
++    if !breaks.is_empty() {
++        m.cpu.history = Some((vec![0; 48], 0));
++    }
++    for c in &counts {
++        m.add_counter(*c);
++    }
++    if break_after > 0 {
++        m.run_until(break_after);
++    }
++    for b in &breaks {
++        m.add_breakpoint(*b);
++    }
++    m.xdiff = dtemu::xdiff::XDiff::from_env();
++    if let Some(x) = &m.xdiff {
++        let s = x.start;
++        m.cpu.set_hook(s, true);
++    }
++    if let Some(a) = watch {
++        if a >> 28 == 8 {
++            let o = a & 0xFFFF;
++            m.cpu.bus.sram_watch = Some((o, o + 4));
++        } else {
++            let o = a & 0x07FF_FFFF;
++            m.cpu.bus.watch = Some((o, o + 4));
++        }
++    }
++    if let Some((a, n)) = watch_read {
++        let o = a & 0x07FF_FFFF;
++        m.cpu.bus.watch = Some((o, o + n));
++        m.cpu.bus.watch_reads = true;
++    }
++    if let Some(p) = &card {
++        let fresh = m.attach_card(std::path::Path::new(p)).unwrap();
++        println!("card {p}: {} sectors in use{}", m.cpu.bus.io.esdhc.card.sectors.len(), if fresh { " (new, sample area formatted)" } else { "" });
++    }
++    if let Some(p) = &load {
++        dtemu::snapshot::load(&mut m, std::path::Path::new(p)).unwrap();
++        println!("restored {p} at clock {}", m.now());
++        instr += m.now();
++    }
++    // --ob-in FILE.wav[:CH]: a 16-bit WAV's first channel as Overbridge input
++    // channel CH (default 4, BD), from the start, at 48 kHz.
++    if let Some(spec) = &ob_in {
++        let (path, ch) = match spec.rsplit_once(':') {
++            Some((p, c)) if c.parse::<usize>().is_ok() => (p, c.parse::<usize>().unwrap()),
++            _ => (spec.as_str(), 4),
++        };
++        for (l, _) in read_wav16(path) {
++            let mut f = [0i32; dtemu::oblink::CHANNELS];
++            f[ch.min(dtemu::oblink::CHANNELS - 1)] = (l * 2_147_483_647.0) as i32;
++            m.ob_in.push_back(f);
++        }
++        println!("overbridge in: {} frames from {path} on channel {ch}", m.ob_in.len());
++    }
++    if usb_host {
++        let mut h = dtemu::usbhost::UsbHost::new();
++        h.suspend = usb_sleep;
++        h.midi_sleep = usb_noread;
++        m.usb_host = Some(h);
++    }
++    if usb_midi_real {
++        m.set_usb_midi_real(true);
++    }
++    if let Some(a) = &ob_link {
++        m.ob_link = Some(dtemu::oblink::ObLink::listen(a).unwrap_or_else(|e| panic!("{a}: {e}")));
++        println!("overbridge link: listening on {a}");
++    }
++    for (path, ext) in [(&audio_in, false), (&ext_in, true)] {
++        if let Some(p) = path {
++            let frames = read_wav16(p);
++            println!("{} {p}: {} frames", if ext { "ext in" } else { "audio in" }, frames.len());
++            let q = if ext { &mut m.cpu.bus.io.ssi.ext_in } else { &mut m.cpu.bus.io.ssi.audio_in };
++            q.extend(frames);
++        }
++    }
++    m.cpu.bus.io.usb_audio_capture = usb_wav.is_some();
++    m.dsp_capture = dsp_wav.is_some();
++    let mut dsp_pcm: Vec<i32> = Vec::new();
++    for &(a, x) in &pokes {
++        m.cpu.bus.poke32(a, x);
++    }
++    for (a, file) in &poke_files {
++        for (i, b) in std::fs::read(file).expect("--poke-file").iter().enumerate() {
++            m.cpu.bus.poke8(a + i as u32, *b);
++        }
++    }
++    for &(a, x) in &pokes16 {
++        m.cpu.bus.poke16(a, x);
++    }
++    if !pokes.is_empty() || !pokes16.is_empty() || !poke_files.is_empty() {
++        m.cpu.bus.icache_flush();
++    }
++    let t0 = Instant::now();
++    let (clock0, idle0) = (m.now(), m.stats.idle_skipped);
++    let mut logged = 0;
++    let mut target = m.now();
++    while target < instr {
++        target = (target + every).min(instr);
++        if let Some(pa) = profile_after {
 +            if m.now() >= pa && m.cpu.xprof.is_none() {
 +                m.cpu.xprof = Some(Default::default());
 +                if std::env::var_os("XPROF_CACHE").is_some() { let mut c = Box::new(dtemu::bus::CacheModel::new()); c.load_sets(); m.cpu.bus.cm = Some(c); }
-             }
-         }
-         // Key presses and encoder turns scheduled inside this chunk, in time order.
-@@ -707,6 +708,23 @@
-     print!("{}", m.task_report());
-     let vt: Vec<String> = [97u32, 99, 154, 155, 180, 191, 192, 205, 207, 208, 223].iter().map(|v| format!("v{v}={:08x}", m.cpu.bus.peek32(m.cpu.vbr + v * 4))).collect();
-     println!("vectors: {}", vt.join(" "));
++            }
++        }
++        // Key presses and encoder turns scheduled inside this chunk, in time order.
++        // kind: 0 = key down, 1 = key up, 2 = turn
++        // For keys the third field indexes `presses`; for turns it is the encoder.
++        let mut events: Vec<(u64, u8, usize, i8)> = Vec::new();
++        for (i, (_, at, hold)) in presses.iter().enumerate() {
++            events.push((*at, 0, i, 0));
++            events.push((at + hold, 1, i, 0));
++        }
++        for &(at, e, d) in &turns {
++            events.push((at, 2, e as usize, d));
++        }
++        for (i, (_, at)) in raws.iter().enumerate() {
++            events.push((*at, 3, i, 0));
++        }
++        for (i, (_, at)) in midis.iter().enumerate() {
++            events.push((*at, 4, i, 0));
++        }
++        for (i, (_, at)) in usb_midis.iter().enumerate() {
++            events.push((*at, 5, i, 0));
++        }
++        for (i, n) in nudges.iter().enumerate() {
++            events.push((n.0, 6, i, 0));
++        }
++        if let Some(at) = power_off {
++            events.push((at, 7, 0, 0));
++        }
++        events.sort();
++        // A breakpoint or fault before an event ends the run there.
++        let mut early: Option<Stop> = None;
++        let mut powered_off = false;
++        for (at, kind, code, d) in events {
++            if at < m.now() || at >= target {
++                continue;
++            }
++            let s = m.run_until(at);
++            if matches!(s, Stop::Hook(_) | Stop::Fault(..)) {
++                early = Some(s);
++                break;
++            }
++            if kind == 7 {
++                let r = m.power_off(2_000_000_000);
++                println!(
++                    "[{:>12}] power off: handler {} after {:.1}M instructions, {} sectors written, state slots 0x7a000 {} 0x7c000 {}{}",
++                    m.now(),
++                    if r.done { "finished" } else if r.armed { "DID NOT FINISH" } else { "not armed (EPORT IRQ2 off: no OS yet?)" },
++                    r.instructions as f64 / 1e6,
++                    r.sectors_written,
++                    if r.slots[0] { "valid" } else { "-" },
++                    if r.slots[1] { "valid" } else { "-" },
++                    if matches!(r.stop, Stop::Fault(..)) { format!(" ({:?})", r.stop) } else { String::new() }
++                );
++                if card.is_some() {
++                    card_save = true;
++                }
++                early = Some(r.stop);
++                powered_off = true;
++                break;
++            }
++            if kind == 6 {
++                let (_, e, d, func, big) = nudges[code];
++                m.nudge_steps(e, d, if big { 8 } else { 1 }, func);
++                continue;
++            }
++            if kind == 5 {
++                m.usb_midi_send(&usb_midis[code].0.clone());
++                if std::env::var_os("DTBOOT_QUIET_USB").is_none() {
++                    println!("[{:>12}] usb midi in: {} bytes", m.now(), usb_midis[code].0.len());
++                }
++                continue;
++            }
++            if kind == 4 {
++                m.midi_send(&midis[code].0.clone());
++                println!("[{:>12}] midi in: {} bytes", m.now(), midis[code].0.len());
++                continue;
++            }
++            if kind == 3 {
++                m.panel_send(&raws[code].0.clone());
++                println!("[{:>12}] raw {:02x?}", m.now(), raws[code].0);
++                continue;
++            }
++            if kind == 2 {
++                m.turn(code as u8, d);
++                if let Some(dir) = std::env::var_os("DTBOOT_TURN_PNG") {
++                    let settle = m.now() + std::env::var("DTBOOT_TURN_SETTLE").ok().and_then(|v| v.parse().ok()).unwrap_or(3_000_000);
++                    m.run_until(settle);
++                    step_no += 1;
++                    oled_png(&m, &std::path::Path::new(&dir).join(format!("turn{step_no:02}.png")));
++                }
++                continue;
++            }
++            let down = kind == 0;
++            // A number is an upstream control code (Digitakt); anything else a key name.
++            let spec = presses[code].0.clone();
++            let label = match spec.parse::<u8>() {
++                Ok(c) => {
++                    m.key(c, down);
++                    dtemu::panel::key_name(c).unwrap_or("?").to_string()
++                }
++                Err(_) => {
++                    if !m.key_named(&spec, down) {
++                        eprintln!("no key named {spec:?} on this machine");
++                    }
++                    spec.to_uppercase()
++                }
++            };
++            println!("[{:>12}] key {} {}", m.now(), label, if down { "down" } else { "up" });
++            if !down && std::env::var_os("DTBOOT_STEPS").is_some() {
++                let settle = m.now() + 40_000_000;
++                m.run_until(settle);
++                if let Some(dir) = std::env::var_os("DTBOOT_PNG_DIR") {
++                    step_no += 1;
++                    oled_png(&m, &std::path::Path::new(&dir).join(format!("step{step_no:02}_{label}.png")));
++                } else {
++                    print!("{}", Machine::pixels_ascii(&m.panel_pixels()));
++                }
++            }
++        }
++        let stop = match early {
++            Some(s) => s,
++            None => m.run_until(target),
++        };
++        {
++            // The Syntakt's speakers' mix adds its analog side (stanalog.rs).
++            let st = m.cpu.bus.st.is_some() && main_wav.is_some();
++            let v = &mut m.cpu.bus.io.ssi.voices;
++            if st {
++                analog_mix.extend(v.iter().copied());
++            }
++            if analog_wav.is_some() {
++                for (l, r) in v.drain(..) {
++                    analog.push((l.clamp(-1.0, 1.0) * 8_388_607.0) as i32);
++                    analog.push((r.clamp(-1.0, 1.0) * 8_388_607.0) as i32);
++                }
++            } else {
++                v.clear();
++            }
++        }
++        if dsp_wav.is_some() {
++            dsp_pcm.extend(m.dsp_take_capture());
++        }
++        if wav.is_some() || main_wav.is_some() {
++            // Whole frames only, so channels keep their places.
++            let fw = m.cpu.bus.io.ssi_frame_words().max(1) as usize;
++            let out = &mut m.cpu.bus.io.ssi.out;
++            let n = out.len() - out.len() % fw;
++            pcm.extend(out.drain(..n));
++        }
++        for l in &m.log[logged..] {
++            println!("{l}");
++        }
++        logged = m.log.len();
++        let io = &m.cpu.bus.io;
++        let mut top: Vec<(usize, u64)> = io.irq_taken.iter().copied().enumerate().filter(|x| x.1 > 0).collect();
++        top.sort_by_key(|b| std::cmp::Reverse(b.1));
++        let irqs: Vec<String> = top.iter().take(8).map(|(v, n)| format!("v{v}:{n}")).collect();
++        let lit = m.frame.as_ref().map(|f| Machine::lit(f)).unwrap_or(0);
++        println!(
++            "{:>6.0}M pc={:08x} sr={:04x} idle={} frames={} lit={} tasks={} mainloop={} irq[{}] {:.1}s {}",
++            m.now() as f64 / 1e6,
++            m.cpu.pc,
++            m.cpu.sr,
++            m.stats.idle_hits,
++            m.stats.frames,
++            lit,
++            m.stats.tasks.len(),
++            m.stats.mainloop,
++            irqs.join(" "),
++            t0.elapsed().as_secs_f64(),
++            m.counters.iter().map(|(a, n)| format!("{a:08x}:{n}")).collect::<Vec<_>>().join(" ")
++        );
++        if let Ok(list) = std::env::var("DTBOOT_PEEK") {
++            // DTBOOT_PEEK=ADDR,ADDR,...: those words (hex) on each status line
++            let w: Vec<String> = list
++                .split(',')
++                .filter_map(|a| u32::from_str_radix(a.trim_start_matches("0x"), 16).ok())
++                .map(|a| format!("[{a:08x}]={:08x}", m.cpu.bus.peek32(a)))
++                .collect();
++            println!("  peek {} usb_midi_out={}", w.join(" "), m.cpu.bus.io.usb_midi_out.len());
++        }
++        if let Stop::Fault(v, p) = stop {
++            println!("FAULT vector {v} at 0x{p:08x}");
++            break;
++        }
++        if let Stop::Hook(pc) = stop {
++            println!("BREAK at 0x{pc:08x}");
++            let sp = m.cpu.a[7];
++            let st: Vec<String> = (0..6).map(|k| format!("{:08x}", m.cpu.bus.peek32(sp + 4 * k))).collect();
++            println!("stack at a7={sp:08x}: {}", st.join(" "));
++            if let Some((h, i)) = &m.cpu.history {
++                let n = h.len();
++                let from = i.saturating_sub(n);
++                let pcs: Vec<String> = (from..*i).map(|k| format!("{:08x}", h[k % n])).collect();
++                println!("history: {}", pcs.join(" "));
++            }
++            for _ in 0..trace {
++                let c = &m.cpu;
++                let op = c.bus.peek16(c.pc);
++                println!("  {:08x} {:04x}  sr={:04x} d0={:08x} d1={:08x} a0={:08x} a7={:08x}", c.pc, op, c.sr, c.d[0], c.d[1], c.a[0], c.a[7]);
++                m.cpu.step();
++            }
++            break;
++        }
++        if let Stop::Stopped = stop {
++            println!("STOPPED with nothing to wake it at pc=0x{:08x}", m.cpu.pc);
++            break;
++        }
++        if powered_off {
++            break;
++        }
++    }
++    if let Some(p) = &main_wav {
++        let fw = m.cpu.bus.io.ssi_frame_words().max(2) as usize;
++        let st: Vec<i32> = pcm.chunks(fw).enumerate().flat_map(|(i, f)| {
++            let (l, r) = m.speaker_pair(f);
++            let (al, ar) = analog_mix.get(i).copied().unwrap_or((0.0, 0.0));
++            [l + al, r + ar].map(|x| (x.clamp(-1.0, 1.0) * 8_388_607.0) as i32)
++        }).collect();
++        write_wav(p, &st, 2);
++        let peak = st.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
++        println!("wrote {p}: {} stereo frames (the speakers' mix), peak {peak} (of 8388607)", st.len() / 2);
++    }
++    if let Some(p) = &dsp_wav {
++        // The DSP's words are 32-bit; write_wav takes 24.
++        let w: Vec<i32> = dsp_pcm.iter().map(|&x| x >> 8).collect();
++        write_wav(p, &w, dtemu::syntakt::TRACKS as u16);
++        let peak = dsp_pcm.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
++        println!("wrote {p}: {} frames of tracks 1..8 as the DSP rendered them, peak {peak} (of 2^31)", dsp_pcm.len() / dtemu::syntakt::TRACKS);
++    }
++    if let Some(p) = &wav {
++        write_wav(p, &pcm, m.cpu.bus.io.ssi_frame_words().max(2) as u16);
++        let peak = pcm.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
++        let nz = pcm.iter().filter(|&&x| x != 0).count();
++        println!("wrote {p}: {} frames, peak {peak} (of 8388607), {nz} nonzero samples", pcm.len() / 2);
++    }
++    if card_save {
++        m.cpu.bus.io.esdhc.card.dirty = true;
++        m.flush_card().expect("--card-save");
++        println!("card written back ({} sectors)", m.cpu.bus.io.esdhc.card.sectors.len());
++    }
++    if let Some(p) = &save {
++        dtemu::snapshot::save(&m, std::path::Path::new(p)).unwrap();
++        println!("saved {p} ({} bytes)", std::fs::metadata(p).unwrap().len());
++    }
++    let secs = t0.elapsed().as_secs_f64();
++    let executed = (m.now() - clock0) - (m.stats.idle_skipped - idle0);
++    println!(
++        "{} instructions ({} executed, {} idle-skipped) in {:.2}s = {:.1} MIPS executed, {:.0}% of real time",
++        m.now() - clock0,
++        executed,
++        m.stats.idle_skipped - idle0,
++        secs,
++        executed as f64 / secs / 1e6,
++        (m.now() - clock0) as f64 / m.cpu.bus.io.ips / secs * 100.0
++    );
++    let exc: Vec<String> = m.cpu.exc_counts.iter().enumerate().filter(|x| *x.1 > 0 && x.0 < 64).map(|(v, n)| format!("{v}:{n}")).collect();
++    println!("cpu exceptions: {}", exc.join(" "));
++    for (v, pc, op, t) in &m.cpu.fault_log {
++        println!("  fault vector {v} at 0x{pc:08x} opcode {op:04x} (clock {t})");
++    }
++    if m.usb_midi_real && m.prof.name.contains("1.73") {
++        let b = &m.cpu.bus;
++        // The sender's request pool (OS 1.73): free list 0x413db390, next at +52.
++        let (mut free, mut r) = (0, b.peek32(0x413D_B390));
++        while r != 0 && free < 64 {
++            free += 1;
++            r = b.peek32(r + 52);
++        }
++        println!("usb midi real: free requests {free}, sender ring fill {}, waits from interrupt level: {}", b.peek32(0x413D_B258), m.isr_pends.len());
++        for ((lv, sem, ret), (t, n)) in &m.isr_pends {
++            println!("  BLOCKING sem_pend(0x{sem:08x}) at level {lv}, return 0x{ret:08x}: first at clock {t}, {n} times");
++        }
++    }
++    if let Some(h) = &m.usb_host {
++        println!("usb host: streaming={} {:?}", h.streaming(), h.stats);
++        println!("usb host: device descriptor {:02x?}", h.device_desc);
++        println!("usb host: configuration ({} bytes) {:02x?}", h.config_desc.len(), h.config_desc);
++    }
++    let uo = &m.cpu.bus.io.usb_midi_out;
++    if !uo.is_empty() {
++        println!("usb midi out ({} bytes): {}", uo.len(), uo.iter().take(64).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));        // DTBOOT_USB_OUT=FILE: all of it, raw.
++        if let Ok(f) = std::env::var("DTBOOT_USB_OUT") {
++            let v: Vec<u8> = uo.iter().copied().collect();
++            std::fs::write(&f, v).expect("DTBOOT_USB_OUT");
++        }
++    }
++    let mo = &m.cpu.bus.io.midi_out;
++    if let Some(p) = &usb_wav {
++        let s = &m.cpu.bus.io.usb_audio;
++        Machine::write_wav16(std::path::Path::new(p), s, 12).unwrap();
++        println!("usb audio: {} frames to {p}", s.len() / 12);
++    }
++    if let Some(p) = &analog_wav {
++        write_wav(p, &analog, 2);
++    }
++    if let Some(f) = &midi_out_file {
++        std::fs::write(f, mo.iter().copied().collect::<Vec<u8>>()).unwrap();
++    }
++    if !mo.is_empty() {
++        println!("midi out ({} bytes): {}", mo.len(), mo.iter().take(64).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
++    }
++    let p = &m.cpu.bus.io.panel;
++    if p.unknown > 0 {
++        println!("panel: {} messages not understood; last ones: {:02x?}", p.unknown, p.unknown_log.iter().rev().take(12).collect::<Vec<_>>());
++    }
++    let pages: Vec<String> = m.cpu.bus.unmapped_touch.iter().filter(|(p, _)| **p >= 0xE000_0000).map(|(p, (pc, n))| format!("{p:08x}(pc {pc:08x} x{n})")).collect();
++    println!("unmodelled io pages: {}", pages.join(" "));
++    // Every page no model claims that was touched, I/O or not (first pc).
++    for (p, (pc, n)) in &m.cpu.bus.unmapped_touch {
++        println!("unmapped_touch: page {p:08x} first pc {pc:08x} io-count {n}");
++    }
++    for ((pc, page, w), (a, n)) in &m.cpu.bus.strict_log {
++        println!("strict: pc {pc:08x} {} page {page:08x} first {a:08x} x{n}", if *w { "write" } else { "read " });
++    }
++    print!("{}", m.task_report());
++    let vt: Vec<String> = [97u32, 99, 154, 155, 180, 191, 192, 205, 207, 208, 223].iter().map(|v| format!("v{v}={:08x}", m.cpu.bus.peek32(m.cpu.vbr + v * 4))).collect();
++    println!("vectors: {}", vt.join(" "));
++    if let Some(x) = &m.xdiff {
++        println!("{}", x.report());
++    }
 +    if let Some(x) = &m.cpu.xprof {
 +        if let Ok(f) = std::env::var("XPROF_OUT") {
 +            use std::io::Write;
@@ -290,7 +2003,7 @@
 +            writeln!(o, "total {}", x.total).unwrap();
 +            writeln!(o, "overflow {}", x.overflow).unwrap();
 +            writeln!(o, "misses {} {}", x.tim, x.tdm).unwrap();
-+            if let Some(c) = &m.cpu.bus.cm { for (l, n) in &c.iline { writeln!(o, "iline {l:07x} {n}").unwrap(); } }
++            if let Some(c) = &m.cpu.bus.cm { for (l, n) in &c.iline { writeln!(o, "iline {l:07x} {n}").unwrap(); } for (l, n) in &c.dline { writeln!(o, "dline {l:07x} {n}").unwrap(); } }
 +            for (a, (i, d)) in &x.selfm { writeln!(o, "selfm {a:08x} {i} {d}").unwrap(); }
 +            for (a, (i, d)) in &x.inclm { writeln!(o, "inclm {a:08x} {i} {d}").unwrap(); }
 +            for (a, n) in &x.selfc { writeln!(o, "self {a:08x} {n}").unwrap(); }
@@ -300,6 +2013,525 @@
 +            for (a, n) in &x.by_tcb { writeln!(o, "tcb {a:08x} {n}").unwrap(); }
 +        }
 +    }
-     if let Some(p) = &m.cpu.profile {
-         let total: u64 = p.values().sum();
-         let mut by_fn: std::collections::HashMap<u32, u64> = Default::default();
++    if let Some(p) = &m.cpu.profile {
++        let total: u64 = p.values().sum();
++        let mut by_fn: std::collections::HashMap<u32, u64> = Default::default();
++        for (pc, n) in p {
++            *by_fn.entry(pc & !0xFF).or_insert(0) += n;
++        }
++        let mut v: Vec<_> = by_fn.into_iter().collect();
++        v.sort_by_key(|b| std::cmp::Reverse(b.1));
++        let mut ops: std::collections::HashMap<u16, u64> = Default::default();
++        for (pc, n) in p {
++            *ops.entry(m.cpu.bus.peek16(*pc)).or_insert(0) += n;
++        }
++        let mut ov: Vec<_> = ops.into_iter().collect();
++        ov.sort_by_key(|b| std::cmp::Reverse(b.1));
++        let mut acc = 0.0;
++        println!("opcodes:");
++        for (o, n) in ov.iter().take(40) {
++            let f = *n as f64 * 100.0 / total as f64;
++            acc += f;
++            println!("  {o:04x} {f:5.2}% (cum {acc:5.1}%)");
++        }
++        println!("distinct opcodes: {}", ov.len());
++        let mut blocks: Vec<(u32, u64)> = p.iter().map(|(a, n)| (*a, *n)).collect();
++        blocks.sort_by_key(|b| std::cmp::Reverse(b.1));
++        println!("hottest blocks:");
++        for (a, n) in blocks.iter().take(20) {
++            println!("  {a:08x} {:5.1}%", *n as f64 * 100.0 / total as f64);
++        }
++        println!("guest profile ({total} samples), by 256-byte region:");
++        for (a, n) in v.iter().take(25) {
++            println!("  {a:08x} {:5.1}%", *n as f64 * 100.0 / total as f64);
++        }
++    }
++    println!("+Drive mounted: {}", m.drive_mounted());
++    if let Some(d) = m.cpu.bus.io.dsp.as_ref() {
++        println!(
++            "dsp link: {:?}, version {:#06x}, boot stream {} B, kicks {}, irqs {}, data blocks {}, audio blocks {}",
++            d.dsp.phase, d.dsp.version, d.boot_stream.len(), d.kicks, d.irqs, d.dsp.blocks, d.dsp.frames
++        );
++        if let Some(c) = m.dsp.as_ref() {
++            let st = &m.dsp_stats;
++            let ran = c.bus.io.now - st.started_at;
++            println!(
++                "dsp core: boots {}, pc {:08x}, sr {:04x}, ran {} (idle {}: {:.1}% busy), kicks taken {}, irq edges {}, mbox +0..+10 {:02x?}, fault {:?}",
++                st.boots,
++                c.pc,
++                c.sr,
++                ran,
++                st.idle_skipped,
++                100.0 * (ran - st.idle_skipped.min(ran)) as f64 / ran.max(1) as f64,
++                c.bus.io.dsp_side.as_ref().map_or(0, |s| s.kicks_taken),
++                d.irqs,
++                &d.mbox[0..16],
++                st.fault
++            );
++            if let Some(p) = c.profile.as_ref() {
++                let total: u64 = p.values().sum();
++                let mut v: Vec<(u32, u64)> = p.iter().map(|(a, n)| (*a, *n)).collect();
++                v.sort_by_key(|b| std::cmp::Reverse(b.1));
++                println!("dsp hottest blocks ({total} samples):");
++                for (a, n) in v.iter().take(20) {
++                    println!("  {a:08x} {:5.1}%", *n as f64 * 100.0 / total.max(1) as f64);
++                }
++            }
++        } else if m.dsp_real() {
++            println!("dsp core: not started");
++        }
++        if let Ok(f) = std::env::var("DTBOOT_DSP_STREAM") {
++            std::fs::write(&f, &d.boot_stream).expect("DTBOOT_DSP_STREAM");
++        }
++    }
++    if let Ok(spec) = std::env::var("DTBOOT_DUMP") {
++        let parts: Vec<&str> = spec.split(',').collect();
++        let a = u32::from_str_radix(parts[0].trim_start_matches("0x"), 16).unwrap();
++        let len: u32 = parts[1].parse().unwrap();
++        let mut v = Vec::with_capacity(len as usize);
++        for i in 0..len { v.push(m.cpu.bus.peek8(a + i)); }
++        std::fs::write(parts[2], &v).expect("DTBOOT_DUMP");
++    }
++    println!("icache: {} decodes, {} invalidating stores", m.cpu.bus.icache_decodes, m.cpu.bus.icache_invalidations);
++    let c = &m.cpu;
++    for (pc, a, n, v) in c.bus.watch_log.iter().take(40) {
++        println!("watch: pc={pc:08x} [{a:08x}].{n} <- {v:08x}");
++    }
++    println!("d: {}", c.d.iter().map(|v| format!("{v:08x}")).collect::<Vec<_>>().join(" "));
++    println!("a: {}", c.a.iter().map(|v| format!("{v:08x}")).collect::<Vec<_>>().join(" "));
++    println!("macsr: {:08x}", c.macsr);
++    let sp = c.a[7];
++    println!("stack: {}", (0..24).map(|i| format!("{:08x}", c.bus.peek32(sp + 4 * i))).collect::<Vec<_>>().join(" "));
++    println!("uart8 tx ({} bytes): {}", c.bus.io.uart8.tx.len(), c.bus.io.uart8.tx.iter().take(64).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
++    let el = &c.bus.io.esdhc.log;
++    let log: Vec<String> = el.iter().skip(el.len().saturating_sub(24)).map(|(i, a)| format!("CMD{i}({a:x})")).collect();
++    println!("esdhc: {} commands: {}", c.bus.io.esdhc.log.len(), log.join(" "));
++    for (i, ic) in c.bus.io.intc.iter().enumerate() {
++        let lv: Vec<String> = ic.icr.iter().enumerate().filter(|x| *x.1 != 0).map(|(s, l)| format!("{s}:{l}")).collect();
++        println!("intc{i}: imr={:016x} frc={:016x} lines={:016x} icr {}", ic.imr, ic.frc, ic.lines, lv.join(" "));
++    }
++    for (i, p) in c.bus.io.pit.iter().enumerate() {
++        println!("pit{i}: pcsr={:04x} pmr={:04x} fired={}", p.pcsr, p.pmr, p.fired);
++    }
++    for (i, d) in c.bus.io.dtim.iter().enumerate() {
++        println!("dtim{i}: dtmr={:04x} dter={:02x} dtrr={:08x} fired={}", d.dtmr, d.dter, d.dtrr, d.fired);
++    }
++    let ssi = &c.bus.io.ssi;
++    let nz = ssi.out.iter().filter(|&&x| x != 0).count();
++    let peak = ssi.out.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
++    println!("ssi: frames={} buffered={} nonzero={} peak={} tx_pending={}", ssi.frames, ssi.out.len(), nz, peak, ssi.tx_pending);
++    println!("edma: erq={:016x} int={:016x} majors[34]={} [35]={} [59]={}", c.bus.io.edma.erq, c.bus.io.edma.int, c.bus.io.edma.majors[34], c.bus.io.edma.majors[35], c.bus.io.edma.majors[59]);
++    if std::env::var_os("DTBOOT_OLED").is_some() {
++        println!("panel MCU OLED ({} frames):", m.cpu.bus.io.panel.oled_frames);
++        print!("{}", Machine::pixels_ascii(&m.panel_pixels()));
++    } else if let Some(f) = &m.frame {
++        print!("{}", Machine::frame_ascii(f));
++    }
++    if let Some(p) = std::env::var_os("DTBOOT_END_PNG") {
++        oled_png(&m, std::path::Path::new(&p));
++    }
++    if std::env::var_os("DTBOOT_LEDS").is_some() {
++        // The LED selector bytes per group (`0x2g`/`0x3g`): on the MKI units
++        // each is 8 single-colour LEDs, one bit each.
++        let sel: Vec<String> = m.cpu.bus.io.panel.selectors.iter().map(|s| s.map_or("--".into(), |v| format!("{v:02x}"))).collect();
++        println!("led groups: {}", sel.join(" "));
++        if std::env::var("DTBOOT_LEDS").is_ok_and(|v| v == "rgb") {
++            // DTBOOT_LEDS=rgb: every colour LED that is defined, as 8-bit RGB.
++            let p = &m.cpu.bus.io.panel;
++            let lit: Vec<String> = (0..dtemu::panel::ALL_LEDS).filter_map(|i| p.led_rgb(i).map(|(r, g, b)| format!("{i}:{r:02x}{g:02x}{b:02x}"))).collect();
++            println!("led rgb: {}", lit.join(" "));
++        }
++    }
++}
++
++/// 16-bit stereo WAV at 48 kHz from 24-bit samples.
++/// One channel per SSI frame word: 2 on the Digitakt, 16 on the Rytm (digital
++/// layers 0..7, tom exciters 8..10, effect returns 12..15).
++fn write_wav(path: &str, pcm: &[i32], chans: u16) {
++    let data: Vec<u8> = pcm.iter().flat_map(|&s| ((s >> 8) as i16).to_le_bytes()).collect();
++    let mut f = Vec::new();
++    f.extend_from_slice(b"RIFF");
++    f.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
++    f.extend_from_slice(b"WAVEfmt ");
++    f.extend_from_slice(&16u32.to_le_bytes());
++    f.extend_from_slice(&1u16.to_le_bytes());
++    f.extend_from_slice(&chans.to_le_bytes());
++    f.extend_from_slice(&48_000u32.to_le_bytes());
++    f.extend_from_slice(&(48_000u32 * 2 * chans as u32).to_le_bytes());
++    f.extend_from_slice(&(2 * chans).to_le_bytes());
++    f.extend_from_slice(&16u16.to_le_bytes());
++    f.extend_from_slice(b"data");
++    f.extend_from_slice(&(data.len() as u32).to_le_bytes());
++    f.extend_from_slice(&data);
++    std::fs::write(path, f).unwrap();
++}
++
++fn oled_png(m: &Machine, path: &std::path::Path) {
++    // The MKII's 128x64 OLED, or the MKI's 122x32 LCD.
++    let rows = m.panel_pixels();
++    let (w, h) = (rows[0].len(), rows.len());
++    let mut cv = dtemu::gui::Canvas::new(w * 3, h * 3);
++    for (y, row) in rows.iter().enumerate() {
++        for (x, &on) in row.iter().enumerate() {
++            cv.fill(x as i32 * 3, y as i32 * 3, 3, 3, if on { 0xFFFFFF } else { 0 });
++        }
++    }
++    dtemu::gui::save_png(&cv, path).unwrap();
++}
++
++/// A 16-bit PCM WAV as stereo frames at its own rate (mono is doubled).
++fn read_wav16(path: &str) -> Vec<(f32, f32)> {
++    let b = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
++    let mut i = 12;
++    let mut chans = 2usize;
++    while i + 8 <= b.len() {
++        let id = &b[i..i + 4];
++        let n = u32::from_le_bytes(b[i + 4..i + 8].try_into().unwrap()) as usize;
++        if id == b"fmt " {
++            chans = u16::from_le_bytes([b[i + 10], b[i + 11]]) as usize;
++        }
++        if id == b"data" {
++            let d = &b[i + 8..(i + 8 + n).min(b.len())];
++            let s: Vec<f32> = d.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect();
++            return s.chunks(chans.max(1)).map(|f| (f[0], *f.get(1).unwrap_or(&f[0]))).collect();
++        }
++        i += 8 + n + (n & 1);
++    }
++    Vec::new()
++}
+--- /dev/null
++++ b/src/xdiff.rs
+@@ -0,0 +1,333 @@
++//! Exact differential test of a replacement for a stock function.
++//!
++//! XDIFF="start=HEX,repl=HEX,code=FILE[,every=N][,limit=N][,max=N][,dead=HEXMASK][,cont=repl]"
++//! Every N-th call of `start` (a function entry, return address at (A7)):
++//! the replacement (FILE loaded at `repl`) and then the stock function run
++//! from the same state, single-stepped with the peripherals frozen (no
++//! events, no interrupts, I/O writes of the replacement logged but not
++//! performed). Their results are compared: D0-D7/A0-A7 (minus `dead`, bit n
++//! = Dn, bit 8+n = An), SR, MACSR, MASK, the four accumulators, all of SRAM,
++//! all of DDR except the dead stack below the entry SP, and the I/O writes.
++//! The run continues from the stock result (or the replacement's, cont=repl).
++
++use crate::machine::Machine;
++
++pub struct XDiff {
++    pub start: u32,
++    pub repl: u32,
++    base: u32,
++    code: Vec<u8>,
++    every: u64,
++    limit: u64,
++    max: u64,
++    dead: u32,
++    cont_repl: bool,
++    after: u64,
++    loaded: bool,
++    pub seen: u64,
++    pub cases: u64,
++    pub fails: u64,
++    pub timeouts: u64,
++    pub stock_instr: u64,
++    pub repl_instr: u64,
++    pub ccr_diffs: u64,
++}
++
++impl XDiff {
++    pub fn from_env() -> Option<Box<XDiff>> {
++        let spec = std::env::var("XDIFF").ok()?;
++        let mut x = XDiff {
++            start: 0, repl: 0, base: 0, code: Vec::new(), every: 1, limit: u64::MAX, max: 5_000_000,
++            dead: 0, cont_repl: false, after: 0, loaded: false, seen: 0, cases: 0, fails: 0, timeouts: 0,
++            stock_instr: 0, repl_instr: 0, ccr_diffs: 0,
++        };
++        for kv in spec.split(',') {
++            let (k, v) = kv.split_once('=').expect("XDIFF key=value");
++            let hex = || u32::from_str_radix(v.trim_start_matches("0x"), 16).unwrap();
++            match k {
++                "start" => x.start = hex(),
++                "repl" => x.repl = hex(),
++                "base" => x.base = hex(),
++                "code" => x.code = std::fs::read(v).expect("XDIFF code"),
++                "every" => x.every = v.parse().unwrap(),
++                "limit" => x.limit = v.parse().unwrap(),
++                "max" => x.max = v.parse().unwrap(),
++                "dead" => x.dead = hex(),
++                "cont" => x.cont_repl = v == "repl",
++                "after" => x.after = v.trim_end_matches('M').parse::<u64>().unwrap() * if v.ends_with('M') { 1_000_000 } else { 1 },
++                _ => panic!("XDIFF: unknown key {k}"),
++            }
++        }
++        if x.base == 0 { x.base = x.repl; }
++        Some(Box::new(x))
++    }
++    pub fn report(&self) -> String {
++        format!(
++            "xdiff: {} calls seen, {} cases, {} FAILED, {} timeouts, {} CCR-only differences; instructions per call stock {:.1}, replacement {:.1}",
++            self.seen, self.cases, self.fails, self.timeouts, self.ccr_diffs,
++            self.stock_instr as f64 / self.cases.max(1) as f64,
++            self.repl_instr as f64 / self.cases.max(1) as f64
++        )
++    }
++}
++
++#[derive(Clone)]
++struct Regs {
++    d: [u32; 8],
++    a: [u32; 8],
++    pc: u32,
++    sr: u16,
++    macsr: u32,
++    mask: u32,
++    accv: [i64; 4],
++}
++
++fn regs(m: &Machine) -> Regs {
++    let c = &m.cpu;
++    Regs { d: c.d, a: c.a, pc: c.pc, sr: c.sr, macsr: c.macsr, mask: c.mask, accv: c.accv }
++}
++
++fn set_regs(m: &mut Machine, r: &Regs) {
++    let c = &mut m.cpu;
++    c.d = r.d;
++    c.a = r.a;
++    c.pc = r.pc;
++    c.sr = r.sr;
++    c.macsr = r.macsr;
++    c.mask = r.mask;
++    c.accv = r.accv;
++}
++
++/// Step from `pc` until the function returns to `ret` with SP back at `sp`.
++thread_local! { pub static TRACE: std::cell::RefCell<Option<Vec<(u32, [u32; 16], [i64; 4], u32)>>> = const { std::cell::RefCell::new(None) }; }
++
++fn run_to(m: &mut Machine, pc: u32, ret: u32, sp: u32, max: u64) -> Option<u64> {
++    m.cpu.pc = pc;
++    let t0 = m.cpu.bus.io.now;
++    while m.cpu.bus.io.now - t0 < max {
++        if m.cpu.pc == ret && m.cpu.a[7] == sp {
++            return Some(m.cpu.bus.io.now - t0);
++        }
++        TRACE.with(|t| if let Some(v) = t.borrow_mut().as_mut() {
++            let mut r = [0u32; 16];
++            r[..8].copy_from_slice(&m.cpu.d);
++            r[8..].copy_from_slice(&m.cpu.a);
++            v.push((m.cpu.pc, r, m.cpu.accv, m.cpu.macsr));
++        });
++        m.cpu.step();
++        if m.cpu.last_fault.take().is_some() {
++            return None;
++        }
++    }
++    None
++}
++
++/// XDIFF_FUZZ="K:LEN:MODE;..." fills the LEN bytes that stack argument K
++/// (1 = the first, at 4(A7)) points to, before both runs, then restores the
++/// real state afterwards. MODE: r random words; g gains (random, with the
++/// extremes often); i ramp increments (all zero on odd cases, else random,
++/// some zero); s samples (random, with the extremes often).
++fn fuzz(m: &mut Machine, case: u64) -> bool {
++    let Ok(spec) = std::env::var("XDIFF_FUZZ") else { return false };
++    let mut st = 0x9E37_79B9_7F4A_7C15u64 ^ case.wrapping_mul(0xD1B5_4A32_D192_ED03);
++    let mut rnd = || { st ^= st << 13; st ^= st >> 7; st ^= st << 17; st };
++    let sp = m.cpu.a[7];
++    for item in spec.split(';') {
++        let f: Vec<&str> = item.split(':').collect();
++        let k: u32 = f[0].parse().unwrap();
++        let len: u32 = f[1].parse().unwrap();
++        let base = m.cpu.bus.peek32(sp + 4 * k);
++        let zero_incs = case % 2 == 1;
++        for w in 0..len / 4 {
++            let r = rnd();
++            let v = match f[2] {
++                "g" | "s" => match r % 8 { 0 => 0x7FFF_FFFF, 1 => 0x8000_0000, 2 => 0, _ => (r >> 16) as u32 },
++                "i" => if zero_incs || r % 4 == 0 { 0 } else { ((r >> 20) as u32 & 0x7F_FFFF).wrapping_sub(0x40_0000) },
++                _ => (r >> 16) as u32,
++            };
++            m.cpu.bus.poke32(base + 4 * w, v);
++        }
++    }
++    true
++}
++
++pub fn case(m: &mut Machine) {
++    let now = m.cpu.bus.io.now;
++    let x = m.xdiff.as_mut().unwrap();
++    if now < x.after {
++        return;
++    }
++    x.seen += 1;
++    if x.cases >= x.limit || x.seen % x.every != 0 {
++        return;
++    }
++    if !x.loaded {
++        let (base, code) = (x.base, x.code.clone());
++        for (i, b) in code.iter().enumerate() {
++            m.cpu.bus.poke8(base + i as u32, *b);
++        }
++        m.xdiff.as_mut().unwrap().loaded = true;
++    }
++    let x = m.xdiff.as_ref().unwrap();
++    let (start, repl, max, dead, cont_repl) = (x.start, x.repl, x.max, x.dead, x.cont_repl);
++    let noddr = std::env::var_os("XDIFF_NODDR").is_some();
++    let pre = if std::env::var_os("XDIFF_FUZZ").is_some() {
++        Some((regs(m), m.cpu.bus.sram.clone(), m.cpu.bus.ddr.clone()))
++    } else { None };
++    let ncase = m.xdiff.as_ref().unwrap().cases;
++    fuzz(m, ncase);
++    let r0 = regs(m);
++    let sp0 = r0.a[7];
++    if std::env::var_os("XDIFF_DUMP").is_some() && ncase < 8 {
++        let a: Vec<u32> = (1..5).map(|k| m.cpu.bus.peek32(sp0 + 4 * k)).collect();
++        println!("xdiff args case {ncase}: ret {:08x} args {:08x?}", m.cpu.bus.peek32(sp0), a);
++        for (k, p) in a.iter().enumerate() {
++            let w: Vec<u32> = (0..10).map(|i| m.cpu.bus.peek32(p + 4 * i)).collect();
++            println!("   *arg{}: {:08x?}", k + 1, w);
++        }
++    }
++    let ret = m.cpu.bus.peek32(sp0);
++    let sram0 = m.cpu.bus.sram.clone();
++    let ddr0 = if noddr { Vec::new() } else { m.cpu.bus.ddr.clone() };
++    let (now0, dl0) = (m.cpu.bus.io.now, m.cpu.bus.io.deadline);
++    m.cpu.bus.io.deadline = u64::MAX;
++
++    // The replacement, I/O writes logged only.
++    m.cpu.bus.xio = Some(Vec::new());
++    m.cpu.bus.xior = Some(Vec::new());
++    let tracing = std::env::var_os("XDIFF_TRACE").is_some() && m.xdiff.as_ref().unwrap().cases == 0;
++    if tracing { TRACE.with(|t| *t.borrow_mut() = Some(Vec::new())); }
++    m.cpu.bus.xio_suppress = std::env::var_os("XDIFF_SUPPRESS_IO").is_some();
++    let tr = run_to(m, repl, ret, sp0 + 4, max);
++    let tr_trace = TRACE.with(|t| t.borrow_mut().replace(Vec::new()));
++    m.cpu.bus.xio_suppress = false;
++    let io_r = m.cpu.bus.xio.replace(Vec::new()).unwrap();
++    let ior_r = m.cpu.bus.xior.replace(Vec::new()).unwrap();
++    let rr = regs(m);
++    let sram_r = m.cpu.bus.sram.clone();
++    let ddr_r = if noddr { Vec::new() } else { m.cpu.bus.ddr.clone() };
++
++    // The stock function from the same state.
++    if !noddr { m.cpu.bus.ddr.copy_from_slice(&ddr0); }
++    drop(ddr0);
++    m.cpu.bus.sram.copy_from_slice(&sram0);
++    set_regs(m, &r0);
++    m.cpu.bus.io.now = now0;
++    let ts = run_to(m, start, ret, sp0 + 4, max);
++    let ts_trace = TRACE.with(|t| t.borrow_mut().take());
++    if let (Some(a), Some(b)) = (tr_trace, ts_trace) {
++        let a = &a[1..];
++        if let Some(k) = a.iter().zip(b.iter()).position(|(x, y)| x != y) {
++            println!("xdiff trace: first divergence at step {k}: repl pc {:08x} regs {:08x?} acc {:x?} macsr {:x}", a[k].0, a[k].1, a[k].2, a[k].3);
++            println!("                                     stock pc {:08x} regs {:08x?} acc {:x?} macsr {:x}", b[k].0, b[k].1, b[k].2, b[k].3);
++            if k > 0 { println!("  previous pc {:08x}", b[k - 1].0); }
++        } else { println!("xdiff trace: no divergence in {} steps", b.len()); }
++    }
++    let io_s = m.cpu.bus.xio.take().unwrap();
++    let ior_s = m.cpu.bus.xior.take().unwrap();
++    let rs = regs(m);
++
++    let mut out = Vec::new();
++    let x = m.xdiff.as_mut().unwrap();
++    x.cases += 1;
++    match (tr, ts) {
++        (Some(a), Some(b)) => {
++            x.repl_instr += a;
++            x.stock_instr += b;
++        }
++        _ => {
++            x.timeouts += 1;
++            out.push(format!("timeout/fault: replacement {tr:?}, stock {ts:?}"));
++        }
++    }
++    for i in 0..8 {
++        if dead & (1 << i) == 0 && rr.d[i] != rs.d[i] {
++            out.push(format!("d{i}: repl {:08x} stock {:08x}", rr.d[i], rs.d[i]));
++        }
++        if dead & (1 << (8 + i)) == 0 && rr.a[i] != rs.a[i] {
++            out.push(format!("a{i}: repl {:08x} stock {:08x}", rr.a[i], rs.a[i]));
++        }
++    }
++    if rr.sr & 0xFF00 != rs.sr & 0xFF00 {
++        out.push(format!("sr: repl {:04x} stock {:04x}", rr.sr, rs.sr));
++    } else if rr.sr != rs.sr {
++        x.ccr_diffs += 1;
++    }
++    if rr.macsr != rs.macsr || rr.mask != rs.mask {
++        out.push(format!("macsr/mask: repl {:08x}/{:08x} stock {:08x}/{:08x}", rr.macsr, rr.mask, rs.macsr, rs.mask));
++    }
++    for i in 0..4 {
++        if rr.accv[i] != rs.accv[i] {
++            out.push(format!("acc{i}: repl {:x} stock {:x}", rr.accv[i], rs.accv[i]));
++        }
++    }
++    let diffs = |name: &str, base: u32, a: &[u8], b: &[u8], skip: (usize, usize), out: &mut Vec<String>| {
++        let mut n = 0;
++        let mut i = 0;
++        while i < a.len().min(b.len()) {
++            if (i < skip.0 || i >= skip.1) && a[i] != b[i] {
++                if n < 12 {
++                    let w = i & !3;
++                    let rd = |v: &[u8]| u32::from_be_bytes(v[w..w + 4].try_into().unwrap());
++                    out.push(format!("{name} {:08x}: repl {:08x} stock {:08x}", base + w as u32, rd(a), rd(b)));
++                }
++                n += 1;
++                i = (i | 3) + 1;
++                continue;
++            }
++            i += 1;
++        }
++        if n > 12 {
++            out.push(format!("{name}: {n} differing words in all"));
++        }
++    };
++    diffs("sram", 0x8000_0000, &sram_r, &m.cpu.bus.sram, (0, 0), &mut out);
++    let so = (sp0 - 0x4000_0000) as usize;
++    if !noddr { diffs("ddr", 0x4000_0000, &ddr_r, &m.cpu.bus.ddr, (so - 0x4000, so), &mut out); }
++    if ior_r != ior_s {
++        let k = ior_r.iter().zip(ior_s.iter()).position(|(a, b)| a != b).unwrap_or(ior_r.len().min(ior_s.len()));
++        out.push(format!("io reads differ at #{k} of {}/{}: repl {:x?} stock {:x?}", ior_r.len(), ior_s.len(), ior_r.get(k), ior_s.get(k)));
++    }
++    if io_r != io_s {
++        out.push(format!("io writes differ: repl {:x?} stock {:x?}", &io_r[..io_r.len().min(8)], &io_s[..io_s.len().min(8)]));
++    }
++    let x = m.xdiff.as_mut().unwrap();
++    if !out.is_empty() && !(out.len() == 1 && out[0].starts_with("timeout")) {
++        x.fails += 1;
++    }
++    if !out.is_empty() && x.fails + x.timeouts <= 5 {
++        println!("xdiff case {} (call {}) at clock {now0}:", x.cases, x.seen);
++        if std::env::var_os("XDIFF_ARGS").is_some() {
++            println!("  acc_in = {:x} {:x} {:x} {:x} macsr={:08x} mask={:08x}", r0.accv[0], r0.accv[1], r0.accv[2], r0.accv[3], r0.macsr, r0.mask);
++            for k in 1..5u32 {
++                let p = m.cpu.bus.peek32(sp0 + 4 * k);
++                let w: Vec<u32> = (0..8).map(|i| m.cpu.bus.peek32(p + 4 * i)).collect();
++                println!("  arg{k} @ {p:08x}: {w:08x?}");
++            }
++            let outp = m.cpu.bus.peek32(sp0 + 4);
++            let rd = |buf: &[u8], a: u32| { let o = (a & (super::bus::SRAM_SIZE as u32 - 1)) as usize; u32::from_be_bytes(buf[o..o+4].try_into().unwrap()) };
++            let r: Vec<u32> = (0..8).map(|i| rd(&sram_r, outp + 8 * i)).collect();
++            let s: Vec<u32> = (0..8).map(|i| rd(&m.cpu.bus.sram, outp + 8 * i)).collect();
++            println!("  out repl : {r:08x?}");
++            println!("  out stock: {s:08x?}");
++        }
++        for l in &out {
++            println!("  {l}");
++        }
++    }
++    if cont_repl && tr.is_some() {
++        m.cpu.bus.ddr.copy_from_slice(&ddr_r);
++        m.cpu.bus.sram.copy_from_slice(&sram_r);
++        set_regs(m, &rr);
++        m.cpu.bus.io.now = now0 + tr.unwrap();
++    }
++    if let Some((r, sram, ddr)) = pre {
++        m.cpu.bus.ddr.copy_from_slice(&ddr);
++        m.cpu.bus.sram.copy_from_slice(&sram);
++        set_regs(m, &r);
++        m.cpu.bus.io.now = now0;
++        m.cpu.pc = start;
++    }
++    let d = m.cpu.bus.io.deadline;
++    m.cpu.bus.io.deadline = dl0.min(d);
++}
