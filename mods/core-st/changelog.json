@@ -1,8 +1,30 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.2.0",
+  "latest": "2.4.0",
   "entries": [
+    {
+      "version": "2.4.0",
+      "date": "2026-11-20",
+      "commits": [
+        {
+          "sha": "e1e51bf",
+          "date": "2026-11-20",
+          "subject": "Add FX-bus COMP with shared core services and SRAM optimization"
+        }
+      ]
+    },
+    {
+      "version": "2.3.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "ce91a3b",
+          "date": "2026-11-19",
+          "subject": "Improve Sample Manager sizes, project memory and atomic capacity checks"
+        }
+      ]
+    },
     {
       "version": "2.2.0",
       "date": "2026-11-19",
@@ -11,6 +33,11 @@
           "sha": "53ac728",
           "date": "2026-11-19",
           "subject": "Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06)"
+        },
+        {
+          "sha": "121e965",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.2.0 and samplers 1.5.2"
         }
       ]
     },

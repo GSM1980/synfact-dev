@@ -1,8 +1,19 @@
 {
   "id": "chorus-st",
   "title": "Chorus",
-  "latest": "1.2.1",
+  "latest": "1.2.2",
   "entries": [
+    {
+      "version": "1.2.2",
+      "date": "2026-11-20",
+      "commits": [
+        {
+          "sha": "e1e51bf",
+          "date": "2026-11-20",
+          "subject": "Add FX-bus COMP with shared core services and SRAM optimization"
+        }
+      ]
+    },
     {
       "version": "1.2.1",
       "date": "2026-11-17",
@@ -21,6 +32,11 @@
           "sha": "53ac728",
           "date": "2026-11-19",
           "subject": "Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06)"
+        },
+        {
+          "sha": "121e965",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.2.0 and samplers 1.5.2"
         },
         {
           "sha": "c0e44f9",

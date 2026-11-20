@@ -12,14 +12,21 @@
       "slug": "chorus-st",
       "id": "chorus-st",
       "title": "Chorus",
-      "latest": "1.2.1",
+      "latest": "1.2.2",
       "path": "mods/chorus-st"
+    },
+    {
+      "slug": "comp-st",
+      "id": "comp-st",
+      "title": "Compressor",
+      "latest": "0.2.0",
+      "path": "mods/comp-st"
     },
     {
       "slug": "core-st",
       "id": "core",
       "title": "core",
-      "latest": "2.2.0",
+      "latest": "2.4.0",
       "path": "mods/core-st"
     },
     {
@@ -40,7 +47,7 @@
       "slug": "lfo3-st",
       "id": "lfo3-st",
       "title": "Third LFO",
-      "latest": "1.3.1",
+      "latest": "1.3.3",
       "path": "mods/lfo3-st"
     },
     {

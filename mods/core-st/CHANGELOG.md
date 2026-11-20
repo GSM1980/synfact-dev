@@ -1,10 +1,19 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.2.0.
+Generated from git history by `tools/changelog.py`. Latest version: 2.4.0.
+
+## 2.4.0 (2026-11-20)
+
+- Add FX-bus COMP with shared core services and SRAM optimization (`e1e51bf`, 2026-11-20)
+
+## 2.3.0 (2026-11-19)
+
+- Improve Sample Manager sizes, project memory and atomic capacity checks (`ce91a3b`, 2026-11-19)
 
 ## 2.2.0 (2026-11-19)
 
 - Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
+- Changelogs: core 2.2.0 and samplers 1.5.2 (`121e965`, 2026-11-19)
 
 ## 2.1.2 (2026-11-19)
 

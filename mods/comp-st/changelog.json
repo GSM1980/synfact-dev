@@ -1,0 +1,19 @@
+{
+  "id": "comp-st",
+  "title": "Compressor",
+  "latest": "0.2.0",
+  "entries": [
+    {
+      "version": "0.2.0",
+      "date": "2026-11-20",
+      "commits": [
+        {
+          "sha": "e1e51bf",
+          "date": "2026-11-20",
+          "subject": "Add FX-bus COMP with shared core services and SRAM optimization"
+        }
+      ]
+    }
+  ],
+  "slug": "comp-st"
+}
