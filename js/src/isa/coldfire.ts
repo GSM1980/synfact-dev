@@ -129,8 +129,9 @@ function decode(read16: Read16, addr: number): Instruction {
 }
 
 function line4(w: number, read16: Read16, addr: number, mode: number, reg: number): Instruction {
-  // lea <ea>,An; 0x49c0..0x49c7 (A4, Dn mode) is extb.l Dn, decoded below
-  if ((w & 0xf1c0) === 0x41c0 && (w & 0xfff8) !== 0x49c0) { if (mode === 0 || mode === 1 || mode === 3 || mode === 4 || (mode === 7 && reg === 4)) throw new Bad('lea EA'); return one('lea', w, read16, 4, { immOk: false }) }
+  // EXTB.L overlaps LEA's broad mask; its operand is a data register.
+  if ((w & 0xfff8) === 0x49c0) return insn(2, 'extb')
+  if ((w & 0xf1c0) === 0x41c0) { if (mode === 0 || mode === 1 || mode === 3 || mode === 4 || (mode === 7 && reg === 4)) throw new Bad('lea EA'); return one('lea', w, read16, 4, { immOk: false }) }
   if (w === 0x40e7) { if (read16(2) !== 0x46fc) throw new Bad('stldsr'); return insn(6, 'stldsr', PRIV) }
   const hi = w & 0xfff8, top = w & 0xffc0
   if (hi === 0x4080) return insn(2, 'negx')

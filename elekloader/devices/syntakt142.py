@@ -8,6 +8,14 @@ owned memory windows are deliberately excluded. See docs/OS142-PORT.md.
 import re
 
 MAIN_141_TO_142 = {
+    # Sound model vtable: all 16 methods move by 0x1c4. Destination ordering
+    # map words are verified through their operands in 4001471c..40014b90.
+    0x401c61f4: 0x401c6494,
+    0x405fd330: 0x405fe330,
+    0x405fd334: 0x405fe334,
+    0x405fd33c: 0x405fe33c,
+    0x405fd340: 0x405fe340,
+    0x405fd348: 0x405fe348,
     0x4004f750: 0x4004f7c8,
     0x4005f0fe: 0x4005f176,
     0x4005f104: 0x4005f17c,

@@ -7,6 +7,7 @@
 #define ELEKLOADER_ST_HOST_H
 #include "storage.h"
 #include "sample-pool.h"
+#define ST_PARAMETER_UI_DEST_FLAGS 32u
 /* Init-only MAIN mixer replacement for a stopped-transport preview session.
  * ready() returns 0 or 1. mix has native OS 1.42 mixer C ABI (three words),
  * preserves callee saves and owns bus clearing, preview clock and output. */
@@ -87,7 +88,16 @@ struct st_machine_host_api {
      * it uniformly over its range (query 13 for a module's ID) and stores it
      * through the page's model (24 for a module's ID). Before 13 there is one
      * provider slot: a provider only for 31 registers on 14. Register in
-     * the module's init. */
+     * the module's init.
+     * Host API 16: query ST_PARAMETER_UI_DEST_FLAGS (32), only
+     * while the native destination builder enumerates a registered machine.
+     * args[0] is the engine ID; result is the borrowed model/proxy whose
+     * destinations are being listed (NOT a result buffer). Return nonzero
+     * with *value=0 to hide it, or a capability mask such as 0xe00 to keep it.
+     * Read that model's TYPE through its native getter, not global UI state.
+     * No writes, heap or IO. This never changes runtime flags (query 21),
+     * parameter IDs, saved routing or Sound values. Unclaimed/module IDs
+     * retain their ordinary query-21 provider lookup. */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
     /* API 8 native_query and the ARP branch's native_dispatch are aliases
      * for the same existing bus at offset 84. Both prefixes stay compatible.
@@ -115,5 +125,9 @@ struct st_machine_host_api {
      * mix() replaces the native mixer call only while stopped and ready.
      * Both are bounded, no heap/IO; mix may use the native EMAC/output ABI. */
     const struct st_audio_idle_owner *volatile *audio_idle;
+    /* Host API 16 adds no field: UI-only destination query 32. API 15's
+     * stopped-transport mixer owner and its ABI offset remain unchanged. */
+    /* Host API 17 adds no field: extended configuration controls with alias
+     * ST_MACHINE_CONFIG_PARAMETER are unmodulated and not destinations. */
 };
 #endif

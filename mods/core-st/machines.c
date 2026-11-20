@@ -69,7 +69,7 @@ void core_machine_defaults(u32 type,void *model,u32 quiet)
 }
 int core_machine_bind(const struct core_machine_def *d,u32 count)
 {
-    u32 i,j,k,index;void *memory;
+    u32 i;void *memory;
     core_machine_active=0;core_machine_definitions=0;core_machine_count=0;core_machine_extended=0;
     /* A modules-only bank still needs the parameter providers and the active
      * assembly paths. Initialize an empty directory and valid lane storage
@@ -83,14 +83,6 @@ int core_machine_bind(const struct core_machine_def *d,u32 count)
     for(i=0;i<count;i++)if(d[i].on_load!=(void *)CORE_SMZ_NONE && d[i].on_load(d+i))return 0;
     for(i=0;i<count;i++){
         directory[d[i].type-64]=d+i;if(d[i].params>8)core_machine_extended=1;
-        for(k=0;k<4;k++){
-            for(j=0;j<11;j++)layouts[i][k][j]=0;
-            layouts[i][k][10]=10;
-            for(j=0;j<8;j++){index=8*k+j;
-                if(core_machine_ui_definitions){const struct st_machine_ui *u=core_machine_ui_definitions+i;
-                    index=k<u->pages?u->layout[8*k+j]:CORE_SMZ_NONE;}
-                layouts[i][k][2+j]=index<d[i].params?engine(d+i)+index:0;}
-        }
     }
     for(i=0;i<54;i++)core_machine_lanes[i]=fw_lane_ids[i];
     for(i=54;i<71;i++)core_machine_lanes[i]=0x47+i-54;
@@ -107,9 +99,17 @@ u32 core_machine_storage_slot(u32 track,u32 id)
 }
 u32 *core_machine_layout(const struct core_machine_def *m,u32 page)
 {
-    u32 *layout;if(page>=4)return 0;
+    const struct st_machine_ui *u;u32 *layout,j,index;if(page>=4)return 0;
     layout=layouts[m-core_machine_definitions][page];layout[0]=fw_source_layout[0];
-    layout[1]=fw_source_layout[1];return layout;
+    layout[1]=fw_source_layout[1];layout[10]=10;u=core_machine_ui(m);
+    /* UI task: idle callbacks may change the bank-owned slot map when TYPE
+     * or the displayed Sound changes. Resolve it for drawing, navigation and
+     * page actions together, rather than freezing the initial map at bind. */
+    for(j=0;j<8;j++){
+        index=u?(page<u->pages?u->layout[8*page+j]:CORE_SMZ_NONE):8*page+j;
+        layout[2+j]=index<m->params?engine(m)+index:0;
+    }
+    return layout;
 }
 /* Entry wrappers pass the original stack arguments and hidden A0 result.
  * A zero result declines to the exact displaced stock entry. These are
@@ -140,6 +140,10 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     const struct core_machine_def *m=0;const struct core_machine_param *p;
     u32 id=args[0],index=0,i,*layout,*copy;
     if(!core_machine_active)return 0;
+    if(q==ST_UI_DEST_FLAGS){
+        if(core_parameter_provider(q,args,result,value))return 1;
+        q=ST_FLAGS; /* A declined UI filter uses ordinary flags/providers. */
+    }
     if(q==ST_AVAILABLE && id>=64 && id<80){
         core_machine_availability_seen|=1u<<(id-64);core_machine_last_track=args[1];
     }
@@ -170,7 +174,7 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     case ST_LOCAL:*value=slots[index];break;
     case ST_OWNER:case ST_VALID_OWNER:*value=m->type;break;
     case ST_ENGINE_UI:*value=ui(m)+index;break;
-    case ST_FLAGS:*value=0xe00;break;
+    case ST_FLAGS:*value=p->alias==ST_MACHINE_CONFIG_PARAMETER?0:0xe00;break;
     case ST_LABEL:*value=(u32)p->label;break;
     case ST_LONG_LABEL:*value=(u32)p->name;break;
     case ST_RANGE:
@@ -180,9 +184,10 @@ int core_machine_query(u32 q,u32 *args,void *result,u32 *value)
     case ST_FORMAT:{const char *text=core_machine_format(id,args[1]);
         if(text){*value=(u32)text;break;}}
         /* fall through */
-    case ST_CACHED:args[0]=p->alias;return 0;
+    case ST_CACHED:args[0]=p->alias==ST_MACHINE_CONFIG_PARAMETER?0x13u:p->alias;return 0;
     case ST_ENCODER_CACHED:
-        i=core_machine_policy(id);args[0]=i==CORE_SMZ_NONE?p->alias:i;return 0;
+        i=core_machine_policy(id);args[0]=i==CORE_SMZ_NONE?
+            (p->alias==ST_MACHINE_CONFIG_PARAMETER?0x13u:p->alias):i;return 0;
     case ST_SLOT_ENGINE:
         /* Slot 0 is the native None destination (engine 0x13, "---"): LFO and
          * Sound Setup lists and defaults use it. A control stored there is

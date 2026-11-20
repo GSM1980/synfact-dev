@@ -217,8 +217,10 @@ def _decode(read16, addr):
                     flags=sf | df)
 
     if line == 4:
-        # lea <ea>,An; 0x49C0..0x49C7 (A4, Dn mode) is extb.l Dn, decoded below
-        if (w & 0xF1C0) == 0x41C0 and (w & 0xFFF8) != 0x49C0:
+        # EXTB.L overlaps LEA's broad mask; its operand is a data register.
+        if (w & 0xFFF8) == 0x49C0:
+            return Insn(2, 'extb', 4, R, R, writes=reg)
+        if (w & 0xF1C0) == 0x41C0:          # lea <ea>,An
             if mode in (0, 1, 3, 4) or (mode == 7 and reg == 4):
                 raise _Bad('lea EA')
             ins = _one('lea', w, read16, 4, imm_ok=False)

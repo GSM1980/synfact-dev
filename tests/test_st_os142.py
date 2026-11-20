@@ -16,6 +16,7 @@ from elekloader import formats, syx
 from elekloader.devices.syntakt import DEVICE
 from elekloader.sdk.build import BuildError, for_release
 from tools.generate_boot_preimages import modulation_skip
+from st_bank_modules import check_bank_machines
 
 
 def runtime_sites(source):
@@ -31,6 +32,18 @@ def audio_section(path):
     data = path.read_bytes()
     offset, length = struct.unpack_from('>II', data, 72)
     return data[48 + offset:48 + offset + length]
+
+
+def check_module_composition(report):
+    expected = {
+        'sp_sampler_input_module', 'st_stereo_module', 'fm_tone_module',
+        'recorder_module', 'lfo3_module', 'arp_module', 'poly_module',
+        'system_info_module', 'sample_manager_module', 'chorus_module',
+        'playhead_module', 'modulation_skip_module'}
+    if 71 in report['machines']:expected.add('dm_destination_module')
+    actual=set(report['modules'])
+    assert len(actual)==len(report['modules'])
+    assert actual-{'mix_fast_module','icache_lock_module'}==expected
 
 
 def verify(stock_path, folder, previous=None):
@@ -109,11 +122,8 @@ def verify(stock_path, folder, previous=None):
     assert struct.unpack_from('>I', raw, 24)[0] & 16
     assert struct.unpack_from('>I', raw, 64)[0] == 0x53594606   # core 2.2: the pool moved, the bank window grew
     modules = json.loads(bank.with_suffix('.smz4.json').read_text())
-    assert modules['machines'] == [66, 67, 68, 69, 65]
-    assert set(modules['modules']) == {
-        'sp_sampler_input_module', 'st_stereo_module', 'fm_tone_module',
-        'recorder_module', 'lfo3_module', 'arp_module', 'poly_module',
-        'system_info_module', 'sample_manager_module', 'chorus_module', 'playhead_module', 'modulation_skip_module'}
+    check_bank_machines(modules,raw)
+    check_module_composition(modules)
     if previous:
         assert built_audio == (previous / 'audio.bin').read_bytes()
         assert audio_section(bank) == audio_section(previous / bank.name)

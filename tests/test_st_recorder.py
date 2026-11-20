@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from elekloader.sdk import elf
 from elekloader.sdk.syntakt.audio import audit
-from st_bank_modules import check_bank_modules
+from st_bank_modules import check_bank_modules,check_bank_machines,object_for_symbol
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -17,7 +17,8 @@ def verify(folder,synfact=None):
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
         ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module'],
         ['fm_tone_module','recorder_module','lfo3_module','arp_module','poly_module','system_info_module']))
-    assert report['machines']==[66,67,68,69,65] and not report['firmware_required']
+    check_bank_machines(report,raw)
+    assert not report['firmware_required']
     for name,digest in report['source_sha256'].items():
         assert Path(name).is_relative_to(ROOT) and hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest,name
     for name in ('main.c','recorder.c','save.c','trim.c','capture.c','normalize.c','native.h','irq.s','idle.s','capture-kernels.s'):
@@ -34,14 +35,7 @@ def verify(folder,synfact=None):
     rows=[struct.unpack_from('>II',raw,image+subs+8*i) for i in range(n)]
     assert [x[0] for x in rows]==[2,3,0,0x101,10,8,9]
     assert all(not(fn&1) and fn<report['main_bytes'] for event,fn in rows)
-    # Identify the IRQ owner by its defined symbol, rather than a module
-    # ordinal: Playhead's modal now precedes the recorder in the normal bank.
-    irq=[]
-    for path in report['object_sha256']:
-        obj=elf.Elf.load(Path(path));text=obj.section('.text')
-        if text and any(s.name=='recorder_irq_lock' and s.shndx==text.idx for s in obj.symbols):irq.append(text.data)
-    assert len(irq)==1,'one recorder IRQ object required'
-    code=irq[0]
+    obj=object_for_symbol(report,'recorder_irq_lock');code=obj.section('.text').data
     assert code==bytes.fromhex('700040c046fc27004e75202f000446c04e75') and audit(code)>0
     assert all(flag in report['cflags'] for flag in ('-O3','-mcpu=54415','-mtune=cfv4'))
     # The new resident service table refers to existing operations only.
@@ -56,7 +50,7 @@ def verify(folder,synfact=None):
     assert struct.unpack('>I',read(ui+44,4))[0]==s['core:core_pool_sample_channels']
     names=('core_hzfs_native_io','core_hzfs_open','core_hzfs_close','core_crc_update',
            'core_pool_read','core_pool_write','core_pool_ready','st_pool_live_sync','st_pool_preview_stop','core_event_view')
-    assert read(host,44)==struct.pack('>11I',15,*[s['core:'+name] for name in names])   # host API 15, prefix retained
+    assert read(host,44)==struct.pack('>11I',17,*[s['core:'+name] for name in names])   # host API 17, prefix retained
     assert struct.unpack('>I',read(host+100,4))[0]==s['core:core_audio_idle_owner']
     assert read(s['core:core_high_written'],2)==bytes.fromhex('4e75')
     # The existing native close notification is conditional on a valid

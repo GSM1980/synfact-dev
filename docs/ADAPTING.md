@@ -117,6 +117,19 @@ sites, which no mod may patch, are in `mods/core-st/mod.json` and
 [mods/core-st/README.md](../mods/core-st/README.md). A firmware routine your
 mod calls is named by its OS 1.41 address.
 
+### Syntakt core 2.3: sample-pool memory snapshot and capacity preflight
+
+Sample-pool API 2 appends `memory(struct st_pool_memory *)` to the API 1
+prefix. Check `host->version >= 11` and `host->pool->version >= 2` before
+calling it from a task/UI callback. `bytes[128]` contains each loaded slot's
+PCM span (stereo includes both channels); `used` counts unique 2 KiB extents
+referenced by slots 65..128 only. `total` comes from the current AUDIO layout,
+excluding stock PCM, service code and stack. No disk IO or allocation occurs.
+Runtime sync checks the whole requested allocation, including aliases and
+fragmentation, before changing AUDIO. Capacity failure returns `-2` from
+`sync` and `-6` from the existing rollback-capable `host->pool_apply`.
+The host ABI prefix and SMZ4 contract `0x53594606` remain unchanged.
+
 ### Syntakt core 2.2: a 4 MiB bank window, the pool above AUDIO's page
 
 The bank's AUDIO section may be up to 4 MiB (sample store pages `4000..47ff`,
@@ -371,11 +384,14 @@ one: Sounds saved with the old machine would open as the new one.
 | 68 | SP REPITCH | `mods/samplers-st` |
 | 69 | SP SLICE | `mods/samplers-st` |
 | 70 | MD MACHINEDRUM | `mods/md-st` |
+| 71 | SY MnM | `mods/digimono-st` |
 
-**Free: 71 to 79.** Take the lowest free type, add your machine to this
+**Free: 72 to 79.** Take the lowest free type, add your machine to this
 table in the same change, and keep it if the machine is ever renamed.
 `tests/test_units.py` checks that this table names every type the mods
 and examples use.
+Explicit `(reserved)` rows also occupy an ID while its implementation is
+on a parallel branch; remove the marker when that machine is merged.
 
 ## 4. elekloader's general paths
 
@@ -451,7 +467,7 @@ independent groups must keep advancing when analog groups coexist.
 
 
 Host API 11 appends `const struct st_sample_pool_api *pool` at byte 88,
-retaining every earlier offset. The pool service version is 1. It supplies
+retaining every earlier offset. The original pool service version is 1. It supplies
 validation/sync/cached names, preview start/refill/release and one optional
 menu/progress UI provider. Native hooks, storage, PCM streaming/mixing and
 project references remain in core. A bank-owned Sample Manager uses existing
@@ -598,6 +614,43 @@ Host API 14 adds no field. Before host API 13 there is one provider slot, so
 a module that needs a provider only for query 31 registers it on 14. LFO3 1.2
 leaves the Kit setter `40013516` to core 1.4 and stores through query 24, as
 it does for the Sound; on an older core it hooks it as before.
+
+## Syntakt: destination visibility per model (core 1.8.2)
+
+Host API 16 adds query `ST_PARAMETER_UI_DEST_FLAGS` (32). `args[0]` is the
+engine ID; `result` is the borrowed model whose native destination list is
+being enumerated, not an output buffer. A provider returns nonzero with a
+capability mask in `*value`, or zero there to hide the entry. Read TYPE through
+that model's getter; do not use the last visible SYN page's global state.
+Only the native builder `4001471c` flags call (return `400147a0`, A5=model)
+uses this query; runtime flags remain query 21. A declined filter falls back
+to the original flags/provider behavior. No new field, serialized feature,
+patch site or event is added. Digi Mono 0.1.2 required API 16; its subtype
+selector in 0.5.0 requires API 17 for the configuration marker below.
+
+## Syntakt: saved configuration controls (core 2.3.1)
+
+Core 2.3.1 / host API 17 also supports saved configuration controls: an extended
+parameter at index 8..23 can use alias `ST_MACHINE_CONFIG_PARAMETER` from
+`syntakt/machines.h`. It has no modulation flags and uses the ordinary native scalar editor;
+the MAIN sender publishes the owner's unmodulated Sound mirror for that word.
+Old effective LFO/Sound routes and locks cannot change its AUDIO value.
+Explicit edits and codec storage retain the ordinary ID/slot. Only use this
+marker with API 17 or newer; require it in the module initializer. Ordinary
+controls keep their effective working values. Digi Mono uses it for hidden
+TYPE; see [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md). Core 2.3.2 additionally excludes
+these configuration controls from the shared native SYN reload/randomize list.
+Explicit machine defaults and Sound/project loads still include configuration.
+
+## Syntakt: live SYN slot maps (core 1.8.1)
+
+`st_machine_ui.layout` is read on each native page lookup, not cached at bank
+binding. An `idle` callback may change a writable bank-owned array to match the
+current TYPE/Sound. `0xffffffff` hides a position from drawing, navigation and
+page actions; restoring its fixed control index restores the control. Storage
+and parameter IDs do not change. Static layouts keep the same behavior. No new
+site, event, service, feature bit or ABI field is needed. Digi Mono 0.1.1 needs
+this core for its dynamic controls; see `tests/test_st_digimono_pages.c`.
 
 ## Syntakt: stereo tracks (core 1.8)
 

@@ -225,6 +225,45 @@ int main(void)
      assert(wave->lo[0]<=l && wave->hi[0]>=l && wave->lo_r[0]<=r && wave->hi_r[0]>=r);
      assert(wave->lo[0]!=wave->lo_r[0] || wave->hi[0]!=wave->hi_r[0]);}
     reset_state();
+    /* Budget snapshots exclude stock/lower slots and deduplicate upper aliases.
+     * Dry-run rejection must leave every descriptor and the mailbox untouched. */
+    core_pool_prepare();for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+    core_pool_boot_release();
+    {
+        struct st_pool_memory memory;struct st_hzfs fs;int opened=0;
+        u32 calls=receiver_calls;u32 saved_pointer=state->pointer[64];
+        core_pool_memory(&memory);
+        assert(memory.total==66711552u && memory.used==4096 && memory.bytes[64]==2200);
+        entry(65,550,saved_pointer,2);state->code[65]=0x8001;
+        core_pool_memory(&memory);assert(memory.used==4096 && memory.bytes[65]==2200);
+        entry(0,550,saved_pointer+4096,2);state->code[0]=0x8001;
+        core_pool_memory(&memory);assert(memory.used==4096);
+        for(i=0;i<128;i++)state->wanted[i]=state->code[i];
+        state->wanted[66]=0x8002;
+        entry(64,(CORE_POOL_END-CORE_POOL_PCM)/2,CORE_POOL_PCM,1);
+        assert(preflight(&fs,&opened)==-2);if(opened)core_hzfs_close(&fs);
+        assert(receiver_calls==calls && state->pointer[64]==saved_pointer && !state->frames[66]);
+        core_pool_write(PROJECT,state->wanted);assert(core_pool_sync()==-2);
+        assert(receiver_calls==calls && state->pointer[64]==saved_pointer && !state->frames[66]);
+        /* Fragmentation: sufficient total free space, no two-page hole. */
+        entry(64,(CORE_POOL_END-CORE_POOL_PCM-4096)/2,CORE_POOL_PCM+2048,1);
+        entry(65,0,0,1);state->code[65]=0;state->wanted[65]=0;
+        entry(0,0,0,1);state->code[0]=0;state->wanted[0]=0;
+        opened=0;assert(preflight(&fs,&opened)==-2);if(opened)core_hzfs_close(&fs);
+        /* A two-page free tail fits exactly. Removal frees the old extent. */
+        entry(64,(CORE_POOL_END-CORE_POOL_PCM-4096)/2,CORE_POOL_PCM,1);
+        opened=0;assert(preflight(&fs,&opened)==1);if(opened)core_hzfs_close(&fs);
+        state->wanted[64]=0;opened=0;assert(preflight(&fs,&opened)==1);if(opened)core_hzfs_close(&fs);
+        /* Two new files: the first fits, the second does not. Neither may
+         * reach AUDIO, and the existing large descriptor stays published. */
+        entry(64,0,0,1);state->code[64]=0;
+        entry(127,(CORE_POOL_END-CORE_POOL_PCM-4096)/2,CORE_POOL_PCM,1);state->code[127]=0x8003;
+        for(i=0;i<128;i++)state->wanted[i]=state->code[i];
+        state->wanted[64]=0x8001;state->wanted[65]=0x8002;
+        core_pool_write(PROJECT,state->wanted);assert(core_pool_sync()==-2);
+        assert(receiver_calls==calls && !state->frames[64] && !state->frames[65] && state->code[127]==0x8003);
+    }
+    reset_state();
     /* Full legal stock capacity and a mixture of empty, short and rejected
      * oversize headers. Compare every byte, including page boundary splits. */
     for(u32 variant=0;variant<2;variant++){

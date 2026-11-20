@@ -71,7 +71,8 @@ and `memcpy` calls, which the freestanding core does not have).
 - A function of those files that a tick, a draw, a key, an encoder or a native
   path calls is marked `CORE_HOT` (`__attribute__((optimize("O3")))`) and keeps
   `-O3`: the pool's cursor tick, sample source, name, channels, cursor, cached
-  name, wave storage, code-used, readiness, validity, empty, stock-changed; the
+  name, wave storage, code-used, readiness, validity, empty, stock-changed,
+  memory snapshot; the
   bank's auto-confirm tick; the sample write guard. GCC does not inline a
   function compiled at another level, so a hot function that calls a cold
   helper now calls it instead of inlining it (a few bytes either way).
@@ -173,10 +174,25 @@ The folder must contain the SYX build, `lint.json` and `synfact-machines.smz4`.
 # add  --synfact "$SYNFACT_SRC"  when you have the Synfact source tree
 ```
 
+When comparing the complete Digi Mono 0.3 bank against 0.2, add
+`--digimono-ens-changed`. This requires the same machine/module lists and AUDIO
+object set: only Digi Mono's adapter and existing MONO2K DSP object may change.
+The original Digi Mono engine/sine, samplers and FM-TONE objects must match.
+
+For the 0.6.0 FM+ replacement, use `--digimono-fm-changed` instead. It permits
+the new FM+ object and changes to the adapter/MONO2K dispatch only, retaining
+the same machine/module lists and all other AUDIO object hashes.
+
 `--unicorn-python` runs the linked core's safe-boot record writes in Unicorn
 (`tests/test_st_safe_boot_emu.py`; see SETUP.md for Unicorn). Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.
 A comparison that needs an input you did not give is printed as skipped; it is
 not a pass. `SYNFACT_SRC`, when you use it, is read only.
+
+For the Digi Mono 0.1.2 to 0.2.0 bank upgrade, add
+`--digimono-audio-changed`: the normal six-machine bank must keep its machine
+directory and modules, change only Digi Mono's adapter object, and add its
+MONO2K object. Every sampler, FM TONE and legacy Digi Mono engine/sine object
+must remain byte-identical. This does not permit any core AUDIO change.
 
 ### Generated LFO3 lock sources
 

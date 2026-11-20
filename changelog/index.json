@@ -19,8 +19,15 @@
       "slug": "core-st",
       "id": "core",
       "title": "core",
-      "latest": "2.2.0",
+      "latest": "2.3.2",
       "path": "mods/core-st"
+    },
+    {
+      "slug": "digimono-st",
+      "id": "digimono-st",
+      "title": "SY MnM",
+      "latest": "0.7.0",
+      "path": "mods/digimono-st"
     },
     {
       "slug": "fm-tone-st",

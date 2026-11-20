@@ -2,6 +2,7 @@
   "modules": [
     {"id": "samplers-st", "path": "mods/samplers-st", "kind": "machine"},
     {"id": "fm-tone-st", "path": "mods/fm-tone-st", "kind": "machine"},
+    {"id": "digimono-st", "path": "mods/digimono-st", "kind": "machine"},
     {"id": "playhead-st", "path": "mods/playhead-st", "kind": "module"},
     {"id": "recorder-st", "path": "mods/recorder-st", "kind": "module"},
     {"id": "lfo3-st", "path": "mods/lfo3-st", "kind": "module"},

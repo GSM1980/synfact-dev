@@ -2,6 +2,22 @@
 
 # Tests
 
+Sample Manager 1.3 / core 2.3: native-host manager/pool tests cover the expanded
+63.62 MiB budget, protected slots, mono/stereo sizes, unique page extents,
+fragmentation, exact fits and capacity rejection before any AUDIO command.
+The compiled UI additionally executes against OS 1.42's real list, font,
+QString, bitmap and selection routines (allocation/synchronization, core
+services and manager attachment are fixture boundaries):
+
+```bash
+python tests/test_st_manager_draw_emu.py --stock "$SYNTAKT_STOCK" \
+    --bank out/<build>/synfact-machines.smz4 --out out/<build>/manager-preview
+```
+
+It checks the two-line header, six-row scrolling, folder labels, stereo/mono
+sizes, ellipsis and the right column's pixel positions, and writes two optional
+LCD PNGs plus an AUDIO FULL error capture. It does not access a device or model LCD timing.
+
 Core 2.1.2: the registry regression (`tests/test_core_st_machines.c`) includes
 module-only banks (LFO3 metadata with and without a second provider), no-bank
 fallback, empty-directory/lane safety and allocation failure/recovery. It uses
@@ -253,6 +269,141 @@ mono/stereo, transport states and STOP/FUNC+STOP. They check reduced-mode
 eligibility before the next UI tick, unchanged PCM/length, one native STOP
 only, repeat/release handling and normalization/PLAY gating.
 See [RECORDER-CAPTURE-CPU.md](RECORDER-CAPTURE-CPU.md).
+
+## Digi Mono
+
+SY MnM 0.6 replaces FM+STAT/PAR/DYN with De-Pattern's algorithms. Run
+`tests/test_st_fmplus.py --cc CC [--os MONOMACHINE_OS]` for the 120-case pinned
+float32 DSL comparison and 12,288 split/native-wide arithmetic/resampling
+blocks. Its `--arithmetic-only` mode is explicit in the common suite; the full
+DSL sweep is reported separately. The original comparison bench now accepts
+`--suite fmplus` (27 cases). See [the FM+ port](../mods/digimono-st/fmplus/README.md).
+
+The ColdFire decoder checks EXTB.L D0..D7 before LEA's overlapping mask in
+both Python and TypeScript. Positive tests cover all eight registers; the
+adjacent invalid LEA An remains rejected. No audit rule or compiler flag
+was relaxed for the FM+ build.
+
+The original-Monomachine calibration bench is documented in
+[`tools/monomachine-reference`](../tools/monomachine-reference/README.md).
+It is separate from the port's exactness tests: it needs the owner's Monomachine
+OS 1.32B and a built DSP reference. Its numerical analysis tests run without
+firmware using `python tests/test_monomachine_compare.py` in the research venv.
+`complex_compare.py` adds 88 cases in eight complex engines: unison/subs/PWM,
+ENS intervals/chorus, VO vowels/consonants, SID waves/RING/SYNC and all three
+FM+ families. `python tests/test_monomachine_complex.py` checks its band-power
+metrics, stereo/silence handling, gain-response calculation, transient-preserving
+A/B normalization and explicit fixtures without any firmware input. Reanalysis
+may reuse hash-verified captures; the linked DSP/native generator sources and
+every parameter/event must match.
+The ENS extension adds 149 octave/control/chorus/retrigger fixtures and 28
+separate shape cuts, with per-note gain anchors. `ens_model.py` checks hashed
+original captures and infers duty/blend from same-note harmonic ratios, then
+validates 22 independent response cuts, excluding repeated grid settings.
+Numerical tests cover width/blend
+inference, invalid inputs, the five-octave grid and stereo captures. Original
+DIST, the entire chain and the fixture set must also match for capture reuse.
+
+The standalone Digi Mono port test runs all twelve types through the real
+adapter/DSP, checking PCM/state against the engine, UI labels and chord names,
+TYPE transport, backend re-entry, independent tracks, pitch and AMP sleep.
+Only firmware service boundaries are doubles; it does not boot a Syntakt:
+
+```bash
+python tests/test_st_digimono.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.exe"
+```
+
+Its upstream source hashes are also verified. No firmware input is needed.
+The runner also compiles `test_st_digimono_pages.c` with the real core registry,
+page resolver and Digi Mono UI. It checks all twelve engine types, repeated TYPE
+switches, two views, every dial/edit ID and page-action layout, TUNE and LEVEL.
+This catches the old core's frozen SAW layout, which a descriptor-only UI test
+missed: the hidden E position must reappear for every seven-parameter engine.
+It also alternates destination queries for two different Sound models without
+opening SYN, checks every TYPE's visibility, unchanged runtime flags/storage,
+module-provider fallback and rejection of older host APIs.
+Version 0.5 adds `test_st_digimono_picker.c`: the real one-page UI and shared
+subtype helper, twelve names, hidden TYPE, YES/NO/encoder routing, recording
+guards, late defaults, track/model changes, preserved knobs and wrapping ticks.
+`test_st_digimono_picker_emu.py BUILD --out OUTPUT` runs the linked ColdFire
+picker and actual native Bitmap construction/fill, writing PBM previews of all
+twelve name boxes and the selector. Native UI/model/get/edit boundaries are
+explicit doubles; a complete native selector/undo/modal lifecycle is not
+emulated. The original MD work is imported read-only with snapshot hashes. Core 2.3.2
+also runs native SYN reload through its real machine-parameter enumeration for
+all twelve subtypes, with boot-created kit/snapshot and final reload-consumer
+boundaries doubled: all eight synthesis IDs remain and TYPE is absent.
+See [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md).
+Core 2.3.1's transport fixture also tests `ST_MACHINE_CONFIG_PARAMETER` for
+every extended index 8..23, both packed halves, independent/shared POLY owners,
+legacy modulated working values versus raw stored edits, and restoration of
+ordinary modulation after clearing the marker. TYPE flags are zero in native
+metadata and it is absent from LFO/Sound destination lists; other synthesis
+flags and common destinations remain unchanged.
+
+The runner also runs `test_st_mono2k.py`. It verifies pinned MONO2K hashes and
+deterministic extraction; the generated tables at 44.1 kHz match upstream and
+the committed ones regenerate at 48 kHz. ENS and SID compare
+3,456 blocks of PCM/state against the pinned code using native 64-bit maths,
+including fractional controls, low/high pitches and changing modulation.
+ENS's oracle includes the measured 0.3.1 PW/WAVE laws; its width conversion uses
+independent wide arithmetic. The adapter checks PW=0 remains audible at WAVE127.
+Independent checks cover wide arithmetic, 440 Hz carrier tuning at 48 kHz
+and all five SID waves, ENS L/R and delay/clock continuity across retriggers.
+`test_st_digimono_stereo.c` checks both output channels, single ramp advancement,
+TYPE/width changes, AMP tails and service fallback with stateful native doubles.
+This is not original-Monomachine matching or timing.
+
+FM+ STAT/PAR/DYN use De-Pattern in version 0.6.0. The host runner includes
+12,288 split/native-wide arithmetic blocks and source/table hashes. The
+separate `test_st_fmplus.py --cc HOST_CC --os MONOMACHINE_OS` sweep executes
+120 cases against the pinned float32 DSL (60 dB clean-case SNR or bounded
+absolute error; chaotic feedback uses a 2.5 dB level gate).
+`test_st_fmplus_optim_emu.py --before OLD_BANK --after NEW_BANK --stock OS
+--out OUTPUT` compares 768 linked blocks with exact PCM and full voice state,
+requiring fewer aggregate render instructions in every scene.
+`test_st_fmplus_emac.py --bank BANK --stock OS --out OUTPUT --sgdk-bin SGDK`
+checks all four accumulators, both extension words and MACSR across 144 calls,
+including triggers. `test_st_fmplus_cfbench.py --cfbench CFBENCH --sgdk-bin SGDK
+--out OUTPUT` independently runs 768 target/split-integer blocks on the physical
+EMAC register model, with eight voices and four incoming modes. PCM, full voice
+state and every incoming accumulator/extension/MACSR word must match exactly.
+The target tests need `PYTHONPATH` set to the repository and EMAC-capable
+Unicorn. See [FM+ details](../mods/digimono-st/fmplus/README.md).
+
+Version 0.7.0 ships the balanced hybrid backend. The runner's arithmetic
+comparison explicitly selects `--backend balanced`; the strict source DSL
+sweep remains HQ with all existing thresholds. `test_st_fmplus_quality.py`
+needs numpy/scipy and compares 48 HQ/balanced tuning, level and spectral cases,
+writing three shared-gain listening WAVs. `test_st_fmplus_cost_emu.py` compares
+768 linked HQ/balanced blocks for callback cost (at least 15% per scene, 20%
+in aggregate), without asserting intentional DSP changes are exact. The
+ordinary 2,300-block linked adapter test still requires exact target/host PCM.
+
+`test_st_digimono_destinations_emu.py BUILD_FOLDER` executes the native list
+builder and sorter, actual Sound-proxy getter, linked core flags wrapper and
+linked bank's destination module. Only the boot objects, empty map header and
+heap are fixtures. It checks TYPE changes with the three LFO masks, unique
+targets, unchanged common destinations, Sound bytes and runtime flags. It needs
+a built core/bank folder and EMAC-capable Unicorn, without external fixtures.
+
+The linked ColdFire test additionally needs Syntakt OS 1.41, a bank with its
+sibling `.work/audio.elf`, 64-bit native clang, and the EMAC-capable Unicorn
+from [SETUP.md](SETUP.md) (`LIBUNICORN_PATH`). It runs real native update and
+gain calls, compares the oscillator PCM to the host engine, checks callee-save
+registers and stack balance, and reports instruction counts (not CPU cycles).
+Its 2,300 blocks include a full second of stereo ENS with fractional controls,
+delay wrap and retrigger, plus 128 blocks of mono fold-down with the service
+unavailable. It also checks the real native gain/mix ramp states match between
+the two channel calls. A complete bank exercises the shared stereo service;
+a standalone bank exercises the missing weak symbol and centered fold-down:
+
+```bash
+python tests/test_st_digimono_emu.py --bank out/digimono/synfact-machines.smz4 \
+  --stock "$SYNTAKT_STOCK" --host-cc "$LLVM_MINGW_BIN/x86_64-w64-mingw32-clang.exe"
+```
+
+This is an offline fixture, without a full boot, scheduler or FLTR/AMP/FX pass.
 
 ## The engine
 

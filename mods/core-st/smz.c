@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "smz.h"
 #include "cold.h"
+#include <syntakt/machines.h>
 typedef core_u32 u32;typedef core_u8 u8;
 u32 core_smz_be(const void *data)
 {const u8 *p=data;return (u32)p[0]<<24|(u32)p[1]<<16|(u32)p[2]<<8|p[3];}
@@ -153,7 +154,9 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
                !text(r,v,core_smz_be(p),9) || !immutable(r,v,k+8,16) ||
                !text(r,v,core_smz_be(p+4),64)){core_smz_failure=__LINE__;return 0;}
             x=core_smz_be(p+8);y=core_smz_be(p+12);n=core_smz_be(p+16);
-            if(y>0xffff || x>y || n<x || n>y || core_smz_be(p+20)>0x1f8){core_smz_failure=__LINE__;return 0;}
+            if(y>0xffff || x>y || n<x || n>y ||
+               (core_smz_be(p+20)>0x1f8 &&
+                !(j>=8 && j<24 && core_smz_be(p+20)==ST_MACHINE_CONFIG_PARAMETER))){core_smz_failure=__LINE__;return 0;}
         }
     }
     if(!read_at(r,v->audio,ae,16) || core_smz_be(ae)!=0x534d4133u ||

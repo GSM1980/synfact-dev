@@ -56,6 +56,56 @@ marked "octabam" where they are used (elekloader/devices/octatrack.py, in
 the engine this repository keeps from elekloader). No octabam code is
 included here.
 
+Digi Mono
+---------
+mods/digimono-st/upstream/ contains the unmodified Digi Mono engine from
+gdeo607/digi1_mods, pinned at commit 32fd22a1fd66fa5833b808b1c1c049a0deb82d88.
+It is MIT-licensed, copyright (c) 2026 the digi1_mods authors; its full licence
+is included there. Its sine table is from Plaits (MIT, copyright 2016 Emilie
+Gillet); the full notice is retained in upstream/sine.c. No MACRO engine or
+Monomachine firmware is included. The original Syntakt adapters are GPL-2.0-or-later.
+
+MONO2K
+------
+mods/digimono-st/mono2k/upstream/ contains source snapshots from MONO2K by
+Inigo Hernandez (https://github.com/InigoHernandez/mono2k), pinned at commit
+95d5763495d961f3ed225f5e4201328934ca4247, GPL-3.0-only. The full licence and
+source hashes are included there. ENS and SID-6581 are extracted
+from these clean-room generators, with tables regenerated for 48 kHz.
+The new DSP, extraction script and combined AUDIO adapter are GPL-3.0-only;
+the historical combined bank used GPL-3.0-only with MIT notices retained.
+From Digi Mono 0.6.0, the FM+ replacement adds AGPLv3 terms (below).
+No original Monomachine firmware is included or needed.
+
+De-Pattern FM+
+--------------
+mods/digimono-st/fmplus/upstream/ pins De-Pattern/dn2mk2-firmware at
+a0249fc55fd188242c92f377b4cbb2748b851a35 (AGPL-3.0-or-later), including
+its full licence. fmplus.c is an integer port of its FM+ STAT/PAR/DYN.
+The combined machine is distributed under AGPLv3 with all GPL/MIT notices
+retained. The original FM tables are included as C arrays at the owner's
+explicit request, with an OS 1.32B extraction recipe and source/output hashes.
+No Elektron executable code or complete firmware is included.
+
+Machine subtype selector
+------------------------
+elekloader/sdk/include/syntakt/subtype-picker.h adapts the GPL-2.0-or-later
+MAIN UI and original small glyphs from the uncommitted Synfact MD prototype.
+The source snapshot hashes and base revision are retained in
+mods/digimono-st/picker-provenance.json; docs/SUBTYPE-PICKER.md describes the
+adaptation. No mdkit/Machinedrum DSP or firmware is imported by this UI work.
+
+Monomachine reference bench
+--------------------------
+tools/monomachine-reference/ builds an offline driver against Monomodule
+(https://github.com/shnolk/monomodule, copyright Shnolk, AGPL-3.0), downloaded
+separately at its recorded revision. reference.cpp/reference.cmake and compat.h
+are AGPL-3.0-only; the Python tools and host adapter are GPL-3.0-only. The
+included MinGW patch adjusts the Windows calling convention in the separately
+downloaded GPLv3 DSP56300 emulator; it does not change DSP opcode semantics.
+Upstream dependency notices are retained in their checkouts. No Monomachine OS,
+extracted firmware, reference recording or generated JIT code is included here.
+
 Elektron
 --------
 Elektron, Digitakt, Digitone, Syntakt and Analog are trademarks of Elektron

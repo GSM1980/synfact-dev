@@ -1,0 +1,3 @@
+upstream/* -text
+tables.h text eol=lf
+tables.json text eol=lf

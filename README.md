@@ -8,10 +8,12 @@ Synfact is built on [elekloader](https://github.com/irpina/elekloader), a mod
 loader for Elektron firmware: its engine, file format and checks are the
 foundation here. This repository keeps only the Syntakt.
 
-- **Nothing from Elektron is distributed.** A build starts from your own stock
+- **Firmware images are built locally.** A build starts from your own stock
   file, recognised by its hash. Mods carry their authors' bytes, the short
   instruction fragments needed to hook the OS, and hashes of the stock bytes
-  they expect.
+  they expect. SY MnM's FM+ port additionally includes reference table arrays,
+  their provenance and a reproducible extraction recipe; see its
+  [FM+ documentation](mods/digimono-st/fmplus/README.md).
 - **The bootloader is never touched.** Builds change MAIN and a bounded part
   of AUDIO only; bootstrap, updater and boot stub stay byte-identical, and
   each output is re-read and verified before delivery.
@@ -31,6 +33,7 @@ bank that can change without reinstalling the firmware:
 |---|---|
 | [SP sample machines](mods/samplers-st) | ONE SHOT, WERP, REPITCH and SLICE |
 | [SY FM DTONE](mods/fm-tone-st) | an FM machine (FM TONE until 2026-11-02) |
+| [SY MnM](mods/digimono-st) | twelve Digi Mono/MONO2K synth types in one machine, chosen through its subtype selector |
 | [Audio Recorder](mods/recorder-st) | record, trim, normalize and save samples |
 | [Third LFO](mods/lfo3-st) | a third LFO on every track |
 | [Arpeggiator](mods/arp-st) | a Digitone-style arpeggiator on the audio tracks |

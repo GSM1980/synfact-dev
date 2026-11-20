@@ -1,4 +1,24 @@
-# Syntakt core 2.2.0
+# Syntakt core 2.3.2
+
+Core **2.3.2** excludes saved configuration controls from the shared native
+SYN reload/randomize parameter list. FUNC+NO can reload the synthesis controls
+without resetting a hidden subtype. Explicit machine defaults and Sound/project
+loading retain their existing behavior. Host API remains 17; AUDIO is unchanged.
+
+Core **2.3.1** / host API 17 adds saved configuration controls for machine
+indices 8..23 through `ST_MACHINE_CONFIG_PARAMETER`. They have no modulation
+destinations and MAIN sends their stored Sound values, ignoring effective
+LFO/Sound Setup routes and locks. Digi Mono uses this for its hidden TYPE.
+Other controls keep their effective values. The alias is validated before
+loading a bank; serialized layouts, hook sites and AUDIO code are unchanged.
+
+Core **2.3.0** appends a task/UI memory snapshot to sample-pool API 2, keeping
+the API 1 prefix. It reports PCM bytes for each loaded slot and the unique,
+page-aligned extents referenced by slots 65..128, against the core 2.2 AUDIO
+capacity (66,711,552 bytes). Stock slots 1..64 use a separate budget.
+Runtime sync dry-runs the complete allocation before retiring or streaming
+any sample. An insufficient or fragmented AUDIO pool rejects the whole edit;
+the existing live-apply wrapper restores the project record.
 
 Core **2.2.0** reorganizes AUDIO's sample store mapping
 ([docs/AUDIO-MEMORY-MAP.md](../../docs/AUDIO-MEMORY-MAP.md)):
@@ -121,6 +141,40 @@ Development labels in the records below are mapped to this single release in
 [the consolidated version table](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
 See [core MAIN performance](../../docs/CORE-MAIN-PERFORMANCE.md) for complete-call
 counts, compatibility, startup checks and hardware measurement limits.
+
+## Model-specific destination lists (host API 16)
+
+Core 2.3.1 / host API 17 adds `ST_MACHINE_CONFIG_PARAMETER` for saved
+configuration values in extended controls 8..23. The marker uses the existing
+alias field, without changing descriptor geometry or storage. Such a control
+has no modulation flags and keeps the native scalar editor. The MAIN sender
+publishes its owning Sound's unmodulated mirror, blocking old LFO/Sound/lock
+projections. Native
+edits still store the same control. Digi Mono TYPE is the first user; the
+selector itself stays entirely in the bank. No additional hook or AUDIO
+oscillator code is added. See [SUBTYPE-PICKER.md](../../docs/SUBTYPE-PICKER.md).
+
+Host API 16 adds parameter-provider query 32 without extending the API record.
+API 15 retains main's stopped-transport mixer owner and its original ABI.
+Digi Mono's destination module refuses API 15, so an existing main core cannot
+silently accept a bank whose hidden-target filtering requires query 32.
+Only the native destination builder's flags call (return address `400147a0`
+in OS 1.41, borrowed model in A5) uses this query. A bank may filter a target
+using that model's values. Declined queries retain the normal flags/provider
+lookup. Every other flags caller, including playback/locked-destination
+validation, still uses query 21. Existing stock fast paths are unchanged; no
+new patch site is added. Digi Mono 0.1.2 uses it to remove blank targets per TYPE.
+
+## Live SYN layouts (core 1.8.1)
+
+The native page layout now reads the bank UI's current slot map on every
+lookup. Previously the core copied it only at bank binding: a machine with
+a TYPE-dependent layout could change labels but never recover an initially
+empty position or remove a dial it no longer used. Drawing, encoder routing
+and page actions now use the same current map. Digi Mono 0.1.1 uses this to
+show TUNE plus all seven engine controls where present, and hide unused ones.
+Static layouts, stored parameter IDs and the SMZ format are unchanged. This
+is UI-task work; no AUDIO path, hook site or ABI field is added.
 
 Version 0.12.19 adds host API 8 `native_query`, a pointer to the existing
 synchronous native bus. It adds no hook site or operation number. OWNERS with

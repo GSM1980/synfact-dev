@@ -54,6 +54,11 @@ static __inline__ const unsigned short *st_machine_extended(const void *params)
     return ((const unsigned short *(*)(const void *))api[1])(params);
 }
 struct core_machine_param {const char *label,*name;st_u32 min,max,initial,alias;} __attribute__((aligned(4)));
+/* Host API 17: extended controls 8..23 may use this alias for a saved
+ * configuration value. No modulation destination; AUDIO receives the owner's
+ * unmodulated Sound mirror, even with an old route/lock in the working row.
+ * Explicit UI edits and the codec retain the ordinary ID and Sound slot. */
+#define ST_MACHINE_CONFIG_PARAMETER 0xfffffffeu
 struct core_machine_def {
     st_u32 type,params;const char *name,*short_name,*group;
     const struct core_machine_param *parameter;
@@ -112,7 +117,11 @@ struct st_machine_ui_api {
 struct st_machine_dial {void *model;st_u32 id,raw,a,b;void *ctx;int x,y;};
 struct st_machine_ui {
     st_u32 type,pages;
-    const st_u32 *layout; /* pages * 8 parameter indices, ffffffff = empty */
+    /* pages * 8 parameter indices, ffffffff = empty. Core 1.8.1 rereads the
+     * array on page lookup; idle may update a writable bank-owned array to
+     * hide/restore controls for the current Sound. Control IDs/storage stay
+     * fixed. Earlier cores snapshot the array when binding the bank. */
+    const st_u32 *layout;
     void (*draw)(const struct st_machine_ui_api *,const struct core_machine_def *,void *view,void *ctx,st_u32 page);
     int (*idle)(const struct st_machine_ui_api *,const struct core_machine_def *,void *view,st_u32 page);
     int (*dial)(const struct st_machine_ui_api *,const struct core_machine_def *,st_u32 index,const struct st_machine_dial *);

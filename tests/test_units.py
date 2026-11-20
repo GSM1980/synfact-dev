@@ -963,11 +963,162 @@ def test_adapting_lists_every_machine_type_in_use():
         for m in re.finditer(r'core_machine_def \w+=(?:\{\s*|D\()(\d+),\s*(?:\d+,\s*)?"([^"]+)"', text):
             used[int(m[1])] = m[2]
     doc = open(os.path.join(root, 'docs', 'ADAPTING.md'), encoding='utf-8').read()
-    table = {int(t): name for t, name in re.findall(r'^\| (\d+) \| ([^|]+?) \|', doc, re.M)}
+    rows = {int(t): name for t, name in re.findall(r'^\| (\d+) \| ([^|]+?) \|', doc, re.M)}
+    reserved = {t for t, name in rows.items() if name.endswith(' (reserved)')}
+    table = {t: name for t, name in rows.items() if t not in reserved}
     assert used and table == used, (table, used)
-    assert all(64 <= t < 80 for t in used)
-    free = [t for t in range(64, 80) if t not in used]
+    assert not reserved.intersection(used), (reserved, used)
+    assert all(64 <= t < 80 for t in rows)
+    free = [t for t in range(64, 80) if t not in used and t not in reserved]
     assert '**Free: %d to %d.**' % (free[0], free[-1]) in doc and free == list(range(free[0], 80)), free
+
+
+def test_optional_machine_composition_keeps_exact_directory_checks():
+    import hashlib
+    import struct
+    from pathlib import Path
+    from st_bank_modules import check_bank_machines
+    manifest=Path(HERE).parent/'mods/digimono-st/mod.json'
+    def fixture(types,include):
+        raw=bytearray(80+40*len(types))
+        struct.pack_into('>II',raw,40,0,len(types))
+        for i,t in enumerate(types):struct.pack_into('>I',raw,80+40*i,t)
+        report={'machines':list(types),'source_sha256':{str(manifest):hashlib.sha256(manifest.read_bytes()).hexdigest()} if include else {}}
+        return report,raw
+    baseline=[66,67,68,69,65]
+    check_bank_machines(*fixture(baseline,False))
+    check_bank_machines(*fixture(baseline+[71],True))
+    for types,include in [(baseline,True),(baseline+[71],False),(baseline+[72],True),
+                          (baseline+[71,71],True),(baseline[1:]+[71],True),
+                          (list(reversed(baseline))+[71],True)]:
+        try:check_bank_machines(*fixture(types,include))
+        except AssertionError:pass
+        else:raise AssertionError(('accepted wrong composition',types,include))
+    report,raw=fixture(baseline+[71],True)
+    struct.pack_into('>I',raw,80+40*5,72)
+    try:check_bank_machines(report,raw)
+    except AssertionError:pass
+    else:raise AssertionError('accepted lying machine report')
+
+
+def test_os142_bank_allows_only_declared_optional_modules():
+    from copy import deepcopy
+    from test_st_os142 import check_module_composition
+    old={'machines':[66,67,68,69,65], 'modules':[
+        'sp_sampler_input_module','st_stereo_module','fm_tone_module',
+        'recorder_module','lfo3_module','arp_module','poly_module',
+        'system_info_module','sample_manager_module','chorus_module',
+        'playhead_module','modulation_skip_module']}
+    check_module_composition(old)
+    new=deepcopy(old);new['machines'].append(71);new['modules'].append('dm_destination_module')
+    check_module_composition(new)
+    fast=deepcopy(new);fast['modules']+=['mix_fast_module','icache_lock_module']
+    check_module_composition(fast)
+    bad=[]
+    for module in ('recorder_module','dm_destination_module','sp_sampler_input_module'):
+        report=deepcopy(new);report['modules'].remove(module);bad.append(report)
+    for module in ('unknown_module','dm_destination_module'):
+        report=deepcopy(new);report['modules'].append(module);bad.append(report)
+    report=deepcopy(old);report['modules'].append('dm_destination_module');bad.append(report)
+    for report in bad:
+        try:check_module_composition(report)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unexpected OS 1.42 module composition')
+
+
+def test_digimono_picker_module_has_only_the_declared_ui_events():
+    import hashlib,struct
+    from pathlib import Path
+    from st_bank_modules import check_digimono_module
+    path=Path(HERE).parent/'mods/digimono-st/picker.c'
+    raw=bytearray(256);raw[32:32+19]=b'MONO TYPE SELECTOR\0'
+    report={'main_bytes':256,'source_sha256':{str(path):hashlib.sha256(path.read_bytes()).hexdigest()}}
+    struct.pack_into('>4I',raw,0,32,100,128,5)
+    for i,e in enumerate((0,2,3,0x101,1)):struct.pack_into('>II',raw,128+8*i,e,200+2*i)
+    check_digimono_module(report,raw,0,0)
+    for offset,value in ((12,0),(12,6),(128,5),(136,0x102),(140,201),(144,11),(132,256)):
+        bad=bytearray(raw);struct.pack_into('>I',bad,offset,value)
+        try:check_digimono_module(report,bad,0,0)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unexpected picker event/ABI')
+    bad=bytearray(raw);bad[32]=ord('X')
+    try:check_digimono_module(report,bad,0,0)
+    except AssertionError:pass
+    else:raise AssertionError('accepted unknown picker')
+    try:check_digimono_module(dict(report,source_sha256={}),raw,0,0)
+    except AssertionError:pass
+    else:raise AssertionError('accepted picker without pinned source')
+
+
+def test_digimono_audio_change_keeps_every_other_engine_identical():
+    from copy import deepcopy
+    from test_st_common_regressions import check_digimono_audio_change
+    old={'machines':[66,67,68,69,65,71],'modules':['a','dm_destination_module'],
+         'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(3)}}
+    new=deepcopy(old)
+    new['object_sha256']['audio2-0.o']='changed adapter'
+    new['object_sha256']['audio2-3.o']='new mono2k'
+    new['source_sha256']['/mods/digimono-st/mono2k.c']='source'
+    check_digimono_audio_change(new,old)
+    bad=[]
+    for name in ('audio0-0.o','audio1-1.o','audio2-1.o','audio2-2.o','audio9-0.o'):
+        report=deepcopy(new);report['object_sha256'][name]='unexpected';bad.append(report)
+    report=deepcopy(new);del report['object_sha256']['audio0-1.o'];bad.append(report)
+    report=deepcopy(new);report['modules'].reverse();bad.append(report)
+    report=deepcopy(new);report['machines'][-1]=72;bad.append(report)
+    report=deepcopy(new);report['source_sha256'].clear();bad.append(report)
+    for report in bad:
+        try:check_digimono_audio_change(report,old)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unrelated AUDIO change')
+
+
+def test_digimono_ens_change_is_limited_to_two_existing_objects():
+    from copy import deepcopy
+    from test_st_common_regressions import check_digimono_ens_change
+    old={'machines':[66,67,68,69,65,71],'modules':['st_stereo_module','dm_destination_module'],
+         'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(4)}}
+    new=deepcopy(old)
+    for n in (0,3):new['object_sha256'][f'audio2-{n}.o']='ENS '+str(n)
+    new['source_sha256']['/mods/digimono-st/mono2k/ens.inc']='source'
+    check_digimono_ens_change(new,old)
+    bad=[]
+    for name in ('audio0-0.o','audio1-1.o','audio2-1.o','audio2-2.o','audio9-0.o'):
+        report=deepcopy(new);report['object_sha256'][name]='unexpected';bad.append(report)
+    for name in ('audio0-1.o','audio2-0.o','audio2-3.o'):
+        report=deepcopy(new);del report['object_sha256'][name];bad.append(report)
+    report=deepcopy(new);report['modules'].reverse();bad.append(report)
+    report=deepcopy(new);report['machines'][-1]=72;bad.append(report)
+    report=deepcopy(new);report['source_sha256'].clear();bad.append(report)
+    for n in (0,3):
+        report=deepcopy(new);report['object_sha256'][f'audio2-{n}.o']=old['object_sha256'][f'audio2-{n}.o'];bad.append(report)
+    for report in bad:
+        try:check_digimono_ens_change(report,old)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unrelated or incomplete ENS AUDIO change')
+
+
+def test_digimono_fm_replacement_is_limited_to_its_adapter_and_new_engine():
+    from copy import deepcopy
+    from test_st_common_regressions import check_digimono_fm_change
+    old={'machines':[66,67,68,69,65,71],'modules':['dm_destination_module'],
+         'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(4)}}
+    new=deepcopy(old)
+    for n in (0,3):new['object_sha256'][f'audio2-{n}.o']='FM '+str(n)
+    new['object_sha256']['audio2-4.o']='new FM'
+    new['source_sha256']['/mods/digimono-st/fmplus.c']='source'
+    check_digimono_fm_change(new,old)
+    bad=[]
+    for name in ('audio0-0.o','audio1-1.o','audio2-1.o','audio2-2.o','audio9-0.o'):
+        report=deepcopy(new);report['object_sha256'][name]='unexpected';bad.append(report)
+    for name in ('audio0-1.o','audio2-0.o','audio2-3.o','audio2-4.o'):
+        report=deepcopy(new);del report['object_sha256'][name];bad.append(report)
+    report=deepcopy(new);report['source_sha256'].clear();bad.append(report)
+    report=deepcopy(new);report['modules'].append('unexpected');bad.append(report)
+    for report in bad:
+        try:check_digimono_fm_change(report,old)
+        except AssertionError:pass
+        else:raise AssertionError('accepted unrelated or incomplete FM+ replacement')
 
 
 def test_an_smz_source_pins_what_it_incbins():

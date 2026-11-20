@@ -61,6 +61,12 @@ struct st_pool_ui_callbacks {
     void (*file)(unsigned int,unsigned int,unsigned int);
     void (*progress)(unsigned int,unsigned int);
 };
+/* Task/UI snapshot: actual PCM bytes per slot; used counts unique AUDIO page
+ * extents referenced by slots 65..128 only. Stock PCM has its own budget. */
+struct st_pool_memory {
+    pool_u32 used,total,bytes[CORE_POOL_SLOTS];
+};
+void core_pool_memory(struct st_pool_memory *);
 struct st_sample_pool_api {
     unsigned int version;
     int (*valid)(const unsigned char *);
@@ -70,6 +76,8 @@ struct st_sample_pool_api {
     void (*refill)(void);
     void (*release)(void);
     int (*bind_ui)(const struct st_pool_ui_callbacks *);
+    /* API 2 appends this service, preserving the API 1 prefix. */
+    void (*memory)(struct st_pool_memory *);
 };
 extern const struct st_sample_pool_api core_sample_pool_api;
 void core_pool_ui_reset(void);

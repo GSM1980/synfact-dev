@@ -1,0 +1,10 @@
+{
+  "source_branch": "feat/md-machine",
+  "source_commit": "121e9655f4bd12117dc6752308bcd8fa75b7b88c",
+  "state": "uncommitted working files, read-only snapshot; no MD DSP imported",
+  "snapshot_sha256": {
+    "mods/md-st/main.c": "99c681817127cf0da7f508cd078b6d3f65d51e1f7e96ffa7d2b51eeb41f9a833",
+    "tests/md_st_picker_check.c": "94ab8c081ca3af039685226ac04c4176647ee9084c960935ca762bc4982abc7b",
+    "mods/md-st/README.md": "15ad72407bc285f6e72f28f6f1d2307c16b8f8dcc696e466a852b5232fedfc60"
+  }
+}

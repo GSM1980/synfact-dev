@@ -1,0 +1,195 @@
+{
+  "id": "digimono-st",
+  "title": "SY MnM",
+  "latest": "0.7.0",
+  "entries": [
+    {
+      "version": "0.7.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "04b66e5",
+          "date": "2026-11-19",
+          "subject": "perf(digimono): balance FM+ CPU cost while retaining 2x self-FM"
+        }
+      ]
+    },
+    {
+      "version": "0.6.1",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "b958d5d",
+          "date": "2026-11-19",
+          "subject": "perf(digimono): preserve exact FM+ output with fewer DDR writes"
+        },
+        {
+          "sha": "67908e5",
+          "date": "2026-11-19",
+          "subject": "docs(digimono): publish SY MnM 0.6.1 change history"
+        }
+      ]
+    },
+    {
+      "version": "0.6.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "c9f7174",
+          "date": "2026-11-19",
+          "subject": "feat(digimono): replace FM+ with De-Pattern and cut render instructions by 64 percent"
+        },
+        {
+          "sha": "0907c50",
+          "date": "2026-11-19",
+          "subject": "docs(digimono): publish SY MnM 0.6.0 change history"
+        }
+      ]
+    },
+    {
+      "version": "0.5.1",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "e9a6dd4",
+          "date": "2026-11-19",
+          "subject": "Rename Digi Mono to SY MnM and preserve TYPE on SYN reload"
+        },
+        {
+          "sha": "a171405",
+          "date": "2026-11-19",
+          "subject": "Update core 2.3.2 and SY MnM 0.5.1 changelogs"
+        }
+      ]
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "b570b0e",
+          "date": "2026-11-19",
+          "subject": "Add Digi Mono subtype picker and keep TYPE outside modulation"
+        },
+        {
+          "sha": "1e78098",
+          "date": "2026-11-19",
+          "subject": "Update core 2.3.1 and Digi Mono 0.5.0 changelogs"
+        }
+      ]
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-11-19",
+      "commits": [
+        {
+          "sha": "ca7e95d",
+          "date": "2026-11-19",
+          "subject": "Document Digi Mono 0.4.0 OS 1.42 and API 16 integration"
+        },
+        {
+          "sha": "f7b1014",
+          "date": "2026-11-19",
+          "subject": "Refresh merged core and Digi Mono release histories"
+        }
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-11-17",
+      "commits": [
+        {
+          "sha": "04c943f",
+          "date": "2026-11-17",
+          "subject": "Calibrate ENS PW and WAVE laws against independent harmonic responses"
+        },
+        {
+          "sha": "9f0bb11",
+          "date": "2026-11-17",
+          "subject": "Record Digi Mono 0.3.1 control calibration release"
+        }
+      ]
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "f9652a6",
+          "date": "2026-11-11",
+          "subject": "Calibrate ENS intervals, waveform blend and stereo chorus with MONO2K"
+        },
+        {
+          "sha": "f30645a",
+          "date": "2026-11-11",
+          "subject": "Record Digi Mono 0.3.0 ENS calibration release"
+        }
+      ]
+    },
+    {
+      "version": "0.2.0",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "005748a",
+          "date": "2026-11-11",
+          "subject": "Add MONO2K SID-6581 and FM+ types to SY MONOMACHINE"
+        },
+        {
+          "sha": "c3da0b1",
+          "date": "2026-11-11",
+          "subject": "Document SY MONOMACHINE 0.2.0 release"
+        }
+      ]
+    },
+    {
+      "version": "0.1.2",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "7fe932b",
+          "date": "2026-11-11",
+          "subject": "Filter Digi Mono destinations by Sound TYPE"
+        },
+        {
+          "sha": "1094bde",
+          "date": "2026-11-11",
+          "subject": "Document destination filtering releases"
+        }
+      ]
+    },
+    {
+      "version": "0.1.1",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "fe671aa",
+          "date": "2026-11-11",
+          "subject": "Refresh SYN layouts when Digi Mono TYPE changes"
+        },
+        {
+          "sha": "83ff21d",
+          "date": "2026-11-11",
+          "subject": "Document live SYN layout fix releases"
+        }
+      ]
+    },
+    {
+      "version": "0.1",
+      "date": "2026-11-11",
+      "commits": [
+        {
+          "sha": "17eb89d",
+          "date": "2026-11-11",
+          "subject": "Add Digi Mono as one selectable Syntakt machine"
+        },
+        {
+          "sha": "d6d3934",
+          "date": "2026-11-11",
+          "subject": "Document Digi Mono 0.1 release history"
+        }
+      ]
+    }
+  ],
+  "slug": "digimono-st"
+}

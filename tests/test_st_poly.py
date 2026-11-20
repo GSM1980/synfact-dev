@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from elekloader.sdk import elf
 from elekloader.sdk.syntakt.audio import audit
-from st_bank_modules import check_bank_modules
+from st_bank_modules import check_bank_modules,check_bank_machines,object_for_symbol
 
 def kernel_layout(s):
     """Raw native relative branches require their original instruction offsets."""
@@ -27,7 +27,8 @@ def verify(folder,synfact=None):
         ['fm_tone_module','recorder_module','poly_module','system_info_module'],
         ['fm_tone_module','recorder_module','lfo3_module','poly_module','system_info_module'],
         ['fm_tone_module','recorder_module','lfo3_module','arp_module','poly_module','system_info_module']))
-    assert report['machines']==[66,67,68,69,65] and report['optimization']=='-O3'
+    check_bank_machines(report,(folder/'synfact-machines.smz4').read_bytes())
+    assert report['optimization']=='-O3'
     for name,digest in report['source_sha256'].items():
         assert Path(name).is_relative_to(ROOT) and hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest,name
     for name in ['poly_core.c','poly_ui.c','poly_sequence.c','poly_pattern.c','poly_event.c','publication.s','imported/kernels.s']:
@@ -58,7 +59,7 @@ def verify(folder,synfact=None):
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
     names+=['core_parameter_provider_set','core_native','core_sample_pool_api']
-    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',15,*[address(n) for n in names])
+    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',17,*[address(n) for n in names])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
@@ -118,8 +119,8 @@ def verify(folder,synfact=None):
     assert bank_read('poly_mod_shared',len(modulation))==modulation
     for name in ['poly_native_shared','poly_mod_shared','poly_native_lfo_guard','poly_fast_publish','poly_fast_publish_span','si_tick','si_draw']:
         assert sy[name].shndx==section.idx and sy[name].value<report['main_bytes']
-    for name in ['main3-1.o','main3-2.o']:
-        obj=elf.Elf.load(work/name);assert audit(obj.section('.text').data)>0
+    for name in ['poly_mod_all','poly_fast_publish']:
+        obj=object_for_symbol(report,name);assert audit(obj.section('.text').data)>0
     if synfact:
         p=json.loads((mod/'provenance.json').read_text())
         for name,digest in p['source_sha256'].items():assert hashlib.sha256((synfact/name).read_bytes()).hexdigest()==digest,name

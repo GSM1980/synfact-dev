@@ -19,7 +19,7 @@ Checked by the core's parser (`mods/core-st/smz.c`) before anything runs.
 | parameter short label | printable ASCII, at most 8 characters |
 | parameter long label | printable ASCII, at most 63 characters |
 | `min`, `max`, `default` | 16-bit. `min <= default <= max` and `max <= 0xffff` |
-| parameter alias | at most `0x1f8` |
+| parameter alias | at most `0x1f8`; core 2.3.1 also accepts `ST_MACHINE_CONFIG_PARAMETER` at indices 8..23 only |
 | `borrow` | must be 44 (the stock SYN presentation template) |
 | `category` | 1 to 14 |
 | `rank` | 0 to 127 |
@@ -90,6 +90,7 @@ aliases in use:
 | `0x1f1` | TUNE: the native TUNE dial, with its FUNC snap | TUNE controls. Do not put a start position on it: it reads -64 to +64 |
 | `0x1f2` | SAMP: the project sample slot | sample slot controls. Randomize never draws it (`docs/ADAPTING.md`) |
 | `0x1f7` | OVER: the stock OVER dial | overdrive controls that keep the stock behaviour |
+| `0xfffffffe` | `ST_MACHINE_CONFIG_PARAMETER`, scalar editor (`0x13`) | core 2.3.1 / host API 17: saved configuration at indices 8..23; zero modulation flags and unmodulated Sound mirror sent to AUDIO |
 
 Any other alias value is not listed in the repository.
 
@@ -455,6 +456,18 @@ big-endian words: two words per column, with y=0 in bit 31 of the first and
 y=63 in bit 0 of the second. A zero mask bit preserves the destination pixel.
 This layout, clipping and masked blit execute against the supplied 1.42 MAIN
 in `tests/test_st_playhead_emu.py`; Playhead 1.2 caches its selector this way.
+
+The native three-pane list (`400fad82` constructor, `400faa2e` draw) uses the
+base list painter `400f572c`. Per-list fields are viewport x/y at `198/19c`,
+width/height at `1a0/1a4`, row height at `1a8`, visible row count at `1c`, and
+header height at `84`. The base painter starts rows at viewport top minus six
+pixels and, for a titled pane, subtracts another eight. Item constructor
+`400fa84c`'s third callback receives `(capture, item, bitmap, x, y)` after the
+label and before native selection XOR (`400f59ec..400f5a8c`). Sample Manager
+uses this owned callback for the right size column. Small-font lookup is
+`400f9478(view+94)`; ASCII font data has default width at +0, optional signed
+widths at +8, and one-pixel inter-glyph spacing (`400f9482/400f9584`). These
+facts execute against OS 1.42 in `tests/test_st_manager_draw_emu.py`.
 
 On OS 1.42, `4016e044()` returns the root owner from singleton `444e2334`,
 not the controller. Native composition at `4000a21a..4000a220` passes

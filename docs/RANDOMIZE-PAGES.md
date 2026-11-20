@@ -1,5 +1,12 @@
 # Randomizing the new pages (core 1.4, list item 22)
 
+Core 2.3.2 (OS 1.42) excludes `ST_MACHINE_CONFIG_PARAMETER` controls from
+the shared machine-parameter list and generic randomizer. Native SYN reload
+(`4001e88c`, used by FUNC+NO) also enumerates that list through `400146bc`:
+SY MnM therefore reloads its eight synthesis values without replacing hidden
+TYPE with the saved subtype. FUNC+YES still randomizes the current page.
+Explicit machine defaults and loading a Sound/project still include TYPE.
+
 The page key + YES randomizes the page shown, as on the stock pages. Before
 core 1.4 it changed nothing on the bank machines' SYN pages, POLY's TRIG
 page, the ARP view and the chorus page. Addresses are OS 1.41 MAIN, measured

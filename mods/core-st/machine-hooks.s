@@ -675,14 +675,23 @@ core_stock_parameter_long_label:
         .globl core_machine_modulation_flags,core_stock_modulation_flags
 core_machine_modulation_flags:
         STOCK_FIRST modulation_flags,4,0x1f9
+| 4001471c enumerates one model's destination list. At its flags call the
+| return is 400147a0 and A5 is that borrowed model. Other callers (including
+| runtime LFO validation) retain query 21 and its full capability mask.
+        moveq #21,%d1
+        move.l (%sp),%d0
+        cmpi.l #0x400147a0,%d0
+        bne.s 8f
+        moveq #32,%d1
+8:
         lea -12(%sp),%sp
         move.l %a0,(%sp)
         move.l %a1,4(%sp)
         pea 8(%sp)
-        move.l 4(%sp),-(%sp)
+        move.l %a5,-(%sp)
         lea 24(%sp),%a0
         move.l %a0,-(%sp)
-        pea 21
+        move.l %d1,-(%sp)
         jsr core_machine_query
         lea 16(%sp),%sp
         tst.l %d0
