@@ -20,7 +20,9 @@
  * per-knob navigation path sends PAGE_NAV without a second PAGE_SYNC.
  * PAGE_NAV: view,knob -> ID, ffffffff means no override.
  * PAGE_LAYOUT: page (3, 37/38 for LFO3 actions, 25 for the chorus since
- * core 1.2) -> borrowed layout pointer; zero means no override.
+ * core 1.2, 39 for COMP since core 2.4) -> borrowed layout pointer;
+ * zero means no override. Core 2.4 also resolves these module page layouts
+ * on SourcePageView's direct getter, without replacing its native vtable.
  * PAGE_GUARD: view,zero -> 1 consumes the native page mutation.
  * OWNERS: null args -> borrowed 12-byte track-owner map, or zero (MAIN IRQ).
  * Core 0.12.19: args {1} requests LFO state owners instead. Sound/configuration

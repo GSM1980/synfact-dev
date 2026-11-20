@@ -2,6 +2,41 @@
 
 # Tests
 
+COMP 0.1 / core 2.4: `tests/test_st_comp_emu.py --core <main.bin> --bank
+<bank.smz4> [--preview <png>]` executes the linked compact DSP against the
+upstream fixed-point model (384 blocks), native FX VCA hook and bypass, six
+control formats/dials, Source/base navigation, native Kit construction,
+encode/decode/copy, 16 corrupt-record cases and the short-SysEx boundary.
+Application/model selection, allocator and some UI state are explicit
+boundaries. `tools/bench_st_comp.py` counts the full shared FX hook against
+the original native window, per 32 stereo frames; not cycles or CPU percent.
+No device access. Both require the corrected ColdFire EMAC Unicorn setup.
+`tests/test_st_comp_coexist_emu.py --core <build-folder> --bank <bank.smz4>`
+also initializes the real four parameter providers (POLY/LFO3/Chorus/COMP),
+round-trips both effects through native Kit codecs and LFO3's owning copy,
+and checks that Kit depth returns to zero and both trailers remain present.
+COMP 0.1.1 adds `tests/test_st_comp_meter_emu.py --core <main.bin> --bank
+<bank.smz4> --digitakt <Digitakt-1.54.syx> [--out <preview-folder>]`: original
+Digitakt GR calculation, 36 native LCD comparisons, no changed pixels outside
+the two-column meter strip, preserved MUP/MIX/page dots, erasure/bypass and
+real audio-driven meter rise/release/redraw. It changes no core/SYX bytes.
+
+COMP 0.2 adds `test_st_comp_perf_emu.py --core <main.bin> --bank <bank.smz4>
+--previous <0.1.1-bank> [--sram]`: 2,624 blocks per placement, exact native VCA
+output/envelope/GR, random Q8 controls/Kit transitions, all integer MUP gains
+and extreme ADC/CV values. `test_st_comp_sram_emu.py --core <main.bin> --bank
+<bank.smz4>` checks both independent occupied windows, guards/code fallback,
+320 exact transition blocks, neighbours and both real LFO3 init orders with
+Chorus retaining all SRAM. The meter test accepts `--sram`, executes the
+actual native view before the overlay, requires one page paint, and tests
+visible-only invalidation (no IRQ root redraw; hidden/closed/opaque/DRIVE and
+unchanged-height cases). `generate_config_tables.py --check` verifies the
+formula-only tables. `tools/bench_st_comp.py --sram` measures audio instructions;
+`tools/bench_st_comp_cache.py --core <main.bin> --bank <bank> --previous <old>
+--out <json>` separately reports cached line footprint and task setter cost.
+It installs read instrumentation before translation and checks all ADC reads.
+Cache figures are warm/cold bounds, not a whole-system or physical CPU model.
+
 Sample Manager 1.3 / core 2.3: native-host manager/pool tests cover the expanded
 63.62 MiB budget, protected slots, mono/stereo sizes, unique page extents,
 fragmentation, exact fits and capacity rejection before any AUDIO command.

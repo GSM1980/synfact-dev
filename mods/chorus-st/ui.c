@@ -74,6 +74,7 @@ static int dial(const u32 *a)
 }
 extern void chorus_params_save(u8 *,const u16 *),chorus_params_load(u16 *,const u8 *);
 extern s32 chorus_param_set(void *,u32,s32);
+extern s32 chorus_param_get(void *,u32);
 /* Host API 13 provider. The seven settings answer like V56's generic FX
  * machine (owner 0x31, not a synth or modulation destination, cached
  * record of 0x13, encoder policy of 0x1f1 but HPF/WDTH); the CHO send takes
@@ -85,6 +86,11 @@ static int query(u32 q,u32 *args,void *result,u32 *value)
     u32 id,i;
     if(q==28 && (args[2]&255u))chorus_params_save((u8 *)args[0],(const u16 *)args[1]);
     if(q==29 && (args[2]&255u))chorus_params_load((u16 *)args[0],(const u8 *)args[1]);
+    if(q==32 || q==33){
+        if(args[1]-CHORUS_ID>=7u)return 0;
+        *value=q==33?(u32)chorus_param_get((void *)args[0],args[1]):args[-1]!=0x4003a3c4u;
+        return 1;
+    }
     if(q>=25 && q!=30 && q!=31)return 0;
     if(q==6){if(args[0]-CHORUS_UI>=7u)return 0;*value=CHORUS_ID+args[0]-CHORUS_UI;return 1;}
     id=q==18 || q==20 || q==24 || q==30?args[1]:args[0];
@@ -141,6 +147,7 @@ u32 chorus_reverb_draw(u8 *view,void *frame)
     return 0;
 }
 extern u32 chorus_install(void);
+extern u32 chorus_shared_globals;
 u32 chorus_refused DATA=0;
 int chorus_ui_init(const struct st_smz_api *api)
 {
@@ -148,6 +155,7 @@ int chorus_ui_init(const struct st_smz_api *api)
     const char allocator=0;u32 i,*a=(u32 *)0x41ba061cu,*b=(u32 *)0x41ba0648u;
     static const u32 row[4]={CHORUS_SEND,78,79,80};
     if(!api || !api->ui || api->ui->version<7 || !(host=api->ui->host) || host->version<12){chorus_refused=1;return 0;}
+    chorus_shared_globals=host->version>=16;
     host->parameter_provider(query);                     /* the settings' codec, always */
     chorus_refused=chorus_install();                            /* stock bytes differ: no controls */
     host->native_interest((void (*)(void))chorus_native,chorus_refused?0:1u<<ST_NATIVE_PAGE_LAYOUT);

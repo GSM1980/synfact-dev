@@ -69,7 +69,7 @@ class Diagnostic(Patchers):
         assert self.call('core_modules_bind',DESCRIPTORS,self.count)==1
         assert [self.u.reg_read(r) for r in saved]==values
         assert self.u.reg_read(UC_M68K_REG_A7)==SP+4
-        assert [self.event_list(i) for i in range(15)]==self.expected
+        assert [self.event_list(i) for i in range(self.event_count)]==self.expected
         assert self.stub_calls==sum(init==self.stub for _,init,_ in self.modules)
         return bytes(self.u.mem_read(self.sym['core:core_native_interest'],24))
 

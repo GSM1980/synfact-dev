@@ -1,4 +1,13 @@
-# Syntakt core 2.3.0
+# Syntakt core 2.4.0
+
+Core **2.4.0 / host API 16** shares global Kit has/get/set and task-side Kit
+copy/new/codecs across parameter providers, and adds `ST_EV_FX_CV` (15) before
+the FX bus's two native VCA stores. COMP uses these services alongside Chorus
+and LFO3, without claiming a second owner for their sites. SourcePageView's
+direct layout path also resolves module pages (COMP 39). The host struct's
+prefix and SMZ4 geometry/contract remain unchanged; old parsers reject event
+15. The linked core uses 55,860 of 65,536 MAIN resident bytes (9,676 free).
+See [COMP](../comp-st/README.md) and the contracts in `syntakt/host.h`.
 
 Core **2.3.0** appends a task/UI memory snapshot to sample-pool API 2, keeping
 the API 1 prefix. It reports PCM bytes for each loaded slot and the unique,

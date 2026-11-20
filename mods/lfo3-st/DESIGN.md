@@ -1,6 +1,6 @@
 # LFO3 port to elekloader (working design, 2026-10-28)
 
-Desktop OS 1.42 release: **1.3.1**, based on remote main `f48f3ab`.
+Desktop OS 1.42 release: **1.3.2**; core 2.4 integration is described below.
 Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 The consolidated release is **LFO3 1.3**, one step from main's 1.2. Numbers
@@ -277,3 +277,22 @@ Module-owned (self-installed, preimage-checked, like Synfact init / FAST MAIN):
 `39160` value entry, `1c422` resolver (LFO3 ID → LFO2 ID for the model),
 `3b8d4/3baae/3b6be/3b11a` encoder/popup metadata,
 `14ad8/14cc2/14eac` destination validation.
+
+## Core 2.4 integration (LFO3 1.3.2)
+
+With host API 16, core-st owns task memcpy and Kit new/encode/decode sites.
+LFO3 skips those installs, supplies its existing `lfo3_owned_copy_entry` via
+provider query 35, and receives shared query 34 lifecycle notifications.
+Codec depth still excludes nested Sound/FX records from standalone trailers;
+post-decode/new still republishes. Older cores keep the original entries.
+Generated lock/owner code and its provenance are unchanged.
+
+## COMP SRAM sharing (LFO3 1.3.3)
+
+The current linked renderer is 822 bytes, ending at `80007676` when copied
+to `80007340`. Its original 1,152-byte reservation contained 330 unused bytes.
+The first zero-check/code bound now ends at `ST_SRAM_COMP_CODE` (`80007680`):
+822 code bytes plus ten alignment bytes. COMP owns the following 320 bytes
+for checked code/state. The LFO renderer, 944-byte data bank, copy CRC,
+fallback and Chorus reservations are unchanged. Both module init orders
+execute in `test_st_comp_sram_emu.py`; COMP must not make LFO3 refuse SRAM.

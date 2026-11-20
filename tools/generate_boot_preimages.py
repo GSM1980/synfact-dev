@@ -28,7 +28,8 @@ def lfo3():
         assert len(data) == int(length)
         at = int(address, 16)
         # Host API 13/14 owns these sites; LFO3 itself skips them.
-        if at not in (0x400a6e0e, 0x400a6da6, 0x40013516):
+        if at not in (0x400a6e0e, 0x400a6da6, 0x40013516,
+                      0x4011613c, 0x400b3384, 0x400a78f4, 0x400a78a0):
             rows.append(record(at, data))
     assert len(rows) >= 80
     operands = source.split('operands[]=', 1)[1].split('};', 1)[0]

@@ -7,7 +7,13 @@ enum st_smz_event { ST_EV_TICK,ST_EV_DRAW,ST_EV_KEY,ST_EV_ENC,ST_EV_SETTINGS,
     ST_EV_FS_WRITTEN,ST_EV_MAIN_MIX,ST_EV_NATIVE,
     /* Core 1.2: mixer FX-send events (fx-send.s, MAIN audio IRQ). An older
      * core's bank parser refuses a bank that subscribes to them. */
-    ST_EV_TRACK_SEND,ST_EV_DELAY_IN,ST_EV_REVERB_IN,ST_EV_COUNT };
+    ST_EV_TRACK_SEND,ST_EV_DELAY_IN,ST_EV_REVERB_IN,
+    /* Core 2.4: FX bus VCA control, MAIN IRQ before native clamp/store.
+     * void f(struct st_fx_cv *). Gains are unsigned native CV values; only
+     * left/right may change. hardware is borrowed. No heap/IO, preserve
+     * ACC2/3; ACC0/1 are scratch. Native clamp/store still executes. */
+    ST_EV_FX_CV,ST_EV_COUNT };
+struct st_fx_cv {void *hardware;int left,right;};
 /* Core 0.10 / module service API 2: opt into the native receiving-view phase
  * of the SAME event collection. Ordinary subscriptions retain their ABI and
  * run once at the global site. No second input registry is involved.

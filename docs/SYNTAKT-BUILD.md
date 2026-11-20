@@ -130,6 +130,11 @@ to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
 "$PY" mods/chorus-st/tools/import_digitone.py "$DIGITONE_OS"
 ```
 
+Optional COMP (core 2.4+): import its private UI assets with
+`"$PY" mods/comp-st/tools/import_digitakt.py "$DIGITAKT_OS"` (original
+Digitakt OS 1.54), then append `--module mods/comp-st` immediately after
+Chorus in the bank command. See [COMP](../mods/comp-st/README.md).
+
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \

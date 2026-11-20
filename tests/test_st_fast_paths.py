@@ -81,7 +81,7 @@ def verify(folder):
     branch(0x401010f8,0x67,0x40101102)
     _,cleanup_call=next(cf.disassemble_lengths(read(0x401010fc,4),0x401010fc,0x401010fc,0x40101100))
     assert cleanup_call.flow==cf.F_JSR and cleanup_call.target==0x40100ca2
-    assert len(manifest['sites'])==119 and len(manifest['collections'])==16   # nine project callback literals; no extra IRQ site.
+    assert len(manifest['sites'])==127 and len(manifest['collections'])==17   # 2.4 shared Kit/global services and FX CV event.
     assert report['resident_ram']['free']>=0 and '-O3' in report['cflags']
     print('PASS: 23 no-bank/stock-ID lookup exits and 12 per-operation interest native replays; hidden pointers/stack untouched on fast exits; all hooks, extended paths and APIs retained')
 

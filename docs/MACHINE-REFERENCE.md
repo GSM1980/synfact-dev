@@ -58,6 +58,8 @@ the layout (`MACHINES.md`, section 6). A layout entry is a control index, and
 - UI IDs of type `t` are `0x2e0 + (t - 64) * 32`.
 - The parameter providers for modules use `ST_MODULE_ID` (`0x3f9`) and
   `ST_MODULE_UI` (`0x4e0`), 128 of each (`machines.h`).
+- Allocations: LFO3 +0..+9, Chorus +10..+16, COMP +17..+22
+  (engine `40a..40f`, UI `4f1..4f6`). COMP uses page 39 after FX DRIVE (32).
 
 The numbers next to a range are not free because they look free. Check every
 consumer of an ID before you assign it: arrays, comparisons, maps, the codec,
@@ -525,13 +527,21 @@ t 0..12, the pattern's step `0x43bd73c4` above), which the trig LEDs'
 playhead reads (`0x400c20ee`). playhead-st changes it at those uses
 (`mods/playhead-st/seq-direction.s`). The sequencer's pattern pointers name
 their kits: `0x43bd7430` (playing) with `0x43bd743c`, `0x43bd7438` (next)
-with `0x43bd7444`; the live kits are `0x41ad5134 + k × 0x1618`, k < 128. An
+with `0x43bd7444`; OS 1.42 live kits are `0x41ad6134 + k × 0x1618`, k < 128. An
 encoded kit slot (0x1600 bytes) uses [0, 0x14d2) natively, LFO3
-[0x14e0, 0x15d0) and playhead-st [0x15e0, 0x15f8). A native edit of a kit
-ends in `KitActive::kitChanged` (`0x40172250`, vtable `0x401c33f4` +0x5c; the
-object is in the project, `0x40a38b18 + 0x378d8`, kits at its +0x10), which
-re-encodes the kit into its mirror slots (job "KitActive::updateSingleMirror",
-`0x4001082e`): what survives a power cycle without a project save.
+[0x14e0, 0x15d0), COMP [0x15d0, 0x15e0), and playhead-st [0x15e0, 0x15f8).
+On OS 1.42 a native edit of a kit ends in `KitActive::kitChanged`
+(`0x40172414`, vtable `0x401c3694` +0x5c; object `0x40a713f0`, kits at its
++0x10), which re-encodes the Kit into its mirror slots: what survives a
+power cycle without a project save.
+
+OS 1.42 native Kit new/encode/decode are `400b3384`, `400a78f4`, `400a78a0`;
+native memcpy is `4011613c`. Core 2.4 owns their task-side notifications.
+The two FX VCA gains are D1/D3 at `400905b6`; native clamp/stores continue
+through `400905da`, writing hardware context +70/+72 (decimal). The fixed FX
+ADC pair is `80003c50/80003cd0`, 32 signed Q31 frames each. `ST_EV_FX_CV`
+modifies only the two gains. Native MOVCLR leaves ACC0/1 empty at this site;
+callbacks may use them and must preserve ACC2/3. This is not the MAIN mix.
 
 Key IDs used here beyond `mods/core-st/README.md`'s: TRK = 2 (MainScreen's key
 switch at `0x40033f0a`, case 2, pushes the TrackSelectionView), UP = 14,

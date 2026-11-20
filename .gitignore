@@ -30,3 +30,4 @@ mods/poly-st/imported/
 
 # The chorus tables, rebuilt from the owner's Digitone OS (mods/chorus-st/tools/import_digitone.py).
 mods/chorus-st/imported/
+mods/comp-st/imported/

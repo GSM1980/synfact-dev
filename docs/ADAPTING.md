@@ -1,5 +1,24 @@
 # How to adapt your mod to the Syntakt
 
+## Syntakt core 2.4: FX CV and shared Kit parameters
+
+Core 2.4 / host API 16 owns the global Kit model's has/get/set and task-side
+Kit copy/new/codecs. Use parameter-provider queries 32/33/24 and notifications
+34; query 35 may preserve an established owning-object copy implementation.
+Do not install these sites again. Chorus 1.2.2 and LFO3 1.3.2 select this path
+on API 16 and retain their earlier-core fallback. `ST_EV_FX_CV` (15) supplies
+the two FX-bus gains before native clamp/store; an older parser refuses this
+event. No arbitrary address is supplied by the bank. See the exact argument
+and IRQ contracts in `syntakt/host.h` and `syntakt/modules.h`.
+
+Module page 39 is available through PAGE_LAYOUT. Base navigation and
+SourcePageView's direct getter share that service. [COMP](../mods/comp-st/README.md)
+uses it after native FX DRIVE. Its six Kit controls own `[15d0,15e0)` in full
+encoded slots; preserve both neighbors and the original short SysEx length.
+Missing/corrupt metadata defaults to MIX off; see [FORMAT](FORMAT.md).
+
+## Playhead Kit modes
+
 Playhead 1.1 appends ANCHOR/STUTTER/FOLD/WALK+ as saved mode IDs 5..8 in
 the module's existing `PLH1` kit record. Existing IDs 0..4 and the record layout
 are retained. A newer record containing these modes falls back to FORWARD

@@ -11,9 +11,13 @@
 #define ELEKLOADER_ST_SRAM_H
 #define ST_SRAM_TAIL0 0x80007330u        /* first stock-zero tail */
 #define ST_SRAM_LFO3_CODE 0x80007340u    /* LFO3's render kernel, up to ... */
-#define ST_SRAM_CHORUS 0x800077c0u       /* ... the chorus's hot state and per-block
-                                           * code, up to ... (LFO3's kernel takes 1,088
-                                           * of its 1,152 bytes; the unit ran V56's
+#define ST_SRAM_COMP_CODE 0x80007680u    /* ... COMP's detector/curve (256 bytes), up to ... */
+#define ST_SRAM_COMP_STATE 0x80007780u   /* ... COMP's 56-byte hot state + 8-byte guard */
+#define ST_SRAM_COMP_END 0x800077c0u
+#define ST_SRAM_CHORUS 0x800077c0u       /* the chorus's hot state and per-block
+                                           * code, up to ... (LFO3's current kernel takes
+                                           * 822 of its original 1,152 bytes; COMP uses
+                                           * 320 of the previously unused 330. The unit ran V56's
                                            * state at 80007340..80007998 and chorus
                                            * test d's at 800079a0..80007ff8) */
 #define ST_SRAM_TAIL0_END 0x80008000u    /* ... the tail's end */

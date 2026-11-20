@@ -87,7 +87,17 @@ struct st_machine_host_api {
      * it uniformly over its range (query 13 for a module's ID) and stores it
      * through the page's model (24 for a module's ID). Before 13 there is one
      * provider slot: a provider only for 31 registers on 14. Register in
-     * the module's init. */
+     * the module's init.
+     * Host API 16 (core 2.4), no new fields: queries 32/33 implement the
+     * global Kit model's has/get, with original args {model,id,...} (24 is
+     * set). For 32 only, args[-1] is the native caller PC; the inverted
+     * lock highlight caller is 4003a3c4. 34 broadcasts task-side Kit lifecycle
+     * {kind,a,b,n,phase}: COPY=1, NEW=2, ENCODE=5, DECODE=6 (sound-meta.h).
+     * Codec phase 0 precedes native execution, phase 1 follows it with n
+     * equal to the native result. COPY/NEW have only phase 1, n=Kit bytes.
+     * 35 may return a synchronous task memcpy entry, same native C ABI,
+     * to preserve owning-object metadata; zero replays the stock copy.
+     * The core owns these sites on 16; modules must not install them. */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
     /* API 8 native_query and the ARP branch's native_dispatch are aliases
      * for the same existing bus at offset 84. Both prefixes stay compatible.

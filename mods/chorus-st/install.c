@@ -15,14 +15,15 @@ static const struct {u32 at,bytes;u8 stock[10];void (*target)(void);} sites[]={
     {0x40042ce0u,8,{0x4f,0xef,0xff,0xa0,0x48,0xd7,0x7c,0xfc},chorus_reverb_draw_entry},
     {0x40041e7cu,10,{0x12,0x3c,0x00,0x4a,0xb2,0x8e,0x67,0x44,0x60,0x5c},chorus_amp_entry}};
 #define SITES (sizeof sites/sizeof sites[0])
+u32 chorus_shared_globals __attribute__((section(".data")))=0;
 /* Returns 0 when installed, else 2: a site's bytes are not stock. */
 u32 chorus_install(void)
 {
-    u32 i,j,sr,target;
-    for(i=0;i<SITES;i++)for(j=0;j<sites[i].bytes;j++)
+    u32 i,j,sr,target,first=chorus_shared_globals?3u:0u;
+    for(i=first;i<SITES;i++)for(j=0;j<sites[i].bytes;j++)
         if(((volatile const u8 *)sites[i].at)[j]!=sites[i].stock[j])return 2;
     sr=chorus_lock();
-    for(i=0;i<SITES;i++){
+    for(i=first;i<SITES;i++){
         target=(u32)sites[i].target;
         chorus_code16(sites[i].at+2,target>>16);chorus_code16(sites[i].at+4,target&0xffffu);
         for(j=6;j<sites[i].bytes;j+=2)chorus_code16(sites[i].at+j,0x4e71);

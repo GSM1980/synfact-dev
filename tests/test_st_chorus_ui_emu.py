@@ -116,14 +116,14 @@ class Machine:
             self.log[-1] = (name, struct.unpack('>8I', self.read(sp + size + 4, 32)))
         self.ret(0)
 
-    def call(self, fn, *args, regs=None):
+    def call(self, fn, *args, regs=None, sr=0x2700):
         u = self.u
         for i, r in enumerate(CALLEE):
             u.reg_write(r, 0x12340000 + i * 256)
         for r, v in (regs or {}).items():
             u.reg_write(r, v)
         before = [u.reg_read(r) for r in CALLEE]
-        u.reg_write(UC_M68K_REG_SR, 0x2700)
+        u.reg_write(UC_M68K_REG_SR, sr)
         u.reg_write(UC_M68K_REG_A7, SP)
         u.mem_write(SP, struct.pack('>%dI' % (1 + len(args)), RET, *[a & 0xffffffff for a in args]))
         u.emu_start(self.sym.get(fn, fn), RET, count=2000000)
@@ -144,11 +144,15 @@ def init(m):
 
 
 def test_sites(m, stock):
+    shared = m.cs.get('core:core_global_has')
     for at, entry in ((0x4000d870, 'chorus_kit_entry'), (0x4000d94a, 'chorus_get_entry'),
                       (0x4000da32, 'chorus_set_entry'), (0x40042ce0, 'chorus_reverb_draw_entry'),
                       (0x40041e7c, 'chorus_amp_entry')):
-        assert m.read(at, 6) == struct.pack('>HI', 0x4ef9, m.sym[entry]), hex(at)
-        assert stock.read(at, 6) != m.read(at, 6)
+        target = ({0x4000d870: 'core:core_global_has', 0x4000d94a: 'core:core_global_get',
+                   0x4000da32: 'core:core_global_set'}.get(at)) if shared else None
+        assert m.read(at, 6) == struct.pack('>HI', 0x4ef9, m.cs[target] if target else m.sym[entry]), hex(at)
+        if not target:
+            assert stock.read(at, 6) != m.read(at, 6)
     # AMP: E-H of both layouts are CHO, DEL, REV, PAN; VOL on the second page's E
     for at in (0x41ba061c, 0x41ba0648):
         assert struct.unpack('>4I', m.read(at, 16)) == (SEND, 78, 79, 80)

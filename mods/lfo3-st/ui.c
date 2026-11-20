@@ -391,6 +391,20 @@ void lfo3_sound_encoded(u32,u32,u32),lfo3_sound_decoded(u32,u32,u32),lfo3_projec
 void lfo3_lock_ui_store(void *,u32,s32,s32,u32,u32);
 int lfo3_parameter_query(u32 q,u32 *args,void *result,u32 *value)
 {
+    /* Core 2.4 owns task copy/Kit entry sites. Keep the established owning
+     * copy path, shadow codecs and depth guard, without installing twice. */
+    extern void lfo3_owned_copy_entry(void),lfo3_kit_new(u32),lfo3_kit_encoded(u32,u32,u32),lfo3_kit_decoded(u32,u32,u32);
+    extern u32 kit_codec_depth;
+    if(q==35){*value=(u32)lfo3_owned_copy_entry;return 1;}
+    if(q==34){
+        if(args[0]==5 || args[0]==6){
+            if(!args[4]){kit_codec_depth++;return 0;}
+            if(kit_codec_depth)kit_codec_depth--;
+            if(args[0]==5)lfo3_kit_encoded(args[1],args[2],args[3]);
+            else {lfo3_kit_decoded(args[1],args[2],args[3]);lfo3_republish();}
+        }else if(args[0]==2 && args[4]){lfo3_kit_new(args[1]);lfo3_republish();}
+        return 0;
+    }
     /* core 0.12.16 storage notifications (shadow.c, Synfact Sound codec layer) */
     if(q==25){lfo3_sound_encoded(args[0],args[1],args[2]);return 0;}
     if(q==26){lfo3_sound_decoded(args[0],args[1],args[2]);lfo3_republish();return 0;}

@@ -299,13 +299,20 @@ callbacks and initializers are validated relocated pointers. `init=ffffffff`
 means absent; a zero-count subscription pointer must be `ffffffff`.
 Initializers return zero on success and initialize private state only.
 
-The eleven event IDs are defined in `syntakt/modules.h`, in order: tick, draw,
+The original eleven event IDs are defined in `syntakt/modules.h`, in order: tick, draw,
 key, encoder, SETTINGS, render-in, render-out, FS-route, FS-write, FS-written,
 MAIN-mix. Callback signatures match the resident hook bus. IRQ callbacks must
 not allocate, wait or perform storage IO. After all initializers succeed, the
 core merges subscriptions into existing event lists once at boot. Core-owned
 RAM operands select those lists, avoiding an additional dispatcher per event.
 No arbitrary firmware address or patch destination comes from the file.
+
+Later IDs are native transactions (11), track-send/delay-in/reverb-in
+(12..14), and core 2.4's **FX_CV (15)**. FX_CV is a MAIN IRQ callback
+`void f(struct st_fx_cv *)`: borrowed hardware pointer and two gains before
+the native VCA clamp/stores. Only the gains may change. No allocation, IO or
+waiting; ACC0/1 are scratch and ACC2/3 must be preserved. Old parsers reject
+15. Neither the descriptor geometry nor contract `53594606` changes.
 
 Core 0.10's module service API 2 permits **`event | ST_EV_VIEW`** (`100h`) for
 DRAW, KEY and ENC only (serialized IDs `101h`, `102h`, `103h`). These select a

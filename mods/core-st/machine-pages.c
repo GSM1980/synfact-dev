@@ -41,7 +41,18 @@ int core_machine_sync(void *view)
 __attribute__((noinline)) static u32 *view_layout(void *view)
 {
     u32 page;const struct core_machine_def *m;
-    if(!core_machine_active || !core_machine_syn_view(view))return 0;
+    if(!core_machine_active)return 0;
+    if(!core_machine_syn_view(view)){
+        /* SourcePageView bypasses base PAGE_NAV and asks this shared getter.
+         * Module pages therefore use the same PAGE_LAYOUT service here too.
+         * Retain the native layout for ordinary pages and selector views. */
+        const u8 *v=view;const u32 *p;u32 count;
+        if(!core_machine_parameter_view(view))return 0;
+        p=*(const u32 *const *)(v+0x7c);if(!p || p[0]==6)return 0;
+        count=(*(const u32 *const *)(v+0x80)-p);
+        page=*(const u32 *)(v+0x90);
+        return page<count?core_machine_action_layout(p[page]):0;
+    }
     m=core_machine_find(fw_view_machine(view));page=(u32)sync_view(view,m);
     return m?core_machine_layout(m,page):0;
 }
@@ -66,7 +77,7 @@ u32 core_machine_action_begin(void *view)
 void core_machine_action_end(u32 old){override_layout=(void *)old;core_machine_action_select(override_layout);core_native_view(ST_NATIVE_PAGE_END,0,0);}
 /* PAGE_LAYOUT: page 3 (POLY), the LFO3 action pages 37/38 (0.12.16) and
  * page 25, the dormant chorus page (1.2). */
-u32 *core_machine_action_layout(u32 id){return id==6?override_layout:(id==3 || id==25 || id-37u<2u?(u32 *)core_native(ST_NATIVE_PAGE_LAYOUT,&id):0);}
+u32 *core_machine_action_layout(u32 id){return id==6?override_layout:(id==3 || id==25 || id-37u<3u?(u32 *)core_native(ST_NATIVE_PAGE_LAYOUT,&id):0);}
 /* Native Sound records preserve their fixed 172-byte geometry. Copy the 16
  * extended words and last word; slot 0 is kept raw for the extra control,
  * while slots 11/18 retain their native codec. Loaded digital types only. */
