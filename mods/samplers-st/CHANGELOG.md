@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.5.2.
 ## 1.5.2 (2026-11-19)
 
 - Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
+- Changelogs: core 2.2.0 and samplers 1.5.2 (`121e965`, 2026-11-19)
 
 ## 1.5.1 (2026-11-17)
 

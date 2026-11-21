@@ -11,6 +11,11 @@
           "sha": "53ac728",
           "date": "2026-11-19",
           "subject": "Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06)"
+        },
+        {
+          "sha": "121e965",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.2.0 and samplers 1.5.2"
         }
       ]
     },

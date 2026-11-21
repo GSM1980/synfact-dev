@@ -8,3 +8,4 @@ Generated from git history by `tools/changelog.py`. Latest version: 0.1.
 - mix-fast and icache-lock are always-in-every-bank, not web options (`6aa11d2`, 2026-11-19)
 - Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
 - Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
+- Changelogs: core 2.2.0 and samplers 1.5.2 (`121e965`, 2026-11-19)

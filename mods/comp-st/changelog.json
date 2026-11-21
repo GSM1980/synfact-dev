@@ -1,8 +1,19 @@
 {
   "id": "comp-st",
   "title": "Compressor",
-  "latest": "0.2.0",
+  "latest": "0.3.0",
   "entries": [
+    {
+      "version": "0.3.0",
+      "date": "2026-11-21",
+      "commits": [
+        {
+          "sha": "a7a9b39",
+          "date": "2026-11-21",
+          "subject": "COMP 0.3.0: sidechain high-pass (SCF) and a lighter GR meter"
+        }
+      ]
+    },
     {
       "version": "0.2.0",
       "date": "2026-11-20",
@@ -11,6 +22,11 @@
           "sha": "e1e51bf",
           "date": "2026-11-20",
           "subject": "Add FX-bus COMP with shared core services and SRAM optimization"
+        },
+        {
+          "sha": "307482a",
+          "date": "2026-11-20",
+          "subject": "Changelogs: COMP 0.2.0 and core 2.4.0 FX services"
         }
       ]
     }

@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 2.4.0.
 ## 2.4.0 (2026-11-20)
 
 - Add FX-bus COMP with shared core services and SRAM optimization (`e1e51bf`, 2026-11-20)
+- Changelogs: COMP 0.2.0 and core 2.4.0 FX services (`307482a`, 2026-11-20)
 
 ## 2.3.0 (2026-11-19)
 

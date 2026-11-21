@@ -26,6 +26,11 @@
           "sha": "84d9065",
           "date": "2026-11-19",
           "subject": "Changelogs: core 2.1.2"
+        },
+        {
+          "sha": "121e965",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.2.0 and samplers 1.5.2"
         }
       ]
     }

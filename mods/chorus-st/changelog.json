@@ -11,6 +11,11 @@
           "sha": "e1e51bf",
           "date": "2026-11-20",
           "subject": "Add FX-bus COMP with shared core services and SRAM optimization"
+        },
+        {
+          "sha": "307482a",
+          "date": "2026-11-20",
+          "subject": "Changelogs: COMP 0.2.0 and core 2.4.0 FX services"
         }
       ]
     },
