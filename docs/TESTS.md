@@ -37,6 +37,27 @@ formula-only tables. `tools/bench_st_comp.py --sram` measures audio instructions
 It installs read instrumentation before translation and checks all ADC reads.
 Cache figures are warm/cold bounds, not a whole-system or physical CPU model.
 
+COMP 0.3 (SCF) adds `tests/test_st_comp_scf_emu.py [--cfbench <cfbench>]`:
+`tests/st_comp_scf_check.c`, built with the bank's flags and linked with the
+real `mods/comp-st/dsp.s`, runs in analog-emu's cfbench (EMAC per the
+Programmer's Reference Manual; Unicorn is not trusted for EMAC arithmetic).
+It compares the SCF loop's low-pass state and peak, and the plain peak,
+with a 64-bit model on 2,688 blocks (cutoffs across all 127 positions,
+noise, squares, rails, silence), checks `scf-tables.h` against its generator
+(`1 - exp(-2 pi fc / 48000)`), the 244-byte SRAM block, that one block costs
+the same at every cutoff (within the peak's data-dependent stores), and seven
+positions' steady sine response against the exact one-pole response. Without cfbench
+or the m68k compiler it prints SKIPPED and exits 2. In Unicorn, the COMP
+tests now cover seven controls (G = SCF, F empty), the SCF index in RAT's
+low byte (a 0.2.0 record reads as OFF), the kernel's SCF wiring and state
+reset, the 244 + 68-byte SRAM layout, and `--previous <0.2.0-bank>`: with
+SCF OFF, 0.3 is bit-exact with 0.2.0. `bench_st_comp.py` adds an `scf`
+mode (150 Hz) and `bench_st_comp_cache.py` its footprint. The meter test
+checks the 10 Hz / 2-pixel repaint limit, and `tools/bench_st_comp_redraws.py
+--core <main.bin> --bank <bank> --out <json>` counts the screen recomposes a
+second the meter asks for with kick, drums and pad signals through the real
+audio callback and UI tick, plus one COMP page draw's instructions.
+
 Sample Manager 1.3 / core 2.3: native-host manager/pool tests cover the expanded
 63.62 MiB budget, protected slots, mono/stereo sizes, unique page extents,
 fragmentation, exact fits and capacity rejection before any AUDIO command.

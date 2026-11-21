@@ -37,6 +37,8 @@ and change with the code, so a commit's docs match its code.
   Digitakt detector cost, FX-only routing and the budget alongside Chorus.
 - **[COMP module](../mods/comp-st/README.md)**: compact FX-bus compressor,
   original Digitakt controls, private SysEx importer and parallel MIX.
+- **[COMP sidechain filter study](COMP-SIDECHAIN-FILTER-FEASIBILITY.md)**: a
+  fixed-position one-pole high-pass on the detector, its cost and SRAM fit.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
 - **[Safe core/SMZ4 startup proposal](SAFE-BOOT-SMZ4-07-16.md)**: compatibility

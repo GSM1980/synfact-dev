@@ -23,7 +23,7 @@ def main():
     p.add_argument('--sram',action='store_true',help='run the checked SRAM placement used at module init')
     a=p.parse_args();rows={}
     for signal in ('silence','sine','noise','full_scale'):
-        for mode in ('off','wet','parallel','moving'):
+        for mode in ('off','wet','parallel','moving','scf'):
             m=fixture(a.core,a.bank)
             if a.sram:assert m.call('comp_place')==3
             m.w(0x444e2334,W+0x1c00)  # live UI dirty target, including meter publications
@@ -35,7 +35,8 @@ def main():
             measured=[];cold=0
             for n in range(64):
                 values=[0x4000,0x1800,0x2000,0x2000,0x300,
-                        {'off':0,'wet':0x7f00,'parallel':0x4000,'moving':0x1000+n*256}[mode]]
+                        {'off':0,'wet':0x7f00,'parallel':0x4000,'moving':0x1000+n*256,'scf':0x7f00}[mode],
+                        0x2a00 if mode=='scf' else 0]   # SCF 150 Hz in 'scf'
                 if mode=='moving':values[:3]=[0x1000+n*256,n*256,(n*3%128)*256]
                 set_values(m,values)
                 rng=random.Random(600+n)

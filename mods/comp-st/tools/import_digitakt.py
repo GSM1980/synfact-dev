@@ -23,21 +23,28 @@ def main():
         assert BASE<=at<BASE+len(image)
         return image[at-BASE:at-BASE+80].split(b'\0')[0].decode('ascii')
     rows=[]
-    for n in [0,1,2,3,4,7]:
+    # THR ATK REL MUP RAT MIX keep indices 0..5; SCF (record 6) is index 6.
+    for n in [0,1,2,3,4,7,6]:
         at=0x401ab214+52*n;raw_record=image[at-BASE:at-BASE+52];d=struct.unpack('>13I',raw_record)
         assert d[0]==9 and 0<=d[2]<=d[4]<=d[3]<=0x7f00
         rows.append(dict(source=hex(at),sha256=hashlib.sha256(raw_record).hexdigest(),
                          short=text(d[12]),long=text(d[10]),minimum=d[2],maximum=d[3],initial=d[4]))
+    assert rows[6]['short']=='SCF',rows[6]
+    # Only SCF's labels come from Digitakt. Its range is COMP's own: 128
+    # high-pass positions (OFF, then 60..1000 Hz), OFF by default.
+    rows[6].update(minimum=0,maximum=0x7f00,initial=0)
     out=FOLDER/'imported';out.mkdir(exist_ok=True)
     h='/* Private Digitakt 1.54 metadata; regenerate with tools/import_digitakt.py. */\n'
-    h+='static const char *const comp_short_names[6]={'+','.join(json.dumps(x['short']) for x in rows)+'};\n'
-    h+='static const char *const comp_long_names[6]={'+','.join(json.dumps(x['long']) for x in rows)+'};\n'
-    h+='const u16 comp_initial[6]={'+','.join(str(x['initial']) for x in rows)+'};\n'
-    h+='const u16 comp_maximum[6]={'+','.join(str(x['maximum']) for x in rows)+'};\n'
+    h+='static const char *const comp_short_names[7]={'+','.join(json.dumps(x['short']) for x in rows)+'};\n'
+    h+='static const char *const comp_long_names[7]={'+','.join(json.dumps(x['long']) for x in rows)+'};\n'
+    h+='const u16 comp_initial[7]={'+','.join(str(x['initial']) for x in rows)+'};\n'
+    h+='const u16 comp_maximum[7]={'+','.join(str(x['maximum']) for x in rows)+'};\n'
     (out/'metadata.h').write_text(h)
-    # The original parameter constructors select these five native bitmap
+    # The original parameter constructors select these six native bitmap
     # vectors. Parse their literal bitmap constructors, retaining both bits
     # and mask. Each frame is 19 columns of 17 pixels, u32 column-major.
+    # SCF: the 27-frame bipolar filter dial (vector 421fa2fc, drawn by
+    # 400601f0): low-pass at 0, flat at 13, high-pass at 26.
     pattern=re.compile(rb'(?:\x48\x79|\x2e\xbc)(....)\x48\x79(....)\x48\x78(..)\x48\x78(..)',re.S)
     frames=[]
     for m in pattern.finditer(image):
@@ -45,7 +52,7 @@ def main():
         if width==19 and height==17 and BASE<=mask<BASE+len(image) and BASE<=bits<BASE+len(image):
             frames.append((BASE+m.start(),mask,bits))
     specs=[('thr',0x4010cc2e,15),('time',0x40112150,13),('mup',0x4010fae6,96),
-           ('rat',0x40117c4e,8),('mix',0x4010c9ca,18)]
+           ('rat',0x40117c4e,8),('mix',0x4010c9ca,18),('scf',0x40109c84,27)]
     graphics='/* Original Digitakt bitmap frames; private donor output. */\n'
     assets=[]
     for name,before,count in specs:

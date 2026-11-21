@@ -1,4 +1,7 @@
-"""Bit-exact COMP optimization against the previous linked release and MIT math.
+"""Bit-exact COMP against the previous linked release and MIT math.
+
+With SCF OFF (its default), 0.3 must reproduce the previous release exactly;
+--previous may be a 0.1.1 or a 0.2.0 bank (their state layouts differ).
 
 Both callbacks execute at the actual core FX-CV site, including native clamps.
 Random control changes retain envelope history; Kit switches, ADC extrema,
@@ -25,8 +28,14 @@ def verify(core,bank,previous,sram=False):
         m=fixture(core,bank)
         if sram:assert m.call('comp_place')==3
         return m
+    def offsets(m):
+        # (hold, meter) in the hot runtime: 0.3 inserted the SCF coefficient.
+        return (48,56) if 'comp_hp' in m.sym else (44,52)
     def meter(m):
-        return m.word(m.word(m.sym['comp_hot'])+52) if 'comp_hot' in m.sym else m.word(m.sym['comp_gr_meter'])
+        return m.word(m.word(m.sym['comp_hot'])+offsets(m)[1]) if 'comp_hot' in m.sym else m.word(m.sym['comp_gr_meter'])
+    def state(m):
+        if 'comp_k_state' in m.sym:return struct.unpack('>2i',m.read(m.sym['comp_k_state'],8))
+        return struct.unpack('>2i',m.read(m.word(m.sym['comp_hot'])+offsets(m)[0],8))
     old,new=fixture(core,previous),optimized()
     bind(old);bind(new);rng=random.Random(0x4350);checks=0
     # Same uncompressed gain for every integer MUP plus fractional settings;
@@ -78,10 +87,8 @@ def verify(core,bank,previous,sram=False):
         cv=(rng.choice([0,1,40000,65535,65536,0x7fffffff,0xffffffff]),rng.randrange(0x10000))
         a,b=block(old,left,right,cv,True),block(new,left,right,cv,True)
         assert a==b,(n,values,cv,a,b)
-        old_state=struct.unpack('>2i',old.read(old.sym['comp_k_state'],8))
-        new_state=struct.unpack('>2i',new.read(new.word(new.sym['comp_hot'])+44,8))
-        old_config=struct.unpack('>11i',old.read(old.sym['comp_k_const'],44))
-        assert old_state==new_state,(n,values,mode,words,old_config,'state',old_state,new_state)
+        old_state,new_state=state(old),state(new)
+        assert old_state==new_state,(n,values,mode,words,'state',old_state,new_state)
         assert meter(old)==meter(new),(n,values,old_state,new_state,'meter',meter(old),meter(new))
         checks+=1
     print('PASS optimized COMP:',checks,'blocks; linked old/new output and GR exact, all integer MUP gains, random Q8 coefficients, Kit/control transitions and VCA/ADC extrema')

@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Original Digitakt labels, ranges, value strings and bitmap animations are
  * rebuilt privately from its OS. Page 39 follows the FX track DRIVE page;
- * F/G remain empty, H is MIX, as requested. No borrowed owning object copies. */
+ * F is empty, G is SCF (Digitakt's position and dial), H is MIX. No borrowed
+ * owning object copies. */
 #include "comp.h"
 #include "imported/metadata.h"
 #include "imported/formats.h"
@@ -13,9 +14,20 @@
 #define NEW ((u32 *(*)(u32))0x4010394cu)
 #define FREE ((void (*)(void *))0x40103958u)
 #define INVALIDATE ((void (*)(void *))0x400ffe22u)
-static u32 layout[11] DATA={0,0,COMP_ID,COMP_ID+1,COMP_ID+2,COMP_ID+3,COMP_ID+4,0,0,COMP_ID+5,0};
+static u32 layout[11] DATA={0,0,COMP_ID,COMP_ID+1,COMP_ID+2,COMP_ID+3,COMP_ID+4,0,COMP_ID+COMP_SCF,COMP_ID+5,0};
+/* SCF's Digitakt dial: OFF shows its flat centre (frame 13); the cutoffs,
+ * 60 Hz to 1 kHz, its high-pass frames 15 to 21, spread evenly in pitch. */
+static u32 scf_frame(u32 k){return k?15u+(6u*(k-1u)+63u)/126u:13u;}
 static u32 widget[7] DATA={0};static char text[8] DATA={0};
 static u32 last_height DATA=0;
+/* Each meter repaint recomposes the whole screen (double-buffered, every
+ * visible view: about 30,000 instructions for this page alone). 0.3 asks
+ * for one at most every METER_TICKS UI ticks (30 Hz / 3 = 10 Hz) and ignores
+ * 1-pixel moves (0.6 dB), except to reach 0. Other repaints (edits, page
+ * changes) still draw the current height. */
+#define METER_TICKS 3u
+#define METER_STEP 2u
+static u32 meter_wait DATA=METER_TICKS;
 static u32 meter_height(void)
 {
     u32 half_db=comp_meter_read()>>22;
@@ -79,7 +91,12 @@ void comp_tick(void *raw)
     while(node && node!=end){
         view=*(u8 **)(node+8);node=*(u8 **)node;
         if(!selected(view) || !*(u32 *)(view+0x2c) || view[0x17] || view[0x30])continue;
-        if(meter_height()!=last_height)INVALIDATE(view);break;
+        {
+            u32 height=meter_height(),step=height>last_height?height-last_height:last_height-height;
+            if(meter_wait<METER_TICKS)meter_wait++;
+            if(step && meter_wait>=METER_TICKS && (step>=METER_STEP || !height)){meter_wait=0;INVALIDATE(view);}
+        }
+        break;
     }
 }
 static const char *format(u32 i,u32 value)
@@ -87,6 +104,13 @@ static const char *format(u32 i,u32 value)
     u32 n=value>>8;char *p=text;if(value>comp_maximum[i])n=comp_maximum[i]>>8;
     if(i==3)return comp_mup_text[n];
     if(i==4)return comp_rat_text[n];
+    if(i==COMP_SCF){
+        u32 hz=comp_scf_hz_table[n];
+        if(!n)return "OFF";
+        if(hz>=1000u)return "1kHz";
+        if(hz>=100u)*p++='0'+hz/100;
+        *p++='0'+hz/10%10;*p++='0'+hz%10;*p++='H';*p++='z';*p=0;return text;
+    }
     if(n>=100)*p++='0'+n/100;
     if(n>=10)*p++='0'+n/10%10;
     *p++='0'+n%10;*p=0;return text;
@@ -94,11 +118,12 @@ static const char *format(u32 i,u32 value)
 static int dial(const u32 *a)
 {
     u32 i=a[1]-COMP_ID,raw=a[2],frame;const u32 *bits;
-    if(i>=6)return 0;if(raw>comp_maximum[i])raw=comp_maximum[i];
+    if(i>=COMP_COUNT)return 0;if(raw>comp_maximum[i])raw=comp_maximum[i];
     if(i==0){frame=(raw*14u+0x3f80u)/0x7f00u;bits=comp_thr_bits[frame];}
     else if(i==1 || i==2){frame=(raw*12u+0x3f80u)/0x7f00u;bits=comp_time_bits[frame];}
     else if(i==3){frame=(raw*72u+0x3f80u)/0x7f00u+12u;bits=comp_mup_bits[frame];}
     else if(i==4)bits=comp_rat_bits[raw>>8];
+    else if(i==COMP_SCF)bits=comp_scf_bits[scf_frame(raw>>8)];
     else {frame=(raw*17u+0x3f80u)/0x7f00u;bits=comp_mix_bits[frame];}
     BITMAP(widget,19,17,bits,bits+19);BLIT((void *)a[5],widget,(s32)a[6],(s32)a[7],0);return 1;
 }
@@ -107,9 +132,9 @@ int comp_query(u32 q,u32 *a,void *out,u32 *value)
     u32 id,i;if(q==34){comp_meta(a);return 0;}
     if(q>=25 && q<=29)return 0;
     if(q==35)return 0;
-    if(q==6){if(a[0]-COMP_UI>=6)return 0;*value=COMP_ID+a[0]-COMP_UI;return 1;}
+    if(q==6){if(a[0]-COMP_UI>=COMP_COUNT)return 0;*value=COMP_ID+a[0]-COMP_UI;return 1;}
     id=q==18 || q==20 || q==24 || q==30 || q==32 || q==33?a[1]:a[0];
-    i=id-COMP_ID;if(i>=6)return 0;
+    i=id-COMP_ID;if(i>=COMP_COUNT)return 0;
     switch(q){
     case 8:case 14:*value=0x31;return 1;
     case 9:*value=COMP_UI+i;return 1;

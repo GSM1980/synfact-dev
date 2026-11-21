@@ -83,7 +83,7 @@ def capture(pixels,path):
 def verify(core,bank,digitakt,out,sram=False):
     reference=native_heights(digitakt)
     m,view,bitmap,pixels=fixture(core,bank,sram)
-    meter=m.word(m.sym['comp_hot'])+52
+    meter=m.word(m.sym['comp_hot'])+56   # comp_runtime.meter (comp.h)
     area={(x,y) for x in (122,123) for y in range(1,51)}
     for values in ([0,0,0,0,0,0x7f00],DEFAULT[:5]+[0x7f00],
                    [0x7f00]*4+[0x700,0x7f00]):
@@ -131,7 +131,25 @@ def verify(core,bank,digitakt,out,sram=False):
     assert not m.invalidations,'COMP under an opaque overlay must not repaint'
     m.w(ctrl+0x1c,node);m.w(view+0x90,0);m.call('comp_tick',ctrl)
     assert not m.invalidations,'DRIVE must not repaint for COMP metering'
-    m.w(view+0x90,1);m.call('comp_tick',ctrl);assert m.invalidations==[view]
+    # 0.3: at most one meter repaint every 3 UI ticks (10 Hz), none for a
+    # 1-pixel move except down to 0. Ticks while not visible do not count.
+    def ticks(n):
+        hits=[]
+        for _ in range(n):
+            m.invalidations.clear();m.call('comp_tick',ctrl);hits.append(bool(m.invalidations))
+            if m.invalidations:draw_frame(m,view,bitmap)
+        return hits
+    m.w(view+0x90,1)
+    assert ticks(2)==[False,True],'released bar: repaint on the third visible tick since the last'
+    m.w(meter,63<<22)                                       # full scale: a big step
+    assert ticks(3)==[False,False,True],'10 Hz at most'
+    m.w(meter,62<<22)                                       # 50 -> 49 px: one pixel
+    assert ticks(6)==[False]*6,'a 1-pixel move does not repaint'
+    m.w(meter,2<<22)                                        # 49 -> 1 px, waited long enough
+    assert ticks(1)==[True]
+    m.w(meter,0)                                            # 1 -> 0 px: allowed, still 10 Hz
+    assert ticks(3)==[False,False,True],'1 -> 0 px clears'
+    assert not screen(m,pixels)&area
     # Returning to DRIVE does not draw or clear any part of the meter strip.
     m.w(view+0x90,0);before=m.read(pixels,1024);m.call('comp_draw',view,bitmap,0)
     assert m.read(pixels,1024)==before
@@ -144,7 +162,7 @@ def verify(core,bank,digitakt,out,sram=False):
             pixel_exact_screens=36,other_pixels_unchanged=True,
             audio_rise_release_redraw=True,erase_and_bypass=True,sram=sram,
             device_access=False,limits='Native application/model selection, heap and some UI state are fixture boundaries; no hardware timing.'),indent=2)+'\n')
-    print('PASS GR: native reference, 2x50 strip, 36 pixel-exact screens, no MUP/MIX/page-dot overlap, erase/bypass/audio/redraw/release/DRIVE')
+    print('PASS GR: native reference, 2x50 strip, 36 pixel-exact screens, no MUP/MIX/page-dot overlap, erase/bypass/audio/redraw/release/DRIVE, 10 Hz / 2-pixel repaint limit')
 
 
 if __name__=='__main__':

@@ -1,10 +1,18 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Six full-Q8 controls in the encoded Kit's audited 16-byte gap 15d0..15e0,
- * between LFO3 and Playhead. Values live in bank-owned tables at runtime.
- * No native Sound, FX, Chorus or Playhead field is repurposed. */
+ * Seven controls in the encoded Kit's audited 16-byte gap 15d0..15e0,
+ * between LFO3 and Playhead: six full-Q8 words; the SCF position (0..127)
+ * shares RAT's word, whose low byte RAT never uses. Values live in
+ * bank-owned tables at runtime. No native Sound, FX, Chorus or Playhead
+ * field is repurposed. */
 #include "comp.h"
 #include "config-tables.h"
-struct row {u32 valid;u16 value[6];struct comp_config config;};
+/* SCF: OFF, then 127 cutoffs log-spaced from 60 to 1000 Hz; one-pole
+ * coefficient a = 1 - exp(-2*pi*fc/48000) in Q31 (generated, task-side). */
+#include "scf-tables.h"
+const u16 *const comp_scf_hz_table=comp_scf_hz;
+#define ALL 127u
+#define CONFIG_WORDS (sizeof(struct comp_config)/4)
+struct row {u32 valid;u16 value[COMP_COUNT];struct comp_config config;};
 static struct row live[128] DATA={{0,{0}}};
 static struct {u32 address,hash;struct row r;} side[24] DATA={{0,0,{0,{0}}}};
 static u32 next DATA=0;
@@ -37,6 +45,7 @@ static void prepare(const u16 *v,struct comp_config *c,u32 mask)
     if(mask&6u)c->cross=(s32)comp_cross[(a<<7)|r];
     if(mask&32u){c->wet=((u32)v[5]<<15)/0x7f00u;c->dry=4096u-(c->wet>>3);}
     if(mask&40u)c->idle_gain=((idle_gain(c->makeup)*c->wet)>>15)+c->dry;
+    if(mask&64u)c->hpa=comp_scf_coefficient[v[COMP_SCF]>>8];
 }
 static u32 kit_hash(u32 kit)
 {const volatile u8 *p=(const volatile u8 *)kit;u32 h=0x811c9dc5u,n=COMP_KIT_SIZE;while(n--)h=(h^*p++)*0x01000193u;return h;}
@@ -53,19 +62,25 @@ static struct row *row_of(u32 kit,u32 make)
     i=next++%24;side[i].address=kit;side[i].hash=kit_hash(kit);side[i].r.valid=0;return &side[i].r;
 }
 static void read_values(u32 kit,u16 *out)
-{struct row *r=row_of(kit,0);u32 i;for(i=0;i<6;i++)out[i]=r && r->valid?r->value[i]:comp_initial[i];}
+{struct row *r=row_of(kit,0);u32 i;for(i=0;i<COMP_COUNT;i++)out[i]=r && r->valid?r->value[i]:comp_initial[i];}
 static void store_mask(u32 kit,const u16 *v,u32 mask)
 {
     struct row *r=row_of(kit,1);struct comp_config c;u32 i,sr;if(!r)return;
-    if(mask!=63u)c=r->valid?r->config:default_config;
+    if(mask!=ALL)c=r->valid?r->config:default_config;
     prepare(v,&c,mask);
-    sr=comp_lock();r->valid=0;for(i=0;i<6;i++)r->value[i]=v[i];
-    for(i=0;i<10;i++)((u32 *)&r->config)[i]=((const u32 *)&c)[i];
-    if(kit==comp_hot->kit && index_of(kit)<128)
-        for(i=0;i<10;i++)((u32 *)&comp_hot->config)[i]=((const u32 *)&c)[i];
+    sr=comp_lock();r->valid=0;for(i=0;i<COMP_COUNT;i++)r->value[i]=v[i];
+    for(i=0;i<CONFIG_WORDS;i++)((u32 *)&r->config)[i]=((const u32 *)&c)[i];
+    if(kit==comp_hot->kit && index_of(kit)<128){
+        u32 was_off=!comp_hot->config.hpa;
+        for(i=0;i<CONFIG_WORDS;i++)((u32 *)&comp_hot->config)[i]=((const u32 *)&c)[i];
+        /* Turning SCF or COMP on starts the detector filter from rest, not
+         * from a stale state. Moving between cutoffs keeps it: a one-pole
+         * filter takes a new coefficient smoothly while the knob turns. */
+        if((mask&32u) || ((mask&64u) && was_off)){comp_hot->lp[0]=0;comp_hot->lp[1]=0;}
+    }
     __asm__ volatile("" ::: "memory");r->valid=1;comp_unlock(sr);
 }
-static void store(u32 kit,const u16 *v){store_mask(kit,v,63u);}
+static void store(u32 kit,const u16 *v){store_mask(kit,v,ALL);}
 const struct comp_config *comp_current_config(u32 kit)
 {u32 k=index_of(kit);return k<128?&live[k].config:&default_config;}
 const u16 *comp_current_values(void)
@@ -76,13 +91,13 @@ const u16 *comp_current_values(void)
 }
 static u32 current(void){return *(volatile u32 *)0x800030b8u;}
 s32 comp_param_get(u32 id)
-{u16 v[6];if(id-COMP_ID>=6)return 0;read_values(current(),v);return v[id-COMP_ID];}
+{u16 v[COMP_COUNT];if(id-COMP_ID>=COMP_COUNT)return 0;read_values(current(),v);return v[id-COMP_ID];}
 s32 comp_param_set(u32 id,s32 value)
 {
-    u16 v[6];u32 k=index_of(current()),i=id-COMP_ID;const volatile u32 *active=(const volatile u32 *)0x40a713f0u;
-    if(i>=6 || k>=128)return -1;
+    u16 v[COMP_COUNT];u32 k=index_of(current()),i=id-COMP_ID;const volatile u32 *active=(const volatile u32 *)0x40a713f0u;
+    if(i>=COMP_COUNT || k>=128)return -1;
     if(value<0)value=0;if((u32)value>comp_maximum[i])value=comp_maximum[i];
-    if(i==4)value&=~255;
+    if(i==4 || i==COMP_SCF)value&=~255;
     read_values(current(),v);if(v[i]==(u16)value)return 0;
     v[i]=(u16)value;store_mask(current(),v,1u<<i);
     /* Re-encode the same native mirrors that survive MRAM power cycles. */
@@ -103,7 +118,7 @@ static u32 known_slot(u32 p)
 }
 void comp_meta(const u32 *a)
 {
-    u16 v[6];u8 *r;u32 i;if(!a[4])return;
+    u16 v[COMP_COUNT],w;u8 *r;u32 i;if(!a[4])return;
     switch(a[0]){
     case 1:if(a[3]==COMP_KIT_SIZE){read_values(a[2],v);store(a[1],v);}break;
     case 2:if(a[3]==COMP_KIT_SIZE)store(a[1],comp_initial);break;
@@ -111,16 +126,20 @@ void comp_meta(const u32 *a)
         if(!(a[3]&255u) || !known_slot(a[1]))break;
         r=(u8 *)(a[1]+COMP_RECORD);read_values(a[2],v);
         *(u16 *)r=0x4351u;for(i=0;i<6;i++)((u16 *)r)[i+1]=v[i];
+        ((u16 *)r)[5]=(u16)(v[4]|v[COMP_SCF]>>8);
         ((u16 *)r)[7]=check(r);break;
     case 6:
         if(!(a[3]&255u))break;
         r=(u8 *)(a[2]+COMP_RECORD);
         if(!known_slot(a[2]) || *(u16 *)r!=0x4351u || ((u16 *)r)[7]!=check(r)){store(a[1],comp_initial);break;}
-        for(i=0;i<6;i++){v[i]=((u16 *)r)[i+1];if(v[i]>comp_maximum[i] || (i==4 && (v[i]&255)))break;}
-        store(a[1],i==6?v:comp_initial);break;
+        /* RAT's word: RAT in the high byte, SCF in the low byte (0.2.0
+         * wrote zero there: OFF). */
+        w=((u16 *)r)[5];v[COMP_SCF]=(u16)((w&255u)<<8);
+        for(i=0;i<6;i++){v[i]=i==4?(u16)(w&0xff00u):((u16 *)r)[i+1];if(v[i]>comp_maximum[i])break;}
+        store(a[1],i==6 && v[COMP_SCF]<=comp_maximum[COMP_SCF]?v:comp_initial);break;
     }
 }
 void comp_params_init(void)
-{u32 i,j;prepare(comp_initial,&default_config,63u);
- for(i=0;i<128;i++){live[i].valid=0;for(j=0;j<10;j++)((u32 *)&live[i].config)[j]=((u32 *)&default_config)[j];}
+{u32 i,j;prepare(comp_initial,&default_config,ALL);
+ for(i=0;i<128;i++){live[i].valid=0;for(j=0;j<CONFIG_WORDS;j++)((u32 *)&live[i].config)[j]=((u32 *)&default_config)[j];}
  for(i=0;i<24;i++)side[i].address=0;next=0;}

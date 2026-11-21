@@ -1,6 +1,6 @@
 {
-  "id":"comp-st","version":"0.2.0","title":"Compressor",
-  "description":"Digitakt-style compact compressor on the Syntakt FX track bus, with original Digitakt controls and optional parallel mix.",
+  "id":"comp-st","version":"0.3.0","title":"Compressor",
+  "description":"Digitakt-style compact compressor on the Syntakt FX track bus, with original Digitakt controls, optional parallel mix and a fixed sidechain high-pass (SCF).",
   "author":"GSM1980; DSP adapted from Angelo-politek / Synthack-OS",
   "device":"syntakt","os":"1.42","license":"GPL-2.0-or-later AND MIT",
   "sources":["main.c","params.c","ui.c","sram.c","dsp.s","entry.s"],

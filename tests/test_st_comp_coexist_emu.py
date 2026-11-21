@@ -25,7 +25,7 @@ def verify(core,bank):
                     ('copykit',0x4011613c),('getglobal',0x4000d94a),('setglobal',0x4000da32)]:m.bs[name]=at
     m.sr=0x2000;m.w(0x800030b8,KIT);m.w(0x800030bc,KIT+0xdce)
     m.call('kitnew',KIT)
-    values=[0x1234,0x2345,0x3456,0x4567,0x500,0x5678]
+    values=[0x1234,0x2345,0x3456,0x4567,0x500,0x5678,0x200]
     chorus=[0x100,0x2000,0x7f00,0,0x3000,0x4000,0]
     for i,v in enumerate(values):assert m.call('setglobal',api,ID+i,v,0,0,1)==0
     for i,v in enumerate(chorus):assert m.call('setglobal',api,0x403+i,v,0,0,1)==0
@@ -36,12 +36,12 @@ def verify(core,bank):
     m.call('kitnew',KIT)
     assert m.call('kitdec',KIT,slot)&255
     assert m.word(m.bs['kit_codec_depth'])==0
-    assert [m.call('getglobal',api,ID+i) for i in range(6)]==values
+    assert [m.call('getglobal',api,ID+i) for i in range(7)]==values
     assert [m.call('getglobal',api,0x403+i) for i in range(7)]==chorus
     dst=KIT+0x1618
     assert m.call('copykit',dst,KIT,0x1618)==dst
     m.w(0x800030b8,dst);m.w(0x800030bc,dst+0xdce)
-    assert [m.call('getglobal',api,ID+i) for i in range(6)]==values
+    assert [m.call('getglobal',api,ID+i) for i in range(7)]==values
     assert [m.call('getglobal',api,0x403+i) for i in range(7)]==chorus
     assert m.word(m.lfo['hooks_installed'])==1
     print('PASS four real providers: COMP/Chorus values, LFO3 Kit depth/trailer, native codecs and owning copy')

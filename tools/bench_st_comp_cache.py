@@ -14,10 +14,11 @@ from test_st_comp_emu import fixture,set_values,block,W,ID
 from unicorn import UC_HOOK_CODE,UC_HOOK_MEM_READ,UC_HOOK_MEM_WRITE
 
 
-def profile(core,bank,sram=False):
+def profile(core,bank,sram=False,scf=None):
     m=fixture(core,bank)
     if sram:assert m.call('comp_place')==3
-    set_values(m,[0x4000,0x1800,0x2000,0x2000,0x300,0x7f00])
+    # scf: COMP 0.3's SCF position (Q8); None for banks before 0.3.
+    set_values(m,[0x4000,0x1800,0x2000,0x2000,0x300,0x7f00]+([] if scf is None else [scf]))
     m.w(W+0x1d00,m.sym['comp_audio']);m.w(W+0x1d04,0)
     m.w(m.cs['core:core_fx_cv_table']+2,W+0x1d00)
     ins=[];access=[]
@@ -40,10 +41,10 @@ def profile(core,bank,sram=False):
     adc_reads=sum(1 for p,_ in access if 0x80003c50<=p<0x80003d50)
     assert adc_reads==(64 if 'comp_hot' in m.sym else 65),'incomplete memory instrumentation'
     controls={}
-    for i,name in enumerate(('THR','ATK','REL','MUP','RAT','MIX')):
+    for i,name in enumerate(('THR','ATK','REL','MUP','RAT','MIX')+(() if scf is None else ('SCF',))):
         value=m.call('comp_param_get',ID+i)
         ins.clear();access.clear()
-        m.call(0x4000da32,W,ID+i,value+256 if i!=5 else value-256,0,0,1)
+        m.call(0x4000da32,W,ID+i,value-256 if i==5 or (i==6 and value) else value+256,0,0,1)
         controls[name]=len(ins)
     m.u.hook_del(h);m.u.hook_del(j)
     return dict(extra_instructions=n,cached_instruction_lines=len(il),bank_data_lines=len(dl),
@@ -57,6 +58,8 @@ if __name__=='__main__':
     for key in ('core','bank','previous','out'):p.add_argument('--'+key,type=Path,required=True)
     a=p.parse_args()
     rows=dict(previous=profile(a.core,a.previous),optimized_ddr=profile(a.core,a.bank),optimized_sram=profile(a.core,a.bank,True))
+    if 'comp_hp' in fixture(a.core,a.bank).sym:
+        rows.update(scf150_ddr=profile(a.core,a.bank,False,0x2a00),scf150_sram=profile(a.core,a.bank,True,0x2a00))
     a.out.write_text(json.dumps(dict(cases=rows,
         units='guest instructions and distinct 16-byte cached lines in the FX window',
         proxy='0.85 cycles/instruction + 40/fill; cold assumes every distinct line misses once; warm assumes no misses',

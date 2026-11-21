@@ -9,19 +9,23 @@ typedef unsigned int u32;typedef int s32;typedef unsigned short u16;typedef unsi
 #define COMP_ID 0x40au
 #define COMP_UI 0x4f1u
 #define COMP_PAGE 39u
-#define COMP_COUNT 6u
+#define COMP_COUNT 7u
+#define COMP_SCF 6u      /* index: SCF, ID 0x410, UI 0x4f7 */
 #define COMP_KIT_SIZE 0x1618u
 #define COMP_KIT_BASE 0x41ad6134u
 #define COMP_RECORD 0x15d0u
 #define COMP_RECORD_BYTES 16u
-/* Published under IRQ exclusion; audio only reads this prepared 40-byte row. */
-struct comp_config {s32 threshold,slope,makeup,attack32,release32,cross;u32 wet,dry,idle_peak,idle_gain;};
-struct comp_runtime {struct comp_config config;u32 kit;s32 hold,attack;u32 meter;};
+/* Published under IRQ exclusion; audio only reads this prepared 44-byte row.
+ * hpa: the SCF one-pole coefficient (Q31), 0 = OFF. lp: detector low-pass
+ * state L/R, audio-owned (dsp.s offsets 60/64). */
+struct comp_config {s32 threshold,slope,makeup,attack32,release32,cross;u32 wet,dry,idle_peak,idle_gain,hpa;};
+struct comp_runtime {struct comp_config config;u32 kit;s32 hold,attack;u32 meter;s32 lp[2];};
 extern struct comp_runtime comp_ddr_runtime;
 extern struct comp_runtime *comp_hot;
 extern const struct comp_config *comp_current_config(u32);
 static inline u32 comp_meter_read(void){return *(volatile u32 *)&comp_hot->meter;}
-extern const u16 comp_initial[6],comp_maximum[6];
+extern const u16 comp_initial[7],comp_maximum[7];
+extern const u16 *const comp_scf_hz_table;
 extern void comp_process(struct st_fx_cv *),comp_audio(struct st_fx_cv *);
 extern u32 comp_lock(void);extern void comp_unlock(u32);
 extern s32 comp_param_get(u32),comp_param_set(u32,s32);

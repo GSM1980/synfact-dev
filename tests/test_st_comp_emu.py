@@ -21,8 +21,10 @@ from unicorn import UC_HOOK_CODE
 from unicorn.m68k_const import *
 
 ID,UI,KIT,CV=0x40a,0x4f1,0x41ad6134,W+0x1000
-DEFAULT=[0x2000,0x1800,0x2000,0x4000,0x300,0]
-NAMES=['THR','ATK','REL','MUP','RAT','MIX']
+DEFAULT=[0x2000,0x1800,0x2000,0x4000,0x300,0,0]
+NAMES=['THR','ATK','REL','MUP','RAT','MIX','SCF']
+SCF=6
+HOLD,LP=48,60   # comp_runtime offsets (comp.h)
 
 
 class NativeStrings(Machine):
@@ -109,11 +111,14 @@ def test_controls(m):
     m.w(W+0x200,39)
     assert m.call('comp_native',11,W+0x200,W+0x240)==1
     layout=m.word(W+0x240)
-    assert struct.unpack('>8I',m.read(layout+8,32))==(ID,ID+1,ID+2,ID+3,ID+4,0,0,ID+5)
-    set_values(m,[0,0x7f00,0,0,0x700,0x7f00])
-    assert m.call(0x4000da32,W,ID+4,0xffff,0,0,1)==0
-    assert m.call(0x4000d94a,W,ID+4)==0x700
-    print('PASS controls: original six names/ranges, F/G empty, global model IO')
+    assert struct.unpack('>8I',m.read(layout+8,32))==(ID,ID+1,ID+2,ID+3,ID+4,0,ID+SCF,ID+5)
+    set_values(m,[0,0x7f00,0,0,0x700,0x7f00,0x7f00])
+    for i,top in ((4,0x700),(SCF,0x7f00)):
+        assert m.call(0x4000da32,W,ID+i,0xffff,0,0,1)==0
+        assert m.call(0x4000d94a,W,ID+i)==top
+        assert m.call(0x4000da32,W,ID+i,0x3ff,0,0,1)==0
+        assert m.call(0x4000d94a,W,ID+i)==0x300
+    print('PASS controls: original seven names, ranges, F empty, G SCF (128 positions), global model IO')
 
 
 def test_math(core,bank):
@@ -160,10 +165,34 @@ def test_fx_site(core,bank):
     print('PASS FX site: only two FX CV words changed; MIX 0 and no subscriber replay stock')
 
 
+def test_scf(core,bank):
+    # Wiring only: the kernel's SCF setup, its state and the task reset.
+    # The loop's EMAC arithmetic is checked in analog-emu
+    # (test_st_comp_scf_emu.py); Unicorn's EMAC is not trusted for it.
+    def run(scf,hz):
+        m=fixture(core,bank);set_values(m,[0,0,0x2000,0,0x700,0x7f00,scf])
+        hot=m.word(m.sym['comp_hot'])
+        for b in range(60):
+            left=[int(2**30*math.sin(2*math.pi*hz*(b*32+i)/48000)) for i in range(32)]
+            got=block(m,left,left)
+        return m,hot,got
+    low_off=run(0,50)[2];m,hot,low_on=run(0x4100,50);high_off=run(0,3000)[2];high_on=run(0x4100,3000)[2]   # 250 Hz
+    assert low_on[0]>low_off[0]*1.5,('250 Hz SCF must ignore most of a 50 Hz sine',low_off,low_on)
+    assert abs(high_on[0]-high_off[0])<=high_off[0]//8+2,('3 kHz passes',high_off,high_on)
+    lp=struct.unpack('>2i',m.read(hot+LP,8));assert lp!=(0,0),'SCF state not kept'
+    assert m.call(0x4000da32,W,ID+SCF,0x4000,0,0,1)==0
+    assert struct.unpack('>2i',m.read(hot+LP,8))==lp,'moving between cutoffs keeps the state'
+    assert m.call(0x4000da32,W,ID+SCF,0,0,0,1)==0 and m.call(0x4000da32,W,ID+SCF,0x100,0,0,1)==0
+    assert struct.unpack('>2i',m.read(hot+LP,8))==(0,0),'turning SCF on starts from rest'
+    off=run(0,50)[0];assert struct.unpack('>2i',off.read(off.word(off.sym['comp_hot'])+LP,8))==(0,0)
+    print('PASS SCF wiring: 50 Hz CV %d -> %d with 250 Hz, 3 kHz %d -> %d; state kept across cutoffs, reset when turned on, untouched when OFF'
+          %(low_off[0],low_on[0],high_off[0],high_on[0]))
+
+
 def test_persistence(m):
     slot=0x43c0dfc0+0x2e0200
     marker=bytes([0xa7])*0x1600;m.u.mem_write(slot,marker)
-    values=[0x1234,0x2345,0x3456,0x4567,0x500,0x5678];set_values(m,values)
+    values=[0x1234,0x2345,0x3456,0x4567,0x500,0x5678,0x300];set_values(m,values)
     # Real module notification, packed full-Q8 values; native record geometry
     # and the adjacent LFO3/Playhead bytes must be untouched by its codec.
     m.u.mem_write(W+0x300,struct.pack('>5I',5,slot,KIT,1,1))
@@ -171,35 +200,46 @@ def test_persistence(m):
     assert m.read(slot,0x15d0)==marker[:0x15d0]
     assert m.read(slot+0x15e0,32)==marker[0x15e0:]
     saved=m.read(slot+0x15d0,16)
+    assert struct.unpack('>8H',saved)[5]==0x0503,'RAT high byte, SCF low byte'
     set_values(m,DEFAULT)
     m.u.mem_write(W+0x300,struct.pack('>5I',6,KIT,slot,1,1));m.call('comp_meta',W+0x300)
-    assert [m.call('comp_param_get',ID+i) for i in range(6)]==values
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==values
     for j in range(16):
         bad=bytearray(saved);bad[j]^=1;m.u.mem_write(slot+0x15d0,bytes(bad))
         m.call('comp_meta',W+0x300)
-        assert [m.call('comp_param_get',ID+i) for i in range(6)]==DEFAULT
+        assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
+    # A 0.2.0 record (RAT's low byte zero, its own check) reads as SCF OFF;
+    # an SCF index past 7 is refused like any out-of-range value.
+    for low,expected in ((0,values[:6]+[0]),(127,values[:6]+[0x7f00]),(128,DEFAULT)):
+        old=bytearray(saved);old[11]=low
+        words=list(struct.unpack('>8H',bytes(old)))
+        h=0x4350
+        for byte in bytes(old[:14]):h=((h*33)&0xffffffff)^byte
+        words[7]=(h^(h>>16))&0xffff;m.u.mem_write(slot+0x15d0,struct.pack('>8H',*words))
+        m.call('comp_meta',W+0x300)
+        assert [m.call('comp_param_get',ID+i) for i in range(7)]==expected,(low,expected)
     m.u.mem_write(slot+0x15d0,saved)
     # After native Kit construction, the core's NEW notification reaches the
     # provider and resets the live row. No LFO3 dependency.
     set_values(m,values)
     m.call(0x400b3384,KIT,sr=0x2000)
-    assert [m.call('comp_param_get',ID+i) for i in range(6)]==DEFAULT
-    print('PASS persistence: full Q8, 16 corrupt-record cases, neighboring mods and native Kit constructor')
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
+    print('PASS persistence: full Q8, SCF in RAT low byte, 0.2.0 record, 16 corrupt-record cases, neighboring mods and native Kit constructor')
 
 
 def test_native_codec(core,bank):
     m=NativeStrings(core,bank);initialize(m)
     slot=0x43c0dfc0+0x2e0200
-    values=[0x1234,0x2345,0x3456,0x4567,0x500,0x5678]
+    values=[0x1234,0x2345,0x3456,0x4567,0x500,0x5678,0x700]
     m.call(0x400b3384,KIT,sr=0x2000);set_values(m,values)
     assert m.call(0x400a78f4,slot,KIT,0,sr=0x2000)&255
     m.call(0x400b3384,KIT,sr=0x2000)
     assert m.call(0x400a78a0,KIT,slot,sr=0x2000)&255
-    assert [m.call('comp_param_get',ID+i) for i in range(6)]==values
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==values
     dst=KIT+0x1618
     assert m.call(0x4011613c,dst,KIT,0x1618,sr=0x2000)==dst
     m.w(0x800030b8,dst)
-    assert [m.call('comp_param_get',ID+i) for i in range(6)]==values
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==values
     # Native SysEx buffers retain their shorter geometry; no trailer write.
     small=W+0xc000;m.u.mem_write(small,b'\xa7'*0x1600)
     assert m.call(0x400a78f4,small,KIT,0,sr=0x2000)&255
@@ -211,16 +251,16 @@ def test_native_codec(core,bank):
     assert m.call(0x400a78f4,image_slot,KIT,0,sr=0x2000)&255
     m.call(0x400b3384,KIT,sr=0x2000)
     assert m.call(0x400a78a0,KIT,image_slot,sr=0x2000)&255
-    assert [m.call('comp_param_get',ID+i) for i in range(6)]==values
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==values
     temp=W+0xc000
     m.call(0x4011613c,temp,KIT,0x1618,sr=0x2000)
     m.call(0x4011613c,dst,temp,0x1618,sr=0x2000)
     m.w(0x800030b8,dst)
-    assert [m.call('comp_param_get',ID+i) for i in range(6)]==values
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==values
     # Reuse of an untracked buffer cannot resurrect its previous COMP data.
     m.u.mem_write(temp,b'\xa5')
     m.call(0x4011613c,dst,temp,0x1618,sr=0x2000)
-    assert [m.call('comp_param_get',ID+i) for i in range(6)]==DEFAULT
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
     print('PASS native Kit encode/decode/copy, project image, stale buffer and short SysEx boundary')
 
 
@@ -233,7 +273,7 @@ def test_page(core,bank,out):
     m.call('comp_draw',view,bitmap,0)
     assert (m.word(pages),m.word(pages+4),m.word(view+0x80))==(32,39,pages+8)
     m.w(view+0x90,1)
-    for knob,expected in enumerate([ID,ID+1,ID+2,ID+3,ID+4,0,0,ID+5]):
+    for knob,expected in enumerate([ID,ID+1,ID+2,ID+3,ID+4,0,ID+SCF,ID+5]):
         assert m.call(0x40044c54,view,knob)==expected  # real SourcePageView route
         assert m.call(0x40037d9e,view,knob)==expected  # base navigation route
     # Model selection is explicit; real core global get supplies raw values.
@@ -242,10 +282,13 @@ def test_page(core,bank,out):
     m.w(0x443db21c,0x402aa114);m.w(0x443db230,0x402aa114)
     m.call(0x400f72be,bitmap,128,64,pixels,0)
     draw_frame(m,view,bitmap)
-    assert sorted((a[1],a[2]) for a in m.dials)==list(zip(range(ID,ID+6),DEFAULT))
-    # Original format strings, including decimal MUP and the discrete RAT.
+    assert sorted((a[1],a[2]) for a in m.dials)==list(zip(range(ID,ID+7),DEFAULT))
+    # Original format strings, including decimal MUP and the discrete RAT;
+    # SCF's eight positions.
     for pid,raw,expected in ((ID,0x7f00,'127'),(ID+3,0,'0.0'),
-                             (ID+3,0x7f00,'24.0'),(ID+4,0x700,'20.00'),(ID+5,0x4000,'64')):
+                             (ID+3,0x7f00,'24.0'),(ID+4,0x700,'20.00'),(ID+5,0x4000,'64'),
+                             (ID+SCF,0,'OFF'),(ID+SCF,0x100,'60Hz'),(ID+SCF,0x1300,'90Hz'),(ID+SCF,0x2a00,'150Hz'),
+                             (ID+SCF,0x7e00,'978Hz'),(ID+SCF,0x7f00,'1kHz')):
         assert m.string(m.call(0x4007bbe2,pid,raw))==expected
     if out:
         out.parent.mkdir(parents=True,exist_ok=True)
@@ -261,12 +304,13 @@ def test_page(core,bank,out):
                         chunk(b'IDAT',zlib.compress(rows))+chunk(b'IEND',b''))
     m.w(view+0x90,0);m.dials.clear();m.call('comp_draw',view,bitmap,0)
     assert not m.dials and m.word(pages)==32
-    print('PASS native Source/base navigation, six original Digitakt dials/formats, empty F/G and DRIVE retained')
+    print('PASS native Source/base navigation, seven original Digitakt dials/formats, empty F, SCF on G and DRIVE retained')
 
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--core',type=Path,required=True);p.add_argument('--bank',type=Path,required=True);p.add_argument('--preview',type=Path);a=p.parse_args()
     m=fixture(a.core,a.bank);test_controls(m);test_math(a.core,a.bank);test_fx_site(a.core,a.bank)
+    test_scf(a.core,a.bank)
     test_persistence(fixture(a.core,a.bank))
     test_native_codec(a.core,a.bank);test_page(a.core,a.bank,a.preview)
     print('PASS comp-st; no device access')

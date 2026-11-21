@@ -58,8 +58,9 @@ the layout (`MACHINES.md`, section 6). A layout entry is a control index, and
 - UI IDs of type `t` are `0x2e0 + (t - 64) * 32`.
 - The parameter providers for modules use `ST_MODULE_ID` (`0x3f9`) and
   `ST_MODULE_UI` (`0x4e0`), 128 of each (`machines.h`).
-- Allocations: LFO3 +0..+9, Chorus +10..+16, COMP +17..+22
-  (engine `40a..40f`, UI `4f1..4f6`). COMP uses page 39 after FX DRIVE (32).
+- Allocations: LFO3 +0..+9, Chorus +10..+16, COMP +17..+23
+  (engine `40a..410`, UI `4f1..4f7`; +23 is SCF, COMP 0.3). COMP uses page 39
+  after FX DRIVE (32).
 
 The numbers next to a range are not free because they look free. Check every
 consumer of an ID before you assign it: arrays, comparisons, maps, the codec,

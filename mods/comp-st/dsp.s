@@ -1,6 +1,9 @@
 | Adapted from Synthack-OS master-comp, MIT. See upstream/LICENSE.
 | Origin c12cf23ad88e68d3f85422a7d09c2a911659997f. Changes: shared FX-CV
-| context, Synfact settings, six controls, linear dry/wet gain, no sidechain.
+| context, Synfact settings, seven controls, linear dry/wet gain, fixed
+| one-pole high-pass on the detector only (SCF).
+| Runtime (comp.h): 0..44 prepared config (40 hpa), 44 Kit, 48 hold,
+| 52 attack, 56 meter, 60/64 detector low-pass state L/R.
         .include "dsp-constants.inc"
         .equ EXP_K,-356689313
         .equ CV_MAX,65535
@@ -14,19 +17,19 @@ comp_kernel:
         | no spill traffic and no MAC state access. Kit changes take setup.
         movea.l comp_hot,%a0
         move.l  0x800030b8,%d0
-        cmp.l   40(%a0),%d0
+        cmp.l   44(%a0),%d0
         bne.s   .Lsetup
         tst.l   24(%a0)
         bne.s   .Lsetup
-        clr.l   44(%a0)
         clr.l   48(%a0)
-        move.l  52(%a0),%d0
+        clr.l   52(%a0)
+        move.l  56(%a0),%d0
         beq.s   .Loff_return
         subi.l  #METER_DECAY,%d0
         bpl.s   .Loff_store
         moveq   #0,%d0
 .Loff_store:
-        move.l  %d0,52(%a0)
+        move.l  %d0,56(%a0)
 .Loff_return:
         rts
 .Lsetup:
@@ -34,31 +37,40 @@ comp_kernel:
         movem.l %d2-%d4/%d7/%a2-%a3,(%sp)
         movea.l 32(%sp),%a3
         movea.l %a0,%a2
-        cmp.l   40(%a2),%d0
+        cmp.l   44(%a2),%d0
         beq.s   .Lready
-        move.l  %d0,40(%a2)
+        move.l  %d0,44(%a2)
         move.l  %d0,-(%sp)
         jsr     comp_current_config
         addq.l  #4,%sp
         movea.l %d0,%a0
         movem.l (%a0),%d0-%d4/%d7
         movem.l %d0-%d4/%d7,(%a2)
-        movem.l 24(%a0),%d0-%d3
-        movem.l %d0-%d3,24(%a2)
+        movem.l 24(%a0),%d0-%d4
+        movem.l %d0-%d4,24(%a2)
 .Lready:
         tst.l   24(%a2)
         bne.s   .Lactive
-        clr.l   44(%a2)
         clr.l   48(%a2)
-        tst.l   52(%a2)
+        clr.l   52(%a2)
+        tst.l   56(%a2)
         beq.w   .Lreturn
         bsr.w   comp_meter
         bra.w   .Lreturn
 .Lactive:
+        | Both detector loops get their pointer, peak and count from here, so
+        | their SRAM copies hold only the loops. SCF OFF costs two
+        | instructions; its out-of-line setup runs only with a cutoff.
+        lea     0x80003c50,%a0
+        moveq   #0,%d3
+        move.l  40(%a2),%d1
+        bne.w   .Lfiltered
+        moveq   #15,%d7
         movea.l comp_peak_entry,%a1
         jsr     (%a1)
-        move.l 44(%a2),%d1
-        or.l    48(%a2),%d1
+.Lpeaked:
+        move.l  48(%a2),%d1
+        or.l    52(%a2),%d1
         bne.s   .Lcompress
         cmp.l   32(%a2),%d0
         bhi.s   .Lcompress
@@ -73,11 +85,11 @@ comp_kernel:
         jsr     (%a1)
 1:      | ---- tenuta con rilascio e attacco su 32 campioni a ingresso costante, d = min(st - gr, 0):
         |      st = gr + r^32 * d, at = gr + a^32 * (at - gr) + K * d
-        move.l  44(%a2),%d2
+        move.l  48(%a2),%d2
         sub.l   %d0,%d2
         ble.s   2f
         moveq   #0,%d2
-2:      move.l  48(%a2),%d7
+2:      move.l  52(%a2),%d7
         sub.l   %d0,%d7
         move.l  12(%a2),%d3                     | a^32
         mac.l   %d3,%d7,%acc0
@@ -89,8 +101,8 @@ comp_kernel:
         mac.l   %d3,%d2,%acc0
         movclr.l %acc0,%d2
         add.l   %d0,%d2                         | st
-        move.l  %d2,44(%a2)
-        move.l  %d7,48(%a2)
+        move.l  %d2,48(%a2)
+        move.l  %d7,52(%a2)
         bsr.w   comp_meter
         | ---- guadagno G (Q12, 65536 = x16) = 2^(16 - v/2^23), v = EXP_K * (MK + at)
         add.l   8(%a2),%d7
@@ -135,18 +147,33 @@ comp_apply:
         movem.l (%sp),%d2-%d4/%d7/%a2-%a3
         lea     28(%sp),%sp
         rts
+.Lfiltered:
+        | SCF: low-pass state lives in ACC0/ACC1 for the block (FX_CV callers
+        | may use ACC0/1 and leave them empty; ACC2/3 untouched). Fractional
+        | mode as the curve; the caller's MACSR is restored before the curve.
+        move.l  %macsr,%d4
+        move.l  #0xa0,%macsr
+        movem.l 60(%a2),%d0/%d2
+        move.l  %d0,%acc0
+        move.l  %d2,%acc1
+        moveq   #31,%d7
+        movea.l comp_hp_entry,%a1
+        jsr     (%a1)
+        movclr.l %acc0,%d1
+        movclr.l %acc1,%d2
+        movem.l %d1-%d2,60(%a2)
+        move.l  %d4,%macsr
+        bra.w   .Lpeaked
 
         .balignw 4,0x4e71
-        .globl comp_detector_start,comp_peak,comp_curve,comp_scale,comp_detector_end
+        .globl comp_detector_start,comp_peak,comp_hp,comp_curve,comp_scale,comp_detector_end
 comp_detector_start:
 comp_peak:
-8:      | Exact block peak: MOVE supplies the sign flag, NOT gives x^(x>>31).
+        | Exact block peak: MOVE supplies the sign flag, NOT gives x^(x>>31).
         | The two ADC channels are one contiguous span of 64 Q31 words.
-        lea     0x80003c50,%a0
-        moveq   #0,%d3
-        moveq   #7,%d7
+        | Caller: A0 = 80003c50, D3 = 0, D7 = 15 (four samples a pass).
 .Lpeak:
-        .rept 8
+        .rept 4
         move.l  (%a0)+,%d0
         bpl.s   1f
         not.l   %d0
@@ -157,11 +184,37 @@ comp_peak:
         .endr
         subq.l  #1,%d7
         bge.s   .Lpeak
+.Lfloor:
         move.l  %d3,%d0
-6:      cmpi.l  #256,%d0                        | pavimento come la DT
+        cmpi.l  #256,%d0                        | pavimento come la DT
         bge.s   7f
         move.l  #256,%d0
 7:      rts
+comp_hp:
+        | SCF peak: lp += a*(x - lp), y = x - lp, one MSAC a channel.
+        | Caller: A0 = 80003c50, D1 = a (Q31), D3 = 0, D7 = 31, ACC0/1 =
+        | lp L/R, MACSR fractional. Peaks |y|: the SUB gives lp - x = -y
+        | (same magnitude); EMAC does not touch CCR, so R's sign is the SUB's.
+.Lhp:   move.l  %acc0,%d0
+        move.l  %acc1,%d2
+        sub.l   (%a0)+,%d0
+        sub.l   124(%a0),%d2
+        msac.l  %d0,%d1,%acc0
+        msac.l  %d2,%d1,%acc1
+        bpl.s   3f
+        not.l   %d2
+3:      cmp.l   %d2,%d3
+        bge.s   4f
+        move.l  %d2,%d3
+4:      tst.l   %d0
+        bpl.s   1f
+        not.l   %d0
+1:      cmp.l   %d0,%d3
+        bge.s   2f
+        move.l  %d0,%d3
+2:      subq.l  #1,%d7
+        bge.s   .Lhp
+        bra.s   .Lfloor
 comp_curve:
         lea     comp_k_logt,%a1
         | ---- log: L = T[i] + interp - lz*C_OCT
@@ -215,18 +268,18 @@ comp_detector_end:
 | Smoothed GR only. UI tick quantizes/invalidate a visible COMP view.
 | No division, pixel conversion or global display work in the audio IRQ.
 comp_meter:
-        move.l  48(%a2),%d0
+        move.l  52(%a2),%d0
         neg.l   %d0
         bpl.s   1f
         moveq   #0,%d0
-1:      move.l  52(%a2),%d1
+1:      move.l  56(%a2),%d1
         subi.l  #METER_DECAY,%d1
         bpl.s   2f
         moveq   #0,%d1
 2:      cmp.l   %d1,%d0
         bge.s   3f
         move.l  %d1,%d0
-3:      move.l  %d0,52(%a2)
+3:      move.l  %d0,56(%a2)
         rts
 
 
@@ -236,9 +289,10 @@ comp_meter:
         .balign 16
         .globl comp_ddr_runtime,comp_gr_meter
 comp_ddr_runtime:
-        .long 0,0,0,0,0,0,0,0,0,0 | prepared config
-        .long -1,0,0              | Kit, hold, attack
+        .long 0,0,0,0,0,0,0,0,0,0,0 | prepared config (last: SCF a)
+        .long -1,0,0                | Kit, hold, attack
 comp_gr_meter: .long 0
+        .long 0,0                   | SCF low-pass L/R
 comp_k_logt:
         .long LOG_T0,LOG_T1,LOG_T2,LOG_T3,LOG_T4,LOG_T5,LOG_T6,LOG_T7,LOG_T8,LOG_T9,LOG_T10,LOG_T11,LOG_T12,LOG_T13,LOG_T14,LOG_T15,LOG_T16
         .globl comp_k_expt
