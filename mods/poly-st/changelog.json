@@ -8,6 +8,11 @@
       "date": "2026-11-18",
       "commits": [
         {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
+        },
+        {
           "sha": "2b37c65",
           "date": "2026-11-19",
           "subject": "Changelogs: core 2.1.1"

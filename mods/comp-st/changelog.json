@@ -11,6 +11,11 @@
           "sha": "a7a9b39",
           "date": "2026-11-21",
           "subject": "COMP 0.3.0: sidechain high-pass (SCF) and a lighter GR meter"
+        },
+        {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
         }
       ]
     },

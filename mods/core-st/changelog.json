@@ -1,12 +1,28 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.4.0",
+  "latest": "2.5.0",
   "entries": [
+    {
+      "version": "2.5.0",
+      "date": "2026-11-22",
+      "commits": [
+        {
+          "sha": "b6d39b8",
+          "date": "2026-11-22",
+          "subject": "Lighter stereo tracks on both CPUs (core 2.5.0, samplers 1.6.0)"
+        }
+      ]
+    },
     {
       "version": "2.4.0",
       "date": "2026-11-20",
       "commits": [
+        {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
+        },
         {
           "sha": "e1e51bf",
           "date": "2026-11-20",

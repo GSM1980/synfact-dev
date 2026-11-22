@@ -8,6 +8,11 @@
       "date": "2026-11-19",
       "commits": [
         {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
+        },
+        {
           "sha": "9e77668",
           "date": "2026-11-19",
           "subject": "MAIN CPU: icache-lock-st and mix-fast-st (experimental, no core change)"

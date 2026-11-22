@@ -8,6 +8,11 @@
       "date": "2026-11-20",
       "commits": [
         {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
+        },
+        {
           "sha": "e1e51bf",
           "date": "2026-11-20",
           "subject": "Add FX-bus COMP with shared core services and SRAM optimization"

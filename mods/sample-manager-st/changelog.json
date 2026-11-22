@@ -8,6 +8,11 @@
       "date": "2026-11-19",
       "commits": [
         {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
+        },
+        {
           "sha": "ce91a3b",
           "date": "2026-11-19",
           "subject": "Improve Sample Manager sizes, project memory and atomic capacity checks"

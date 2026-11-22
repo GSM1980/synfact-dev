@@ -1,9 +1,14 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.4.0.
+Generated from git history by `tools/changelog.py`. Latest version: 2.5.0.
+
+## 2.5.0 (2026-11-22)
+
+- Lighter stereo tracks on both CPUs (core 2.5.0, samplers 1.6.0) (`b6d39b8`, 2026-11-22)
 
 ## 2.4.0 (2026-11-20)
 
+- Changelogs: COMP 0.3.0 (`a81bb0b`, 2026-11-21)
 - Add FX-bus COMP with shared core services and SRAM optimization (`e1e51bf`, 2026-11-20)
 - Changelogs: COMP 0.2.0 and core 2.4.0 FX services (`307482a`, 2026-11-20)
 
