@@ -284,12 +284,17 @@ def test_page(core,bank,out):
     draw_frame(m,view,bitmap)
     assert sorted((a[1],a[2]) for a in m.dials)==list(zip(range(ID,ID+7),DEFAULT))
     # Original format strings, including decimal MUP and the discrete RAT;
-    # SCF's eight positions.
-    for pid,raw,expected in ((ID,0x7f00,'127'),(ID+3,0,'0.0'),
+    # ATK and REL as their time constants in ms; SCF's eight positions.
+    for pid,raw,expected in ((ID,0x7f00,'127'),(ID+1,0,'0.10'),(ID+1,0x1800,'3.67'),(ID+1,0x7f00,'100'),
+                             (ID+2,0,'10.0'),(ID+2,0x2000,'73.4'),(ID+2,0x7f00,'2000'),(ID+3,0,'0.0'),
                              (ID+3,0x7f00,'24.0'),(ID+4,0x700,'20.00'),(ID+5,0x4000,'64'),
                              (ID+SCF,0,'OFF'),(ID+SCF,0x100,'60Hz'),(ID+SCF,0x1300,'90Hz'),(ID+SCF,0x2a00,'150Hz'),
                              (ID+SCF,0x7e00,'978Hz'),(ID+SCF,0x7f00,'1kHz')):
         assert m.string(m.call(0x4007bbe2,pid,raw))==expected
+    # The value pop-up's title (the selected model's label lookup): ATK and
+    # REL carry their unit there, the others keep Digitakt's long names.
+    for pid,expected in ((ID,'Threshold'),(ID+1,'Attack (ms)'),(ID+2,'Release (ms)'),(ID+3,'Makeup Gain')):
+        assert m.string(m.call(0x40013730,W,pid))==expected,(hex(pid),m.string(m.call(0x40013730,W,pid)))
     if out:
         out.parent.mkdir(parents=True,exist_ok=True)
         words=struct.unpack('>256I',m.read(pixels,1024));rows=bytearray()

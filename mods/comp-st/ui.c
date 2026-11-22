@@ -7,6 +7,7 @@
 #include "imported/metadata.h"
 #include "imported/formats.h"
 #include "imported/dials.h"
+#include "time-tables.h"
 #define BITMAP ((void (*)(void *,s32,s32,const u32 *,const u32 *))0x400f72beu)
 #define BLIT ((void (*)(void *,void *,s32,s32,u32))0x400f8f70u)
 #define FILL ((void (*)(void *,s32,s32,s32,s32,s32))0x400f7fb6u)
@@ -102,6 +103,8 @@ void comp_tick(void *raw)
 static const char *format(u32 i,u32 value)
 {
     u32 n=value>>8;char *p=text;if(value>comp_maximum[i])n=comp_maximum[i]>>8;
+    if(i==1)return comp_atk_text[n];      /* time constants in ms (time-tables.h) */
+    if(i==2)return comp_rel_text[n];
     if(i==3)return comp_mup_text[n];
     if(i==4)return comp_rat_text[n];
     if(i==COMP_SCF){
@@ -142,7 +145,9 @@ int comp_query(u32 q,u32 *a,void *out,u32 *value)
     case 16:case 23:a[0]=0x13;return 0;
     case 17:*value=(u32)format(i,a[1]);return 1;
     case 18:*value=(u32)comp_short_names[i];return 1;
-    case 20:*value=(u32)comp_long_names[i];return 1;
+    /* The long name titles the value pop-up only: ATK and REL carry their
+     * unit there (their values, also drawn under the controls, have none). */
+    case 20:*value=(u32)(i==1?"Attack (ms)":i==2?"Release (ms)":comp_long_names[i]);return 1;
     case 19:case 21:*value=0;return 1;
     case 24:return comp_param_set(id,(s32)a[2])==0;
     case 30:return dial(a);
