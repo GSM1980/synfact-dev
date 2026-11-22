@@ -13,6 +13,16 @@
           "subject": "COMP 1.0.0: first release, THR 127 by default"
         },
         {
+          "sha": "c148d93",
+          "date": "2026-11-22",
+          "subject": "Changelogs: COMP 1.0.0"
+        },
+        {
+          "sha": "afc80da",
+          "date": "2026-11-22",
+          "subject": "COMP 1.0.0: ATK and REL in milliseconds"
+        },
+        {
           "sha": "2eed3fc",
           "date": "2026-11-22",
           "subject": "Changelogs: core 2.5.0 and samplers 1.6.0"

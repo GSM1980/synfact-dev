@@ -16,6 +16,11 @@
           "sha": "2eed3fc",
           "date": "2026-11-22",
           "subject": "Changelogs: core 2.5.0 and samplers 1.6.0"
+        },
+        {
+          "sha": "c148d93",
+          "date": "2026-11-22",
+          "subject": "Changelogs: COMP 1.0.0"
         }
       ]
     },
