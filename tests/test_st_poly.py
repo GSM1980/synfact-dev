@@ -66,7 +66,7 @@ def verify(folder,synfact=None):
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
     native_sites=[s for s in manifest['sites'] if s.get('target','').startswith('core_native_')]
-    assert len(native_sites)==14 and len(manifest['sites'])==119 and len(manifest['collections'])==16
+    assert len(native_sites)==14 and len(manifest['sites'])==127 and len(manifest['collections'])==17
     cleanup=next(s for s in manifest['sites'] if s['addr']=='0x401010f0')
     assert cleanup['op']=='bytes' and read(0x401010f0,18)==bytes.fromhex('4200174000224a0367082f0b4ebafba4588f')
     assert any(s['addr']=='0x400a5046' and s['target']=='core_audio_idle_mix' for s in manifest['sites'])
@@ -123,7 +123,10 @@ def verify(folder,synfact=None):
         obj=object_for_symbol(report,name);assert audit(obj.section('.text').data)>0
     if synfact:
         p=json.loads((mod/'provenance.json').read_text())
-        for name,digest in p['source_sha256'].items():assert hashlib.sha256((synfact/name).read_bytes()).hexdigest()==digest,name
+        for name,digest in p['source_sha256'].items():
+            # The historical provenance used a basename for this one source.
+            path=synfact/('src/features/lfo3/poly/guards.s' if name=='guards.s' else name)
+            assert hashlib.sha256(path.read_bytes()).hexdigest()==digest,name
         # Publication is now authored compact code; the donor remains pinned
         # above. test_st_poly_publication_emu compares the linked implementation
         # with the donor bank and a separate field/padding oracle for all maps.

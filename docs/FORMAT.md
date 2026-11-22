@@ -1,5 +1,19 @@
 # The .elemod format
 
+Core 2.4 / host API 16 adds SMZ module event **15, FX_CV**. It has the same
+subscription record geometry; older core parsers reject event 15. The bank
+contract remains `53594606`, with no envelope or feature-bit change. The host
+struct keeps its API 15 size; provider queries 32..35 are described in
+`syntakt/host.h`.
+
+COMP 0.1 owns encoded Kit bytes `[15d0,15e0)`: big-endian tag `4351`, six
+u16 Q8 values in THR/ATK/REL/MUP/RAT/MIX order, then u16 check. Starting at
+`h=4350`, for the first 14 bytes compute `h=(h*33)^byte` modulo 2^32; check is
+`(h^(h>>16)) & ffff`. Bad tag/check/range gives defaults with MIX off.
+LFO3's `[14e0,15d0)` and Playhead's `[15e0,15f8)` remain unchanged. Only
+audited full Kit mirror/project slots carry the record; native Kit SysEx
+retains its original shorter geometry.
+
 For Syntakt core 2.0's separate SMZ4 banks, OS 1.42 requires feature 16 and
 a contract ID in the existing word at offset 64: `0x53594606` from core 2.2
 (`0x53594605` for 2.0 and 2.1). An AUDIO section may be up to 4 MiB from 2.2. Older and untagged

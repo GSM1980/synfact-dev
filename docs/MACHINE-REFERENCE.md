@@ -58,6 +58,9 @@ the layout (`MACHINES.md`, section 6). A layout entry is a control index, and
 - UI IDs of type `t` are `0x2e0 + (t - 64) * 32`.
 - The parameter providers for modules use `ST_MODULE_ID` (`0x3f9`) and
   `ST_MODULE_UI` (`0x4e0`), 128 of each (`machines.h`).
+- Allocations: LFO3 +0..+9, Chorus +10..+16, COMP +17..+23
+  (engine `40a..410`, UI `4f1..4f7`; +23 is SCF, COMP 0.3). COMP uses page 39
+  after FX DRIVE (32).
 
 The numbers next to a range are not free because they look free. Check every
 consumer of an ID before you assign it: arrays, comparisons, maps, the codec,
@@ -246,7 +249,24 @@ AUDIO's SRAM is `0x80000000` to `0x8000ffff`; its stack is in DDR (`SP`
 tail `0x8000f398` to `0x8000ffff` (3176 bytes) has no known user: no stock
 reference was found, and on the unit (2026-11-10) the memory probe found it
 zero at its start and held a pattern there for several minutes of normal use
-with no word changed. The stereo engine owns it now (next section).
+with no word changed. The stereo engine owns it now (next section):
+
+| AUDIO SRAM | Use (samplers-st 1.6) |
+|---|---|
+| `0x8000f400` | `ST_STEREO_R(t)`, 8 × 128 bytes: R's buffers |
+| `0x8000f800` | `ST_STEREO_SIGNAL`, 40 words: R's chain memory (the multimode's second-loop word, the base-width's two words, the multimode's first-loop words) |
+| `0x8000f8a0` | 40 words: the drive state from before this block's L drive |
+| `0x8000fb50` | the window block's staging (`ST_STEREO_BLOCK`, 560 bytes), read by eDMA channel 46 |
+| `0x8000fe00` | `ST_STEREO_FILTER(t)`: R's render filter memory |
+| `0x8000fe80` | `ST_STEREO_SCRATCH`: R's PCM during a render, then the fused multimode's first output |
+| `0x8000ff00` | the fused multimode's copy of R's buffer |
+| `0x8000ff80` | the fused multimode's second output |
+
+The native multimode's first part indexes its tables with the frame word
+`0x80008188 + 4t` (its `x` argument) shifted right by 21 and 22, and with
+values derived from it: a negative `x` sends those reads outside the tables,
+into this SRAM among other places (seen in analog-emu with random words; the
+engine's checks keep `x` at or above zero).
 
 ### Stereo tracks
 
@@ -260,34 +280,52 @@ as a difference:
    and the two gain ramps (`0x400045a0`, `0x400049f4`) from the start values
    L used. Since samplers-st 1.4 a stereo track does the filter on L and R in
    one loop and both ramps of L and R in another, with the natives' own EMAC
-   operations in their order (`mods/samplers-st/audio/voice-stereo.c`; the
-   same words, checked in analog-emu).
-2. At the chain end (core 1.8, `40000ac6`, after AMP and before the track
-   DMA) the engine runs the native chain on R: drive and base-width on all
-   eight R buffers, the multimode and the AMP envelope (`0x40001476`, per
-   track) of the claimed tracks. Only the chain writes the chain's state
-   (a scan of the AUDIO image: the chain routines and the boot), so the state
-   from before the L pass is the one the previous chain end left. The engine
-   exchanges the control state the L pass left with the one from before it
-   (kept from the previous chain end), swaps in R's signal memory, runs the
-   chain, then swaps L's memory back and copies L's control state back; that
-   copy is the next block's state from before its L pass. Mono tracks and L
-   are what the stock chain made. When every claimed track has OVERDRIVE off
-   (row word `0x28` <= 0) and a drive wet weight (`0x800083b0 + 4t`) of 0,
-   the native drive's output for those tracks is its dry MAC alone, and the
-   engine runs that MAC itself instead of the native drive. The multimode on
-   R skips its coefficient part: R's targets are the coefficients the L pass
-   left (`0x80008740 + 32t`), so the engine writes them to the routine's
-   target block (`0x80008900`), builds the native frame (t at 48, the type at
-   52) and enters at `0x40001ea4`, where every path of the first part joins.
-3. It sends D = R − L through the shared window, `0x5b0` to `0x7df`: 32
-   16-bit mantissas per track, one shift per track and block
+   operations in their order (`mods/samplers-st/audio/voice-stereo.c`, by
+   hand since 1.6; the same words, checked in analog-emu).
+2. Inside the chain (core 2.5, samplers-st 1.6). The stock chain loads its
+   per-track multimode routine with `movea.l 40040f3c,a4` (`40000a72`, the
+   chain directory's word 3; the native `0x400019d6` until a bank writes its
+   own entry there), so the engine's entry runs at every track's multimode
+   call, after drive and base-width have run on the eight L buffers:
+   - at track 0's call, R's drive and base-width for the claimed tracks. The
+     drive runs from the drive state from before this block's L drive (the
+     40 words at `0x800083b0`, kept by the previous chain end: only the
+     chain writes them). When every claimed track has OVERDRIVE off (row
+     word `0x28` <= 0) and a drive wet weight of 0, the native drive's output
+     for those tracks is its dry MAC alone, and the engine runs that MAC
+     itself; otherwise the native drive runs on the eight R buffers with that
+     state exchanged in. The base-width has no control state, only two words
+     of memory a track (`0x800088a0 + 8t`) and the row's poles, so the engine
+     runs it on each claimed track with its own code and R's own memory, the
+     same EMAC operations per accumulator;
+   - at a claimed track's call, the multimode on L and R at once: a copy of
+     the native routine's first part (`0x400019d6` to `0x40001ea3`, the
+     block's targets; no PC-relative operand, no call, every exit at the
+     join `0x40001ea4`), made on the unit from its own AUDIO image when the
+     bytes have OS 1.42's fingerprint, ends in `st_mm_fused_tail`
+     (`mods/samplers-st/stereo/multimode.s`): the native second part with R
+     added, R's three loops on ACC2 and ACC3 with the same coefficients,
+     weights and ramps on every frame. R works in the engine's AUDIO SRAM
+     (`0x8000fe80` to `0x8000ffff`) at fixed distances from L's scratch.
+     Without the fingerprint, R takes the native second part after L's call
+     from the same starting words (the track's 14 control words put back,
+     R's signal words swapped in);
+   - then the AMP envelope (`0x40001476`) on R, from the envelope state the
+     AMP stage will find for L (three words, put back after).
+   Mono tracks and L are what the stock chain made, word for word, state
+   included (`check_chain`, tests/test_st_stereo_natives_emu.py: the engine
+   against the stock chain and a native R pass, block after block).
+3. At the chain end (core 1.8, `40000ac6`, after AMP and before the track
+   DMA) the engine keeps the drive state for the next block and sends
+   D = R − L through the shared window, `0x5b0` to `0x7df`: 32 16-bit
+   mantissas per track, one shift per track and block
    (D = mantissa << (shift + 1)), the track mask, a tag and the sequence at
-   both ends. The block is built in AUDIO SRAM and copied to the window in
-   ascending order. A DMA on AUDIO eDMA channel 46 was tried: its block never
-   reached the window on the unit (the profile, written by the CPU, did), and
-   sending cost 5.1 % of the block against 6 % word by word, so most of that
-   cost is packing D, not the bus.
+   both ends. The block is built in AUDIO SRAM and sent by AUDIO eDMA
+   channel 46 (samplers-st 1.6), ascending. A software start runs one minor
+   loop: like the stock's channel 47, the TCD links the channel to itself
+   (`CITER`/`BITER` `0xdc23`: ELINK, channel 46, 35 loops of 16 bytes). The
+   first try, in 2026-11, had `CITER` 35 without the link: only the first 16
+   bytes (sequence, mask, shifts) reached the window, never the tag.
 4. MAIN adds gR × D to every bus the right gain feeds: the delay input
    (`ev_delay_in`), the reverb input (`ev_reverb_in`) and the two main buses
    (`ev_main_mix`). Left stays gL × L and right becomes gR × R; pan acts as a
@@ -305,14 +343,22 @@ a block at any moment of it: on the unit, with D read at `ev_render_in` and
 dropped whenever the sequence moved before the mix, about 20 blocks a second
 were dropped, even in STOP. The right channel then switched between R and L
 and sounded broken. So D carries a fingerprint of its block's L
-(`st_stereo_print`, samples 0, 8, 16 and 24 of each track). MAIN reads D at
-`ev_render_in`; at the first mix event it fingerprints the L it is mixing
-(`ST_TRACK_PCM`) and takes the D that matches: the one already read, or, if
-AUDIO wrote since, the new one; a read caught mid-write is retried. When
-AUDIO has not finished a new block, MAIN mixes the same L again, and the same
-D with it. The only block never used is the one a restart left in the window,
-until the engine has sent one of this boot. The track is not meant to fall
-back to mono: `DROP` on the test probe counts the blocks where no D matched.
+(`st_stereo_print`, samples 0, 8, 16 and 24 of each track). At
+`ev_render_in` MAIN starts eDMA channel 46 (free on MAIN; its controller
+arbitrates round robin, `CR` 6 at boot) to copy the window block into the
+STEREO module's state (samplers-st 1.6; MAIN SRAM when the placement moved
+it there, DDR otherwise, its lines pushed first): descending, 16 bytes a minor
+loop, the channel linked to itself, so it reads SEQ_END first and SEQ last,
+the order that makes SEQ = SEQ_END mean one whole block against AUDIO's
+ascending write. No transfer starts while the block MAIN has is still the
+window's. At the first mix event it fingerprints the L it is mixing
+(`ST_TRACK_PCM`) and takes the D that matches: the one copied, or, if AUDIO
+wrote since or the copy overlapped a write, a newer one the CPU reads (and
+retries when caught mid-write). When AUDIO has not finished a new block,
+MAIN mixes the same L again, and the same D with it. The only block never
+used is the one a restart left in the window, until the engine has sent one
+of this boot. The track is not meant to fall back to mono: `DROP` on the
+test probe counts the blocks where no D matched.
 
 Which tracks are stereo (samplers-st 1.4, `sp_stereo_wanted`): a track with
 a stereo sample (core 1.8, `st_machine_sample_channels`; SAMPLE-POOL.md) is
@@ -528,13 +574,21 @@ t 0..12, the pattern's step `0x43bd73c4` above), which the trig LEDs'
 playhead reads (`0x400c20ee`). playhead-st changes it at those uses
 (`mods/playhead-st/seq-direction.s`). The sequencer's pattern pointers name
 their kits: `0x43bd7430` (playing) with `0x43bd743c`, `0x43bd7438` (next)
-with `0x43bd7444`; the live kits are `0x41ad5134 + k × 0x1618`, k < 128. An
+with `0x43bd7444`; OS 1.42 live kits are `0x41ad6134 + k × 0x1618`, k < 128. An
 encoded kit slot (0x1600 bytes) uses [0, 0x14d2) natively, LFO3
-[0x14e0, 0x15d0) and playhead-st [0x15e0, 0x15f8). A native edit of a kit
-ends in `KitActive::kitChanged` (`0x40172250`, vtable `0x401c33f4` +0x5c; the
-object is in the project, `0x40a38b18 + 0x378d8`, kits at its +0x10), which
-re-encodes the kit into its mirror slots (job "KitActive::updateSingleMirror",
-`0x4001082e`): what survives a power cycle without a project save.
+[0x14e0, 0x15d0), COMP [0x15d0, 0x15e0), and playhead-st [0x15e0, 0x15f8).
+On OS 1.42 a native edit of a kit ends in `KitActive::kitChanged`
+(`0x40172414`, vtable `0x401c3694` +0x5c; object `0x40a713f0`, kits at its
++0x10), which re-encodes the Kit into its mirror slots: what survives a
+power cycle without a project save.
+
+OS 1.42 native Kit new/encode/decode are `400b3384`, `400a78f4`, `400a78a0`;
+native memcpy is `4011613c`. Core 2.4 owns their task-side notifications.
+The two FX VCA gains are D1/D3 at `400905b6`; native clamp/stores continue
+through `400905da`, writing hardware context +70/+72 (decimal). The fixed FX
+ADC pair is `80003c50/80003cd0`, 32 signed Q31 frames each. `ST_EV_FX_CV`
+modifies only the two gains. Native MOVCLR leaves ACC0/1 empty at this site;
+callbacks may use them and must preserve ACC2/3. This is not the MAIN mix.
 
 Key IDs used here beyond `mods/core-st/README.md`'s: TRK = 2 (MainScreen's key
 switch at `0x40033f0a`, case 2, pushes the TrackSelectionView), UP = 14,

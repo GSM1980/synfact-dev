@@ -1,32 +1,47 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.3.2",
+  "latest": "2.5.0",
   "entries": [
     {
-      "version": "2.3.2",
-      "date": "2026-11-19",
+      "version": "2.5.0",
+      "date": "2026-11-22",
       "commits": [
         {
-          "sha": "e9a6dd4",
-          "date": "2026-11-19",
-          "subject": "Rename Digi Mono to SY MnM and preserve TYPE on SYN reload"
+          "sha": "b6d39b8",
+          "date": "2026-11-22",
+          "subject": "Lighter stereo tracks on both CPUs (core 2.5.0, samplers 1.6.0)"
+        },
+        {
+          "sha": "2eed3fc",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.5.0 and samplers 1.6.0"
+        },
+        {
+          "sha": "c148d93",
+          "date": "2026-11-22",
+          "subject": "Changelogs: COMP 1.0.0"
         }
       ]
     },
     {
-      "version": "2.3.1",
-      "date": "2026-11-19",
+      "version": "2.4.0",
+      "date": "2026-11-20",
       "commits": [
         {
-          "sha": "b570b0e",
-          "date": "2026-11-19",
-          "subject": "Add Digi Mono subtype picker and keep TYPE outside modulation"
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
         },
         {
-          "sha": "1e78098",
-          "date": "2026-11-19",
-          "subject": "Update core 2.3.1 and Digi Mono 0.5.0 changelogs"
+          "sha": "e1e51bf",
+          "date": "2026-11-20",
+          "subject": "Add FX-bus COMP with shared core services and SRAM optimization"
+        },
+        {
+          "sha": "307482a",
+          "date": "2026-11-20",
+          "subject": "Changelogs: COMP 0.2.0 and core 2.4.0 FX services"
         }
       ]
     },
@@ -38,16 +53,6 @@
           "sha": "ce91a3b",
           "date": "2026-11-19",
           "subject": "Improve Sample Manager sizes, project memory and atomic capacity checks"
-        },
-        {
-          "sha": "ca7e95d",
-          "date": "2026-11-19",
-          "subject": "Document Digi Mono 0.4.0 OS 1.42 and API 16 integration"
-        },
-        {
-          "sha": "f7b1014",
-          "date": "2026-11-19",
-          "subject": "Refresh merged core and Digi Mono release histories"
         }
       ]
     },
@@ -217,7 +222,7 @@
     },
     {
       "version": "1.8.2",
-      "date": "2026-11-11",
+      "date": "2026-11-16",
       "commits": [
         {
           "sha": "5ff821a",
@@ -228,22 +233,12 @@
           "sha": "84ec2db",
           "date": "2026-11-16",
           "subject": "Generate ARP 1.10.4 and core 1.8.2 changelogs"
-        },
-        {
-          "sha": "7fe932b",
-          "date": "2026-11-11",
-          "subject": "Filter Digi Mono destinations by Sound TYPE"
-        },
-        {
-          "sha": "1094bde",
-          "date": "2026-11-11",
-          "subject": "Document destination filtering releases"
         }
       ]
     },
     {
       "version": "1.8.1",
-      "date": "2026-11-11",
+      "date": "2026-11-14",
       "commits": [
         {
           "sha": "9dd0e4d",
@@ -269,16 +264,6 @@
           "sha": "fcbc288",
           "date": "2026-11-14",
           "subject": "Changelogs: consolidated MAIN optimization releases"
-        },
-        {
-          "sha": "fe671aa",
-          "date": "2026-11-11",
-          "subject": "Refresh SYN layouts when Digi Mono TYPE changes"
-        },
-        {
-          "sha": "83ff21d",
-          "date": "2026-11-11",
-          "subject": "Document live SYN layout fix releases"
         }
       ]
     },

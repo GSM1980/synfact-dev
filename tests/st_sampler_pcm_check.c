@@ -49,7 +49,8 @@ unsigned check_pcm(unsigned cases,unsigned start)
         }
         sp_window(&s,start,end,loop,play,1);
         if(rnd(2))s.frame=start+rnd(end-start);
-        s.fraction=rnd(4096);
+        /* a whole fraction often: whole-frame steps take their own loops */
+        s.fraction=rnd(3)==0?0:rnd(4096);
         r=s;
         for(block=0;block<12;block++){
             sp_s32 *rp=want==0?0:right,*rp2=want==0?0:right2;
@@ -62,14 +63,15 @@ unsigned check_pcm(unsigned cases,unsigned start)
     }
     return bad<<16|(blocks&0xffffu);
 }
-/* One block for instruction counts: channels 1 or 2, a forward one-shot at
- * unity pitch in the middle of a long sample; right only for stereo. */
+/* One block for instruction counts: channels 1 or 2 (+ 4: a pitch off
+ * unity, interpolated), a forward one-shot in the middle of a long sample;
+ * right only for stereo. */
 void bench_pcm_setup(unsigned channels)
 {
-    unsigned i;struct sp_state *s=&bench_state;
+    unsigned i,off=channels&4;struct sp_state *s=&bench_state;channels&=3;
     for(i=0;i<sizeof(*s);i++)((unsigned char *)s)[i]=0;
     s->source.pcm=pcm;s->source.channels=channels;s->source.frames=channels==2?6000:12000;
-    s->step=4096;s->control[1]=3<<8;
+    s->step=off?4096+333:4096;s->control[1]=3<<8;
     sp_window(s,0,s->source.frames,0,3,1);s->frame=1000;
 }
 void bench_pcm(void){sp_pcm(&bench_state,bout,bench_state.source.channels==2?bright:0);}

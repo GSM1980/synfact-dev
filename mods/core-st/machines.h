@@ -28,7 +28,7 @@ enum core_machine_query {
     ST_UI_ENGINE,ST_LOCAL,ST_OWNER,ST_ENGINE_UI,ST_SLOT_ENGINE,ST_PAGE_LOCAL,
     ST_PAGE_COPY,ST_RANGE,ST_VALID_OWNER,ST_LAYOUT,ST_CACHED,ST_FORMAT,
     ST_LABEL,ST_SYNTH,ST_LONG_LABEL,ST_FLAGS,ST_RANK,ST_ENCODER_CACHED,
-    ST_UI_DEST_FLAGS=32
+    ST_UI_DEST_FLAGS=36
 };
 extern volatile st_u32 core_machine_active;
 extern const struct core_machine_def *core_machine_definitions;

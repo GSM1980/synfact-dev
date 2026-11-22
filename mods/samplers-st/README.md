@@ -1,12 +1,37 @@
-# SP sample machines 1.5
+# SP sample machines 1.6
 
-Desktop OS 1.42 release: **1.5.2**.
-Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+Desktop OS 1.42 release: **1.6.0**.
+Use core 2.5 or later and the matching bank (SMZ4 contract `0x53594606`).
+On an older core (chain directory version 1) every track stays mono.
 
-1.5.2 is the rebuild for core 2.2, whose pool moved above AUDIO's own page: a
-stereo sample's channel count now comes through the AUDIO ABI directory
-(`st_machine_sample_channels`, `<syntakt/machines.h>`) instead of the old fixed
-pool address. Nothing else changes.
+1.6.0 makes stereo tracks lighter on both CPUs. Every change gives the same
+words as 1.5.2, checked in analog-emu against the native routines
+(tests/test_st_stereo_natives_emu.py, tests/test_st_stereo_engine_emu.py,
+tests/test_st_stereo_main_dma_emu.py). Instruction counts for one 32-frame
+block, not CPU percentages:
+
+- **R inside the chain** (core 2.5's multimode entry, docs/MACHINE-REFERENCE.md,
+  "Stereo tracks"). R's drive and base-width run at track 0's multimode
+  call; the base-width has its own per-track code, so only the stereo
+  tracks pay for it. Each stereo track's multimode runs L and R in one pass:
+  a copy of the native first part, made on the unit from its own AUDIO image
+  (fingerprinted; no firmware in the bank), ends in `stereo/multimode.s`, the
+  native second part with R on ACC2 and ACC3 sharing the coefficients,
+  weights and ramps. The 172-word state exchange at the chain end is gone.
+  R's chain work for eight stereo tracks: 19,891 instructions (a native R
+  pass: 33,099); the chain end's own code 4,954 (9,671 in 1.5).
+- **D packed by hand and sent by eDMA** (AUDIO channel 46, the TCD linked to
+  itself as the stock's channel 47 is: the 2026-11 try lacked that link and
+  moved only 16 bytes).
+- **MAIN reads the window by eDMA** (channel 46 on MAIN), started at
+  `ev_render_in`, descending so that SEQ = SEQ_END means one whole block;
+  the CPU reads only when AUDIO wrote after that copy. The STEREO module's
+  block mirrors the window (560 bytes); its second block stays in DDR.
+- **PCM at whole-frame steps** (unity pitch, octaves): no interpolation, one
+  longword per stereo frame. A block: mono 679 -> 344, stereo 969 -> 447;
+  off unity 658 and 952 (BR and OVER skip their divisions when off).
+- **The stereo voice tail by hand** (`audio/voice-stereo.c`): 2,581 -> 2,399
+  a track.
 
 Version 1.5 includes all MAIN stereo optimizations below. Their 1.4.x numbers
 were development iterations, consolidated into one release step from 1.4.

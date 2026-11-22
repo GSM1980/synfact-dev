@@ -1,12 +1,21 @@
 # Changelog: Third LFO
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.3.1.
+Generated from git history by `tools/changelog.py`. Latest version: 1.3.3.
+
+## 1.3.3 (2026-11-20)
+
+- Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
+- Changelogs: COMP 1.0.0 (`c148d93`, 2026-11-22)
+- Changelogs: COMP 0.3.0 (`a81bb0b`, 2026-11-21)
+- Add FX-bus COMP with shared core services and SRAM optimization (`e1e51bf`, 2026-11-20)
+- Changelogs: COMP 0.2.0 and core 2.4.0 FX services (`307482a`, 2026-11-20)
 
 ## 1.3.1 (2026-11-17)
 
 - Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
 - Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
 - Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
+- Changelogs: core 2.2.0 and samplers 1.5.2 (`121e965`, 2026-11-19)
 - Changelogs: POLY 1.7 (`c0e44f9`, 2026-11-18)
 - move to OS 1.42 (`276667a`, 2026-11-17)
 - Changelogs: move to OS 1.42 (`3c0cdcb`, 2026-11-17)

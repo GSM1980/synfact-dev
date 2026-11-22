@@ -682,7 +682,7 @@ core_machine_modulation_flags:
         move.l (%sp),%d0
         cmpi.l #0x400147a0,%d0
         bne.s 8f
-        moveq #32,%d1
+        moveq #36,%d1
 8:
         lea -12(%sp),%sp
         move.l %a0,(%sp)

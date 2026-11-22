@@ -45,15 +45,15 @@ int main(int argc,char **argv)
             memcpy(bad,b,n);at=v.image+v.modules+12;put(bad+at,17);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
             memcpy(bad,b,n);at=core_smz_be(b+v.image+v.modules+8);
             if(at==CORE_SMZ_NONE)put(bad+v.image+v.modules+8,0); /* init-only module */
-            else put(bad+v.image+at,15);                      /* past core 1.2's events */
+            else put(bad+v.image+at,16);                      /* past core 2.4's events */
             sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
             if(at!=CORE_SMZ_NONE){
-                unsigned invalid[]={15,0x100,0x104,0x10b,0x201,0x301,0x303,0x30b,0xffffffffu};
+                unsigned invalid[]={16,0x100,0x104,0x10b,0x201,0x301,0x303,0x30b,0xffffffffu};
                 for(unsigned q=0;q<sizeof(invalid)/sizeof(invalid[0]);q++){
                     memcpy(bad,b,n);put(bad+v.image+at,invalid[q]);sum(bad,n,&v);
                     assert(!core_smz_validate(&r,&v));
                 }
-                for(unsigned event=12;event<=14;event++){        /* core 1.2's mixer events */
+                for(unsigned event=12;event<=15;event++){        /* mixer events and FX CV */
                     memcpy(bad,b,n);put(bad+v.image+at,event);sum(bad,n,&v);
                     assert(core_smz_validate(&r,&v));
                 }

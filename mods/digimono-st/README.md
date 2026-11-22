@@ -71,8 +71,9 @@ subtype. Explicit machine selection and Sound/project loading still load TYPE.
 Version 0.4.0 integrates remote main's OS/memory contract and preserves the
 0.3.1 AUDIO generators. Rebuild the bank and core together; older 1.41 banks
 are not compatible with the current core contract. The stopped-transport
-preview service remains at its API 15 ABI offset; destination query 32 uses
-API 16 so an unextended main core correctly refuses the destination module.
+preview service remains at its API 15 ABI offset; destination query 36 (32
+before core 2.6.0) needs API 17, so a core without it refuses the destination
+module.
 The integration baseline is remote main `ce91a3b`. Its OS 1.42 build passes
 227 exact stock preimages and 95 common checks; all four Digi Mono AUDIO
 objects remain byte-identical to 0.3.1. Physical validation is still separate.

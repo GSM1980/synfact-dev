@@ -1,10 +1,18 @@
 # Changelog: SP sample machines
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.5.2.
+Generated from git history by `tools/changelog.py`. Latest version: 1.6.0.
+
+## 1.6.0 (2026-11-22)
+
+- Lighter stereo tracks on both CPUs (core 2.5.0, samplers 1.6.0) (`b6d39b8`, 2026-11-22)
+- Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
+- Changelogs: COMP 1.0.0 (`c148d93`, 2026-11-22)
 
 ## 1.5.2 (2026-11-19)
 
+- Changelogs: COMP 0.3.0 (`a81bb0b`, 2026-11-21)
 - Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
+- Changelogs: core 2.2.0 and samplers 1.5.2 (`121e965`, 2026-11-19)
 
 ## 1.5.1 (2026-11-17)
 

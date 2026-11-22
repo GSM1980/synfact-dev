@@ -174,6 +174,11 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
             else:
                 assert old[i:i+2]==b'\x4e\xb9'
                 operands.update(range(i+2,i+6))
+            # The chain multimode (core 2.5) loads its routine from the chain
+            # directory: movea.l 40040f3c,a4; a previous build has the stock lea.
+            i=0x40000a72-base;assert new[i:i+6]==bytes.fromhex('287940040f3c')
+            if old[i:i+6]==bytes.fromhex('49f9400019d6'):operands.update(range(i,i+6))
+            else:assert old[i:i+6]==new[i:i+6]
             # The base-width filter's two low-pass lookups (core 1.7.2) call the
             # companion: jsr + nop now; a previous build has them stock or as a call.
             for site in (0x40002364,0x400023e8):

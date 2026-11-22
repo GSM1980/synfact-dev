@@ -132,7 +132,7 @@ int core_parameter_provider(u32 q,u32 *args,void *result,u32 *value)
     u32 i;int r;
 #pragma GCC unroll 1
     for(i=0;i<PROVIDERS && core_parameter_providers[i];i++)
-        if((r=core_parameter_providers[i](q,args,result,value)) && (q<25 || q>29))return r;
+        if((r=core_parameter_providers[i](q,args,result,value)) && (q<25 || q>29) && q!=34)return r;
     return 0;
 }
 int core_machine_query(u32 q,u32 *args,void *result,u32 *value)

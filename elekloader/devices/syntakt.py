@@ -43,6 +43,8 @@ DEVICE = Device(
     secondary={7: ('daf6451cf9587c0b628e901b7bb6b25f4e2633d448c534c0c181dd35ec783bc2',
                    383760, 0x40000400,
                    ((0x4000094a, 0x40000950),
+                    # chain multimode: the routine from the chain directory
+                    (0x40000a72, 0x40000a78),
                     # chain end: after the AMP stage, before the track DMA
                     (0x40000ac6, 0x40000acc),
                     (0x40000b04, 0x40000b0a),

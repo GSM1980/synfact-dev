@@ -191,9 +191,55 @@ static sp_s32 run_stereo(const short *base,sp_s32 at,sp_s32 step,sp_u32 n,sp_s32
         :[p]"a"(base),[s]"r"(step),[sh]"d"(shift):"cc","memory");
     return at;
 }
+/* Whole-frame steps (unity pitch, octaves) from a whole frame: the fraction
+ * stays 0, the model's interpolation adds (b - a) x 0, and the output is the
+ * sample itself << 16. No multiply and no read of the next frame: one
+ * halfword per mono sample, one longword (L high, R low) per stereo frame,
+ * the pointer moving by `bytes` (signed: frames x 2 x channels). Two samples
+ * an iteration after an odd first one; n is at least 1. */
+static sp_s32 run_mono_whole(const short *p,sp_s32 at,sp_s32 step,sp_u32 n,sp_s32 *out)
+{
+    sp_s32 a,b,bytes=step>>11;sp_u32 k=n;
+    __asm__ volatile(
+        "btst #0,%[n]\n\tbeq.s 2f\n\t"
+        "move.w (%[p]),%[a]\n\tadda.l %[by],%[p]\n\tswap %[a]\n\tclr.w %[a]\n\tmove.l %[a],(%[o])+\n\t"
+        "subq.l #1,%[n]\n\tbeq.s 3f\n"
+        "2:\n\tlsr.l #1,%[n]\n"
+        "1:\n\tmove.w (%[p]),%[a]\n\tadda.l %[by],%[p]\n\tmove.w (%[p]),%[b]\n\tadda.l %[by],%[p]\n\t"
+        "swap %[a]\n\tclr.w %[a]\n\tswap %[b]\n\tclr.w %[b]\n\t"
+        "move.l %[a],(%[o])+\n\tmove.l %[b],(%[o])+\n\tsubq.l #1,%[n]\n\tbne.s 1b\n"
+        "3:"
+        :[p]"+a"(p),[o]"+a"(out),[n]"+d"(n),[a]"=&d"(a),[b]"=&d"(b)
+        :[by]"r"(bytes):"cc","memory");
+    return at+step*(sp_s32)k;
+}
+static sp_s32 run_stereo_whole(const short *p,sp_s32 at,sp_s32 step,sp_u32 n,sp_s32 *out,sp_s32 *right)
+{
+    sp_s32 a,b,bytes=step>>10;sp_u32 k=n;
+    __asm__ volatile(
+        "btst #0,%[n]\n\tbeq.s 2f\n\t"
+        "move.l (%[p]),%[a]\n\tadda.l %[by],%[p]\n\tmove.l %[a],%[b]\n\tandi.l #-65536,%[b]\n\t"
+        "move.l %[b],(%[o])+\n\tswap %[a]\n\tclr.w %[a]\n\tmove.l %[a],(%[r])+\n\t"
+        "subq.l #1,%[n]\n\tbeq.s 3f\n"
+        "2:\n\tlsr.l #1,%[n]\n"
+        "1:\n\tmove.l (%[p]),%[a]\n\tadda.l %[by],%[p]\n\tmove.l %[a],%[b]\n\tandi.l #-65536,%[b]\n\t"
+        "move.l %[b],(%[o])+\n\tswap %[a]\n\tclr.w %[a]\n\tmove.l %[a],(%[r])+\n\t"
+        "move.l (%[p]),%[a]\n\tadda.l %[by],%[p]\n\tmove.l %[a],%[b]\n\tandi.l #-65536,%[b]\n\t"
+        "move.l %[b],(%[o])+\n\tswap %[a]\n\tclr.w %[a]\n\tmove.l %[a],(%[r])+\n\t"
+        "subq.l #1,%[n]\n\tbne.s 1b\n"
+        "3:"
+        :[p]"+a"(p),[o]"+a"(out),[r]"+a"(right),[n]"+d"(n),[a]"=&d"(a),[b]"=&d"(b)
+        :[by]"r"(bytes):"cc","memory");
+    return at+step*(sp_s32)k;
+}
+/* at is the fraction (0..4095) here: a whole start means at == 0. */
 #define SP_RUN_ASM(sign) do{if(!shaped && (stride==1 || both)){ \
-        if(count)at=stride==1?run_mono(base,at,(sign)*(sp_s32)step,count,out): \
-                              run_stereo(base,at,(sign)*(sp_s32)step,count,out,right); \
+        if(count){ \
+            if(!at && !(step&4095)) \
+                at=stride==1?run_mono_whole(base,at,(sign)*(sp_s32)step,count,out): \
+                             run_stereo_whole(base,at,(sign)*(sp_s32)step,count,out,right); \
+            else at=stride==1?run_mono(base,at,(sign)*(sp_s32)step,count,out): \
+                              run_stereo(base,at,(sign)*(sp_s32)step,count,out,right);} \
         k=count;goto ran;}}while(0)
 #else
 #define SP_RUN_ASM(sign) do{}while(0)
@@ -259,8 +305,9 @@ ran:
  * take the frames where it is plain interpolation, pcm_one the others. */
 static void pcm_block(struct sp_state *s,sp_s32 *out,sp_s32 *right,int fast)
 {
-    sp_u32 i=0,n,width=0,span,removed=bit_reduction(s->br),stereo=s->source.channels==2;
-    sp_u32 gain=256+(sp_min(s->control[7]>>8,127)*1792)/127;
+    /* BR 0 removes no bit and OVER 0 is unity: skip their divisions */
+    sp_u32 i=0,n,width=0,span,removed=s->br?bit_reduction(s->br):0,stereo=s->source.channels==2;
+    sp_u32 gain=s->control[7]>>8?256+(sp_min(s->control[7]>>8,127)*1792)/127:256;
     int shaped=removed || gain!=256,both=right && stereo,forward=s->play>=2;
     if(s->play==1 || s->play==2){
         span=s->end>s->loop?s->end-s->loop:0;

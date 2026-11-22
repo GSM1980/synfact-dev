@@ -37,7 +37,7 @@ _Static_assert(__builtin_offsetof(struct lfo3_bank,overlay)%4==0,"LFO3 overlay a
 _Static_assert(sizeof(((struct lfo3_bank *)0)->params[0])%4==0,"LFO3 record stride");
 _Static_assert(ST_SRAM_LFO3_BANK%4==0,"LFO3 SRAM bank alignment");
 static const u16 defaults[8]={0x7000,0x300,0x4000,0x7f00,0,0,0,0x4000};
-static const u32 tails[2][2]={{ST_SRAM_TAIL0,ST_SRAM_CHORUS},{ST_SRAM_TAIL1,ST_SRAM_CHORUS_CODE}};
+static const u32 tails[2][2]={{ST_SRAM_TAIL0,ST_SRAM_COMP_CODE},{ST_SRAM_TAIL1,ST_SRAM_CHORUS_CODE}};
 #define SRAM_CODE ST_SRAM_LFO3_CODE
 #define SRAM_BANK ST_SRAM_LFO3_BANK
 static const struct st_machine_host_api *host;
@@ -249,6 +249,8 @@ static u32 hooks_installed;
 static u32 core_site(u32 i)
 {
     return (host->version>=13 && (sites[i].at==0x400a6e0eu || sites[i].at==0x400a6da6u)) ||
+           (host->version>=16 && (sites[i].at==0x4011613cu || sites[i].at==0x400b3384u ||
+                                  sites[i].at==0x400a78f4u || sites[i].at==0x400a78a0u)) ||
            (host->version>=14 && sites[i].at==0x40013516u);
 }
 static u32 install_hooks(void)

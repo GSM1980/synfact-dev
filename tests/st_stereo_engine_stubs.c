@@ -24,10 +24,11 @@ static void first(void)
     for(i=0;i<5;i++)for(p=(const u32 *)control[i][0],j=0;j<control[i][1];j++)stub_log[k++]=p[j];
     for(i=0;i<3;i++)for(p=(const u32 *)signal[i][0],j=0;j<signal[i][1];j++)stub_log[k++]=p[j];
 }
+u32 stub_multis,stub_envelopes;
 void stub_drive(void){first();stub_calls++;touch(1);}
 void stub_width(void){first();touch(2);}
-void stub_multi(void){touch(3);}
-void stub_envelope(void){touch(4);}
+void stub_multi(void){stub_multis++;touch(3);}
+void stub_envelope(void){stub_envelopes++;touch(4);}
 u32 stub_tails,stub_tail_track,stub_tail_targets[8];
 void stub_tail_record(u32 t)
 {

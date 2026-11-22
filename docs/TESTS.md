@@ -2,6 +2,62 @@
 
 # Tests
 
+COMP 0.1 / core 2.4: `tests/test_st_comp_emu.py --core <main.bin> --bank
+<bank.smz4> [--preview <png>]` executes the linked compact DSP against the
+upstream fixed-point model (384 blocks), native FX VCA hook and bypass, six
+control formats/dials, Source/base navigation, native Kit construction,
+encode/decode/copy, 16 corrupt-record cases and the short-SysEx boundary.
+Application/model selection, allocator and some UI state are explicit
+boundaries. `tools/bench_st_comp.py` counts the full shared FX hook against
+the original native window, per 32 stereo frames; not cycles or CPU percent.
+No device access. Both require the corrected ColdFire EMAC Unicorn setup.
+`tests/test_st_comp_coexist_emu.py --core <build-folder> --bank <bank.smz4>`
+also initializes the real four parameter providers (POLY/LFO3/Chorus/COMP),
+round-trips both effects through native Kit codecs and LFO3's owning copy,
+and checks that Kit depth returns to zero and both trailers remain present.
+COMP 0.1.1 adds `tests/test_st_comp_meter_emu.py --core <main.bin> --bank
+<bank.smz4> --digitakt <Digitakt-1.54.syx> [--out <preview-folder>]`: original
+Digitakt GR calculation, 36 native LCD comparisons, no changed pixels outside
+the two-column meter strip, preserved MUP/MIX/page dots, erasure/bypass and
+real audio-driven meter rise/release/redraw. It changes no core/SYX bytes.
+
+COMP 0.2 adds `test_st_comp_perf_emu.py --core <main.bin> --bank <bank.smz4>
+--previous <0.1.1-bank> [--sram]`: 2,624 blocks per placement, exact native VCA
+output/envelope/GR, random Q8 controls/Kit transitions, all integer MUP gains
+and extreme ADC/CV values. `test_st_comp_sram_emu.py --core <main.bin> --bank
+<bank.smz4>` checks both independent occupied windows, guards/code fallback,
+320 exact transition blocks, neighbours and both real LFO3 init orders with
+Chorus retaining all SRAM. The meter test accepts `--sram`, executes the
+actual native view before the overlay, requires one page paint, and tests
+visible-only invalidation (no IRQ root redraw; hidden/closed/opaque/DRIVE and
+unchanged-height cases). `generate_config_tables.py --check` verifies the
+formula-only tables. `tools/bench_st_comp.py --sram` measures audio instructions;
+`tools/bench_st_comp_cache.py --core <main.bin> --bank <bank> --previous <old>
+--out <json>` separately reports cached line footprint and task setter cost.
+It installs read instrumentation before translation and checks all ADC reads.
+Cache figures are warm/cold bounds, not a whole-system or physical CPU model.
+
+COMP 0.3 (SCF) adds `tests/test_st_comp_scf_emu.py [--cfbench <cfbench>]`:
+`tests/st_comp_scf_check.c`, built with the bank's flags and linked with the
+real `mods/comp-st/dsp.s`, runs in analog-emu's cfbench (EMAC per the
+Programmer's Reference Manual; Unicorn is not trusted for EMAC arithmetic).
+It compares the SCF loop's low-pass state and peak, and the plain peak,
+with a 64-bit model on 2,688 blocks (cutoffs across all 127 positions,
+noise, squares, rails, silence), checks `scf-tables.h` against its generator
+(`1 - exp(-2 pi fc / 48000)`), the 244-byte SRAM block, that one block costs
+the same at every cutoff (within the peak's data-dependent stores), and seven
+positions' steady sine response against the exact one-pole response. Without cfbench
+or the m68k compiler it prints SKIPPED and exits 2. In Unicorn, the COMP
+tests now cover seven controls (G = SCF, F empty), the SCF index in RAT's
+low byte (a 0.2.0 record reads as OFF), the kernel's SCF wiring and state
+reset, the 244 + 68-byte SRAM layout, and `--previous <0.2.0-bank>`: with
+SCF OFF, 0.3 is bit-exact with 0.2.0. `bench_st_comp.py` adds an `scf`
+mode (150 Hz) and `bench_st_comp_cache.py` its footprint. The meter test
+checks the 10 Hz / 2-pixel repaint limit, and `tools/bench_st_comp_redraws.py
+--core <main.bin> --bank <bank> --out <json>` counts the screen recomposes a
+second the meter asks for with kick, drums and pad signals through the real
+audio callback and UI tick, plus one COMP page draw's instructions.
+
 Sample Manager 1.3 / core 2.3: native-host manager/pool tests cover the expanded
 63.62 MiB budget, protected slots, mono/stereo sizes, unique page extents,
 fragmentation, exact fits and capacity rejection before any AUDIO command.
@@ -491,6 +547,38 @@ Use `--require-no-count-regressions` to reject any increase versus the
 reference in either the stable or changing complete-block count matrix.
 Results include `dynamic_block_instruction_counts`. This catches gains
 that hide a setup/check overhead by benchmarking only an unchanged loop.
+
+### Stereo engine 1.6 (core 2.5)
+
+`tests/test_st_stereo_natives_emu.py --core <core build folder> --cfbench
+<cfbench>` (analog-emu, the core's real AUDIO image) adds, for samplers-st 1.6:
+- `width`: the engine's per-track base-width against the native routine's
+  pairs, outputs and memory, 400 random cases;
+- `chain`: the whole chain block after block (40 cases of ten blocks, three
+  warm-up): the stock chain on L from the block's starting state, a native R
+  pass on R from the same state with R's own memory, and the engine's flow
+  (the stock drive and base-width on L, the multimode entry for every track,
+  the stock envelopes on L). L, the chain state, the multimode's scratch,
+  MACSR, R and R's memory must match, word for word, for both paths: the
+  fused multimode (`stereo/multimode.s` after the first part copied from the
+  image, fingerprinted) and the per-track one. The frame word `x` is kept at
+  or above zero: with a negative one the native first part reads outside its
+  tables (docs/MACHINE-REFERENCE.md, "AUDIO's SRAM");
+- the whole-frame PCM loops (fractions 0 a third of the time) and a count at
+  a pitch off unity.
+
+`tests/test_st_stereo_engine_emu.py` (Unicorn) runs the chain end and the
+multimode entry with stand-ins: the version-2 directory install (none on
+version 1), mono and stereo dispatch, the drive state kept, R zeroed when a
+track leaves the claim, and the window block sent by AUDIO eDMA channel 46,
+emulated on the SSRT write with its TCD checked (self-linked minor loops,
+35 bursts of 16 bytes).
+
+`tests/test_st_stereo_main_dma_emu.py` (Unicorn) runs the STEREO module's
+MAIN side with MAIN eDMA channel 46 emulated: the TCD (descending, linked to
+itself), one transfer per new block and none for a repeated one, and the
+pairing of new, repeated, late (written after the copy), torn (the copy
+overlapping AUDIO's write) and untagged blocks.
 
 ### LFO3 MAIN callback, engine and task measurements
 

@@ -50,13 +50,27 @@ class Activity(Patchers):
         # PAGE_LAYOUT interest before the deferred LFO3 initializer runs.
         if full_catalog and 'chorus_native' in self.bs:
             self.call('core_native_interest_set',self.bs['chorus_native'],1<<11)
+        if full_catalog and 'comp_native' in self.bs:
+            # COMP construction is a boundary, as Chorus is. Model its real
+            # three page interests, never the default all-operation mask.
+            self.call('core_native_interest_set',self.bs['comp_native'],(1<<9)|(1<<10)|(1<<11))
         for i,(name,init,subscriptions) in enumerate(self.modules):
+            if name=='COMP' and not full_catalog:
+                # Match the reference's observer set for this isolated LFO
+                # cost comparison. Full-catalog tests retain and check COMP.
+                subs=self.word(DESCRIPTORS+16*i+8)
+                rows=[bytes(self.u.mem_read(subs+8*j,8)) for j,event in enumerate(subscriptions) if event!=11]
+                self.u.mem_write(subs,b''.join(rows));self.w(DESCRIPTORS+16*i+12,len(rows))
+                self.modules[i]=(name,init,[event for event in subscriptions if event!=11])
+                self.expected[11].remove(self.bs['comp_native'])
             if name=='PLAYHEAD' and not full_catalog:
                 assert subscriptions in ([2,0x101,11],[2,0x101,1,3,11]),subscriptions
                 self.w(DESCRIPTORS+16*i+12,len(subscriptions)-1)
                 self.modules[i]=(name,init,subscriptions[:-1])
                 self.expected[11].remove(self.bs['playhead_native'])
         self.run('full')
+        if full_catalog and 'comp_native' in self.bs:
+            self.call('core_native_interest_set',self.bs['comp_native'],(1<<9)|(1<<10)|(1<<11))
         self.lfo_route_bit=self.route_bit('lfo3_native')
         if 'chorus_native' in self.bs:
             # Chorus initialization is a boundary in Patchers. Its real UI
@@ -298,7 +312,7 @@ def verify(core,before,after):
                 negative_control=negative,device_access=False,
                 limits=['Real initialization, public publication/locks, IRQ masking and resident route builder.',
                         'Native metadata/event bodies/heap/mutex and DSP renderer/original LFO body are explicit boundaries.',
-                        'Playhead metadata subscription is excluded from this isolated LFO3 cost comparison; full-bank fifth-subscriber fallback is not a measured optimization.',
+                        'Playhead and COMP native subscriptions are excluded from this isolated LFO3 cost comparison; full-catalog tests retain their real observer set.',
                         'Separate analog-emu runs the unchanged real renderer/EMAC.',
                         'Instructions are not cycles or hardware CPU points.'])
 

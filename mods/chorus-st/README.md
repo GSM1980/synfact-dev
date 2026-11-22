@@ -1,6 +1,8 @@
 # Chorus
 
-Desktop OS 1.42 release: **1.2.1**, based on remote main `f48f3ab`.
+Desktop OS 1.42 release: **1.2.2**. With host API 16 (core 2.4), Chorus uses
+shared global Kit has/get/set rather than installing those three sites;
+its two UI sites, DSP, settings and older-core fallback are unchanged.
 Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a

@@ -1,0 +1,54 @@
+{
+  "id": "comp-st",
+  "title": "Compressor",
+  "latest": "1.0.0",
+  "entries": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-20",
+      "commits": [
+        {
+          "sha": "51e15cc",
+          "date": "2026-11-22",
+          "subject": "COMP 1.0.0: first release, THR 127 by default"
+        },
+        {
+          "sha": "c148d93",
+          "date": "2026-11-22",
+          "subject": "Changelogs: COMP 1.0.0"
+        },
+        {
+          "sha": "afc80da",
+          "date": "2026-11-22",
+          "subject": "COMP 1.0.0: ATK and REL in milliseconds"
+        },
+        {
+          "sha": "2eed3fc",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.5.0 and samplers 1.6.0"
+        },
+        {
+          "sha": "a7a9b39",
+          "date": "2026-11-21",
+          "subject": "COMP 0.3.0: sidechain high-pass (SCF) and a lighter GR meter"
+        },
+        {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
+        },
+        {
+          "sha": "e1e51bf",
+          "date": "2026-11-20",
+          "subject": "Add FX-bus COMP with shared core services and SRAM optimization"
+        },
+        {
+          "sha": "307482a",
+          "date": "2026-11-20",
+          "subject": "Changelogs: COMP 0.2.0 and core 2.4.0 FX services"
+        }
+      ]
+    }
+  ],
+  "slug": "comp-st"
+}

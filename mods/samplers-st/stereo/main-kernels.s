@@ -42,7 +42,7 @@ st_stereo_widen:
  movem.l %d2-%d7/%a2,(%sp)
  movea.l 32(%sp),%a2
  movea.l 36(%sp),%a1
- lea 20(%a2),%a0
+ lea 32(%a2),%a0
  move.l 4(%a2),%d4
  moveq #0,%d6
  tst.l %d4
@@ -51,7 +51,7 @@ stereo_widen_track:
  lsr.l #1,%d4
  bcc.s stereo_widen_skip
  moveq #0,%d5
- move.b 12(%a2,%d6.l),%d5
+ move.b 8(%a2,%d6.l),%d5
  moveq #4,%d7
 stereo_widen_eight:
  .rept 2
@@ -195,20 +195,20 @@ st_stereo_remember:
  movea.l st_stereo_state,%a0
  movea.l #0x80006308,%a1
  movem.l (%a1),%d0-%d7
- movem.l %d0-%d7,1092(%a0)
+ movem.l %d0-%d7,588(%a0)
  movea.l #0x800062c0,%a1
  movem.l (%a1),%d0-%d7
- movem.l %d0-%d7,1124(%a0)
+ movem.l %d0-%d7,620(%a0)
  movea.l #0x8000e160,%a1
  movem.l (%a1),%d0-%d7
- movem.l %d0-%d7,1156(%a0)
+ movem.l %d0-%d7,652(%a0)
  movea.l #0x8000e110,%a1
  movem.l (%a1),%d0-%d7
- movem.l %d0-%d7,1188(%a0)
+ movem.l %d0-%d7,684(%a0)
  moveq #1,%d0
  moveq #1,%d1
- movem.l %d0-%d1,1220(%a0)
- movem.l %d0-%d1,1228(%a0)
+ movem.l %d0-%d1,716(%a0)
+ movem.l %d0-%d1,724(%a0)
  movem.l (%sp),%d2-%d7
  lea 24(%sp),%sp
  rts

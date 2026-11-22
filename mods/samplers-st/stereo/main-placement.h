@@ -35,6 +35,8 @@ static void move_state(struct stereo_main_state *to)
 {
     u32 i,old=(u32)stereo_state,*dst=(u32 *)to;
     const u32 *src=(const u32 *)stereo_state;
+    /* receive's eDMA writes slot0 where the state was: let it finish */
+    while(*(volatile unsigned short *)(ST_STEREO_MAIN_DMA+0x1e)&0x40u){}
     for(i=0;i<sizeof(*to)/4;i++)dst[i]=src[i];
     stereo_state=to;
     if((u32)use>=old && (u32)use<old+sizeof(*to))

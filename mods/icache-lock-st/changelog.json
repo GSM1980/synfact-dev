@@ -8,6 +8,21 @@
       "date": "2026-11-19",
       "commits": [
         {
+          "sha": "2eed3fc",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.5.0 and samplers 1.6.0"
+        },
+        {
+          "sha": "c148d93",
+          "date": "2026-11-22",
+          "subject": "Changelogs: COMP 1.0.0"
+        },
+        {
+          "sha": "a81bb0b",
+          "date": "2026-11-21",
+          "subject": "Changelogs: COMP 0.3.0"
+        },
+        {
           "sha": "9e77668",
           "date": "2026-11-19",
           "subject": "MAIN CPU: icache-lock-st and mix-fast-st (experimental, no core change)"
@@ -26,6 +41,11 @@
           "sha": "84d9065",
           "date": "2026-11-19",
           "subject": "Changelogs: core 2.1.2"
+        },
+        {
+          "sha": "121e965",
+          "date": "2026-11-19",
+          "subject": "Changelogs: core 2.2.0 and samplers 1.5.2"
         }
       ]
     }

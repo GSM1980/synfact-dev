@@ -1,5 +1,24 @@
 # How to adapt your mod to the Syntakt
 
+## Syntakt core 2.4: FX CV and shared Kit parameters
+
+Core 2.4 / host API 16 owns the global Kit model's has/get/set and task-side
+Kit copy/new/codecs. Use parameter-provider queries 32/33/24 and notifications
+34; query 35 may preserve an established owning-object copy implementation.
+Do not install these sites again. Chorus 1.2.2 and LFO3 1.3.2 select this path
+on API 16 and retain their earlier-core fallback. `ST_EV_FX_CV` (15) supplies
+the two FX-bus gains before native clamp/store; an older parser refuses this
+event. No arbitrary address is supplied by the bank. See the exact argument
+and IRQ contracts in `syntakt/host.h` and `syntakt/modules.h`.
+
+Module page 39 is available through PAGE_LAYOUT. Base navigation and
+SourcePageView's direct getter share that service. [COMP](../mods/comp-st/README.md)
+uses it after native FX DRIVE. Its six Kit controls own `[15d0,15e0)` in full
+encoded slots; preserve both neighbors and the original short SysEx length.
+Missing/corrupt metadata defaults to MIX off; see [FORMAT](FORMAT.md).
+
+## Playhead Kit modes
+
 Playhead 1.1 appends ANCHOR/STUTTER/FOLD/WALK+ as saved mode IDs 5..8 in
 the module's existing `PLH1` kit record. Existing IDs 0..4 and the record layout
 are retained. A newer record containing these modes falls back to FORWARD
@@ -615,9 +634,9 @@ a module that needs a provider only for query 31 registers it on 14. LFO3 1.2
 leaves the Kit setter `40013516` to core 1.4 and stores through query 24, as
 it does for the Sound; on an older core it hooks it as before.
 
-## Syntakt: destination visibility per model (core 1.8.2)
+## Syntakt: destination visibility per model (core 2.6.0)
 
-Host API 16 adds query `ST_PARAMETER_UI_DEST_FLAGS` (32). `args[0]` is the
+Host API 17 adds query `ST_PARAMETER_UI_DEST_FLAGS` (36). `args[0]` is the
 engine ID; `result` is the borrowed model whose native destination list is
 being enumerated, not an output buffer. A provider returns nonzero with a
 capability mask in `*value`, or zero there to hide the entry. Read TYPE through
@@ -625,12 +644,14 @@ that model's getter; do not use the last visible SYN page's global state.
 Only the native builder `4001471c` flags call (return `400147a0`, A5=model)
 uses this query; runtime flags remain query 21. A declined filter falls back
 to the original flags/provider behavior. No new field, serialized feature,
-patch site or event is added. Digi Mono 0.1.2 required API 16; its subtype
-selector in 0.5.0 requires API 17 for the configuration marker below.
+patch site or event is added. On the MD / SY MnM branch (cores 1.8.2..2.3.2)
+this query was 32 under API 16; core 2.4.0 gave 32 to the shared Kit has, so
+core 2.6.0 moved the filter to 36. SY MnM requires API 17.
 
-## Syntakt: saved configuration controls (core 2.3.1)
+## Syntakt: saved configuration controls (core 2.6.0)
 
-Core 2.3.1 / host API 17 also supports saved configuration controls: an extended
+Host API 17 also supports saved configuration controls (first on the branch as
+core 2.3.1): an extended
 parameter at index 8..23 can use alias `ST_MACHINE_CONFIG_PARAMETER` from
 `syntakt/machines.h`. It has no modulation flags and uses the ordinary native scalar editor;
 the MAIN sender publishes the owner's unmodulated Sound mirror for that word.
@@ -638,9 +659,10 @@ Old effective LFO/Sound routes and locks cannot change its AUDIO value.
 Explicit edits and codec storage retain the ordinary ID/slot. Only use this
 marker with API 17 or newer; require it in the module initializer. Ordinary
 controls keep their effective working values. Digi Mono uses it for hidden
-TYPE; see [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md). Core 2.3.2 additionally excludes
-these configuration controls from the shared native SYN reload/randomize list.
-Explicit machine defaults and Sound/project loads still include configuration.
+TYPE; see [SUBTYPE-PICKER.md](SUBTYPE-PICKER.md). Configuration controls are
+also excluded from the shared native SYN reload/randomize list (branch core
+2.3.2). Explicit machine defaults and Sound/project loads still include
+configuration.
 
 ## Syntakt: live SYN slot maps (core 1.8.1)
 
@@ -652,12 +674,15 @@ and parameter IDs do not change. Static layouts keep the same behavior. No new
 site, event, service, feature bit or ABI field is needed. Digi Mono 0.1.1 needs
 this core for its dynamic controls; see `tests/test_st_digimono_pages.c`.
 
-## Syntakt: stereo tracks (core 1.8)
+## Syntakt: stereo tracks (core 1.8, 2.5)
 
 A digital track is mono up to MAIN's mixer. Core 1.8 adds one AUDIO site, the
 chain end (after AMP, before the track DMA), and a directory at `40040f30`
-whose word 1 is the hook it calls (`<syntakt/stereo.h>`). The stereo engine
-that uses it is in `mods/samplers-st/stereo/`, written in the core's shape:
+whose word 1 is the hook it calls (`<syntakt/stereo.h>`). Core 2.5 makes the
+directory version 2: the stock chain loads its per-track multimode routine
+from word 3 (the native one until a bank writes its entry), so an engine can
+run R inside the chain. The stereo engine that uses both is in
+`mods/samplers-st/stereo/`, written in the core's shape:
 
 - A machine that renders stereo calls `st_stereo_claim(t)` in its render and
   writes R where it points; L goes to its output as before. It runs on R the
@@ -665,11 +690,15 @@ that uses it is in `mods/samplers-st/stereo/`, written in the core's shape:
   machine on the native sample voice can use `mods/samplers-st/audio/voice-stereo.c`
   for that: the voice's filter and gain ramps on L and R in one loop each, the
   same words as the native calls.
-- The engine runs the native chain on R and sends D = R − L; the module
-  `STEREO` adds gR × D to the right buses. Pan becomes a balance.
+- The engine runs the chain on R (drive and base-width at track 0's
+  multimode call, then each stereo track's multimode on L and R at once, and
+  its AMP envelope) and sends D = R − L; the module `STEREO` adds gR × D to
+  the right buses. Pan becomes a balance.
 - The engine, its module and a claiming machine must be in the same bank (the
-  claim links to the engine). On a core before 1.8 the claim returns 0 and the
-  track stays mono.
+  claim links to the engine). On a core before 2.5 (chain directory version
+  1, or none) the claim returns 0 and the track stays mono.
+- The stereo engine uses AUDIO and MAIN eDMA channel 46 for the window block;
+  no other mod may use that channel.
 
 The engine owns AUDIO SRAM `0x8000f398..0x8000ffff`, the shared window
 `0x5b0..0x7ef`; no other mod may use them (docs/MACHINE-REFERENCE.md,

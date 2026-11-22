@@ -7,7 +7,7 @@
 #define ELEKLOADER_ST_HOST_H
 #include "storage.h"
 #include "sample-pool.h"
-#define ST_PARAMETER_UI_DEST_FLAGS 32u
+#define ST_PARAMETER_UI_DEST_FLAGS 36u
 /* Init-only MAIN mixer replacement for a stopped-transport preview session.
  * ready() returns 0 or 1. mix has native OS 1.42 mixer C ABI (three words),
  * preserves callee saves and owns bus clearing, preview clock and output. */
@@ -89,7 +89,17 @@ struct st_machine_host_api {
      * through the page's model (24 for a module's ID). Before 13 there is one
      * provider slot: a provider only for 31 registers on 14. Register in
      * the module's init.
-     * Host API 16: query ST_PARAMETER_UI_DEST_FLAGS (32), only
+     * Host API 16 (core 2.4), no new fields: queries 32/33 implement the
+     * global Kit model's has/get, with original args {model,id,...} (24 is
+     * set). For 32 only, args[-1] is the native caller PC; the inverted
+     * lock highlight caller is 4003a3c4. 34 broadcasts task-side Kit lifecycle
+     * {kind,a,b,n,phase}: COPY=1, NEW=2, ENCODE=5, DECODE=6 (sound-meta.h).
+     * Codec phase 0 precedes native execution, phase 1 follows it with n
+     * equal to the native result. COPY/NEW have only phase 1, n=Kit bytes.
+     * 35 may return a synchronous task memcpy entry, same native C ABI,
+     * to preserve owning-object metadata; zero replays the stock copy.
+     * The core owns these sites on 16; modules must not install them.
+     * Host API 17 (core 2.6): query ST_PARAMETER_UI_DEST_FLAGS (36), only
      * while the native destination builder enumerates a registered machine.
      * args[0] is the engine ID; result is the borrowed model/proxy whose
      * destinations are being listed (NOT a result buffer). Return nonzero
@@ -97,7 +107,9 @@ struct st_machine_host_api {
      * Read that model's TYPE through its native getter, not global UI state.
      * No writes, heap or IO. This never changes runtime flags (query 21),
      * parameter IDs, saved routing or Sound values. Unclaimed/module IDs
-     * retain their ordinary query-21 provider lookup. */
+     * retain their ordinary query-21 provider lookup. (On the MD/SY MnM
+     * branch's cores 1.8.2..2.3.2 this was query 32 under API 16/17; main's
+     * core 2.4 gave 32 to Kit has, so the merged core 2.6 moved it to 36.) */
     void (*parameter_provider)(int (*query)(unsigned int,unsigned int *,void *,unsigned int *));
     /* API 8 native_query and the ARP branch's native_dispatch are aliases
      * for the same existing bus at offset 84. Both prefixes stay compatible.
@@ -125,9 +137,10 @@ struct st_machine_host_api {
      * mix() replaces the native mixer call only while stopped and ready.
      * Both are bounded, no heap/IO; mix may use the native EMAC/output ABI. */
     const struct st_audio_idle_owner *volatile *audio_idle;
-    /* Host API 16 adds no field: UI-only destination query 32. API 15's
+    /* Host API 16 adds no field: the shared Kit queries 32..35. API 15's
      * stopped-transport mixer owner and its ABI offset remain unchanged. */
-    /* Host API 17 adds no field: extended configuration controls with alias
-     * ST_MACHINE_CONFIG_PARAMETER are unmodulated and not destinations. */
+    /* Host API 17 adds no field: UI-only destination query 36, and extended
+     * configuration controls with alias ST_MACHINE_CONFIG_PARAMETER, which
+     * are unmodulated and not destinations. */
 };
 #endif

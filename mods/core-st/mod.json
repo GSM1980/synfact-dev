@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "2.3.2",
+  "version": "2.6.0",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -54,7 +54,10 @@
     "audio-idle.c",
     "audio-idle.s",
     "machine-global-labels.s",
-    "project-operations.s"
+    "project-operations.s",
+    "global-fx.s",
+    "kit-meta.c",
+    "kit-meta.s"
   ],
   "defsym": {
     "DRAWALL": "0x40100992",
@@ -72,6 +75,14 @@
     "ST_CONTEXT_EVENTS": "1"
   },
   "sites": [
+    {"addr":"0x4000d870","stock":"2f02747c222f0008","op":"jmp","target":"core_global_has"},
+    {"addr":"0x4000d94a","stock":"2f02222f0008202f000c","op":"jmp","target":"core_global_get"},
+    {"addr":"0x4000da32","stock":"2f032f02222f000c","op":"jmp","target":"core_global_set"},
+    {"addr":"0x400905b6","stock":"0c810000ffff","op":"jsr","target":"core_fx_cv"},
+    {"addr":"0x4011613c","stock":"226f0004206f0008","op":"jmp","target":"core_meta_copy"},
+    {"addr":"0x400b3384","stock":"4fefffdc428048d77c3c","op":"jmp","target":"core_meta_kit_new"},
+    {"addr":"0x400a78f4","stock":"4fefffe448d73c1c","op":"jmp","target":"core_meta_kit_encode"},
+    {"addr":"0x400a78a0","stock":"202f0004206f0008","op":"jmp","target":"core_meta_kit_decode"},
     {
       "addr": "0x40013730",
       "stock": "4feffff448d7040c",
@@ -803,7 +814,8 @@
     "core_mod_info": 40,
     "ev_track_send": 4,
     "ev_delay_in": 4,
-    "ev_reverb_in": 4
+    "ev_reverb_in": 4,
+    "ev_fx_cv": 4
   },
   "subscribe": [
     {

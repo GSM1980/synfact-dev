@@ -1,16 +1,46 @@
-# Syntakt core 2.3.2
+# Syntakt core 2.6.0
 
-Core **2.3.2** excludes saved configuration controls from the shared native
-SYN reload/randomize parameter list. FUNC+NO can reload the synthesis controls
-without resetting a hidden subtype. Explicit machine defaults and Sound/project
-loading retain their existing behavior. Host API remains 17; AUDIO is unchanged.
+Core **2.6.0** joins the two lines that followed 2.3.0: main's 2.4.0 and 2.5.0
+(below) and the MD / SY MnM branch's 2.3.1 and 2.3.2 (configuration controls,
+TYPE-preserving SYN reload, live SYN slot maps and the per-model destination
+filter). **Host API 17** is API 16's shared Kit queries 32..35 plus the
+branch's additions. The destination filter `ST_PARAMETER_UI_DEST_FLAGS` is now
+query **36**: on the branch it was 32, which core 2.4.0 had given to Kit has, so
+in one core a provider could not tell the two apart. Banks built for the
+branch's 2.3.x cores must be rebuilt; SY MnM 0.8.0 requires API 17.
 
-Core **2.3.1** / host API 17 adds saved configuration controls for machine
-indices 8..23 through `ST_MACHINE_CONFIG_PARAMETER`. They have no modulation
-destinations and MAIN sends their stored Sound values, ignoring effective
-LFO/Sound Setup routes and locks. Digi Mono uses this for its hidden TYPE.
-Other controls keep their effective values. The alias is validated before
-loading a bank; serialized layouts, hook sites and AUDIO code are unchanged.
+Core **2.5.0** gives the AUDIO chain a multimode entry for stereo engines.
+The stock chain's `lea 400019d6,a4` before its per-track multimode loop
+(`40000a72`) becomes `movea.l 40040f3c,a4`: the routine comes from the chain
+directory's word 3, which holds the native routine until a bank writes its
+own entry there. The directory's version is 2 (`<syntakt/stereo.h>`,
+`ST_CHAIN_MULTIMODE_VERSION`). No AUDIO code is added; the companion cave is
+unchanged. A bank for core 1.8 to 2.4 still works on it (it writes only
+word 1); a samplers-st 1.6 bank on an older core keeps every track mono.
+See docs/MACHINE-REFERENCE.md, "Stereo tracks".
+
+Core **2.4.0 / host API 16** shares global Kit has/get/set and task-side Kit
+copy/new/codecs across parameter providers, and adds `ST_EV_FX_CV` (15) before
+the FX bus's two native VCA stores. COMP uses these services alongside Chorus
+and LFO3, without claiming a second owner for their sites. SourcePageView's
+direct layout path also resolves module pages (COMP 39). The host struct's
+prefix and SMZ4 geometry/contract remain unchanged; old parsers reject event
+15. The linked core uses 55,860 of 65,536 MAIN resident bytes (9,676 free).
+See [COMP](../comp-st/README.md) and the contracts in `syntakt/host.h`.
+
+Core **2.3.2** (MD / SY MnM branch) excludes saved configuration controls from
+the shared native SYN reload/randomize parameter list. FUNC+NO can reload the
+synthesis controls without resetting a hidden subtype. Explicit machine
+defaults and Sound/project loading retain their existing behavior. AUDIO is
+unchanged.
+
+Core **2.3.1** (MD / SY MnM branch) adds saved configuration controls for
+machine indices 8..23 through `ST_MACHINE_CONFIG_PARAMETER` (host API 17 since
+2.6.0). They have no modulation destinations and MAIN sends their stored Sound
+values, ignoring effective LFO/Sound Setup routes and locks. SY MnM uses this
+for its hidden TYPE. Other controls keep their effective values. The alias is
+validated before loading a bank; serialized layouts, hook sites and AUDIO code
+are unchanged.
 
 Core **2.3.0** appends a task/UI memory snapshot to sample-pool API 2, keeping
 the API 1 prefix. It reports PCM bytes for each loaded slot and the unique,
@@ -154,10 +184,12 @@ edits still store the same control. Digi Mono TYPE is the first user; the
 selector itself stays entirely in the bank. No additional hook or AUDIO
 oscillator code is added. See [SUBTYPE-PICKER.md](../../docs/SUBTYPE-PICKER.md).
 
-Host API 16 adds parameter-provider query 32 without extending the API record.
+Host API 17 (core 2.6.0; API 16 and query 32 on the branch's earlier cores)
+adds parameter-provider query 36 without extending the API record.
 API 15 retains main's stopped-transport mixer owner and its original ABI.
-Digi Mono's destination module refuses API 15, so an existing main core cannot
-silently accept a bank whose hidden-target filtering requires query 32.
+SY MnM's destination module refuses API 16 and older, so a core without the
+filter cannot silently accept a bank whose hidden-target filtering requires
+query 36.
 Only the native destination builder's flags call (return address `400147a0`
 in OS 1.41, borrowed model in A5) uses this query. A bank may filter a target
 using that model's values. Declined queries retain the normal flags/provider

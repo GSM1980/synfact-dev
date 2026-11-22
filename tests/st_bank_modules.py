@@ -100,6 +100,7 @@ def check_bank_modules(report, raw, allowed):
     # Optional modules in bank order: Chorus, Playhead, then Modulation Skip.
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
     expected += [names+['chorus_module'] for names in list(expected)]
+    expected += [names+['comp_module'] for names in list(expected)]
     expected += [names+['playhead_module'] for names in list(expected)]
     # mix-fast-st and icache-lock-st (experimental, no UI): before modulation skip.
     expected += [names+['mix_fast_module'] for names in list(expected)]

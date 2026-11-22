@@ -12,6 +12,7 @@ def verify(core,bank,overflow_reference=None):
     assert any(name=='PLAYHEAD' and 11 in subscriptions for name,_,subscriptions in m.modules)
     assert 'PLAYHEAD' in m.initialized
     expected={'lfo3_native','arp_native','poly_native','chorus_native','playhead_native'}
+    if 'comp_native' in m.bs:expected.add('comp_native')
     start=m.sym['core:core_native_masks'];end=m.sym['core:core_native_masks_end']
     registered={m.word(at) for at in range(start,end,12)}
     assert {m.bs[name] for name in expected}<=registered

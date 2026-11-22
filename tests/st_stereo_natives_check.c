@@ -41,8 +41,8 @@ u32 check_drive(u32 cases,u32 start)
         copy_words(buffers[1],(u32 *)ST_STEREO_R(0),256);
         /* replacement */
         copy_words((u32 *)live,state,40);copy_words((u32 *)ST_STEREO_R(0),buffers[0],256);
-        if(drive_off(mask))ran++;
-        drive_r(mask);
+        if(drive_off(mask,(u32 *)live))ran++;
+        drive_r(mask,(u32 *)live);
         for(t=0;t<8;t++)if(mask&(1u<<t)){
             u32 i;const u32 *a=buffers[1]+32*t,*b=(const u32 *)ST_STEREO_R(t);
             for(i=0;i<32;i++)if(a[i]!=b[i])bad++;
@@ -53,7 +53,7 @@ u32 check_drive(u32 cases,u32 start)
 }
 /* One R drive pass of eight claimed tracks, for instruction counts. */
 void bench_drive_native(void){u32 m=get_macsr();set_macsr(32);DRIVE(ST_STEREO_R(0),ROWS);set_macsr(m);}
-void bench_drive_replacement(void){u32 m=get_macsr();set_macsr(32);drive_r(0xffu);set_macsr(m);}
+void bench_drive_replacement(void){u32 m=get_macsr();set_macsr(32);drive_r(0xffu,DRIVE_STATE);set_macsr(m);}
 /* The sampler's native voice tail on L and R (sp_render before 1.4) against
  * st_voice_filter2, 40003d42 and st_voice_gains2: outputs, buffers, the
  * voice and R's filter, under several MACSR modes and with whatever an
@@ -116,7 +116,7 @@ void bench_voice_replacement(void){fused_tail(voice[1],(s32 *)pcm[1],(s32 *)pcm[
  * for random rows, types, flags, coefficients, weights and signal memory. The
  * L pass is the native routine itself on the same starting state, with the
  * same scratch left by an earlier track. */
-static u32 mstate[2][88+12+8+24+8+16],scratch[8],mrow[142/4+1],mbuf[3][32];
+static u32 mstate[2][88+12+8+24+8+16],scratch[8],targets[8],mrow[142/4+1],mbuf[3][32];
 #define MULTI_SPANS {{0x80008740u,88},{0x80008550u,12},{0x800088e0u,8},{0x80008840u,24},{0x80008580u,8},{0x80008920u,16}}
 static void multi_state(u32 *to,int save)
 {
@@ -143,7 +143,7 @@ u32 check_multi(u32 cases,u32 start)
         multi_state(mstate[0],0);copy_words((u32 *)0x80008900u,scratch,8);
         copy_words(mbuf[1],mbuf[0],32);set_macsr(32);
         MULTI(ROWS+142*t+0x52,mbuf[1],x,t,trig,word);
-        copy_words(before+MULTI_COEFFICIENTS(t),(u32 *)(0x80008740u+32*t),8);
+        copy_words(targets,(u32 *)0x80008900u,8);       /* what the L call leaves */
         /* R: native, the same start, the scratch the earlier track left */
         multi_state(mstate[0],0);copy_words((u32 *)0x80008900u,scratch,8);
         copy_words(mbuf[1],mbuf[0],32);set_macsr(32);
@@ -151,9 +151,9 @@ u32 check_multi(u32 cases,u32 start)
         multi_state(mstate[1],1);
         if(get_macsr()!=32)bad++;
         /* R: the tail */
-        multi_state(mstate[0],0);fill((u32 *)0x80008900u,32);
+        multi_state(mstate[0],0);copy_words((u32 *)0x80008900u,targets,8);
         copy_words(mbuf[2],mbuf[0],32);set_macsr(32);
-        MULTI_R(t,ROWS+142*t+0x52,mbuf[2],x,t,trig,word);
+        st_multimode_tail(ROWS+142*t+0x52,mbuf[2],x,t,trig,word);
         if(get_macsr()!=32)bad++;
         for(i=0;i<32;i++)bad+=mbuf[1][i]!=mbuf[2][i];
         multi_state(mstate[0],1);
@@ -162,7 +162,7 @@ u32 check_multi(u32 cases,u32 start)
     return bad<<16|cases;
 }
 void bench_multi_native(void){u32 m=get_macsr();set_macsr(32);MULTI(ROWS+0x52,mbuf[1],0,0,0,0);set_macsr(m);}
-void bench_multi_replacement(void){u32 m=get_macsr();set_macsr(32);MULTI_R(0,ROWS+0x52,mbuf[2],0,0,0,0);set_macsr(m);}
+void bench_multi_replacement(void){u32 m=get_macsr();set_macsr(32);st_multimode_tail(ROWS+0x52,mbuf[2],0,0,0,0);set_macsr(m);}
 /* One track of each filter type, for instruction counts: which 0 native, 1 tail. */
 void bench_multi_type(u32 type,u32 which)
 {
@@ -170,7 +170,7 @@ void bench_multi_type(u32 type,u32 which)
     for(i=0;i<142;i++)((u8 *)ROWS)[i]=(u8)(0x40+i);
     row[0]=(u8)type;row[4]=0x20;((volatile u32 *)0x80008560u)[0]=type;
     set_macsr(32);
-    if(which)MULTI_R(0,ROWS+0x52,mbuf[2],0,0,0,0);else MULTI(ROWS+0x52,mbuf[1],0,0,0,0);
+    if(which)st_multimode_tail(ROWS+0x52,mbuf[2],0,0,0,0);else MULTI(ROWS+0x52,mbuf[1],0,0,0,0);
     set_macsr(m);
 }
 /* The claim's release: after a loud burst then silence, the native multimode
@@ -194,4 +194,198 @@ u32 check_tail(u32 type)
         if(!mx){zero=k-4;break;}
     }
     return quiet<<16|zero;
+}
+/* The base-width on one track's R (width_track) against the native routine
+ * on the eight tracks in pairs: outputs and the two memory words, for random
+ * rows (BASE and WDTH, the reset word), flags and memory, every track. The
+ * accumulators start cleared, as the stock chain leaves them. */
+static void clear_accumulators(void)
+{u32 v;__asm__ volatile("movclr.l %%acc0,%0\n\tmovclr.l %%acc1,%0\n\tmovclr.l %%acc2,%0\n\tmovclr.l %%acc3,%0":"=d"(v)::"cc");}
+static u32 wmem[2][16],wbuf[3][256];
+u32 check_width(u32 cases,u32 start)
+{
+    u32 k,t,i,bad=0;volatile u8 *flags=(volatile u8 *)0x80008550u;
+    seed=start;set_macsr(32);
+    for(k=0;k<cases;k++){
+        for(t=0;t<8;t++){
+            u8 *row=ROWS+142*t;
+            *(short *)(row+0x66)=(short)(rng()&0x7fff);*(short *)(row+0x68)=(short)(rng()&0x7fff);
+            *(short *)(row+0x82)=(rng()&3)?0:(short)(1+(rng()&0x7fff));
+            flags[t]=(u8)(rng()&1);
+        }
+        for(i=0;i<16;i++)wmem[0][i]=(u32)sample();
+        for(i=0;i<256;i++)wbuf[0][i]=(u32)sample();
+        /* native */
+        copy_words((u32 *)0x800088a0u,wmem[0],16);copy_words((u32 *)ST_STEREO_R(0),wbuf[0],256);
+        clear_accumulators();
+        WIDTH(ST_STEREO_R(0),ROWS,0);
+        copy_words(wbuf[1],(u32 *)ST_STEREO_R(0),256);copy_words(wmem[1],(u32 *)0x800088a0u,16);
+        if(get_macsr()!=32)bad++;
+        /* per track */
+        copy_words((u32 *)ST_STEREO_R(0),wbuf[0],256);copy_words(wbuf[2],wmem[0],16);
+        clear_accumulators();set_macsr(32);
+        for(t=0;t<8;t++)width_track(ST_STEREO_R(t),t,wbuf[2]+2*t);
+        if(get_macsr()!=32)bad++;
+        for(i=0;i<256;i++)bad+=((u32 *)ST_STEREO_R(0))[i]!=wbuf[1][i];
+        for(i=0;i<16;i++)bad+=wbuf[2][i]!=wmem[1][i];
+    }
+    return bad<<16|cases;
+}
+void bench_width_native(void){u32 m=get_macsr();set_macsr(32);WIDTH(ST_STEREO_R(0),ROWS,0);set_macsr(m);}
+void bench_width_replacement(void){u32 m=get_macsr();set_macsr(32);width_track(ST_STEREO_R(0),0,wmem[0]);set_macsr(m);}
+/* The whole chain, block after block, against the stock chain and a native
+ * R pass. Each block: the stock chain on L (drive, base-width, the multimode
+ * per track, the AMP envelopes) from the state S the block starts with gives
+ * L, the state after and L's memory; the native routines on R (drive,
+ * base-width, then the multimode and the envelope of the claimed tracks)
+ * from the same S, with R's own memory, give R. The engine's flow (the stock
+ * drive and base-width on L, st_stereo_multimode_c for every track, the
+ * stock envelopes on L), from S with the drive state kept by the previous
+ * chain end, must give the same L, state and memory, and the same R and R
+ * memory for the claimed tracks. Rows, masks, frame words and buffers change
+ * from block to block; three warm-up blocks first. */
+static const u32 spans[10][2]={{0x800083b0u,40},{0x80008550u,12},{0x80008740u,88},{0x800088e0u,8},
+    {0x800049e0u,24},{0x80008580u,8},{0x800088a0u,16},{0x80008920u,16},
+    {0x80008720u,8},{0x80008900u,8}};   /* the multimode's scratch: what the last call left */
+#define CHAIN_ALL 228u
+static void chain_state(u32 *w,u32 first,u32 count,int save)
+{
+    u32 i,j,*p;
+    for(i=first;i<first+count;i++)for(p=(u32 *)spans[i][0],j=0;j<spans[i][1];j++)if(save)*w++=p[j];else p[j]=*w++;
+}
+static u32 trig_of(void){return ~(u32)*(const volatile u16 *)(FRAME+0x182)&FRAME[0x180];}
+static void envelopes(s32 *buffers,u32 mask)
+{
+    u32 t,trig=trig_of(),held=(u32)FRAME[0x181]|*(const volatile u16 *)(FRAME+0x182),gate=FRAME[0x1a8];
+    for(t=0;t<8;t++)if(mask&(1u<<t))
+        ENVELOPE(buffers+32*t,(void *)(0x800049e0u+12*t),ROWS+142*t+0x6a,(trig>>t)&1,(held>>t)&1,t,(gate>>t)&1);
+}
+#define X_WORD(t) (*(volatile u32 *)(0x80008188u+4u*(t)))
+#define RESET_WORD(t) (*(const short *)(ROWS+142*(t)+0x82))
+/* The multimode's scratch (0x80008720, 0x80008900) each L call found: the
+ * native R call of a track starts from it, as the engine's R does. */
+static u32 seen[8][16];
+static void stock_l(void)
+{
+    u32 t,trig=trig_of();
+    DRIVE(TRACKS,ROWS);WIDTH(TRACKS,ROWS,trig);
+    for(t=0;t<8;t++){
+        chain_state(seen[t],8,2,1);
+        MULTI(ROWS+142*t+0x52,TRACKS+32*t,X_WORD(t),t,trig,RESET_WORD(t));
+    }
+    envelopes(TRACKS,0xffu);
+}
+u32 chain_bad[8];
+static u32 S[CHAIN_ALL],SL[CHAIN_ALL],RS[40],RSref[40],lin[256],rin[256],lref[256],rref[256];
+static void randomize_block(u32 block)
+{
+    u32 t,i;
+    for(t=0;t<8;t++){
+        u8 *row=ROWS+142*t;
+        if(block==0 || !(rng()&3)){
+            for(i=0;i<142;i+=2)*(short *)(row+i)=(short)((rng()%128)<<8|(rng()&0xff));
+            row[0x52]=(u8)(rng()&7);row[0x56]=(u8)(rng()&0x7f);
+            *(short *)(row+0x50)=(rng()&1)?(short)-(s32)(rng()&0x7fff):(short)(rng()&0x7fff);
+            *(short *)(row+0x82)=(rng()&3)?0:(short)(1+(rng()&0x7fff));
+        }
+        X_WORD(t)=rng()>>1;                   /* x >= 0: the tables' range */
+    }
+    *(volatile u32 *)(0x80008180u)=rng();*(volatile u8 *)(0x800081a8u)=(u8)rng();
+    for(i=0;i<256;i++){lin[i]=(u32)sample();rin[i]=(rng()&1)?lin[i]+(u32)(sample()>>4):(u32)sample();}
+}
+u32 check_chain(u32 cases,u32 start)
+{
+    u32 k,block,t,i,mask=0,bad=0,blocks=0,trig,macsr;
+    seed=start;
+    for(k=0;k<cases;k++){
+        for(i=0;i<CHAIN_ALL;i++)S[i]=0;
+        chain_state(S,0,10,0);
+        for(i=0;i<40;i++)ST_STEREO_SIGNAL[i]=0;
+        for(block=0;block<10;block++){
+            randomize_block(block);trig=trig_of();
+            if(block==3 || !(rng()&3)){mask=rng()&0xffu;if(!mask)mask=1u<<(rng()&7);}
+            set_macsr(32);clear_accumulators();
+            if(block<3){copy_words((u32 *)TRACKS,lin,256);stock_l();continue;}
+            chain_state(S,0,10,1);copy_words(RS,ST_STEREO_SIGNAL,40);
+            /* the stock chain on L */
+            copy_words((u32 *)TRACKS,lin,256);stock_l();macsr=get_macsr();
+            copy_words(lref,(u32 *)TRACKS,256);chain_state(SL,0,10,1);
+            /* a native R pass from S, with R's memory */
+            chain_state(S,0,5,0);chain_state(RS,5,3,0);
+            for(t=0;t<8;t++)for(i=0;i<32;i++)ST_STEREO_R(t)[i]=mask&(1u<<t)?(s32)rin[32*t+i]:0;
+            set_macsr(32);clear_accumulators();
+            DRIVE(ST_STEREO_R(0),ROWS);WIDTH(ST_STEREO_R(0),ROWS,trig);
+            for(t=0;t<8;t++)if(mask&(1u<<t)){
+                chain_state(seen[t],8,2,0);
+                MULTI(ROWS+142*t+0x52,ST_STEREO_R(t),X_WORD(t),t,trig,RESET_WORD(t));
+            }
+            envelopes(ST_STEREO_R(0),mask);
+            copy_words(rref,(u32 *)ST_STEREO_R(0),256);chain_state(RSref,5,3,1);
+            /* the engine */
+            chain_state(S,0,10,0);copy_words(ST_STEREO_SIGNAL,RS,40);
+            copy_words((u32 *)TRACKS,lin,256);
+            for(t=0;t<8;t++)for(i=0;i<32;i++)ST_STEREO_R(t)[i]=mask&(1u<<t)?(s32)rin[32*t+i]:0;
+            copy_words(drive_before,S,DRIVE_WORDS);primed=1;claimed=mask;
+            set_macsr(32);clear_accumulators();
+            DRIVE(TRACKS,ROWS);WIDTH(TRACKS,ROWS,trig);
+            for(t=0;t<8;t++){
+                st_stereo_multimode_c(ROWS+142*t+0x52,TRACKS+32*t,X_WORD(t),t,trig,RESET_WORD(t));
+            }
+            envelopes(TRACKS,0xffu);
+            claimed=0;
+            if(get_macsr()!=macsr){bad++;chain_bad[7]++;}      /* mode and flags as the stock chain leaves them */
+            for(i=0;i<256;i++)if(((u32 *)TRACKS)[i]!=lref[i]){bad++;chain_bad[0]++;}
+            chain_state(S,0,10,1);
+            for(i=0;i<CHAIN_ALL;i++)if(S[i]!=SL[i]){bad++;chain_bad[1]++;chain_bad[4]=i;}
+            for(t=0;t<8;t++)if(mask&(1u<<t)){
+                for(i=0;i<32;i++)if((u32)ST_STEREO_R(t)[i]!=rref[32*t+i]){bad++;chain_bad[2]++;}
+                chain_bad[3]+=ST_STEREO_SIGNAL[t]!=RSref[t];
+                bad+=ST_STEREO_SIGNAL[t]!=RSref[t];
+                i=(ST_STEREO_SIGNAL[8+2*t]!=RSref[8+2*t])+(ST_STEREO_SIGNAL[9+2*t]!=RSref[9+2*t]);
+                bad+=i;chain_bad[5]+=i;
+                i=(ST_STEREO_SIGNAL[24+2*t]!=RSref[24+2*t])+(ST_STEREO_SIGNAL[25+2*t]!=RSref[25+2*t]);
+                bad+=i;chain_bad[6]+=i;
+            }
+            blocks++;
+            /* the next block starts from the stock state */
+            chain_state(SL,0,10,0);
+        }
+    }
+    return bad<<16|(blocks&0xffffu);
+}
+/* One block's R work for eight claimed tracks, for instruction counts:
+ * which 0, the earlier chain-end pass (all natives on R); 1, the engine's
+ * (track 0's R drive and base-width, each track's L multimode, R multimode
+ * and R envelope: the L multimode is the stock's own work). */
+void bench_chain(u32 which)
+{
+    u32 t,trig=0,m=get_macsr();
+    set_macsr(32);
+    if(!which){
+        DRIVE(ST_STEREO_R(0),ROWS);WIDTH(ST_STEREO_R(0),ROWS,trig);
+        for(t=0;t<8;t++)MULTI(ROWS+142*t+0x52,ST_STEREO_R(t),0,t,trig,0);
+        envelopes(ST_STEREO_R(0),0xffu);
+    }else{
+        claimed=0xffu;primed=1;
+        for(t=0;t<8;t++)st_stereo_multimode_c(ROWS+142*t+0x52,TRACKS+32*t,0,t,trig,0);
+        claimed=0;
+    }
+    set_macsr(m);
+}
+/* The stock multimode on the eight L buffers, to subtract from bench_chain 1. */
+void bench_chain_l(void)
+{
+    u32 t,m=get_macsr();
+    set_macsr(32);
+    for(t=0;t<8;t++)MULTI(ROWS+142*t+0x52,TRACKS+32*t,0,t,0,0);
+    set_macsr(m);
+}
+u32 chain_detail(u32 i){return chain_bad[i];}
+/* Choose the multimode path for check_chain and bench_chain: 1 the fused
+ * one (the first part copied from this image, st_mm_fused_tail), 0 the
+ * native routine on L and its second part on R. Returns the path in use. */
+u32 set_fused(u32 on)
+{
+    if(on){fused=FUSED_UNKNOWN;fused_prepare();}else fused=FUSED_OFF;
+    return fused==FUSED_READY;
 }

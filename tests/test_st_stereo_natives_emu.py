@@ -58,6 +58,10 @@ def build(work, audio, source):
                       % HARNESS)
     exe = work / 'check.elf'
     objects=[str(obj)]
+    if Path(source).name in ('st_stereo_natives_check.c',):
+        src=ROOT/'mods/samplers-st/stereo/multimode.s';target=work/'multimode.s.o'
+        subprocess.run([prefix+'as',*DEVICE.toolchain['asflags'],str(src),'-o',str(target)],check=True)
+        objects.append(str(target))
     if Path(source).name=='st_stereo_main_check.c':
         for name in ('resolve-begin.s','main-resolve.c','resolve-end.s','main-kernels.s'):
             src=ROOT/'mods/samplers-st/stereo'/name; target=work/(name+'.o')
@@ -111,6 +115,39 @@ def main():
             '%s %d/%s' % ('render' if ty == 8 else 'type %d' % ty, w >> 16, 'never' if w & 0xffff == 0xffff else w & 0xffff)
             for ty, w in enumerate(tails)))
         failed |= any(w >> 16 == 0xffff for w in tails)
+        # the engine's own base-width on one track against the native pairs
+        result = cfbench(a.cfbench, image, '%x:%x,%x' % (syms['check_width'], CASES, 0x5eed))
+        word = int(result[0][0], 16)
+        native, replacement = cfbench(a.cfbench, image, '%x' % syms['bench_width_native'],
+                                      '%x' % syms['bench_width_replacement'])
+        print('width: %d cases, %d differing words; native (8 tracks) %s, one track %s instructions'
+              % (word & 0xffff, word >> 16, native[1], replacement[1]))
+        failed |= word >> 16 != 0
+        # the whole chain, block after block, against the stock chain and a native
+        # R pass: the per-track path (native multimode on L, its second part on
+        # R) and the fused one (one second part for both)
+        stock = int(cfbench(a.cfbench, image, '%x' % syms['bench_chain_l'])[0][1])
+        for mode in (0, 1):
+          result = cfbench(a.cfbench, image, '%x:%x' % (syms['set_fused'], mode),
+                           '%x:%x,%x' % (syms['check_chain'], 40, 0x5eed))
+          ready = int(result[0][0], 16)
+          word = int(result[1][0], 16)
+          if mode and not ready:
+              print('chain: the fused multimode is not available on this image (fingerprint)')
+              failed = True
+          old = int(cfbench(a.cfbench, image, '%x:0' % syms['bench_chain'])[0][1])
+          new = int(cfbench(a.cfbench, image, '%x:%x' % (syms['set_fused'], mode), '%x:1' % syms['bench_chain'])[1][1])
+          print('chain (%s): %d blocks, %d differing words (L, state and memory against the stock chain; R and R '
+                'memory against a native R pass); R work for 8 stereo tracks: natives %d, the engine %d '
+                '(%d with the L multimode)' % ('fused' if mode else 'per track', word & 0xffff, word >> 16,
+                                              old, new - stock, new))
+          if word >> 16:
+            detail = cfbench(a.cfbench, image, '%x:%x' % (syms['set_fused'], mode),
+                             '%x:%x,%x' % (syms['check_chain'], 40, 0x5eed),
+                             *['%x:%x' % (syms['chain_detail'], i) for i in range(8)])
+            print('  chain differences: L, state, R, R memory 80008580, last state index, R BW memory, R 80008920, MACSR: %s'
+                  % [int(d[0], 16) for d in detail[2:]])
+          failed |= word >> 16 != 0 or word & 0xffff == 0
         # MAIN: the STEREO module's EMAC mix against a 64-bit model
         image, syms = build(Path(tmp), audio, 'tests/st_stereo_main_check.c')
         result = cfbench(a.cfbench, image, '%x:%x,%x' % (syms['check_mix'], CASES, 0x5eed))
@@ -136,9 +173,10 @@ def main():
         word = int(result[0][0], 16)
         bad, blocks = word >> 16, word & 0xffff
         costs = [cfbench(a.cfbench, image, '%x:%x' % (syms['bench_pcm_setup'], channels),
-                         '%x' % syms['bench_pcm'])[1][1] for channels in (1, 2)]
+                         '%x' % syms['bench_pcm'])[1][1] for channels in (1, 2, 5, 6)]
         print('sampler PCM: %d blocks, %d differing words or cursors; a block at unity pitch: '
-              'mono %s, stereo %s instructions' % (blocks, bad, costs[0], costs[1]))
+              'mono %s, stereo %s; off unity: mono %s, stereo %s instructions'
+              % (blocks, bad, costs[0], costs[1], costs[2], costs[3]))
         failed |= bad != 0 or blocks == 0
     if failed:
         print('FAIL')

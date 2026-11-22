@@ -4,9 +4,13 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.2.1.
 
 ## 1.2.1 (2026-11-18)
 
+- Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
+- Changelogs: COMP 1.0.0 (`c148d93`, 2026-11-22)
+- Changelogs: COMP 0.3.0 (`a81bb0b`, 2026-11-21)
 - Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
 - Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
 - Core 2.2.0: 4 MiB bank window, pool above AUDIO's page (contract 06) (`53ac728`, 2026-11-19)
+- Changelogs: core 2.2.0 and samplers 1.5.2 (`121e965`, 2026-11-19)
 - Playhead 1.2.1: request native composition from the actual UI controller (`4a9012f`, 2026-11-18)
 - Changelogs: Playhead 1.2.1 (`9db6680`, 2026-11-18)
 

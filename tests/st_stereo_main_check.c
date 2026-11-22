@@ -157,11 +157,11 @@ u32 check_placement(u32 mode)
         /* Check the resolver runs from SRAM too: untagged is a safe exit. */
         resolved=0;tagged=0;if(current()!=0 || !resolved)bad++;
         /* A genuine internal slot pointer must survive fallback. */
-        slot[0].sequence=0x12345678;use=&slot[0];
+        slot0.sequence=0x12345678;use=&slot0;
         if(mode==4)*(volatile unsigned char *)(void *)remember_kernel^=1;
         else *(volatile unsigned char *)ST_SRAM_CHORUS_CODE^=1;
         for(i=0;i<60;i++)placement_tick(0);
-        if(st_stereo_sram || st_stereo_state!=&stereo_ddr || use!=&slot[0] || slot[0].sequence!=0x12345678)bad++;
+        if(st_stereo_sram || st_stereo_state!=&stereo_ddr || use!=&slot0 || slot0.sequence!=0x12345678)bad++;
         if(remember_kernel!=st_stereo_remember)bad++;
         bad+=check_mix(400,0xfeed);bad+=check_widen(400,0xbeef);
     }else{

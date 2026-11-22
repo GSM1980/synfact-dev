@@ -35,7 +35,8 @@ class Startup(Core):
         start=report['link']['boot'][0]
         self.u.mem_write(start,bytes(len(raw)-(start-BASE)))
         self.u.ctl_remove_cache(start,start+len(raw)-(start-BASE))
-        self.original=[self.event_list(i) for i in range(15)]
+        self.event_count=16 if 'core:core_fx_cv' in self.sym else 15
+        self.original=[self.event_list(i) for i in range(self.event_count)]
         self.expected=[list(x) for x in self.original]
         self.modules=[];self.count=0
         if mode!='empty':
@@ -107,19 +108,19 @@ class Startup(Core):
         assert self.u.reg_read(UC_M68K_REG_A7)==SP+4
         if mode in ('reject','no_memory'):
             assert value==0
-            assert [self.event_list(i) for i in range(15)]==self.original
+            assert [self.event_list(i) for i in range(self.event_count)]==self.original
             if mode=='reject':assert self.frees and self.initialized==[self.fail_name]
             else:assert not self.initialized
         else:
             assert value==1
-            assert [self.event_list(i) for i in range(15)]==self.expected
+            assert [self.event_list(i) for i in range(self.event_count)]==self.expected
             assert self.word(self.sym['core:core_module_count'])==self.count
             assert self.word(self.sym['core:core_module_subscriptions'])==sum(len(x) for _,_,x in self.modules)
             if mode!='empty':
                 ordinary=[n for n,init,_ in self.modules if init!=0xffffffff and n not in ('LFO3','MODULATION SKIP')]
                 patchers=[n for n,init,_ in self.modules if init!=0xffffffff and n in ('LFO3','MODULATION SKIP')]
                 assert self.initialized==ordinary+patchers
-                for i in range(15):
+                for i in range(self.event_count):
                     ptr=self.word(self.sym['core:events']+8*i)
                     if i!=11:
                         assert ptr==self.word(self.word(self.sym['core:events']+8*i+4))

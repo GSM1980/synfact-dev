@@ -1,6 +1,6 @@
 # Synfact docs
 
-Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
+Current desktop target: **OS 1.42 / core 2.4.0**.
 See [OS142-PORT.md](OS142-PORT.md).
 
 Everything past the [front page](../README.md). The pages are plain Markdown
@@ -33,6 +33,12 @@ and change with the code, so a commit's docs match its code.
 - **[Stock MAIN CPU profile](STOCK-MAIN-CPU-PROFILE.md)**: where stock OS 1.42
   spends MAIN (half of it in instruction-cache misses) and what rewriting or
   cache locking could recover.
+- **[FX bus compressor feasibility](FX-BUS-COMPRESSOR-FEASIBILITY.md)**: measured
+  Digitakt detector cost, FX-only routing and the budget alongside Chorus.
+- **[COMP module](../mods/comp-st/README.md)**: compact FX-bus compressor,
+  original Digitakt controls, private SysEx importer and parallel MIX.
+- **[COMP sidechain filter study](COMP-SIDECHAIN-FILTER-FEASIBILITY.md)**: a
+  fixed-position one-pole high-pass on the detector, its cost and SRAM fit.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
 - **[Safe core/SMZ4 startup proposal](SAFE-BOOT-SMZ4-07-16.md)**: compatibility

@@ -37,6 +37,7 @@ bank that can change without reinstalling the firmware:
 | [SY FM DTONE](mods/fm-tone-st) | an FM machine (FM TONE until 2026-11-02) |
 | [SY MnM](mods/digimono-st) | fifteen Digi Mono/MONO2K/De-Pattern synth types (with FM+ and the DigiPRO WAVE, DDRW and DENS) in one machine, chosen through its subtype selector |
 | [Audio Recorder](mods/recorder-st) | record, trim, normalize and save samples |
+| [FX compressor](mods/comp-st) | compact compressor on the FX bus, with Digitakt controls, parallel MIX and gain-reduction meter |
 | [Third LFO](mods/lfo3-st) | a third LFO on every track |
 | [Arpeggiator](mods/arp-st) | a Digitone-style arpeggiator on the audio tracks |
 | [POLY](mods/poly-st) | polyphonic play for digital and compatible analog tracks |

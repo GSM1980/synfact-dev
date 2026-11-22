@@ -31,32 +31,67 @@ typedef sp_s32 s32;typedef sp_u32 u32;
 void st_voice_filter2(s32 *l,s32 *r,u32 *fl,u32 *fr)
 {
     s32 c1=(s32)fl[0],c2=(s32)fl[1],l1=(s32)fl[2],l2=(s32)fl[3],r1=(s32)fr[2],r2=(s32)fr[3];
-    s32 t,a,y1,b,y2,o;u32 i;
-    for(i=0;i<32;i++){
-        SUB_SAT(t,l[i],l1);MAC_CLR(a,t,c1);ADD_SAT(y1,a,l1);
-        SUB_SAT(t,y1,l2);MAC_CLR(b,t,c2);ADD_SAT(y2,b,l2);
-        SUB_SAT(o,y1,y2);l[i]=o;ADD_SAT(l1,y1,a);ADD_SAT(l2,y2,b);
-        SUB_SAT(t,r[i],r1);MAC_CLR(a,t,c1);ADD_SAT(y1,a,r1);
-        SUB_SAT(t,y1,r2);MAC_CLR(b,t,c2);ADD_SAT(y2,b,r2);
-        SUB_SAT(o,y1,y2);r[i]=o;ADD_SAT(r1,y1,a);ADD_SAT(r2,y2,b);
-    }
+    s32 t,a,y1,b;const s32 *end;
+    /* Per channel and frame, with state (s1, s2): t = sat(x - s1),
+     * a = mac(t, c1), y1 = sat(a + s1), t = sat(y1 - s2), b = mac(t, c2),
+     * y2 = sat(b + s2), out = sat(y1 - y2), s1 = sat(y1 + a), s2 = sat(y2 + b):
+     * the C above as it was (SUB_SAT, MAC_CLR, ADD_SAT), by hand, with s2
+     * and the loaded sample as temporaries once they are spent. L then R.
+     * The coefficients are the MAC's first operand (an address register
+     * there is a valid encoding; as the second, with some data registers,
+     * it is not: GAS takes `mac.l %d2,%a3` and emits 0xa642). */
+#define FILTER_CHANNEL(p,s1,s2) \
+        "move.l (%[" #p "]),%[t]\n\tsub.l %[" #s1 "],%[t]\n\tsats.l %[t]\n\t" \
+        "mac.l %[c1],%[t],%%acc0\n\tmovclr.l %%acc0,%[a]\n\t" \
+        "move.l %[a],%[y1]\n\tadd.l %[" #s1 "],%[y1]\n\tsats.l %[y1]\n\t" \
+        "move.l %[y1],%[t]\n\tsub.l %[" #s2 "],%[t]\n\tsats.l %[t]\n\t" \
+        "mac.l %[c2],%[t],%%acc0\n\tmovclr.l %%acc0,%[b]\n\t" \
+        "move.l %[b],%[t]\n\tadd.l %[" #s2 "],%[t]\n\tsats.l %[t]\n\t" \
+        "move.l %[y1],%[" #s2 "]\n\tsub.l %[t],%[" #s2 "]\n\tsats.l %[" #s2 "]\n\tmove.l %[" #s2 "],(%[" #p "])+\n\t" \
+        "move.l %[y1],%[" #s1 "]\n\tadd.l %[a],%[" #s1 "]\n\tsats.l %[" #s1 "]\n\t" \
+        "move.l %[t],%[" #s2 "]\n\tadd.l %[b],%[" #s2 "]\n\tsats.l %[" #s2 "]\n\t"
+    /* The end is computed here, in its own register: as an input it may
+     * share one with r (r is l + 32 when L and R are adjacent). */
+    __asm__ volatile(
+        "lea 128(%[l]),%[e]\n"
+        "1:\n\t"
+        FILTER_CHANNEL(l,l1,l2)
+        FILTER_CHANNEL(r,r1,r2)
+        "cmpa.l %[e],%[l]\n\tbne.w 1b"
+        :[l]"+a"(l),[r]"+a"(r),[l1]"+d"(l1),[l2]"+d"(l2),[r1]"+d"(r1),[r2]"+d"(r2),
+         [t]"=&d"(t),[a]"=&d"(a),[y1]"=&d"(y1),[b]"=&d"(b),[e]"=&a"(end)
+        :[c1]"a"(c1),[c2]"a"(c2):"cc","memory");
+#undef FILTER_CHANNEL
     fl[2]=(u32)l1;fl[3]=(u32)l2;fr[2]=(u32)r1;fr[3]=(u32)r2;
 }
 /* 400045a0 then 400049f4 (locals 0 and 1, second buffer zero) on L and R:
  * l and r are ramped in place, then out_l and out_r get the output ramp. */
 void st_voice_gains2(s32 *l,s32 *r,s32 *out_l,s32 *out_r,void *voice)
 {
-    u32 *v=voice,i;s32 target,g,step,end,ramp,slope,a,b;
+    u32 *v=voice;s32 target,g,step,end,ramp,slope,a,b;const s32 *stop;
     /* 400045a0's start */
     if(v[0x34/4])v[0x3d0/4]=0;
     else if(v[0x38/4] && v[0x3e8/4]==0x80000000u)v[0x3d4/4]=v[0x3d0/4];
     target=(s32)v[0x3d0/4];g=(s32)v[0x3d4/4];SUB_SAT(step,target,g);step>>=5;
     /* 400049f4's first ramp (its second only multiplies the zero buffer) */
     end=(s32)v[2];ramp=(s32)v[6];slope=(s32)((u32)end-(u32)ramp)>>5;
-    for(i=0;i<32;i++){
-        MSAC_CLR(a,g,l[i]);MSAC_CLR(b,g,r[i]);l[i]=a;r[i]=b;ADD_SAT(g,g,step);
-        MAC_CLR(out_l[i],ramp,a);MAC_CLR(out_r[i],ramp,b);ramp=(s32)((u32)ramp+(u32)slope);
-    }
+    /* a = msac(g, l), b = msac(g, r), l = a, r = b, g = sat(g + step),
+     * out_l = mac(ramp, a), out_r = mac(ramp, b), ramp += slope: the C loop
+     * as it was, in its order, with pointers that advance. */
+    __asm__ volatile(
+        "lea 128(%[l]),%[e]\n"
+        "1:\n\t"
+        "move.l (%[l]),%[a]\n\tmsac.l %[g],%[a],%%acc0\n\tmovclr.l %%acc0,%[a]\n\t"
+        "move.l (%[r]),%[b]\n\tmsac.l %[g],%[b],%%acc0\n\tmovclr.l %%acc0,%[b]\n\t"
+        "move.l %[a],(%[l])+\n\tmove.l %[b],(%[r])+\n\t"
+        "add.l %[s],%[g]\n\tsats.l %[g]\n\t"
+        "mac.l %[ramp],%[a],%%acc0\n\tmovclr.l %%acc0,%[a]\n\tmove.l %[a],(%[ol])+\n\t"
+        "mac.l %[ramp],%[b],%%acc0\n\tmovclr.l %%acc0,%[b]\n\tmove.l %[b],(%[or])+\n\t"
+        "add.l %[slope],%[ramp]\n\t"
+        "cmpa.l %[e],%[l]\n\tbne.s 1b"
+        :[l]"+a"(l),[r]"+a"(r),[ol]"+a"(out_l),[or]"+a"(out_r),[g]"+d"(g),[ramp]"+d"(ramp),
+         [a]"=&d"(a),[b]"=&d"(b),[e]"=&a"(stop)
+        :[s]"d"(step),[slope]"d"(slope):"cc","memory");
     v[0x3d4/4]=(u32)target;v[6]=(u32)end;v[7]=v[3];
 }
 #endif
