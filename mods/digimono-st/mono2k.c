@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * SID/ENS DSP adapted from MONO2K by Inigo Hernandez, pinned in mono2k/upstream.
- * FM+ public IDs now dispatch to De-Pattern's separate fmplus.c engine.
+ * FM+ and DigiPRO public IDs dispatch to De-Pattern's fmplus.c and dpro.c.
  * Only the oscillator/its internal envelopes run here; native Syntakt AMP,
  * FLTR, modulation and effects remain downstream. 48 kHz, 2 x 16 samples.
  */
@@ -73,6 +73,7 @@ static inline int32_t blep_saw(uint32_t ph,uint32_t inc,uint32_t inv)
 void dm_m2k_init(struct dm_m2k_voice *v)
 {
     dm_fm_init(&v->fm);
+    dm_dp_init(&v->dp);
     unsigned i;
     for(i=0;i<4;i++)v->ph[i]=0;
     for(i=0;i<6;i++)v->ms[i]=0;
@@ -81,6 +82,7 @@ void dm_m2k_init(struct dm_m2k_voice *v)
 }
 void dm_m2k_trig(struct dm_m2k_voice *v,unsigned type,const uint16_t *p)
 {
+    if(DM_IS_DPRO(type)){dm_dp_trig(&v->dp,type,p);return;}
     if(type>=DM_FMSTAT){dm_fm_trig(&v->fm,type,p);return;}
     if(type==DM_SID){if(p[2]>=64u*256u)v->ms[4]=0;return;}
     dm_m2k_init(v);
@@ -97,6 +99,7 @@ static void dm_m2k_block(struct dm_m2k_voice *t,unsigned type,const uint16_t *p,
 void dm_m2k_render(struct dm_m2k_voice *v,unsigned type,const uint16_t *p,
                    int32_t pitch,int32_t previous_pitch,int16_t *out)
 {
+    if(DM_IS_DPRO(type)){dm_dp_render(&v->dp,type,p,pitch,previous_pitch,out);return;}
     if(type>=DM_FMSTAT){dm_fm_render(&v->fm,type,p,pitch,out);return;}
     dm_m2k_block(v,type,p,pitch,previous_pitch,out);
     dm_m2k_block(v,type,p,pitch,previous_pitch,out+M2K_SUB);
@@ -132,5 +135,37 @@ void dm_ens_render(struct dm_ens_voice *v,const uint16_t *p,int32_t pitch,int16_
     for(unsigned i=0;i<32;i++){
         left[i]=(int16_t)sat16((int32_t)mid[i]+side[i]);
         right[i]=(int16_t)sat16((int32_t)mid[i]-side[i]);
+    }
+}
+
+void dm_ens_chorus(struct dm_ens_voice *t,const uint16_t *p,int16_t *left,int16_t *right)
+{
+    /* ens.inc's chorus, unchanged, after DPRO-DENS (CHRL p[5], CHRW p[6]):
+     * the Monomachine's DENS has the same CHRL/CHRW chorus after the machine. */
+    int32_t chrl = P8(t, P_SYN + 5), chrw = P8(t, P_SYN + 6);
+    int32_t dry = 32768 - (chrl * 27197) / (127 * 256), wet = (chrl * 27853) / (127 * 256);
+    wet = (wet * tq_u16(T_ENS_G, chrw)) >> 15;
+    int32_t wside = (wet * tq_u16(T_ENS_W, chrw)) >> 15;
+    int16_t *cm = t->line;
+    for (unsigned i = 0; i < 32; i++) {
+        int32_t s = left[i], side = 0;
+        t->ms[0] += s;
+        if (i & 1) { cm[t->ph[5]++ & (ENS_LEN - 1)] = (int16_t)sat16(t->ms[0] >> 1); t->ms[0] = 0; }
+        t->ph[4] += ENS_CINC;
+        if (chrl) {
+            int32_t y[2];
+            for (int c = 0; c < 2; c++) {
+                int32_t d8 = (2 << 8) + ENS_CDEP + ((ENS_CDEP * sinp(t->ph[4] + ((uint32_t)c << 30))) >> 15);
+                uint32_t pos = (t->ph[5] << 8) + ((uint32_t)(i & 1) << 7) - (uint32_t)d8;
+                uint32_t j = pos >> 8;
+                int32_t f = (int32_t)(pos & 255);
+                y[c] = (cm[j & (ENS_LEN - 1)] * (256 - f) + cm[(j + 1) & (ENS_LEN - 1)] * f) >> 8;
+            }
+            side = sat16(((y[0] - y[1]) * wside) >> 16);
+            s = add_sh15(s * dry, ((y[0] + y[1]) >> 1) * wet);
+        }
+        s = sat16(s);
+        left[i] = (int16_t)sat16(s + side);
+        right[i] = (int16_t)sat16(s - side);
     }
 }

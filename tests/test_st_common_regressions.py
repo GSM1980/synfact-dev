@@ -49,8 +49,21 @@ def check_digimono_fm_change(current,baseline):
     assert any(Path(n).as_posix().endswith('/mods/digimono-st/fmplus.c') for n in current['source_sha256'])
 
 
-def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False,digimono_fm_changed=False):
-    assert sum((sampler_audio_changed,digimono_audio_changed,digimono_ens_changed,digimono_fm_changed))<=1
+def check_digimono_dpro_change(current,baseline):
+    """DigiPRO: one new DigiPRO object, the existing adapter/dispatch only; FM+ unchanged."""
+    assert current['machines']==baseline['machines']==[66,67,68,69,65,71]
+    assert current['modules']==baseline['modules']
+    def objects(report):
+        return {Path(n).name:h for n,h in report['object_sha256'].items()
+                if Path(n).name.startswith('audio') and Path(n).suffix=='.o'}
+    new,old=objects(current),objects(baseline)
+    assert new.keys()-old.keys()=={'audio2-5.o'} and not old.keys()-new.keys()
+    assert {n for n in old if new[n]!=old[n]}=={'audio2-0.o','audio2-3.o'}
+    assert any(Path(n).as_posix().endswith('/mods/digimono-st/dpro.c') for n in current['source_sha256'])
+
+
+def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False,digimono_fm_changed=False,digimono_dpro_changed=False):
+    assert sum((sampler_audio_changed,digimono_audio_changed,digimono_ens_changed,digimono_fm_changed,digimono_dpro_changed))<=1
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
     def run(name,args):
@@ -182,7 +195,12 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 raw=path.read_bytes();at,n=struct.unpack_from('>II',raw,72);return raw[48+at:48+at+n]
             new_section=audio_section(out/'synfact-machines.smz4')
             old_section=audio_section(oldbank)
-            if digimono_fm_changed:
+            if digimono_dpro_changed:
+                assert new_section!=old_section
+                check_digimono_dpro_change(json.loads((out/'synfact-machines.smz4.json').read_text()),
+                                           json.loads((previous/'synfact-machines.smz4.json').read_text()))
+                checks.append({'name':'Digi Mono DigiPRO added; FM+ and all other AUDIO engine objects identical','ok':True})
+            elif digimono_fm_changed:
                 assert new_section!=old_section
                 check_digimono_fm_change(json.loads((out/'synfact-machines.smz4.json').read_text()),
                                         json.loads((previous/'synfact-machines.smz4.json').read_text()))
@@ -313,6 +331,8 @@ if __name__=='__main__':
         help='Digi Mono 0.3 updates ENS: only its adapter and existing MONO2K DSP object may change')
     p.add_argument('--digimono-fm-changed',action='store_true',
         help='Digi Mono 0.6 replaces FM+: only its adapter/dispatch change and one FM+ object is added')
+    p.add_argument('--digimono-dpro-changed',action='store_true',
+        help='SY MnM 0.8 adds DigiPRO: only its adapter/dispatch change and one DigiPRO object is added')
     a=p.parse_args()
     window=None
     if a.audio_companion_changed:
@@ -320,4 +340,4 @@ if __name__=='__main__':
         from elekloader.devices.syntakt import DEVICE
         window=DEVICE.secondary[7][3][-1]
         assert window==(0x40040860,0x40041050)
-    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed,a.digimono_ens_changed,a.digimono_fm_changed)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed,a.digimono_ens_changed,a.digimono_fm_changed,a.digimono_dpro_changed)

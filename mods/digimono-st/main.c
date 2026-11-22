@@ -107,7 +107,17 @@ static const char *dm_format(const struct st_machine_ui_api *api,const struct co
         static const char *const ratios[]={"1/64","1/32","1/16","3/32","1/8","5/32","3/16","1/4","5/16","3/8","7/16","1/2","5/8","3/4","7/8","1","1.25","1.5","1.75","2","2.5","3","3.5","4"};
         return ratios[(6*v+3)>>5];
     }
-    if(t==DM_ENS && p<3)return T_ENS_PNAME[T_ENS_PIDX[v]];
+    /* DPRO-DENS's PCH table is ENS's interval table, word for word. */
+    if((t==DM_ENS || t==DM_DPDENS) && p<3)return T_ENS_PNAME[T_ENS_PIDX[v]];
+    if(t==DM_DPWAVE){
+        if(p==0){dm_number(dm_text,(int)(v>>2));return dm_text;}
+        if(p==3)return v>=64?"ON":"OFF";
+        if(p==4)return v<43?"OFF":v<86?"SFRQ":"PRCH";
+    }
+    /* Digibank slots, as the Monomachine numbers its 64 (here 32, twice). */
+    if((t==DM_DPDDRW && (p==0 || p==2)) || (t==DM_DPDENS && p==3)){
+        dm_number(dm_text,(int)(v>>1));return dm_text;
+    }
     if(t==6 && p<3) {
         int s=(int)v-63;return dm_signed(s < -36 ? -36 : s > 36 ? 36 : s);
     }

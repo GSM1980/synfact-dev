@@ -110,7 +110,7 @@ def main():
     reference.write_text(oracle())
     exe = (a.out / 'mono2k.exe').resolve()
     subprocess.run([str(a.cc), '-O2', '-Wall', '-Werror', '-I', str(MOD),
-                    'tests/test_st_mono2k.c', 'mods/digimono-st/fmplus.c', str(reference), '-o', str(exe)], cwd=ROOT, check=True)
+                    'tests/test_st_mono2k.c', 'mods/digimono-st/fmplus.c', 'mods/digimono-st/dpro.c', str(reference), '-o', str(exe)], cwd=ROOT, check=True)
     subprocess.run([str(exe)], check=True)
     print('PASS: pinned MONO2K hashes, deterministic extraction, original 44.1 kHz tables and regenerated 48 kHz tables', flush=True)
 

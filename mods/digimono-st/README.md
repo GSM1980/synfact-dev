@@ -1,12 +1,23 @@
-# SY MnM 0.7.0
+# SY MnM 0.8.0
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).
 ENS and SID-6581 come from Inigo Hernandez's
 [MONO2K](https://github.com/InigoHernandez/mono2k/tree/95d5763495d961f3ed225f5e4201328934ca4247).
-FM+STAT, FM+PAR and FM+DYN now use the reverse-engineered algorithms from
-[De-Pattern](https://github.com/De-Pattern/dn2mk2-firmware/tree/a0249fc55fd188242c92f377b4cbb2748b851a35/src/dnfw/mnm),
-ported to fixed point with original FM tables. Version 0.7.0 ships a balanced
+FM+STAT, FM+PAR and FM+DYN, and the DigiPRO machines DPRO WAVE, DPRO DDRW and
+DPRO DENS, use the reverse-engineered algorithms from
+[De-Pattern](https://github.com/De-Pattern/dn2mk2-firmware/tree/a0249fc55fd188242c92f377b4cbb2748b851a35/src/dnfw/mnm).
+
+Version 0.8.0 adds the DigiPRO family as TYPE 12, 13 and 14 (all earlier IDs
+and saved Sounds unchanged). **Building it needs your Monomachine OS 1.32B:**
+the DigiPRO tables are Elektron's data, made by
+`python mods/digimono-st/dpro/import_tables.py "$MONOMACHINE_OS"` into a
+git-ignored header, never committed. DPRO BBOX is not included: De-Pattern has
+no port of it. DDRW's TIME and BR follow De-Pattern's host mapping; DENS's
+CHRL/CHRW are ENS's chorus. The web catalog cannot ship 0.8.0 until it reads
+the Monomachine OS as a donor. See [dpro/README.md](dpro/README.md).
+
+FM+ is ported to fixed point with original FM tables. Version 0.7.0 ships a balanced
 hybrid backend: self-FM stays at 2x; ramped operators and carrier run at 1x.
 This is a reconstruction, not
 a claim of identical whole-instrument output. MACRO is excluded.
@@ -39,7 +50,7 @@ Unused positions are empty. TYPE stays in its existing Sound slot but has no
 dial. Double-tap SYN, highlight **SY MnM**, then press **YES** to open
 **CHOOSE A TYPE**. Encoders or UP/DOWN select a subtype; YES loads the machine
 with that subtype, NO returns to the native machine list. FUNC+UP/DOWN jumps
-seven rows. The twelve TYPE values and all existing saved Sounds keep their IDs.
+seven rows. The fifteen TYPE values and all existing saved Sounds keep their IDs.
 
 Arriving at a Digi Mono SYN page, switching tracks or loading a subtype shows
 its name in a bordered box for about one second. Old views left on SYN 2 are
@@ -102,6 +113,13 @@ MAIN selection/name-box mechanism is adapted, with exact snapshot hashes in
 | FM+STAT | TUNE | 1FRQ | 1FIN | 1ENV | 1FB | 2FRQ | 2VOL | TONE |
 | FM+PAR | TUNE | 1FRQ | 1ENV | 2FRQ | 2ENV | 3FRQ | 3ENV | TONE |
 | FM+DYN | TUNE | 1FRQ | 1FEN | 1VOL | 1VEN | 2FRQ | 2ENV | 2FB |
+| DPRO WAVE | TUNE | WAVE | WP | WPM | WPRS | SYNC | SFRQ | |
+| DPRO DDRW | TUNE | WAV1 | MIX | WAV2 | TIME | BR1 | WID | BR2 |
+| DPRO DENS | TUNE | PCH2 | PCH3 | PCH4 | WAVE | | CHRL | CHRW |
+
+The three DigiPRO TYPE values are appended (12..14) in 0.8.0. DPRO WAVE's WAVE
+shows the wave 0..31, WPRS ON/OFF, SYNC OFF/SFRQ/PRCH; DDRW's WAV1/WAV2 and
+DENS's WAVE the Digibank slot 0..63; DENS's PCH2..4 ENS's interval names.
 
 The four SID/FM+ TYPE values are appended (8..11); the original 0..7 identities
 and all stored control positions remain stable. Version 0.3 replaces ENS's
@@ -132,6 +150,9 @@ Useful starting patches (A..H in the table above, `-` means unused):
 | FM+STAT | 64 | 61 | 64 | 80 | 32 | 82 | 64 | 64 |
 | FM+PAR | 64 | 61 | 64 | 82 | 64 | 104 | 80 | 64 |
 | FM+DYN | 64 | 64 | 64 | 64 | 0 | 74 | 80 | 32 |
+| DPRO WAVE | 64 | 0 | 0 | 0 | 96 | 0 | 0 | - |
+| DPRO DDRW | 64 | 0 | 64 | 0 | 0 | 0 | 0 | 0 |
+| DPRO DENS | 64 | 63 | 63 | 63 | 0 | - | 0 | 0 |
 
 SID's PW/PWAD/PWRS affect the pulse sweep; PW=64 silences the pulse. With
 MOD=RING the generator uses two triangles, so WAVE/PW do not alter that mode.

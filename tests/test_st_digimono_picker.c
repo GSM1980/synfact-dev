@@ -6,9 +6,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-static unsigned values[12],machine=71,track=3,selecting,trigs,recording,edits;
+static unsigned values[15],machine=71,track=3,selecting,trigs,recording,edits;
 static unsigned registered,boxes,lists,rectangles,foreign_edits;
-static unsigned controls[12][8];
+static unsigned controls[15][8];
 static unsigned pixels[256];
 static unsigned get(void *view,unsigned id,unsigned char *locked)
 {(void)view;assert(id==0x1f9u+7*32+8);*locked=0;return values[track];}
@@ -80,16 +80,19 @@ int main(void)
     assert(dm_monomachine.params==9 && dm_ui.pages==1);
     assert(dm_controls[8].initial==DM_DEFAULT_TYPE<<8 && dm_controls[8].max==(DM_TYPES-1)<<8);
     for(unsigned i=0;i<8;i++)assert(dm_layout[i]!=8);
-    for(unsigned t=0;t<12;t++){values[t]=DM_DEFAULT_TYPE<<8;for(unsigned i=0;i<8;i++)controls[t][i]=t*100+i;}
-    unsigned saved[12][8];memcpy(saved,controls,sizeof saved);
+    for(unsigned t=0;t<15;t++){values[t]=DM_DEFAULT_TYPE<<8;for(unsigned i=0;i<8;i++)controls[t][i]=t*100+i;}
+    unsigned saved[15][8];memcpy(saved,controls,sizeof saved);
     values[3]=4<<8;
     selecting=1;seen(view);machine=66;
     assert(!key(STP_KEY_YES,1) && !turn(1) && !stp_sel.active);machine=71;
     open(view);assert(stp_sel.cursor==4 && tick() && !tick());
     unsigned count=lists;stp_frame_draw(pixels,0);assert(lists==count+1 && rectangles>80);
     assert(turn(5) && stp_sel.cursor==5);assert(key(STP_KEY_UP,1) && stp_sel.cursor==4);
-    assert(key(STP_KEY_DOWN,3) && stp_sel.cursor==11);assert(key(STP_KEY_DOWN,1) && stp_sel.cursor==11);
-    assert(key(STP_KEY_UP,3) && stp_sel.cursor==4);assert(!key(STP_KEY_FUNC,1));
+    assert(key(STP_KEY_DOWN,3) && stp_sel.cursor==11);assert(key(STP_KEY_DOWN,3) && stp_sel.cursor==14);
+    assert(key(STP_KEY_DOWN,1) && stp_sel.cursor==14);
+    assert(key(STP_KEY_UP,3) && stp_sel.cursor==7);
+    for(unsigned i=0;i<3;i++)assert(key(STP_KEY_UP,1));
+    assert(stp_sel.cursor==4);assert(!key(STP_KEY_FUNC,1));
     assert(key(STP_KEY_NO,1) && !stp_sel.active && key(STP_KEY_NO,0));
     assert(!key(STP_KEY_NO,1) && !key(STP_KEY_NO,0) && selecting && !edits);
     open(view);trigs=1;assert(key(STP_KEY_YES,1) && stp_sel.active && !edits);trigs=0;
@@ -129,6 +132,6 @@ int main(void)
     for(unsigned i=0;i<30;i++){tick();idle(view);}draw(view);assert(boxes==old_boxes+1);
     /* Closed/foreign views take no native input. */
     assert(!key(STP_KEY_YES,1) && !turn(1));machine=66;draw(view);assert(!key(STP_KEY_YES,1));
-    puts("PASS: hidden TYPE, 12 choices, selector YES/NO/encoders, track/model/recording guards, late defaults, cancellation, bounded name box and wrap; no knob edits");
+    puts("PASS: hidden TYPE, 15 choices, selector YES/NO/encoders, track/model/recording guards, late defaults, cancellation, bounded name box and wrap; no knob edits");
     return 0;
 }

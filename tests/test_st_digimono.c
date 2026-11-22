@@ -114,12 +114,21 @@ int main(void)
                     for(unsigned i=0;i<32;i++)expected[i]=(int16_t)(((int32_t)expected[i]+eright[i])>>1);
                 }
                 else if(kind<DM_SID)mono_render(&ref,dm_engine_type[kind],p,mono_pitch_inc((int)note*128),expected,32);
+                else if(DM_IS_DPRO(kind)){
+                    /* No preceding SY MnM track: PRCH has no pitch (-1). */
+                    dm_m2k_render(&mref,kind,p8,(int)note*64,-1,expected);
+                    if(kind==DM_DPDENS){
+                        dm_ens_chorus(&eref,p8,expected,eright);
+                        for(unsigned i=0;i<32;i++)expected[i]=(int16_t)(((int32_t)expected[i]+eright[i])>>1);
+                    }
+                }
                 else dm_m2k_render(&mref,kind,p8,(int)note*64,dm_previous_pitch(&dm_tracks[0],0),expected);
                 for(unsigned i=0;i<32;i++)assert(out[i+1]==(int32_t)expected[i]*65536);
                 assert(out[0]==123 && out[33]==456);
                 if(kind==DM_ENS)assert(!memcmp(&eref,&dm_tracks[0].ens,sizeof eref));
                 else if(kind<DM_SID)assert(!memcmp(&ref,&dm_tracks[0].engine,sizeof ref));
                 else assert(!memcmp(&mref,&dm_tracks[0].m2k,sizeof mref));
+                if(kind==DM_DPDENS)assert(!memcmp(&eref,&dm_tracks[0].ens,sizeof eref));
                 cases++;
             }
         }
@@ -180,6 +189,6 @@ int main(void)
     memset(out,1,128);dm_update(60<<16,(unsigned char *)fixture+4,input[0]);
     dm_render(out,(unsigned char *)fixture+4);silent(out);
     assert(dm_eco==0 && native_calls*3==chain_calls);
-    printf("PASS: %u exact adapter/DSP blocks, 12 types/8 tracks, UI/chords, TYPE transport, reset, pitch, SID PRCH, AMP sleep and native call boundaries\n",cases);
+    printf("PASS: %u exact adapter/DSP blocks, %u types/8 tracks, UI/chords, TYPE transport, reset, pitch, SID PRCH, AMP sleep and native call boundaries\n",cases,DM_TYPES);
     return 0;
 }

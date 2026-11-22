@@ -130,6 +130,14 @@ to `mods/fm-tone-st/digitone.json`; [its README](../mods/fm-tone-st/README.md)):
 "$PY" mods/chorus-st/tools/import_digitone.py "$DIGITONE_OS"
 ```
 
+SY MnM (0.8.0 and later) needs its DigiPRO tables, from your Monomachine OS
+1.32B, once per checkout ([its README](../mods/digimono-st/dpro/README.md); the
+header is git-ignored, never committed):
+
+```bash
+"$PY" mods/digimono-st/dpro/import_tables.py "$MONOMACHINE_OS"
+```
+
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
@@ -182,6 +190,12 @@ The original Digi Mono engine/sine, samplers and FM-TONE objects must match.
 For the 0.6.0 FM+ replacement, use `--digimono-fm-changed` instead. It permits
 the new FM+ object and changes to the adapter/MONO2K dispatch only, retaining
 the same machine/module lists and all other AUDIO object hashes.
+
+For SY MnM 0.8.0's DigiPRO, use `--digimono-dpro-changed`: one new DigiPRO
+object (`audio2-5.o`), changes to the adapter and MONO2K dispatch only (`audio2-0.o`,
+`audio2-3.o`); FM+ and every other AUDIO object identical. The full LFO3/MSKIP
+emulation also needs `LIBUNICORN_PATH` (TESTS.md): with a generic Unicorn 2.1.4
+it faults at the native MAC instruction, whatever the bank.
 
 `--unicorn-python` runs the linked core's safe-boot record writes in Unicorn
 (`tests/test_st_safe_boot_emu.py`; see SETUP.md for Unicorn). Expected last line: `ALL PASS; 0 optional comparisons skipped; no device access`.

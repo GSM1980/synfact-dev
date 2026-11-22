@@ -29,8 +29,10 @@ PATCHES = ((64, 0, 0, 0, 0, 0, 0, 0), (64, 0, 0, 0, 0, 0, 0, 0),
            (64, 63, 63, 63, 0, 64, 0, 127), (64, 43, 113, 64, 0, 0, 40, 100),
            (64, 63, 63, 63, 64, 64, 0, 0), (64, 0, 0, 0, 16, 64, 0, 127),
            (64,0,0,127,0,0,0,64),(64,61,64,80,32,82,64,64),
-           (64,61,64,82,64,104,80,64),(64,64,64,64,0,74,80,32))
-ENGINES = (0, 1, 2, 3, 4, 5, 6, 8, None, None, None, None)
+           (64,61,64,82,64,104,80,64),(64,64,64,64,0,74,80,32),
+           (64,0,0,0,96,0,0,0),(64,0,64,0,0,0,0,0),(64,63,63,63,0,0,0,0))
+ENGINES = (0, 1, 2, 3, 4, 5, 6, 8, None, None, None, None, None, None, None)
+DPRO = (12, 13, 14)       # DPRO WAVE, DDRW, DENS; DENS has ENS's chorus
 
 
 def host_engine(cc, out):
@@ -40,7 +42,7 @@ def host_engine(cc, out):
                    'unsigned dm_ens_bytes(void){return sizeof(struct dm_ens_voice);}\n')
     dll = (out / 'digimono-host.dll').resolve()
     subprocess.run([str(cc), '-O3', '-shared', '-I', 'mods/digimono-st', str(src),
-                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c',
+                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c', 'mods/digimono-st/dpro.c',
                     '-o', str(dll)], cwd=ROOT, check=True)
     lib = ctypes.CDLL(str(dll))
     lib.dm_voice_bytes.restype = ctypes.c_uint
@@ -49,6 +51,7 @@ def host_engine(cc, out):
     lib.dm_ens_init.argtypes = [ctypes.c_void_p]
     lib.dm_ens_trig.argtypes = [ctypes.c_void_p]
     lib.dm_ens_render.argtypes = [ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int32,ctypes.c_void_p,ctypes.c_void_p]
+    lib.dm_ens_chorus.argtypes = [ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p]
     lib.dm_m2k_init.argtypes = [ctypes.c_void_p]
     lib.dm_m2k_trig.argtypes = [ctypes.c_void_p,ctypes.c_uint,ctypes.c_void_p]
     lib.dm_m2k_render.argtypes = [ctypes.c_void_p,ctypes.c_uint,ctypes.c_void_p,ctypes.c_int32,ctypes.c_int32,ctypes.c_void_p]
@@ -85,6 +88,14 @@ class HostVoice:
             params=(ctypes.c_uint8*7)(*(min(v>>8,127) for v in knobs[1:]))
             if trig:lib.dm_mono_trig(self.old,ENGINES[kind])
             lib.dm_mono_render(self.old,ENGINES[kind],params,lib.dm_mono_pitch_inc(pitch),out,32)
+        elif kind in DPRO:
+            # PRCH: the preceding SY MnM track's pitch, or -1 (none)
+            params=(ctypes.c_uint16*7)(*(min(v,0x7f00) for v in knobs[1:]))
+            if trig:lib.dm_m2k_trig(self.new,kind,params)
+            lib.dm_m2k_render(self.new,kind,params,pitch>>1,-1 if previous is None else previous,out)
+            if kind==14:
+                lib.dm_ens_chorus(self.ens,params,out,right)
+                return tuple(v*65536 for v in out),tuple(v*65536 for v in right)
         else:
             params=(ctypes.c_uint16*7)(*(min(v,0x7f00) for v in knobs[1:]))
             if trig:lib.dm_m2k_trig(self.new,kind,params)

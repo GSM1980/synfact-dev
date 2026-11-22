@@ -22,7 +22,7 @@ BANK=0x46100000
 DATA=0x49000000
 PROXY,MODEL,SOUND,API,OUT=DATA,DATA+0x1000,DATA+0x2000,DATA+0x3000,DATA+0x4000
 ENGINE=0x1f9+(71-64)*32
-ACTIVE=((0,),(0,1,2,3),(0,1,2,3,5,6,7),tuple(range(8)),tuple(range(8)),tuple(range(8)),tuple(range(6)),tuple(range(8)))+(tuple(range(8)),)*4
+ACTIVE=((0,),(0,1,2,3),(0,1,2,3,5,6,7),tuple(range(8)),tuple(range(8)),tuple(range(8)),tuple(range(6)),tuple(range(8)))+(tuple(range(8)),)*4+((0,1,2,3,4,5,6),tuple(range(8)),(0,1,2,3,4,6,7))
 
 
 class Destination(Core):
@@ -97,7 +97,7 @@ class Destination(Core):
 
 def verify(folder):
     machine=Destination(folder);common=None;cases=0
-    for kind in (7,0,6,1,3,2,4,5,0,7,8,9,10,11,0,8):
+    for kind in (7,0,6,1,3,2,4,5,0,7,8,9,10,11,0,8,12,13,14,11,13,0,14,12):
         for mask in (0x600,0xe00,0x200):
             ids=machine.targets(kind,mask)
             selected=[i-ENGINE for i in ids if ENGINE<=i<=ENGINE+8]
@@ -120,7 +120,7 @@ def verify(folder):
             for index in range(9):
                 assert machine.invoke(0x400a66e2,ENGINE+index,a5=PROXY)==(0 if index==8 else 0xe00),'incorrect runtime flags'
             cases+=1
-    print('PASS:',cases,'native destination lists and relative selectors: all 12 TYPEs, LFO1/2/3 masks, TYPE excluded, no blanks, unchanged common targets/Sound; real model getter, sorting, core and bank')
+    print('PASS:',cases,'native destination lists and relative selectors: all 15 TYPEs, LFO1/2/3 masks, TYPE excluded, no blanks, unchanged common targets/Sound; real model getter, sorting, core and bank')
 
 
 if __name__=='__main__':

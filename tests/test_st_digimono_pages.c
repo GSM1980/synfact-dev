@@ -48,7 +48,7 @@ static void init_view(u8 *view)
 }
 static void check_view(u8 *view,unsigned kind)
 {
-    static const unsigned counts[DM_TYPES]={1,4,7,8,8,8,6,8,8,8,8,8};
+    static const unsigned counts[DM_TYPES]={1,4,7,8,8,8,6,8,8,8,8,8,7,8,7};
     unsigned seen=0,i;u32 old,args[2],value;
     *(u32 *)(view+0x100)=kind<<8;
     /* A saved view that used SYN 2 is clamped to the only SYN page. TYPE
@@ -143,6 +143,6 @@ int main(void)
     check_view(views[0],3);assert(core_machine_nav(views[0],1)==DM_ENGINE+1);
     check_destinations();
     fw_free(*(void **)(views[0]+0x7c));fw_free(*(void **)(views[1]+0x7c));
-    puts("PASS: real core/Digi Mono page and destinations: hidden TYPE, old SYN2 clamped, 12 types/two models, hidden UI targets, stable runtime flags/storage, module fallback, API gating and native LEVEL");
+    puts("PASS: real core/Digi Mono page and destinations: hidden TYPE, old SYN2 clamped, 15 types/two models, hidden UI targets, stable runtime flags/storage, module fallback, API gating and native LEVEL");
     return 0;
 }

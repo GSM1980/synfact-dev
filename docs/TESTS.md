@@ -279,6 +279,18 @@ blocks. Its `--arithmetic-only` mode is explicit in the common suite; the full
 DSL sweep is reported separately. The original comparison bench now accepts
 `--suite fmplus` (27 cases). See [the FM+ port](../mods/digimono-st/fmplus/README.md).
 
+SY MnM 0.8 adds De-Pattern's DPRO WAVE, DDRW and DENS. They need the owner's
+Monomachine OS (`mods/digimono-st/dpro/import_tables.py MONOMACHINE_OS` writes the
+git-ignored tables first; `--check` compares with `tables.json`).
+`tests/test_st_dpro.py --cc HOST_CC --os MONOMACHINE_OS [--os-rate 2]` checks the
+pitch words and every integer increment against upstream `exact.py`, then 215
+16-frame cases of the port against the pinned float32 DSL at 60 dB or more.
+`tests/test_st_dpro_cfbench.py --cfbench CFBENCH --out OUTPUT` compares the
+EMAC build with the split integer build on analog-emu (PCM, voice state, EMAC
+registers) and records render instruction counts, not CPU percentages. The
+common suite's `test_st_digimono.py` runs the three types through the adapter.
+See [the DigiPRO port](../mods/digimono-st/dpro/README.md).
+
 The ColdFire decoder checks EXTB.L D0..D7 before LEA's overlapping mask in
 both Python and TypeScript. Positive tests cover all eight registers; the
 adjacent invalid LEA An remains rejected. No audit rule or compiler flag
@@ -304,7 +316,7 @@ Numerical tests cover width/blend
 inference, invalid inputs, the five-octave grid and stereo captures. Original
 DIST, the entire chain and the fixture set must also match for capture reuse.
 
-The standalone Digi Mono port test runs all twelve types through the real
+The standalone Digi Mono port test runs all fifteen types through the real
 adapter/DSP, checking PCM/state against the engine, UI labels and chord names,
 TYPE transport, backend re-entry, independent tracks, pitch and AMP sleep.
 Only firmware service boundaries are doubles; it does not boot a Syntakt:
@@ -315,7 +327,7 @@ python tests/test_st_digimono.py --cc "$LLVM_MINGW_BIN/i686-w64-mingw32-clang.ex
 
 Its upstream source hashes are also verified. No firmware input is needed.
 The runner also compiles `test_st_digimono_pages.c` with the real core registry,
-page resolver and Digi Mono UI. It checks all twelve engine types, repeated TYPE
+page resolver and Digi Mono UI. It checks all fifteen engine types, repeated TYPE
 switches, two views, every dial/edit ID and page-action layout, TUNE and LEVEL.
 This catches the old core's frozen SAW layout, which a descriptor-only UI test
 missed: the hidden E position must reappear for every seven-parameter engine.

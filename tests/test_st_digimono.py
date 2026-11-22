@@ -22,13 +22,13 @@ def main():
     exe = (a.out / 'digimono.exe').resolve()
     subprocess.run([str(a.cc), '-O2', '-Wall', '-Werror', '-I', 'elekloader/sdk/include',
                     '-I', 'mods/digimono-st', 'tests/test_st_digimono.c','mods/digimono-st/picker.c',
-                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c',
+                    'mods/digimono-st/engine.c', 'mods/digimono-st/sine.c', 'mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c','mods/digimono-st/dpro.c',
                     '-o', str(exe)], cwd=ROOT, check=True)
     subprocess.run([str(exe)], check=True)
     stereo=(a.out/'digimono-stereo.exe').resolve()
     subprocess.run([str(a.cc),'-O2','-Wall','-Werror','-I','elekloader/sdk/include',
                     '-I','mods/digimono-st','tests/test_st_digimono_stereo.c',
-                    'mods/digimono-st/engine.c','mods/digimono-st/sine.c','mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c',
+                    'mods/digimono-st/engine.c','mods/digimono-st/sine.c','mods/digimono-st/mono2k.c', 'mods/digimono-st/fmplus.c','mods/digimono-st/dpro.c',
                     '-o',str(stereo)],cwd=ROOT,check=True)
     subprocess.run([str(stereo)],check=True)
     pages=(a.out/'digimono-pages.exe').resolve()

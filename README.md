@@ -13,7 +13,9 @@ foundation here. This repository keeps only the Syntakt.
   instruction fragments needed to hook the OS, and hashes of the stock bytes
   they expect. SY MnM's FM+ port additionally includes reference table arrays,
   their provenance and a reproducible extraction recipe; see its
-  [FM+ documentation](mods/digimono-st/fmplus/README.md).
+  [FM+ documentation](mods/digimono-st/fmplus/README.md). Its DigiPRO tables
+  are not included: each build makes them from your Monomachine OS
+  ([DigiPRO documentation](mods/digimono-st/dpro/README.md)).
 - **The bootloader is never touched.** Builds change MAIN and a bounded part
   of AUDIO only; bootstrap, updater and boot stub stay byte-identical, and
   each output is re-read and verified before delivery.
@@ -33,7 +35,7 @@ bank that can change without reinstalling the firmware:
 |---|---|
 | [SP sample machines](mods/samplers-st) | ONE SHOT, WERP, REPITCH and SLICE |
 | [SY FM DTONE](mods/fm-tone-st) | an FM machine (FM TONE until 2026-11-02) |
-| [SY MnM](mods/digimono-st) | twelve Digi Mono/MONO2K synth types in one machine, chosen through its subtype selector |
+| [SY MnM](mods/digimono-st) | fifteen Digi Mono/MONO2K/De-Pattern synth types (with FM+ and the DigiPRO WAVE, DDRW and DENS) in one machine, chosen through its subtype selector |
 | [Audio Recorder](mods/recorder-st) | record, trim, normalize and save samples |
 | [Third LFO](mods/lfo3-st) | a third LFO on every track |
 | [Arpeggiator](mods/arp-st) | a Digitone-style arpeggiator on the audio tracks |

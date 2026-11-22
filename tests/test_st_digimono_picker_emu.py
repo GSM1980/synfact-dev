@@ -86,11 +86,11 @@ def verify(folder,out):
     m.w(alias,saved)
     # FUNC+NO reaches the native SYN reload. Its actual shared parameter list
     # must include all eight scalar controls and exclude TYPE for every kind.
-    for kind in range(12):
+    for kind in range(15):
         state['value']=kind<<8
         assert m.invoke(0x4001e88c,DATA+0x8800,0,3)==1
         assert state['value']==kind<<8
-    assert state['reloads']==12
+    assert state['reloads']==15
     assert not m.invoke(m.sym['core:core_machine_randomize_entry'],ENGINE+8)
     for index in range(8):
         assert m.invoke(m.sym['core:core_machine_randomize_entry'],ENGINE+index)
@@ -119,10 +119,10 @@ def verify(folder,out):
     clear();draw();assert not any(u.mem_read(pixels,1024))
     state['track']=4;assert idle();clear();draw();assert any(u.mem_read(pixels,1024))
     seen=set()
-    for kind in range(12):
+    for kind in range(15):
         state['value']=kind<<8;idle();clear();draw();seen.add(bytes(u.mem_read(pixels,1024)))
         pbm(f'name-{kind:02}')
-    assert len(seen)==12,'missing glyphs or indistinguishable type boxes'
+    assert len(seen)==15,'missing glyphs or indistinguishable type boxes'
     state['machine']=66;clear();draw();assert not any(u.mem_read(pixels,1024))
     assert not turn(1) and not key(12,1)
     # Execute the linked MAIN sender, with conflicting saved/effective TYPEs.
@@ -152,11 +152,11 @@ def verify(folder,out):
     m.invoke(m.sym['core:core_machine_snapshot'],0xff)
     tag=u.mem_read(0x800021a9,1)[0]
     assert tag!=first and m.word(0x10000c00+(tag&1)*512+20)==4<<24
-    result=dict(ok=True,types=12,native_bitmap=True,bank_callbacks=True,
-                configuration_sender=True,native_syn_reload_types=12,
+    result=dict(ok=True,types=15,native_bitmap=True,bank_callbacks=True,
+                configuration_sender=True,native_syn_reload_types=15,
                 scope='Linked bank with native Bitmap fill; explicit UI/model/get/edit doubles, no device/full native selector boot')
     (out/'results.json').write_text(json.dumps(result,indent=2)+'\n')
-    print('PASS: SY MnM name; native SYN reload excludes TYPE for 12 kinds, marker-removal negative control; linked ColdFire selector, YES/NO/track/record guards, native 128x64 bitmap and 30-tick expiry')
+    print('PASS: SY MnM name; native SYN reload excludes TYPE for 15 kinds, marker-removal negative control; linked ColdFire selector, YES/NO/track/record guards, native 128x64 bitmap and 30-tick expiry')
 
 
 if __name__=='__main__':

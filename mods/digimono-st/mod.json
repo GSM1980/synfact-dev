@@ -1,13 +1,13 @@
 {
   "id": "digimono-st",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "device": "syntakt",
   "os": "1.42",
   "title": "SY MnM",
   "category": "Synth",
-  "author": "gdeo607 (Digi Mono), Inigo Hernandez (MONO2K), De-Pattern (FM+), Synfact port",
+  "author": "gdeo607 (Digi Mono), Inigo Hernandez (MONO2K), De-Pattern (FM+, DigiPRO), Synfact port",
   "license": "AGPL-3.0-or-later AND GPL-3.0-only AND MIT",
-  "description": "SY MnM: twelve Monomachine-style types; FM+STAT/PAR/DYN use De-Pattern algorithms and original tables at 44.1 kHz, resampled to 48 kHz. Eight SYN controls including TUNE; no MACRO.",
+  "description": "SY MnM: fifteen Monomachine-style types; FM+STAT/PAR/DYN and DPRO WAVE/DDRW/DENS use De-Pattern algorithms at 44.1 kHz, resampled to 48 kHz; DigiPRO tables come from your Monomachine OS 1.32B. Eight SYN controls including TUNE; no MACRO.",
   "sources": [
     "main.c",
     "picker.c"
@@ -39,7 +39,8 @@
         "engine.c",
         "sine.c",
         "mono2k.c",
-        "fmplus.c"
+        "fmplus.c",
+        "dpro.c"
       ]
     }
   }

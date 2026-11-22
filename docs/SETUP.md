@@ -56,6 +56,7 @@ export LLVM_MINGW_BIN=/path/to/llvm-mingw/bin                # folder with i686-
 export SYNTAKT_STOCK=/path/to/Syntakt_OS1.42.syx             # your stock Syntakt OS file
 export SYNTAKT_EFT=/path/to/elektron-firmware-tool           # the executable
 export DIGITONE_OS=/path/to/Digitone_and_Digitone_Keys_OS1.44.syx   # optional: Digitone-based import steps
+export MONOMACHINE_OS=/path/to/Elektron_SFX6-60_OS1.32B.syx  # SY MnM: the DigiPRO tables and FM+ checks
 ```
 
 If your SGDK binaries have **no** prefix (`gcc`), add these two lines. Without
@@ -78,6 +79,7 @@ $env:LLVM_MINGW_BIN = 'C:\path\to\llvm-mingw\bin'
 $env:SYNTAKT_STOCK = 'C:\path\to\Syntakt_OS1.42.syx'
 $env:SYNTAKT_EFT = 'C:\path\to\elektron-firmware-tool.exe'
 $env:DIGITONE_OS = 'C:\path\to\Digitone_and_Digitone_Keys_OS1.44.syx'
+$env:MONOMACHINE_OS = 'C:\path\to\Elektron_SFX6-60_OS1.32B.syx'
 ```
 
 For unprefixed binaries, also set `$env:ELEKLOADER_CROSS = ''` and
@@ -123,6 +125,7 @@ file, or a tool that does not run.
 | Core `.syx` build | SGDK, `SYNTAKT_STOCK`, `SYNTAKT_EFT` | refused with the missing name |
 | SMZ4 bank build (machines and modules) | SGDK; the stock file is optional | refused with the missing name |
 | `tests/test_st_fm_recipe.py` | `DIGITONE_OS` | prints `SKIPPED` |
+| A bank with SY MnM; `tests/test_st_dpro.py` | `MONOMACHINE_OS`, once, for `mods/digimono-st/dpro/import_tables.py` | the build stops and names the import command |
 | Common regressions | a build folder and `LLVM_MINGW_BIN`. `SYNFACT_SRC` and a Python with Unicorn add comparisons | prints each skipped comparison |
 | Emulator tests | Unicorn; the fixtures in `SYNTAKT_WORK` for some | those needing fixtures are skipped |
 

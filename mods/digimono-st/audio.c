@@ -52,6 +52,13 @@ static int32_t dm_previous_pitch(const struct dm_track *s,unsigned track)
      * preceding track runs SY MONOMACHINE. Never reuse a stale backend note. */
     return 48*64+((s->m2p[6]*24)>>8);
 }
+/* DPRO-WAVE's PRCH: the preceding SY MnM track's pitch, or -1 (none) */
+static int32_t dm_previous_mnm(unsigned track)
+{
+    unsigned prev=track?track-1:7;
+    const unsigned *voice=(const unsigned *)(DM_TRACK_BASE+prev*0x708u);
+    return voice[0x6f8/4]==DM_SIGNATURE && dm_tracks[prev].loaded?dm_tracks[prev].pitch:-1;
+}
 
 void dm_update(unsigned pitch,void *voice,const unsigned short *params)
 {
@@ -72,7 +79,7 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     /* TYPE is note-latched: no phase restarts in the middle of a held note. */
     if(!s->loaded || (trig && s->loaded!=s->pending+1u)) {
         mono_init(&s->engine);dm_m2k_init(&s->m2k);s->loaded=s->pending+1u;s->live=0;s->quiet=0;
-        if(s->loaded==DM_ENS+1u)dm_ens_init(&s->ens);
+        if(s->loaded==DM_ENS+1u || s->loaded==DM_DPDENS+1u)dm_ens_init(&s->ens);
     }
     for(i=0;i<MONO_PARAMS;i++) {
         unsigned k=params[slots[i+1]]>>8;
@@ -116,7 +123,9 @@ void dm_render(void *out,void *voice)
     struct dm_track *s;
     if(t<0) {for(i=0;i<32;i++)((int32_t *)out)[i]=0;return;}
     s=dm_tracks+t;
-    unsigned ens=s->loaded==DM_ENS+1u,want_stereo=ens && s->live && s->m2p[5] && s->m2p[6];
+    unsigned type=s->loaded-1u,ens=s->loaded==DM_ENS+1u,dens=s->loaded==DM_DPDENS+1u;
+    /* ENS and DPRO-DENS: CHRL/CHRW's chorus spreads them across the stereo. */
+    unsigned chorus=ens || dens,want_stereo=chorus && s->live && s->m2p[5] && s->m2p[6];
     int *rout=0;
     if(want_stereo || s->stereo_tail){
         unsigned sounding=s->live;
@@ -127,14 +136,17 @@ void dm_render(void *out,void *voice)
     }
     if(s->loaded && s->live) {
         if(ens)dm_ens_render(&s->ens,s->m2p,s->pitch,pcm,right);
-        else if(s->loaded-1u>=DM_SID)dm_m2k_render(&s->m2k,s->loaded-1u,s->m2p,s->pitch,
+        else if(DM_IS_DPRO(type)){
+            dm_m2k_render(&s->m2k,type,s->m2p,s->pitch,dm_previous_mnm((unsigned)t),pcm);
+            if(dens)dm_ens_chorus(&s->ens,s->m2p,pcm,right);
+        }else if(type>=DM_SID)dm_m2k_render(&s->m2k,type,s->m2p,s->pitch,
                                            dm_previous_pitch(s,(unsigned)t),pcm);
         else mono_render(&s->engine,dm_engine_type[s->loaded-1u],s->p,s->increment,pcm,32);
         for(i=0;i<32;i++){
             /* A bank without the shared stereo service gets a centered mono
              * fold-down; the complete bank keeps both independent channels. */
-            int32_t l=pcm[i],r=ens?right[i]:l;
-            a[i]=(ens && !rout?(l+r)>>1:l)*65536;
+            int32_t l=pcm[i],r=chorus?right[i]:l;
+            a[i]=(chorus && !rout?(l+r)>>1:l)*65536;
             if(rout)ra[i]=r*65536;
         }
     }else for(i=0;i<32;i++){a[i]=0;if(rout)ra[i]=0;}

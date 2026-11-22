@@ -98,7 +98,8 @@ def phase_jump(values, rate, frequency, time):
 def host_engine(cc, out):
     dll = (out/'bank-generators.dll').resolve()
     sources = [HERE/'host.c', ROOT/'mods/digimono-st/engine.c', ROOT/'mods/digimono-st/sine.c',
-               ROOT/'mods/digimono-st/mono2k.c', ROOT/'mods/digimono-st/fmplus.c']
+               ROOT/'mods/digimono-st/mono2k.c', ROOT/'mods/digimono-st/fmplus.c',
+               ROOT/'mods/digimono-st/dpro.c']
     command = [str(cc), '-O3', '-shared', '-Wall', '-Werror', '-I', str(ROOT/'mods/digimono-st'),
                *map(str, sources), '-o', str(dll)]
     subprocess.run(command, check=True, capture_output=True, text=True)

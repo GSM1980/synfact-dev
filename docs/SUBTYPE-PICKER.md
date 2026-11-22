@@ -4,7 +4,7 @@ The bank-owned implementation in
 [`subtype-picker.h`](../elekloader/sdk/include/syntakt/subtype-picker.h) adapts
 the MAIN UI from the unfinished `feat/md-machine` work. It adds no resident
 patch, firmware contract or AUDIO work. Digi Mono 0.5 uses it for its
-twelve existing TYPE values; machine type 71 and all nine Sound controls keep
+twelve existing TYPE values (fifteen since SY MnM 0.8.0's DigiPRO); machine type 71 and all nine Sound controls keep
 their IDs, ranges, defaults and codec slots. TYPE is on no SYN page.
 
 ## Source and scope
@@ -117,14 +117,14 @@ validation; the tests do not simulate a complete native view lifecycle.
 ## Validation
 
 `test_st_digimono_picker.c` compiles the actual machine UI and helper with
-native service doubles. It exercises twelve choices, scrolling limits, YES/NO
+native service doubles. It exercises all fifteen choices, scrolling limits, YES/NO
 and release behavior, foreign machines, track/model changes, trig/recording
 guards, late defaults, expiration, unchanged knob values and wrapping ticks.
 The real core page test verifies the hidden TYPE and clamping of old SYN 2.
 
 `test_st_digimono_picker_emu.py` executes the linked bank's initialization,
 selector, edits, timing and glyph paths in ColdFire, with actual OS 1.42 Bitmap
-construction/fill. It writes 128x64 PBM previews of twelve distinct name boxes
+construction/fill. It writes 128x64 PBM previews of fifteen distinct name boxes
 and the selector. Native UI/model/get/edit boundaries are explicit doubles;
 native machine confirmation, undo, modal lifetimes and hardware timing are
 not claimed as emulated. The separate destination-list test still executes

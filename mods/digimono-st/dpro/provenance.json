@@ -1,0 +1,34 @@
+{
+  "repository": "https://github.com/De-Pattern/dn2mk2-firmware",
+  "commit": "a0249fc55fd188242c92f377b4cbb2748b851a35",
+  "license": "AGPL-3.0-or-later",
+  "files": {
+    "wave.py": "src/dnfw/mnm/wave.py",
+    "dec.py": "src/dnfw/mnm/dec.py",
+    "dpro.py": "src/dnfw/mnm/dpro.py",
+    "ddrw.py": "src/dnfw/mnm/ddrw.py",
+    "dens.py": "src/dnfw/mnm/dens.py",
+    "machines.py": "src/dnfw/mnm/machines.py",
+    "perc_machines.py": "src/dnfw/perc/machines.py",
+    "LICENSE": "LICENSE"
+  },
+  "shared": "../fmplus/upstream, the same commit: dsl.py, md_core.py, md_rom.py, mnm_core.py, mnm_rom.py, exact.py",
+  "sha256": {
+    "ddrw.py": "99ae9ba726748ebd033e72a9d0efe41f2f5f18af2ef3b77020c34eefdc47ade5",
+    "dec.py": "73dcdf04a38a16d123b05b2bed500972a7f940c5a28781d8594ad8708a28fb17",
+    "dens.py": "433ec4374dda2a74750a80c0794eef52f268131c837b006cd130df9d33528c28",
+    "dpro.py": "faede35907f65f541428b89cac9a08a556e7e46ced4e3f51a451db82dabb5bf5",
+    "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "machines.py": "5fdf34d8c519f01e616b51a968eeb5a71225e649bdde57dc45e1289b56c60ef2",
+    "perc_machines.py": "8a2217469b477da27f1f25595161bbccfdc3a7ee8629ea0f722a29f8e259063f",
+    "wave.py": "68df443a99c03a68ce64f46f34110f4d4c838da8983d0c68a7f9dff0c21d90f4"
+  },
+  "shared_sha256": {
+    "dsl.py": "deed2bf3e7fe5645d9c02fd1072a2a17ddce2eea97fea45c3c58004309ac1d57",
+    "md_core.py": "226c737ece54e306a7384c633847f306225450e7cb200403f350090221794429",
+    "md_rom.py": "885abff051ca77f9dacc7e45893aadc991d1495185f2facc821b64df5f69ecec",
+    "mnm_core.py": "e88da55c3eb41192fee8c6e86fd7640724cd2a42186ce410794e7678a9ed61f6",
+    "mnm_rom.py": "2cb3e60209ac88c1d29187942ae94234048f0073ba7a2dd1dc6e849e526dd799",
+    "exact.py": "5dd3eb9a8eefe236c26c9706cd2a8f09b6e45eda759bd285718e21d269c44031"
+  }
+}
