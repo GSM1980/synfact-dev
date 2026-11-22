@@ -1,12 +1,22 @@
 {
   "id": "comp-st",
   "title": "Compressor",
-  "latest": "0.3.0",
+  "latest": "1.0.0",
   "entries": [
     {
-      "version": "0.3.0",
-      "date": "2026-11-21",
+      "version": "1.0.0",
+      "date": "2026-11-20",
       "commits": [
+        {
+          "sha": "51e15cc",
+          "date": "2026-11-22",
+          "subject": "COMP 1.0.0: first release, THR 127 by default"
+        },
+        {
+          "sha": "2eed3fc",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.5.0 and samplers 1.6.0"
+        },
         {
           "sha": "a7a9b39",
           "date": "2026-11-21",
@@ -16,13 +26,7 @@
           "sha": "a81bb0b",
           "date": "2026-11-21",
           "subject": "Changelogs: COMP 0.3.0"
-        }
-      ]
-    },
-    {
-      "version": "0.2.0",
-      "date": "2026-11-20",
-      "commits": [
+        },
         {
           "sha": "e1e51bf",
           "date": "2026-11-20",

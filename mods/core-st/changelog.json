@@ -11,6 +11,11 @@
           "sha": "b6d39b8",
           "date": "2026-11-22",
           "subject": "Lighter stereo tracks on both CPUs (core 2.5.0, samplers 1.6.0)"
+        },
+        {
+          "sha": "2eed3fc",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.5.0 and samplers 1.6.0"
         }
       ]
     },

@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.6.0.
 ## 1.6.0 (2026-11-22)
 
 - Lighter stereo tracks on both CPUs (core 2.5.0, samplers 1.6.0) (`b6d39b8`, 2026-11-22)
+- Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
 
 ## 1.5.2 (2026-11-19)
 
