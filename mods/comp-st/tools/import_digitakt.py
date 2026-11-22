@@ -33,6 +33,9 @@ def main():
     # Only SCF's labels come from Digitakt. Its range is COMP's own: 128
     # high-pass positions (OFF, then 60..1000 Hz), OFF by default.
     rows[6].update(minimum=0,maximum=0x7f00,initial=0)
+    # THR starts at 127 (0x7f00), the top: nothing is compressed until it is
+    # turned down (Digitakt's own default is 32).
+    rows[0].update(initial=0x7f00)
     out=FOLDER/'imported';out.mkdir(exist_ok=True)
     h='/* Private Digitakt 1.54 metadata; regenerate with tools/import_digitakt.py. */\n'
     h+='static const char *const comp_short_names[7]={'+','.join(json.dumps(x['short']) for x in rows)+'};\n'

@@ -22,6 +22,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# A mod whose earlier versions were development builds, never released: its
+# changelog starts at its first release, and the commits of the earlier
+# versions are listed under it.
+FIRST_RELEASE = {'comp-st': '1.0.0'}
+
 
 def git(*args):
     return subprocess.run(['git', *args], cwd=ROOT, capture_output=True, text=True,
@@ -78,6 +83,10 @@ def build(folder, manifest):
     if pending and versions:
         earliest = min(versions, key=version_key)
         versions[earliest] = pending + versions[earliest]
+    first = FIRST_RELEASE.get(manifest['id'])
+    if first:
+        for version in [v for v in versions if version_key(v) < version_key(first)]:
+            versions.setdefault(first, []).extend(versions.pop(version))
     entries = []
     for version in sorted(versions, key=version_key, reverse=True):
         items = sorted(versions[version], key=lambda c: c['date'], reverse=True)

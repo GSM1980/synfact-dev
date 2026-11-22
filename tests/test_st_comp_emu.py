@@ -21,7 +21,7 @@ from unicorn import UC_HOOK_CODE
 from unicorn.m68k_const import *
 
 ID,UI,KIT,CV=0x40a,0x4f1,0x41ad6134,W+0x1000
-DEFAULT=[0x2000,0x1800,0x2000,0x4000,0x300,0,0]
+DEFAULT=[0x7f00,0x1800,0x2000,0x4000,0x300,0,0]
 NAMES=['THR','ATK','REL','MUP','RAT','MIX','SCF']
 SCF=6
 HOLD,LP=48,60   # comp_runtime offsets (comp.h)

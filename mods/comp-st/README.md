@@ -1,4 +1,7 @@
-# COMP (comp-st 0.3.0)
+# COMP (comp-st 1.0.0)
+
+1.0.0 is COMP's first release. The 0.1 to 0.3 versions named below were
+development builds; their measurements and compatibility notes still apply.
 
 Compact stereo-linked compressor on the **Syntakt FX track bus only**, for
 OS 1.42 and core 2.4.0 / host API 16. It scales the two native FX VCA controls
@@ -16,11 +19,12 @@ first). Encoder positions follow Digitakt:
 |---|---|---|---|---|---|---|---|
 | THR | ATK | REL | MUP | RAT | | SCF | MIX |
 
-The seven labels, the dial animations/masks, the six original defaults and
+The seven labels, the dial animations/masks, the original defaults and
 ranges and the MUP/RAT value strings are extracted from the owner's original
 **Digitakt OS 1.54** SysEx. RAT has 1.50, 2.00, 3.00, 4.00, 6.00, 8.00, 16.00
-and 20.00; MUP displays 0.0..24.0. MIX defaults to zero, so existing projects
-start with COMP off. Turn H up to enable it. F (Digitakt's SCS) stays empty.
+and 20.00; MUP displays 0.0..24.0. THR defaults to 127 (Digitakt: 32), so
+nothing is compressed until it is turned down. MIX defaults to zero, so
+existing projects start with COMP off. Turn H up to enable it. F (Digitakt's SCS) stays empty.
 These settings are Kit-wide; this version does not add lock lanes or LFO
 destinations.
 
