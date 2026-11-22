@@ -118,7 +118,9 @@ class Port(CPU):
         # Explicit fixture: extended-value service returns our transported TYPE.
         self.uc.mem_write(RETURN+0x40, bytes.fromhex('203c480020004e75'))
         self.uc.mem_write(0x40040f40, struct.pack('>2I', 0x454c0001, RETURN+0x40))
-        if self.stereo:self.write32(0x40040f30,0x454c5301)
+        # core 2.5's chain directory {magic, hook, version 2, multimode}: the
+        # stereo service claims tracks only on version 2
+        if self.stereo:self.uc.mem_write(0x40040f30,struct.pack('>4I',0x454c5301,0x40040f40,2,0x400019d6))
         self.write32(0x80008184, 1000)
         for i,reg in enumerate(PRESERVED):
             self.uc.reg_write(reg,0x1a000000+i*0x1234)

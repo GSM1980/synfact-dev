@@ -185,6 +185,35 @@ def ddrw_rate(m, time):
     return p.F(2)
 
 
+def r48(x):
+    """x x 147/160 (44100/48000), floored as dpro.c's R48"""
+    return (x // 160) * 147 + ((x % 160) * 147) // 160
+
+
+def sync_period48(m, F):
+    """exact.sync_period with 48,000 blocks of 16 a second (dpro.c at 48 kHz)"""
+    X = m.X
+    a = X.exp_word(X.acc(F))
+    a = X.mpy(0x20B40, X.lim(a)) << 12
+    x0 = X.lim(X.s56(a))
+    return (0xBB80 << 12) // x0 if x0 else 0
+
+
+def increments48(m, kind, A, F, knobs, pre):
+    """The machine's exact increments at 48 kHz blocks: scaled by 147/160,
+    DENS's mutes (in Hz) unchanged, WAVE's sync period in 48 kHz blocks."""
+    M = getattr(m, KINDS[kind])
+    d = dict(M.exact(A, F, knobs, pre))
+    for name in ('i1', 'i2', 'i3', 'i4'):
+        if name in d and not (kind == 12 and name == 'i2'):
+            d[name] = r48(d[name])
+    if kind == 12:
+        sync, sfrq = knobs[4] << 16, knobs[5] << 16
+        d['i2'] = (0 if sync < 0x2AAAAA else sync_period48(m, pre) if sync >= 0x555555
+                   else 0 if sfrq == 0 else sync_period48(m, 52 * knobs[5] + 0x1000))
+    return d
+
+
 class Voice:
     """One machine on the pinned DSL, with the Monomachine's exact increments."""
 
@@ -210,7 +239,7 @@ class Voice:
         self.mem = dsl.Mem(lambda a: values.get(a, 0))
         self.first = True
 
-    def block(self, F, controls, trig=False, pre=0, glide=None):
+    def block(self, F, controls, trig=False, pre=0, glide=None, rate48=False):
         """F: the pitch word (0..0x5800); controls: eight 16-bit values (knob << 8,
         TUNE last). glide: DDRW's gl word as a float, or None (the model's 0)."""
         m, L = self.m, self.L
@@ -225,7 +254,10 @@ class Voice:
         A = m.X.increment(F)
         p.fconst(0, A / 2.0 ** 24)
         C.vws(p, 'A', 0)
-        for name, v in self.M.exact(A, F, knobs, pre).items():
+        incs = increments48(m, self.kind, A, F, knobs, pre) if rate48 else self.M.exact(A, F, knobs, pre)
+        if rate48 and glide:
+            glide = glide * 147 / 160
+        for name, v in incs.items():
             p.iconst(0, v)
             C.vws(p, name, 0)
         if self.kind == 13:

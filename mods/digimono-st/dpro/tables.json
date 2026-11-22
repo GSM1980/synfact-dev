@@ -1,14 +1,15 @@
 {
   "os_sha256": "fe13c09f661cdba5fe57813240fa1574de1ee0a3ddd7047fc39d0318cba1a710",
-  "tables_sha256": "f6df8a36ef3d978ec9df977a9b2805f7dea54c2dad75a592f19fc790df21fbfc",
+  "tables_sha256": "255b6e5a896a8d7c744fb0da0096ba3a0394073cf127601080cc95d20465f3a4",
   "lengths": {
     "exp": 2048,
-    "waves": 8480,
+    "wave": 16960,
     "interp": 320,
     "pch": 128,
     "wid": 256,
     "br": 256,
     "digibank": 65536,
+    "partner": 65536,
     "rate": 128
   }
 }

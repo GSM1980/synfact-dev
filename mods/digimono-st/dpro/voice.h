@@ -14,8 +14,10 @@ struct dm_dp_voice {
     int32_t mix;                   /* DDRW: the ramped MIX (Q26) */
     int32_t dec[18];               /* WAVE's decimator (5) or the 2:1 allpass (18) */
     uint32_t inc[4],inc_b[2],extra;/* this render's increments; WAVE: sync period, DENS: muted bits */
+    uint32_t key[4];               /* what the increments were computed from */
     uint32_t fresh;                /* the machine's init runs on its first block */
-    int32_t pending[16],history[16];
+    int32_t pending[16];
+    int32_t ring[32];              /* the converter's history, Q17 << 13, doubled */
     uint32_t cursor,write,frac,need;
 };
 void dm_dp_init(struct dm_dp_voice *);

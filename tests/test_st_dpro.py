@@ -35,14 +35,15 @@ class Port:
         return list((ctypes.c_uint32 * 7).from_buffer(self.state, self.lib.inc_offset()))
 
 
-def build(cc, out, rate):
+def build(cc, out, rate, k44):
     out.mkdir(parents=True, exist_ok=True)
     wrapper = out / 'size.c'
     wrapper.write_text('#include <stddef.h>\n#include "dpro/voice.h"\n'
                        'unsigned voice_bytes(void){return sizeof(struct dm_dp_voice);}\n'
                        'unsigned inc_offset(void){return offsetof(struct dm_dp_voice,inc);}\n')
-    dll = out / f'dpro-os{rate}.dll'
-    subprocess.run([str(cc), '-O2', '-Wall', '-Werror', f'-DDM_DPRO_OS={rate}', '-I', 'mods/digimono-st',
+    dll = out / f'dpro-os{rate}{"-44k" if k44 else ""}.dll'
+    subprocess.run([str(cc), '-O2', '-Wall', '-Werror', f'-DDM_DPRO_OS={rate}', *(['-DDM_DPRO_44K'] if k44 else []),
+                    '-I', 'mods/digimono-st',
                     '-shared', 'mods/digimono-st/dpro.c', str(wrapper), '-o', str(dll)], cwd=ROOT, check=True)
     lib = ctypes.CDLL(str(dll))
     lib.voice_bytes.restype = lib.inc_offset.restype = ctypes.c_uint
@@ -55,8 +56,15 @@ def build(cc, out, rate):
     return lib
 
 
-def expected_incs(m, kind, F, knobs, pre):
+def expected_incs(m, kind, F, knobs, pre, rate48):
     A = m.X.increment(F)
+    if rate48:
+        d = R.increments48(m, kind, A, F, knobs, pre)
+        if kind == 12:
+            return [d['i1']], d['i2']
+        if kind == 14:
+            return [d['i1'], d['i2'], d['i3'], d['i4']], d['i5']
+        return [d['i1'], d['i2'], d['i3'], d['i4']], None
     if kind == 12:
         return [m.X.wave_inc(A, 21)], m.X.wave_sync(knobs, pre)
     if kind == 14:
@@ -98,6 +106,8 @@ def main():
     p.add_argument('--out', type=Path, default=Path('out/dpro-tests'))
     p.add_argument('--os-rate', type=int, choices=(1, 2), default=1)
     p.add_argument('--blocks', type=int, default=24)
+    p.add_argument('--44k', dest='k44', action='store_true',
+                   help="the Monomachine's 44.1 kHz blocks and the converter (DM_DPRO_44K)")
     a = p.parse_args()
     out = a.out.resolve()
     info = json.loads((DP / 'tables.json').read_text())
@@ -105,7 +115,8 @@ def main():
     assert hashlib.sha256(header).hexdigest() == info['tables_sha256'], 'tables.h differs: run import_tables.py'
     assert hashlib.sha256(a.os.read_bytes()).hexdigest() == info['os_sha256']
     print('PASS: tables.h matches tables.json', info['tables_sha256'][:12], flush=True)
-    lib = build(a.cc, out, a.os_rate)
+    lib = build(a.cc, out, a.os_rate, a.k44)
+    rate48 = not a.k44
     m = R.load(str(a.os), a.os_rate)
     bank = R.digibank(m, DP / 'out' / f'digibank-{info["os_sha256"][:12]}-'
                       f'{hashlib.sha256((DP / "upstream/dpro.py").read_bytes()).hexdigest()[:12]}.bin')
@@ -124,7 +135,7 @@ def main():
                     v = Port(lib)
                     lib.dm_dp_increments(v.state, kind, c, F, pre)
                     got = v.incs()
-                    incs, extra = expected_incs(m, kind, F, knobs, pre)
+                    incs, extra = expected_incs(m, kind, F, knobs, pre, rate48)
                     if kind == 13:
                         assert got[:2] == incs[:2] and got[4:6] == incs[2:4], (kind, F, knobs, got, incs)
                     else:
@@ -134,6 +145,10 @@ def main():
     for kind in (12, 13, 14):
         worst = 200.0
         for label, patch, pitch, mode in cases(kind):
+            if rate48 and kind == 12 and patch[2] and mode != 'raw':
+                # the WP sweep is scaled per 48 kHz block, which the DSL cannot
+                # take; --44k compares these cases exactly
+                continue
             controls = list(patch) if mode == 'raw' else [x << 8 for x in patch]
             controls = controls + [64 << 8]
             ref = R.Voice(str(a.os), kind, a.os_rate, bank)
@@ -148,7 +163,7 @@ def main():
                 if mode == 'change' and block >= 2 * a.blocks // 3:
                     c[2] = 50 << 8
                 rc, glide = (R.ddrw_host(m, c) if kind == 13 else (c, None))
-                expected = ref.block(F, rc, block == 0, pre, glide)
+                expected = ref.block(F, rc, block == 0, pre, glide, rate48)
                 arr = (ctypes.c_uint16 * 8)(*c)
                 if block == 0:
                     lib.dm_dp_trig(port.state, kind, arr)
@@ -168,7 +183,7 @@ def main():
             if not ok:
                 print('FAIL', NAMES[kind], label, f'{snr:.1f} dB', flush=True)
         print(f'{NAMES[kind]}: {sum(r["type"] == kind for r in rows)} cases, worst {worst:.1f} dB', flush=True)
-    (out / f'results-os{a.os_rate}.json').write_text(json.dumps(dict(rows=rows, os_rate=a.os_rate,
+    (out / f'results-os{a.os_rate}{"-44k" if a.k44 else ""}.json').write_text(json.dumps(dict(rows=rows, os_rate=a.os_rate, rate48=rate48,
                                                                     hardware_tested=False), indent=2) + '\n')
     bad = [r for r in rows if not r['ok']]
     assert not bad, bad

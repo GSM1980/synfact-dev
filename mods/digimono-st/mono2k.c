@@ -140,26 +140,38 @@ void dm_ens_render(struct dm_ens_voice *v,const uint16_t *p,int32_t pitch,int16_
 
 void dm_ens_chorus(struct dm_ens_voice *t,const uint16_t *p,int16_t *left,int16_t *right)
 {
-    /* ens.inc's chorus, unchanged, after DPRO-DENS (CHRL p[5], CHRW p[6]):
-     * the Monomachine's DENS has the same CHRL/CHRW chorus after the machine. */
+    /* ens.inc's chorus after DPRO-DENS (CHRL p[5], CHRW p[6]): the
+     * Monomachine's DENS has the same CHRL/CHRW chorus after the machine.
+     * The same line, taps, mix and spread; the 0.2 Hz LFO's delays are
+     * computed at the block's first and last samples and taken linearly
+     * between them (they move under 0.2 of a line sample a block). ENS keeps
+     * ens.inc's per-sample LFO. */
     int32_t chrl = P8(t, P_SYN + 5), chrw = P8(t, P_SYN + 6);
     int32_t dry = 32768 - (chrl * 27197) / (127 * 256), wet = (chrl * 27853) / (127 * 256);
     wet = (wet * tq_u16(T_ENS_G, chrw)) >> 15;
     int32_t wside = (wet * tq_u16(T_ENS_W, chrw)) >> 15;
     int16_t *cm = t->line;
+    uint32_t ph = t->ph[4];
+    t->ph[4] = ph + 32 * ENS_CINC;
+    int32_t d[2], step[2];
+    for (int c = 0; c < 2; c++) {
+        int32_t a = (2 << 8) + ENS_CDEP + ((ENS_CDEP * sinp(ph + ENS_CINC + ((uint32_t)c << 30))) >> 15);
+        int32_t b = (2 << 8) + ENS_CDEP + ((ENS_CDEP * sinp(ph + 32 * ENS_CINC + ((uint32_t)c << 30))) >> 15);
+        d[c] = a << 16;                        /* 16 fraction bits */
+        step[c] = ((b - a) << 16) / 31;
+    }
     for (unsigned i = 0; i < 32; i++) {
         int32_t s = left[i], side = 0;
         t->ms[0] += s;
         if (i & 1) { cm[t->ph[5]++ & (ENS_LEN - 1)] = (int16_t)sat16(t->ms[0] >> 1); t->ms[0] = 0; }
-        t->ph[4] += ENS_CINC;
         if (chrl) {
             int32_t y[2];
             for (int c = 0; c < 2; c++) {
-                int32_t d8 = (2 << 8) + ENS_CDEP + ((ENS_CDEP * sinp(t->ph[4] + ((uint32_t)c << 30))) >> 15);
-                uint32_t pos = (t->ph[5] << 8) + ((uint32_t)(i & 1) << 7) - (uint32_t)d8;
+                uint32_t pos = (t->ph[5] << 8) + ((uint32_t)(i & 1) << 7) - (uint32_t)(d[c] >> 16);
                 uint32_t j = pos >> 8;
-                int32_t f = (int32_t)(pos & 255);
-                y[c] = (cm[j & (ENS_LEN - 1)] * (256 - f) + cm[(j + 1) & (ENS_LEN - 1)] * f) >> 8;
+                int32_t f = (int32_t)(pos & 255), y0 = cm[j & (ENS_LEN - 1)];
+                y[c] = y0 + (((cm[(j + 1) & (ENS_LEN - 1)] - y0) * f) >> 8);
+                d[c] += step[c];
             }
             side = sat16(((y[0] - y[1]) * wside) >> 16);
             s = add_sh15(s * dry, ((y[0] + y[1]) >> 1) * wet);

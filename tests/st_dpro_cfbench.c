@@ -87,3 +87,12 @@ unsigned incs_dp(unsigned kind,unsigned pitch)
     dm_dp_increments(&bench,kind,heavy[kind-DM_DPWAVE],dm_dp_word(kind,(int32_t)pitch),0);
     return bench.inc[0];
 }
+/* the worst of N random-knob renders (note in pitch): returns its cost index */
+unsigned random_dp(unsigned kind,unsigned pitch)
+{
+    static uint32_t s=0x1234567u;static uint16_t k[7];static unsigned n;
+    if(!n++){dm_dp_init(&bench);}
+    for(unsigned i=0;i<7;i++){s^=s<<13;s^=s>>17;s^=s<<5;k[i]=(uint16_t)((s%128u)<<8);}
+    dm_dp_render(&bench,kind,k,(int32_t)pitch,48*64,sink);
+    return k[0]|(unsigned)k[1]<<16;
+}

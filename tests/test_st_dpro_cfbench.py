@@ -27,10 +27,12 @@ def main():
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--os-rate', type=int, choices=(1, 2), default=1)
     p.add_argument('--blocks', type=int, default=20)
+    p.add_argument('--44k', dest='k44', action='store_true',
+                   help="the Monomachine's 44.1 kHz blocks and the converter (DM_DPRO_44K)")
     a = p.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     assert a.sgdk_bin, 'SGDK_BIN'
-    flags = DEVICE.toolchain['cflags'] + ['-fno-jump-tables', '-I', 'mods/digimono-st', f'-DDM_DPRO_OS={a.os_rate}']
+    flags = DEVICE.toolchain['cflags'] + ['-fno-jump-tables', '-I', 'mods/digimono-st', f'-DDM_DPRO_OS={a.os_rate}'] + (['-DDM_DPRO_44K'] if a.k44 else [])
 
     def run(args):
         return subprocess.run([str(x) for x in args], check=True, capture_output=True, text=True, cwd=ROOT)
@@ -67,7 +69,7 @@ def main():
             costs.setdefault(NAMES[kind], {})[note] = dict(max=max(counts), mean=round(sum(counts) / 16))
         print(NAMES[kind], {n: c['max'] for n, c in costs[NAMES[kind]].items()}, flush=True)
     (a.out / 'results.json').write_text(json.dumps(dict(
-        ok=True, os_rate=a.os_rate, blocks=a.blocks, render_instructions=costs, physical_emac_model=True,
+        ok=True, os_rate=a.os_rate, rate48=not a.k44, blocks=a.blocks, render_instructions=costs, physical_emac_model=True,
         hardware_cycles=False,
         source_sha256=hashlib.sha256((ROOT / 'mods/digimono-st/dpro.c').read_bytes()).hexdigest()), indent=2) + '\n')
     print('PASS: instruction counts written; no device access')

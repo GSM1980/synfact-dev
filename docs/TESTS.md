@@ -338,10 +338,12 @@ DSL sweep is reported separately. The original comparison bench now accepts
 SY MnM 0.8 adds De-Pattern's DPRO WAVE, DDRW and DENS. They need the owner's
 Monomachine OS (`mods/digimono-st/dpro/import_tables.py MONOMACHINE_OS` writes the
 git-ignored tables first; `--check` compares with `tables.json`).
-`tests/test_st_dpro.py --cc HOST_CC --os MONOMACHINE_OS [--os-rate 2]` checks the
-pitch words and every integer increment against upstream `exact.py`, then 215
-16-frame cases of the port against the pinned float32 DSL at 60 dB or more.
-`tests/test_st_dpro_cfbench.py --cfbench CFBENCH --out OUTPUT` compares the
+`tests/test_st_dpro.py --cc HOST_CC --os MONOMACHINE_OS [--os-rate 2] [--44k]`
+checks the pitch words and every integer increment against upstream `exact.py`
+(at 48 kHz blocks with the same 147/160 scaling), then 16-frame cases of the
+port against the pinned float32 DSL at 60 dB or more (206 at 48 kHz, 215 with
+`--44k`, which also covers the WPM sweep).
+`tests/test_st_dpro_cfbench.py --cfbench CFBENCH --out OUTPUT [--44k]` compares the
 EMAC build with the split integer build on analog-emu (PCM, voice state, EMAC
 registers) and records render instruction counts, not CPU percentages. The
 common suite's `test_st_digimono.py` runs the three types through the adapter.
