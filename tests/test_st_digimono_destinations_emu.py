@@ -69,7 +69,7 @@ class Destination(Core):
         elif pc in (0x401038d6,0x40103958):self.ret(0)
         elif hasattr(self,'bank_symbols') and pc==self.bank_symbols.get('dm_destination_query'):
             q,args,model,value=self.args(4)
-            if q==32:
+            if q==36:                 # ST_PARAMETER_UI_DEST_FLAGS (core 2.6)
                 assert model==PROXY and value and ENGINE<=self.word(args)<=ENGINE+8
                 self.ui_calls+=1
 

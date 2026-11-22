@@ -62,8 +62,28 @@ def check_digimono_dpro_change(current,baseline):
     assert any(Path(n).as_posix().endswith('/mods/digimono-st/dpro.c') for n in current['source_sha256'])
 
 
-def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False,digimono_fm_changed=False,digimono_dpro_changed=False):
-    assert sum((sampler_audio_changed,digimono_audio_changed,digimono_ens_changed,digimono_fm_changed,digimono_dpro_changed))<=1
+def check_digimono_added(current,baseline):
+    """SY MnM added to a bank without it: machine 71 last, its module right
+    after FM TONE's, its own AUDIO folder only; every other object identical."""
+    assert 71 not in baseline['machines'] and current['machines']==baseline['machines']+[71]
+    modules=list(baseline['modules'])
+    modules.insert(modules.index('fm_tone_module')+1,'dm_destination_module')
+    assert current['modules']==modules
+    def objects(report):
+        return {Path(n).name:h for n,h in report['object_sha256'].items()
+                if Path(n).name.startswith('audio') and Path(n).suffix=='.o'}
+    new,old=objects(current),objects(baseline)
+    # one folder a machine mod, in bank order: SY MnM's is the next one
+    folder='audio%d-'%(max(int(n[5:n.index('-')]) for n in old)+1)
+    added=new.keys()-old.keys()
+    assert added and all(n.startswith(folder) for n in added) and not old.keys()-new.keys()
+    assert not any(n.startswith(folder) for n in old)
+    assert all(new[n]==old[n] for n in old)
+    assert any(Path(n).as_posix().endswith('/mods/digimono-st/dpro.c') for n in current['source_sha256'])
+
+
+def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False,digimono_fm_changed=False,digimono_dpro_changed=False,digimono_added=False):
+    assert sum((sampler_audio_changed,digimono_audio_changed,digimono_ens_changed,digimono_fm_changed,digimono_dpro_changed,digimono_added))<=1
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
     def run(name,args):
@@ -200,7 +220,12 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 raw=path.read_bytes();at,n=struct.unpack_from('>II',raw,72);return raw[48+at:48+at+n]
             new_section=audio_section(out/'synfact-machines.smz4')
             old_section=audio_section(oldbank)
-            if digimono_dpro_changed:
+            if digimono_added:
+                assert new_section!=old_section
+                check_digimono_added(json.loads((out/'synfact-machines.smz4.json').read_text()),
+                                     json.loads((previous/'synfact-machines.smz4.json').read_text()))
+                checks.append({'name':'SY MnM added; every other AUDIO object identical to the previous build','ok':True})
+            elif digimono_dpro_changed:
                 assert new_section!=old_section
                 check_digimono_dpro_change(json.loads((out/'synfact-machines.smz4.json').read_text()),
                                            json.loads((previous/'synfact-machines.smz4.json').read_text()))
@@ -336,6 +361,8 @@ if __name__=='__main__':
         help='Digi Mono 0.3 updates ENS: only its adapter and existing MONO2K DSP object may change')
     p.add_argument('--digimono-fm-changed',action='store_true',
         help='Digi Mono 0.6 replaces FM+: only its adapter/dispatch change and one FM+ object is added')
+    p.add_argument('--digimono-added',action='store_true',
+        help='the bank adds SY MnM to a previous bank without it: only its machine, module and AUDIO folder are new')
     p.add_argument('--digimono-dpro-changed',action='store_true',
         help='SY MnM 0.8 adds DigiPRO: only its adapter/dispatch change and one DigiPRO object is added')
     a=p.parse_args()
@@ -345,4 +372,4 @@ if __name__=='__main__':
         from elekloader.devices.syntakt import DEVICE
         window=DEVICE.secondary[7][3][-1]
         assert window==(0x40040860,0x40041050)
-    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed,a.digimono_ens_changed,a.digimono_fm_changed,a.digimono_dpro_changed)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed,a.digimono_ens_changed,a.digimono_fm_changed,a.digimono_dpro_changed,a.digimono_added)

@@ -137,6 +137,10 @@ header is git-ignored, never committed):
 ```bash
 "$PY" mods/digimono-st/dpro/import_tables.py "$MONOMACHINE_OS"
 ```
+
+A bank holds at most 16 modules: with MD KIT and SY MnM (each brings one)
+COMP no longer fits beside the normal list.
+
 Optional COMP (core 2.4+): import its private UI assets with
 `"$PY" mods/comp-st/tools/import_digitakt.py "$DIGITAKT_OS"` (original
 Digitakt OS 1.54), then append `--module mods/comp-st` immediately after
@@ -194,6 +198,11 @@ The original Digi Mono engine/sine, samplers and FM-TONE objects must match.
 For the 0.6.0 FM+ replacement, use `--digimono-fm-changed` instead. It permits
 the new FM+ object and changes to the adapter/MONO2K dispatch only, retaining
 the same machine/module lists and all other AUDIO object hashes.
+
+To compare a bank with SY MnM against a previous bank without it (for
+example main's normal bank), use `--digimono-added`: machine 71 is appended,
+`dm_destination_module` follows `fm_tone_module`, SY MnM's AUDIO objects are one
+new folder, and every other AUDIO object is identical.
 
 For SY MnM 0.8.0's DigiPRO, use `--digimono-dpro-changed`: one new DigiPRO
 object (`audio2-5.o`), changes to the adapter and MONO2K dispatch only (`audio2-0.o`,

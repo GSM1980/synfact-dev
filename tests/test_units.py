@@ -1121,6 +1121,34 @@ def test_digimono_fm_replacement_is_limited_to_its_adapter_and_new_engine():
         else:raise AssertionError('accepted unrelated or incomplete FM+ replacement')
 
 
+def test_digimono_added_to_a_bank_changes_nothing_else():
+    from copy import deepcopy
+    from test_st_common_regressions import check_digimono_added
+    old={'machines':[66,67,68,69,65],'modules':['a','fm_tone_module','b'],
+         'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(2) for n in range(4)}}
+    new=deepcopy(old)
+    new['machines'].append(71)
+    new['modules']=['a','fm_tone_module','dm_destination_module','b']
+    for n in range(6):new['object_sha256'][f'audio2-{n}.o']='mnm'+str(n)
+    new['source_sha256']['/mods/digimono-st/dpro.c']='source'
+    check_digimono_added(new,old)
+    bad=[]
+    for name in ('audio0-0.o','audio1-3.o'):
+        report=deepcopy(new);report['object_sha256'][name]='unexpected';bad.append(report)
+    report=deepcopy(new);report['object_sha256']['audio3-0.o']='unexpected';bad.append(report)
+    report=deepcopy(new);del report['object_sha256']['audio1-1.o'];bad.append(report)
+    report=deepcopy(new);report['modules']=['a','fm_tone_module','b','dm_destination_module'];bad.append(report)
+    report=deepcopy(new);report['machines']=[66,67,68,69,65,70];bad.append(report)
+    report=deepcopy(new);report['source_sha256'].clear();bad.append(report)
+    for report in bad:
+        try:check_digimono_added(report,old)
+        except AssertionError:pass
+        else:raise AssertionError('accepted more than SY MnM added')
+    try:check_digimono_added(new,new)
+    except AssertionError:pass
+    else:raise AssertionError('accepted a baseline that already has SY MnM')
+
+
 def test_digimono_dpro_addition_is_limited_to_its_adapter_and_new_engine():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_dpro_change
