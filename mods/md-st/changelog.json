@@ -1,0 +1,24 @@
+{
+  "id": "md-st",
+  "title": "MD MACHINEDRUM",
+  "latest": "0.1",
+  "entries": [
+    {
+      "version": "0.1",
+      "date": "2026-11-20",
+      "commits": [
+        {
+          "sha": "4975b42",
+          "date": "2026-11-20",
+          "subject": "MD MACHINEDRUM (type 70): mdkit's 30 voices on the Syntakt"
+        },
+        {
+          "sha": "cb11822",
+          "date": "2026-11-20",
+          "subject": "MD KIT: per-voice budget, picker icon and a note's knobs taken whole"
+        }
+      ]
+    }
+  ],
+  "slug": "md-st"
+}

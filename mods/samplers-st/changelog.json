@@ -21,6 +21,11 @@
           "sha": "c148d93",
           "date": "2026-11-22",
           "subject": "Changelogs: COMP 1.0.0"
+        },
+        {
+          "sha": "3ddf7da",
+          "date": "2026-11-22",
+          "subject": "Changelogs: COMP 1.0.0 ATK/REL in ms"
         }
       ]
     },

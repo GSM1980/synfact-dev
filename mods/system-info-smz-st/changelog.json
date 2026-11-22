@@ -18,6 +18,11 @@
           "subject": "Changelogs: COMP 1.0.0"
         },
         {
+          "sha": "3ddf7da",
+          "date": "2026-11-22",
+          "subject": "Changelogs: COMP 1.0.0 ATK/REL in ms"
+        },
+        {
           "sha": "a81bb0b",
           "date": "2026-11-21",
           "subject": "Changelogs: COMP 0.3.0"

@@ -1,10 +1,16 @@
 # Changelog: SY MnM
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.7.0.
+Generated from git history by `tools/changelog.py`. Latest version: 0.8.0.
+
+## 0.8.0 (2026-11-22)
+
+- SY MnM 0.8.0: DPRO WAVE, DDRW and DENS from De-Pattern (`0049211`, 2026-11-22)
+- SY MnM 0.8.0: DigiPRO at about half the instructions (`3bb565d`, 2026-11-22)
 
 ## 0.7.0 (2026-11-19)
 
 - perf(digimono): balance FM+ CPU cost while retaining 2x self-FM (`04b66e5`, 2026-11-19)
+- docs(digimono): publish SY MnM 0.7.0 change history (`9fccd3c`, 2026-11-19)
 
 ## 0.6.1 (2026-11-19)
 

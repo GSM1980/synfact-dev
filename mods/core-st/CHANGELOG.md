@@ -7,6 +7,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 2.5.0.
 - Lighter stereo tracks on both CPUs (core 2.5.0, samplers 1.6.0) (`b6d39b8`, 2026-11-22)
 - Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
 - Changelogs: COMP 1.0.0 (`c148d93`, 2026-11-22)
+- Changelogs: COMP 1.0.0 ATK/REL in ms (`3ddf7da`, 2026-11-22)
 
 ## 2.4.0 (2026-11-20)
 
@@ -14,9 +15,21 @@ Generated from git history by `tools/changelog.py`. Latest version: 2.5.0.
 - Add FX-bus COMP with shared core services and SRAM optimization (`e1e51bf`, 2026-11-20)
 - Changelogs: COMP 0.2.0 and core 2.4.0 FX services (`307482a`, 2026-11-20)
 
+## 2.3.2 (2026-11-19)
+
+- Rename Digi Mono to SY MnM and preserve TYPE on SYN reload (`e9a6dd4`, 2026-11-19)
+- Update core 2.3.2 and SY MnM 0.5.1 changelogs (`a171405`, 2026-11-19)
+
+## 2.3.1 (2026-11-19)
+
+- Add Digi Mono subtype picker and keep TYPE outside modulation (`b570b0e`, 2026-11-19)
+- Update core 2.3.1 and Digi Mono 0.5.0 changelogs (`1e78098`, 2026-11-19)
+
 ## 2.3.0 (2026-11-19)
 
 - Improve Sample Manager sizes, project memory and atomic capacity checks (`ce91a3b`, 2026-11-19)
+- Document Digi Mono 0.4.0 OS 1.42 and API 16 integration (`ca7e95d`, 2026-11-19)
+- Refresh merged core and Digi Mono release histories (`f7b1014`, 2026-11-19)
 
 ## 2.2.0 (2026-11-19)
 
@@ -67,18 +80,22 @@ Generated from git history by `tools/changelog.py`. Latest version: 2.5.0.
 - Recorder 1.4 and core 1.9: reduced post-take audio and faster MAIN capture (`085868a`, 2026-11-16)
 - Changelogs: core 1.9.0 and Recorder 1.4 (`f48f3ab`, 2026-11-16)
 
-## 1.8.2 (2026-11-16)
+## 1.8.2 (2026-11-11)
 
 - Fix TRIG/ARP mute navigation and reentrant native view cleanup (`5ff821a`, 2026-11-16)
 - Generate ARP 1.10.4 and core 1.8.2 changelogs (`84ec2db`, 2026-11-16)
+- Filter Digi Mono destinations by Sound TYPE (`7fe932b`, 2026-11-11)
+- Document destination filtering releases (`1094bde`, 2026-11-11)
 
-## 1.8.1 (2026-11-14)
+## 1.8.1 (2026-11-11)
 
 - Playhead 1.0: step order per track (reverse, pendulum, random, walk) (`9dd0e4d`, 2026-11-16)
 - Changelogs: Playhead 1.0 (`c60f324`, 2026-11-16)
 - Changelogs: Chorus 1.2 (`d322360`, 2026-11-15)
 - Optimize MAIN paths across core and optional mods (`b747754`, 2026-11-14)
 - Changelogs: consolidated MAIN optimization releases (`fcbc288`, 2026-11-14)
+- Refresh SYN layouts when Digi Mono TYPE changes (`fe671aa`, 2026-11-11)
+- Document live SYN layout fix releases (`83ff21d`, 2026-11-11)
 
 ## 1.8.0 (2026-11-10)
 

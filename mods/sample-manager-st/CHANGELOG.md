@@ -6,6 +6,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.3.0.
 
 - Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
 - Changelogs: COMP 1.0.0 (`c148d93`, 2026-11-22)
+- Changelogs: COMP 1.0.0 ATK/REL in ms (`3ddf7da`, 2026-11-22)
 - Changelogs: COMP 0.3.0 (`a81bb0b`, 2026-11-21)
 - Improve Sample Manager sizes, project memory and atomic capacity checks (`ce91a3b`, 2026-11-19)
 

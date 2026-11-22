@@ -30,6 +30,13 @@
       "path": "mods/core-st"
     },
     {
+      "slug": "digimono-st",
+      "id": "digimono-st",
+      "title": "SY MnM",
+      "latest": "0.8.0",
+      "path": "mods/digimono-st"
+    },
+    {
       "slug": "fm-tone-st",
       "id": "fm-tone-st",
       "title": "SY FM DTONE",
@@ -56,6 +63,13 @@
       "title": "Syntakt machine loader",
       "latest": "1.0.2",
       "path": "mods/machines-st"
+    },
+    {
+      "slug": "md-st",
+      "id": "md-st",
+      "title": "MD MACHINEDRUM",
+      "latest": "0.1",
+      "path": "mods/md-st"
     },
     {
       "slug": "mix-fast-st",

@@ -1,8 +1,24 @@
 {
   "id": "digimono-st",
   "title": "SY MnM",
-  "latest": "0.7.0",
+  "latest": "0.8.0",
   "entries": [
+    {
+      "version": "0.8.0",
+      "date": "2026-11-22",
+      "commits": [
+        {
+          "sha": "0049211",
+          "date": "2026-11-22",
+          "subject": "SY MnM 0.8.0: DPRO WAVE, DDRW and DENS from De-Pattern"
+        },
+        {
+          "sha": "3bb565d",
+          "date": "2026-11-22",
+          "subject": "SY MnM 0.8.0: DigiPRO at about half the instructions"
+        }
+      ]
+    },
     {
       "version": "0.7.0",
       "date": "2026-11-19",
@@ -11,6 +27,11 @@
           "sha": "04b66e5",
           "date": "2026-11-19",
           "subject": "perf(digimono): balance FM+ CPU cost while retaining 2x self-FM"
+        },
+        {
+          "sha": "9fccd3c",
+          "date": "2026-11-19",
+          "subject": "docs(digimono): publish SY MnM 0.7.0 change history"
         }
       ]
     },
