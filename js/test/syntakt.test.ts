@@ -17,7 +17,7 @@ test('Syntakt profile identifies pinned stock and reserves only its 64 KiB area'
   assert.equal(newRelease.version,'1.42')
   assert.equal(newRelease.mainLen,3442576)
   assert.equal(d.versionOptional,true)
-  assert.deepEqual(d.secondary[7][3],[[0x4000094a,0x40000950],[0x40000ac6,0x40000acc],[0x40000b04,0x40000b0a],
+  assert.deepEqual(d.secondary[7][3],[[0x4000094a,0x40000950],[0x40000a72,0x40000a78],[0x40000ac6,0x40000acc],[0x40000b04,0x40000b0a],
     [0x40001016,0x40001020],[0x40002364,0x4000236c],[0x400023e8,0x400023f0],[0x400043b2,0x400043b6],[0x400043fe,0x40004400],
     [0x40004404,0x40004406],[0x40004408,0x4000440c],[0x40004460,0x40004462],
     [0x400044ac,0x400044b0],[0x40040860,0x40041050]])

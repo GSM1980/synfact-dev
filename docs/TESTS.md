@@ -400,6 +400,38 @@ reference in either the stable or changing complete-block count matrix.
 Results include `dynamic_block_instruction_counts`. This catches gains
 that hide a setup/check overhead by benchmarking only an unchanged loop.
 
+### Stereo engine 1.6 (core 2.5)
+
+`tests/test_st_stereo_natives_emu.py --core <core build folder> --cfbench
+<cfbench>` (analog-emu, the core's real AUDIO image) adds, for samplers-st 1.6:
+- `width`: the engine's per-track base-width against the native routine's
+  pairs, outputs and memory, 400 random cases;
+- `chain`: the whole chain block after block (40 cases of ten blocks, three
+  warm-up): the stock chain on L from the block's starting state, a native R
+  pass on R from the same state with R's own memory, and the engine's flow
+  (the stock drive and base-width on L, the multimode entry for every track,
+  the stock envelopes on L). L, the chain state, the multimode's scratch,
+  MACSR, R and R's memory must match, word for word, for both paths: the
+  fused multimode (`stereo/multimode.s` after the first part copied from the
+  image, fingerprinted) and the per-track one. The frame word `x` is kept at
+  or above zero: with a negative one the native first part reads outside its
+  tables (docs/MACHINE-REFERENCE.md, "AUDIO's SRAM");
+- the whole-frame PCM loops (fractions 0 a third of the time) and a count at
+  a pitch off unity.
+
+`tests/test_st_stereo_engine_emu.py` (Unicorn) runs the chain end and the
+multimode entry with stand-ins: the version-2 directory install (none on
+version 1), mono and stereo dispatch, the drive state kept, R zeroed when a
+track leaves the claim, and the window block sent by AUDIO eDMA channel 46,
+emulated on the SSRT write with its TCD checked (self-linked minor loops,
+35 bursts of 16 bytes).
+
+`tests/test_st_stereo_main_dma_emu.py` (Unicorn) runs the STEREO module's
+MAIN side with MAIN eDMA channel 46 emulated: the TCD (descending, linked to
+itself), one transfer per new block and none for a repeated one, and the
+pairing of new, repeated, late (written after the copy), torn (the copy
+overlapping AUDIO's write) and untagged blocks.
+
 ### LFO3 MAIN callback, engine and task measurements
 
 `tools/bench_st_lfo3_main.py` executes linked before/after bank functions and

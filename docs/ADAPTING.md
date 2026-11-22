@@ -630,12 +630,15 @@ a module that needs a provider only for query 31 registers it on 14. LFO3 1.2
 leaves the Kit setter `40013516` to core 1.4 and stores through query 24, as
 it does for the Sound; on an older core it hooks it as before.
 
-## Syntakt: stereo tracks (core 1.8)
+## Syntakt: stereo tracks (core 1.8, 2.5)
 
 A digital track is mono up to MAIN's mixer. Core 1.8 adds one AUDIO site, the
 chain end (after AMP, before the track DMA), and a directory at `40040f30`
-whose word 1 is the hook it calls (`<syntakt/stereo.h>`). The stereo engine
-that uses it is in `mods/samplers-st/stereo/`, written in the core's shape:
+whose word 1 is the hook it calls (`<syntakt/stereo.h>`). Core 2.5 makes the
+directory version 2: the stock chain loads its per-track multimode routine
+from word 3 (the native one until a bank writes its entry), so an engine can
+run R inside the chain. The stereo engine that uses both is in
+`mods/samplers-st/stereo/`, written in the core's shape:
 
 - A machine that renders stereo calls `st_stereo_claim(t)` in its render and
   writes R where it points; L goes to its output as before. It runs on R the
@@ -643,11 +646,15 @@ that uses it is in `mods/samplers-st/stereo/`, written in the core's shape:
   machine on the native sample voice can use `mods/samplers-st/audio/voice-stereo.c`
   for that: the voice's filter and gain ramps on L and R in one loop each, the
   same words as the native calls.
-- The engine runs the native chain on R and sends D = R − L; the module
-  `STEREO` adds gR × D to the right buses. Pan becomes a balance.
+- The engine runs the chain on R (drive and base-width at track 0's
+  multimode call, then each stereo track's multimode on L and R at once, and
+  its AMP envelope) and sends D = R − L; the module `STEREO` adds gR × D to
+  the right buses. Pan becomes a balance.
 - The engine, its module and a claiming machine must be in the same bank (the
-  claim links to the engine). On a core before 1.8 the claim returns 0 and the
-  track stays mono.
+  claim links to the engine). On a core before 2.5 (chain directory version
+  1, or none) the claim returns 0 and the track stays mono.
+- The stereo engine uses AUDIO and MAIN eDMA channel 46 for the window block;
+  no other mod may use that channel.
 
 The engine owns AUDIO SRAM `0x8000f398..0x8000ffff`, the shared window
 `0x5b0..0x7ef`; no other mod may use them (docs/MACHINE-REFERENCE.md,

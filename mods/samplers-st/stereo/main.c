@@ -45,6 +45,7 @@ typedef st_u32 u32;typedef int s32;
 #endif
 #include "main-state.h"
 static struct stereo_main_state stereo_ddr;
+struct block st_stereo_late_block;
 struct stereo_main_state *st_stereo_state=&stereo_ddr;
 static u32 (*resolve_kernel)(void)=st_stereo_resolve;
 #if defined(__has_include)
@@ -66,9 +67,9 @@ static s32 wide[8][32];
 static const s32 silent[32];
 /* Keep the assembly's private struct offsets checked by the compiler. */
 _Static_assert(__builtin_offsetof(struct block,mask)==4,"assembly mask offset");
-_Static_assert(__builtin_offsetof(struct block,shift)==12,"assembly shift offset");
-_Static_assert(__builtin_offsetof(struct block,d)==20,"assembly samples offset");
-_Static_assert(sizeof(struct block)==532,"assembly block stride");
+_Static_assert(__builtin_offsetof(struct block,shift)==8,"assembly shift offset");
+_Static_assert(__builtin_offsetof(struct block,d)==32,"assembly samples offset");
+_Static_assert(sizeof(struct block)==560,"assembly block stride");
 extern void st_stereo_widen(const struct block *,s32 *);
 static void (*widen_kernel)(const struct block *,s32 *)=st_stereo_widen;
 static void widen(const struct block *b)
@@ -81,20 +82,22 @@ static void widen(const struct block *b)
 struct st_stereo_counters st_stereo_main_counters;
 #include "main-placement.h"
 /* SEQ_END first, then the block, then SEQ: equal means one whole block (the
- * DMA writes SEQ first and SEQ_END last). */
+ * AUDIO side writes SEQ first and SEQ_END last). The CPU copy, for the host
+ * and for a block AUDIO wrote after MAIN's eDMA read (resolve). */
 u32 st_stereo_read_block(struct block *b)
 {
     u32 s=WIN(ST_STEREO_SEQ_END),m,t,bits,x,y;
     m=WIN(ST_STEREO_MASK)&0xffu;
     b->print=WIN(ST_STEREO_PRINT);
+    b->tag=WIN(ST_STEREO_TAG);
     /* Reject an in-flight publication before copying up to 512 bytes. Still
      * check after the copy: AUDIO may start another publication meanwhile. */
     if(WIN(ST_STEREO_SEQ)!=s){st_stereo_main_counters.torn++;return 0;}
-    if(!m){b->mask=0;b->sequence=s;return 1;}
+    if(!m){b->mask=0;b->sequence=b->sequence_end=s;return 1;}
     x=WIN(ST_STEREO_SHIFT);y=WIN(ST_STEREO_SHIFT+4);
+    for(t=0;t<8;t++)b->shift[t]=(unsigned char)((t<4?x:y)>>(24-8*(t&3)));
     for(bits=m;bits;bits&=bits-1u){
         t=31u-(u32)__builtin_clz(bits&-bits);
-        b->shift[t]=(unsigned char)((t<4?x:y)>>(24-8*(t&3)));
 #ifdef __mcoldfire__
         copy64((const volatile void *)(ST_STEREO_MAIN+ST_STEREO_WINDOW+64*t),b->d[t]);
 #else
@@ -107,8 +110,41 @@ u32 st_stereo_read_block(struct block *b)
 #endif
     }
     if(WIN(ST_STEREO_SEQ)!=s){st_stereo_main_counters.torn++;return 0;}
-    b->mask=m;b->sequence=s;return 1;
+    b->mask=m;b->sequence=b->sequence_end=s;return 1;
 }
+#ifdef __mcoldfire__
+/* MAIN eDMA channel 46 (the stock uses 15, 29, 30, 34 to 37, 42, 47, 52, 54
+ * and 59; the controller arbitrates round robin, CR = 6 at boot): the whole
+ * window block into slot0, while MAIN renders. Descending, 16 bytes a
+ * minor loop, the channel linked to itself as the stock's channel 47 is: it
+ * reads SEQ_END first and SEQ last, the order that makes SEQ == SEQ_END mean
+ * one whole block against AUDIO's ascending write. In DDR (copyback cache)
+ * the block's lines are pushed and invalidated first: the CPU does not touch
+ * them again until the transfer is done (resolve). */
+#define MTCD16(offset) (*(volatile unsigned short *)(ST_STEREO_MAIN_DMA+(offset)))
+#define MTCD32(offset) (*(volatile u32 *)(ST_STEREO_MAIN_DMA+(offset)))
+#define ST_STEREO_MAIN_LINK (0x8000u|(46u<<9)|(ST_STEREO_BLOCK/16u))
+static void start_read(struct block *b)
+{
+    u32 i,line=(u32)b;
+    while(MTCD16(0x1e)&0x40u){}               /* CSR.ACTIVE: a transfer not yet waited for */
+    if(line<0x80000000u)
+        for(i=0;i<ST_STEREO_BLOCK/16u;i++,line+=16)
+            __asm__ volatile("cpushl %%dc,(%0)"::"a"(line):"memory");
+    MTCD32(0x00)=ST_STEREO_MAIN+ST_STEREO_SEQ+ST_STEREO_BLOCK-16u;   /* SADDR: the last 16 bytes */
+    MTCD16(0x04)=0x0404u;                     /* ATTR: 16-byte bursts */
+    MTCD16(0x06)=0xfff0u;                     /* SOFF -16 */
+    MTCD32(0x08)=16;                          /* NBYTES */
+    MTCD32(0x0c)=0;                           /* SLAST */
+    MTCD32(0x10)=(u32)b+ST_STEREO_BLOCK-16u;  /* DADDR */
+    MTCD16(0x14)=ST_STEREO_MAIN_LINK;         /* CITER */
+    MTCD16(0x16)=0xfff0u;                     /* DOFF -16 */
+    MTCD32(0x18)=0;                           /* DLAST_SGA */
+    MTCD16(0x1c)=ST_STEREO_MAIN_LINK;         /* BITER */
+    MTCD16(0x1e)=0;                           /* CSR: DONE cleared */
+    ST_STEREO_MAIN_SSRT=46;
+}
+#endif
 /* MAIN profile for test pages: timer ticks spent here, as permille of the
  * interrupt period, per 1024 interrupts. */
 #ifndef MAIN_CLOCK
@@ -132,8 +168,21 @@ static void receive(void)
 #endif
     st_stereo_main_counters.interrupts++;
     resolved=0;use=0;have=0;
+#ifdef __mcoldfire__
+    /* The block already here (AUDIO wrote none since), or the eDMA starts;
+     * resolve waits for it. tagged is decided there. */
+    {struct block *b=&slot0;
+    if((u32)b&15u){                          /* never: the block is 16-byte aligned */
+        tagged=WIN(ST_STEREO_TAG)==ST_STEREO_MAGIC;
+        if(tagged)have=st_stereo_read_block(b);
+    }else if(!pending && b->sequence==b->sequence_end && WIN(ST_STEREO_SEQ_END)==b->sequence){
+        have=1;tagged=b->tag==ST_STEREO_MAGIC;
+    }else{start_read(b);pending=1;tagged=1;}
+    }
+#else
     tagged=WIN(ST_STEREO_TAG)==ST_STEREO_MAGIC;
-    if(tagged)have=st_stereo_read_block(&slot[0]);
+    if(tagged)have=st_stereo_read_block(&slot0);
+#endif
 #if ST_STEREO_MAIN_PROFILE
     spend(&spent_read,a);
 #endif
@@ -226,11 +275,11 @@ static __inline__ void remember_all_gains(void)
     u32 a=MAIN_CLOCK;
 #endif
     __asm__ volatile(
-        "movea.l #0x80006308,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,1092(%1)\n\t"
-        "movea.l #0x800062c0,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,1124(%1)\n\t"
-        "movea.l #0x8000e160,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,1156(%1)\n\t"
-        "movea.l #0x8000e110,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,1188(%1)\n\t"
-        "moveq #1,%%d0\n\tmoveq #1,%%d1\n\tmovem.l %%d0-%%d1,1220(%1)\n\tmovem.l %%d0-%%d1,1228(%1)"
+        "movea.l #0x80006308,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,588(%1)\n\t"
+        "movea.l #0x800062c0,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,620(%1)\n\t"
+        "movea.l #0x8000e160,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,652(%1)\n\t"
+        "movea.l #0x8000e110,%0\n\tmovem.l (%0),%%d0-%%d7\n\tmovem.l %%d0-%%d7,684(%1)\n\t"
+        "moveq #1,%%d0\n\tmoveq #1,%%d1\n\tmovem.l %%d0-%%d1,716(%1)\n\tmovem.l %%d0-%%d1,724(%1)"
         :"=&a"(from):"a"(to):"d0","d1","d2","d3","d4","d5","d6","d7","memory");
 #if ST_STEREO_MAIN_PROFILE
     spend(&spent_mix,a);

@@ -58,7 +58,7 @@ int main(void)
         assert(window[ST_STEREO_SEQ/4]==window[ST_STEREO_SEQ_END/4] && window[ST_STEREO_TAG/4]==ST_STEREO_MAGIC);
         memcpy(main_l,tracks,sizeof(tracks));   /* MAIN's DMA of L */
         receive();
-        assert(have && slot[0].mask==0xd4u);   /* tracks 1, 3, 5: R == L, no D */
+        assert(have && slot0.mask==0xd4u);   /* tracks 1, 3, 5: R == L, no D */
         /* Native kernel: ramp from the previous end to this block's end. */
         for(t=0;t<8;t++){start[t]=block?gains[2][t]:-(int32_t)(0x40000000u>>(t&3));
             end[t]=-(int32_t)(0x7e000000u>>(t&3))+(int32_t)block*0x100000;}
@@ -69,7 +69,7 @@ int main(void)
             gains[2][t]=end[t];
         }
         add(2,MAIN_BUS,MAIN_GAIN);
-        assert(use==&slot[0]);
+        assert(use==&slot0);
         /* Expected: the same kernel on R for stereo tracks, L for track 0. */
         {int32_t want[64]={0};
          for(t=0;t<8;t++){
@@ -93,12 +93,12 @@ int main(void)
     send(0xffu,stage);memcpy(main_l,tracks,sizeof(tracks));receive();
     for(t=0;t<8*32;t++)tracks[t]+=77777;
     send(0xffu,stage);memcpy(main_l,tracks,sizeof(tracks));
-    assert(current()==0xffu && use==&slot[1] && st_stereo_main_counters.late==1);
+    assert(current()==0xffu && use==&slot1 && st_stereo_main_counters.late==1);
     for(t=0;t<8*32;t++)tracks[t]+=33333;
     send(0xffu,stage);memcpy(main_l,tracks,sizeof(tracks));receive();
     for(t=0;t<8*32;t++)tracks[t]+=55555;
-    {uint32_t keep=slot[0].sequence;send(0xffu,stage);
-     assert(current()==0xffu && use==&slot[0] && slot[0].sequence==keep);}
+    {uint32_t keep=slot0.sequence;send(0xffu,stage);
+     assert(current()==0xffu && use==&slot0 && slot0.sequence==keep);}
     /* No D matches the L being mixed (the read overlapped AUDIO's write). */
     receive();for(t=0;t<8*32;t++)main_l[t]=t*3;
     {uint32_t dropped=st_stereo_main_counters.dropped;assert(current()==0 && st_stereo_main_counters.dropped==dropped+1);}

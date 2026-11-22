@@ -14,31 +14,43 @@
 #ifndef ELEKLOADER_ST_STEREO_H
 #define ELEKLOADER_ST_STEREO_H
 
-/* AUDIO, core 1.8: the chain-end directory {magic, hook, version, 0}. The
- * core calls word 1 once a block, after AMP and before the track DMA; it is
- * an rts until a bank writes its own hook there. An older core has no magic. */
+/* AUDIO, core 1.8: the chain-end directory {magic, hook, version, multimode}.
+ * The core calls word 1 once a block, after AMP and before the track DMA; it
+ * is an rts until a bank writes its own hook there. An older core has no
+ * magic. Version 2 (core 2.5): the stock chain loads its per-track multimode
+ * routine from word 3 (40000a72, `movea.l 40040f3c,a4`), the native
+ * 0x400019d6 until a bank writes its own entry there; the entry takes the
+ * native's arguments (row + 0x52, buffer, x, track, trig, word) and must
+ * leave what the native leaves. Version 1 has 0 in word 3. */
 #define ST_CHAIN_DIRECTORY ((volatile unsigned int *)0x40040f30u)
 #define ST_CHAIN_MAGIC 0x454c5301u
+#define ST_CHAIN_MULTIMODE_VERSION 2u
+#define ST_CHAIN_MULTIMODE_NATIVE 0x400019d6u
 
 /* AUDIO SRAM 0x8000f398..0x8000ffff: unused by the stock OS and by every
- * other mod (device check 2026-11-10). The engine owns it. */
+ * other mod (device check 2026-11-10). The engine owns it
+ * (docs/MACHINE-REFERENCE.md, "AUDIO's SRAM", has the map). */
 #ifndef ST_STEREO_R
 #define ST_STEREO_R(t) ((int *)(0x8000f400u+128u*(t)))      /* 8 x 32 Q31 */
 #endif
 #define ST_STEREO_SIGNAL ((unsigned int *)0x8000f800u)      /* 40 words: R's chain memory */
-#define ST_STEREO_SNAP_A ((unsigned int *)0x8000f8a0u)      /* 172 words: the control state from before the L pass */
-#define ST_STEREO_SNAP_B ((unsigned int *)0x8000fb50u)      /* 172 words: the window block's staging */
+#define ST_STEREO_SNAP_A ((unsigned int *)0x8000f8a0u)      /* 40 words (of 172): the drive state from before the L drive */
+#define ST_STEREO_SNAP_B ((unsigned int *)0x8000fb50u)      /* the window block's staging (ST_STEREO_BLOCK bytes) */
 #define ST_STEREO_FILTER(t) ((unsigned int *)(0x8000fe00u+16u*(t))) /* render filter, 4 words */
-#define ST_STEREO_SCRATCH ((int *)0x8000fe80u)              /* 32 words for a render */
+#define ST_STEREO_SCRATCH ((int *)0x8000fe80u)              /* 32 words for a render; then the fused multimode's */
+/* 0x8000ff00..0x8000ffff: the fused multimode's R buffer and second output
+ * (mods/samplers-st/stereo/multimode.s). */
 #define ST_STEREO_WORDS 172u
 #define ST_STEREO_SIGNAL_WORDS 40u
 
 /* The shared window, 0x5b0..0x7ef (free; device check 2026-11-10). AUDIO
- * sees it at 0, MAIN at 0x10000000. Each block AUDIO writes 0x5b0..0x7d3 in
- * ascending order (only the mantissas of the tracks in the mask): the
- * sequence comes first and again last, so a reader that reads SEQ_END, then
- * the block, then SEQ and finds them equal has read one whole block. D is sent as 16-bit mantissas
- * with one shift per track and block: D = mantissa << (shift + 1), Q31. */
+ * sees it at 0, MAIN at 0x10000000. Each block AUDIO writes 0x5b0..0x7df in
+ * ascending order (eDMA channel 46 since samplers-st 1.6, the whole block;
+ * the mantissas of tracks outside the mask are stale): the sequence comes
+ * first and again last, so a reader that reads SEQ_END, then the block, then
+ * SEQ and finds them equal has read one whole block (MAIN's eDMA reads it
+ * descending for that). D is sent as 16-bit mantissas with one shift per
+ * track and block: D = mantissa << (shift + 1), Q31. */
 #define ST_STEREO_SEQ 0x5b0u                    /* u32: the block's sequence */
 #define ST_STEREO_MASK 0x5b4u                   /* u32: bit t, track t has D */
 #define ST_STEREO_SHIFT 0x5b8u                  /* 8 bytes */
@@ -55,9 +67,9 @@
 #define ST_STEREO_MAIN 0x10000000u
 
 /* AUDIO, from a machine's render: claim track t as stereo for this block and
- * get the 32 words to write R into, or 0 on a core without the chain end.
- * The engine is mods/samplers-st/audio/stereo.c (linked into the bank) until
- * it moves into the core. */
+ * get the 32 words to write R into, or 0 on a core whose chain directory is
+ * not version 2 (core 2.5). The engine is mods/samplers-st/stereo/audio.c
+ * and multimode.s (linked into the bank) until it moves into the core. */
 int *st_stereo_claim(unsigned int track);
 /* AUDIO, for a machine deciding whether a track's tail still needs R: one of
  * 32 Q31 samples at or above ST_STEREO_QUIET in magnitude (2^16, -96 dBFS:

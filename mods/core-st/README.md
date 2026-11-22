@@ -1,4 +1,14 @@
-# Syntakt core 2.4.0
+# Syntakt core 2.5.0
+
+Core **2.5.0** gives the AUDIO chain a multimode entry for stereo engines.
+The stock chain's `lea 400019d6,a4` before its per-track multimode loop
+(`40000a72`) becomes `movea.l 40040f3c,a4`: the routine comes from the chain
+directory's word 3, which holds the native routine until a bank writes its
+own entry there. The directory's version is 2 (`<syntakt/stereo.h>`,
+`ST_CHAIN_MULTIMODE_VERSION`). No AUDIO code is added; the companion cave is
+unchanged. A bank for core 1.8 to 2.4 still works on it (it writes only
+word 1); a samplers-st 1.6 bank on an older core keeps every track mono.
+See docs/MACHINE-REFERENCE.md, "Stereo tracks".
 
 Core **2.4.0 / host API 16** shares global Kit has/get/set and task-side Kit
 copy/new/codecs across parameter providers, and adds `ST_EV_FX_CV` (15) before

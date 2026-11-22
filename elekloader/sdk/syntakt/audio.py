@@ -28,6 +28,10 @@ BW_STOCK=bytes.fromhex('d081ec8041f00c00')   # add.l d1,d0; asr.l #6,d0; lea (a0
 # and the 16-byte directory between the render table (ends 40040f30) and the
 # ABI directory at 40040f40. Word 1 is the hook audio_chain_end calls.
 CHAIN_END,CHAIN_DIRECTORY=0x40000ac6,0x40040f30
+# Chain multimode (core 2.5, chain directory version 2): the stock chain's
+# `lea 400019d6,a4` before its per-track multimode loop loads the routine from
+# the directory's word 3 instead, the native until a bank installs its entry.
+CHAIN_MULTIMODE,MULTIMODE_NATIVE=0x40000a72,0x400019d6
 
 def audit(code,base=0):
     """Check an explicit code range, including its complete final instruction."""
@@ -121,6 +125,9 @@ def build(stock,dev,out,meter=False):
     patch(0x40000b04,bytes.fromhex('4ab940040050'),jsr('audio_machine_exit'))
     # Chain end (core 1.8): after AMP, before the track DMA (move.l 4004f6e0,d0).
     patch(CHAIN_END,bytes.fromhex('20394004f6e0'),jsr('audio_chain_end'))
+    # Chain multimode (core 2.5): lea 400019d6,a4 -> movea.l (40040f3c).l,a4.
+    patch(CHAIN_MULTIMODE,bytes.fromhex('49f9')+struct.pack('>I',MULTIMODE_NATIVE),
+          bytes.fromhex('2879')+struct.pack('>I',CHAIN_DIRECTORY+12))
     # The bound is exact only while the stock poles from index 508 on are zero.
     tail=original[BW_TABLE+4*BW_OPEN-BASE:BW_TABLE+4*1024-BASE]
     if any(tail) or not all(original[BW_TABLE+4*i-BASE:BW_TABLE+4*i+4-BASE]!=bytes(4) for i in range(BW_OPEN)):
@@ -130,9 +137,10 @@ def build(stock,dev,out,meter=False):
     api=struct.pack('>4I',0x454c0001,symbols['audio_machine_params'],32,24)
     patch(0x40040f40,bytes(16),api)
     patch(0x40040f50,bytes(16),struct.pack('>4I',0x454c5001,symbols['audio_pool_sample'],128,0))
-    # Chain-end directory, after the render table: {magic, hook, version, 0}.
-    # A bank writes its hook into word 1; until then it is the silent rts.
-    patch(CHAIN_DIRECTORY,bytes(16),struct.pack('>4I',0x454c5301,symbols['audio_machine_silent'],1,0))
+    # Chain directory, after the render table: {magic, hook, version, multimode}.
+    # A bank writes its hook into word 1 (until then the silent rts) and may
+    # write its multimode entry into word 3 (until then the native routine).
+    patch(CHAIN_DIRECTORY,bytes(16),struct.pack('>4I',0x454c5301,symbols['audio_machine_silent'],2,MULTIMODE_NATIVE))
     if meter:
         patch(0x4000094a,bytes.fromhex('4bf9400010e4'),jsr('audio_enter'))
     syx._check_secondary(stock,dev,{7:bytes(image)})

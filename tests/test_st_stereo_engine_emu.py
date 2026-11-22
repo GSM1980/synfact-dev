@@ -1,24 +1,26 @@
-"""The stereo engine's chain end (mods/samplers-st/stereo/audio.c), executed in Unicorn.
+"""The stereo engine's chain end and multimode entry (mods/samplers-st/stereo/audio.c), in Unicorn.
 
 The real engine, built with the bank's compiler and flags, runs block after
-block with stand-ins for the four native chain calls
-(tests/st_stereo_engine_stubs.c): the first one logs the chain state the R
-pass finds, and all of them write that state, as the native chain does.
-Before each chain end the test plays the L pass: it writes new control and
-signal state, and new L and R buffers.
+block with stand-ins for the native chain calls
+(tests/st_stereo_engine_stubs.c), which count their calls and write the
+chain state as the native chain does. (Whether the engine's R equals a
+native R pass, word for word, is tests/test_st_stereo_natives_emu.py's
+check_chain, with the real natives in analog-emu.)
 
 Checked per block, for masks that come and go:
-- the multimode runs from its second part (0x40001ea4) for each claimed
-  track, with that track's coefficients from the L pass as its targets;
-- the R pass takes the native drive only when a claimed track's OVERDRIVE
-  (row word 0x28) is on or its wet weight is not 0, and its own otherwise;
-- the R pass starts from the control state of the previous block's L pass
-  (or this block's, when the previous block had no stereo track), and from
-  R's own signal memory, as the previous R pass left it;
-- after the chain end the control and signal state are exactly the L pass's;
+- a claim installs the chain-end hook (word 1) and the multimode entry
+  (word 3) of a version-2 chain directory; a version-1 directory gets no
+  stereo track;
+- the multimode entry sends a mono track straight to the native routine,
+  and runs a claimed track's L call, its R tail (0x40001ea4) and its R
+  envelope;
+- the chain end leaves the chain state alone, keeps the drive state for the
+  next block's R drive, and zeroes R of a track that left the claim;
 - with no stereo track, one empty block, then the window left alone;
-- the window block: SEQ = SEQ_END, the mask of tracks with a nonzero D, and
-  each mantissa (D = R - L, as tests/test_st_stereo.c checks on the host).
+- the window block, sent by AUDIO eDMA channel 46 (emulated: the TCD links
+  the channel to itself, one start moves the block): SEQ = SEQ_END, the mask
+  of tracks with a nonzero D, and each mantissa (D = R - L, as
+  tests/test_st_stereo.c checks on the host).
 It prints the instructions of a chain end (Unicorn counts instructions, not
 cycles) and fails above the budget: the engine's own code, natives excluded.
 
@@ -49,7 +51,7 @@ NATIVES = {'stub_drive': 0x4000112c, 'stub_width': 0x40002320, 'stub_multi': 0x4
            'stub_multimode_tail': 0x40001ea4}
 TRACKS, R0, WINDOW, ROWS = 0x80003840, 0x8000f400, 0x5b0, 0x80003c40
 SEQ, MASK, SHIFT, D0, SEQ_END = 0x5b0, 0x5b4, 0x5b8, 0x5d0, 0x7d0
-BUDGET = {1: 3800, 8: 10000, 'idle': 60}     # instructions per chain end, natives excluded
+BUDGET = {1: 2000, 8: 5200, 'idle': 60}      # instructions per chain end, natives excluded (R zeroing included)
 
 
 def skipped(why):
@@ -67,6 +69,10 @@ def build(source, work):
         subprocess.run([prefix + 'gcc', *DEVICE.toolchain['cflags'], '-fno-jump-tables', '-I',
                         str(ROOT / 'elekloader/sdk/include'), '-c', str(src), '-o', str(obj)], check=True)
         objs.append(str(obj))
+    obj = work / 'multimode.o'
+    subprocess.run([prefix + 'as', *DEVICE.toolchain['asflags'], str(ROOT / 'mods/samplers-st/stereo/multimode.s'),
+                    '-o', str(obj)], check=True)
+    objs.append(str(obj))
     script = work / 'engine.ld'
     script.write_text('SECTIONS { .image 0x%x : { *(.text*) *(.rodata*) *(.data*) *(.bss*) *(COMMON) } '
                       '/DISCARD/ : { *(.comment) *(.note*) *(.gnu.attributes) } }\n' % BASE)
@@ -85,13 +91,19 @@ class Engine:
         self.u = u = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
         u.ctl_set_cpu_model(UC_CPU_M68K_CFV4E)
         for at, n in ((0, 0x1000), (0x40000000, 0x100000), (BASE, (size + 0xffff) & ~0xffff),
-                      (STACK - 0x10000, 0x20000), (RET, 0x1000), (0x80000000, 0x10000), (0xfc070000, 0x1000)):
+                      (STACK - 0x10000, 0x20000), (RET, 0x1000), (0x80000000, 0x10000), (0xfc070000, 0x1000),
+                      (0xfc044000, 0x2000)):
             u.mem_map(at, n)
+        # eDMA: a write of 46 to SSRT runs channel 46's TCD as the unit would
+        # (one start, minor loops linked to the channel itself) and checks it.
+        from unicorn import UC_HOOK_MEM_WRITE
+        self.dma = 0
+        u.hook_add(UC_HOOK_MEM_WRITE, self.ssrt, begin=0xfc04401e, end=0xfc04401e)
         u.mem_write(BASE, bytes(image))
         u.mem_write(RET, b'\x4e\x71')
         for name, at in NATIVES.items():           # jmp stub
             u.mem_write(at, struct.pack('>HI', 0x4ef9, syms[name]))
-        u.mem_write(0x40040f30, struct.pack('>4I', 0x454c5301, 0x40040f40, 1, 0))
+        u.mem_write(0x40040f30, struct.pack('>4I', 0x454c5301, 0x40040f40, 2, 0x400019d6))
         u.mem_write(0x40040f40, b'\x4e\x75')
         self.syms = syms
         self.count = 0
@@ -101,6 +113,20 @@ class Engine:
 
     def code(self, u, at, size, user):
         self.count += 1
+
+    def ssrt(self, u, access, at, size, value, user):
+        assert value == 46, ('SSRT', value)
+        tcd = bytes(u.mem_read(0xfc0455c0, 32))
+        # ColdFire order: SADDR, ATTR, SOFF, NBYTES, SLAST, DADDR, CITER, DOFF,
+        # DLAST_SGA, BITER, CSR
+        saddr, attr, soff, nbytes, slast, daddr, citer, doff, dlast, biter, csr = struct.unpack('>IHHIIIHHIHH', tcd)
+        assert (attr, soff, nbytes, slast, doff, dlast, csr) == (0x0404, 16, 16, 0, 16, 0, 0), \
+            ('TCD fields', attr, soff, nbytes, slast, doff, dlast, csr)
+        assert citer == biter and citer >> 15 == 1 and (citer >> 9) & 0x3f == 46, ('minor loop link', hex(citer))
+        loops = citer & 0x1ff
+        assert daddr == WINDOW and loops * 16 == 0x230 and saddr & 15 == 0, ('block', hex(daddr), loops, hex(saddr))
+        u.mem_write(daddr, bytes(u.mem_read(saddr, loops * 16)))
+        self.dma += 1
 
     def call(self, name, *args):
         from unicorn.m68k_const import UC_M68K_REG_A7, UC_M68K_REG_PC
@@ -128,12 +154,6 @@ class Engine:
             k += n
 
 
-def lctl_wet(lctl, previous_l, previous_mask, t):
-    """Track t's drive wet weight (0x800083b0 + 4t, control word t) as the R pass finds it."""
-    start = previous_l if previous_mask else lctl
-    return start[t] != 0
-
-
 def expected_block(l, r):
     """D mantissas and shift of one track, or None when D is zero (stereo/audio.c)."""
     d = [(b >> 1) - (a >> 1) for a, b in zip(l, r)]
@@ -158,12 +178,17 @@ def main():
         skipped('no unicorn (docs/SETUP.md)')
     with tempfile.TemporaryDirectory() as tmp:
         image, syms, size = build(Path(args.source), Path(tmp))
+    # A version-1 directory (core 1.8 to 2.4): no stereo track.
+    old = Engine(image, syms, size)
+    old.write(0x40040f30, [0x454c5301, 0x40040f40, 1, 0])
+    old.call('st_stereo_claim', 0)
+    assert old.words(0x40040f30, 4)[1:] == [0x40040f40, 1, 0], 'version-1 directory'
     eng = Engine(image, syms, size)
     rnd = random.Random(20261110)
-    rsig = eng.state([(0x8000f800, 40)])               # ST_STEREO_SIGNAL: R's own memory
-    previous_l, previous_mask = None, 0
+    previous_mask = 0
     masks = [0xff, 0xff, 0x01, 0x81, 0, 0x3c, 0xff, 0, 0, 0xfe, 0xff, 0x10]
     costs = {}
+    counted = ('stub_multis', 'stub_tails', 'stub_envelopes')
     for block, mask in enumerate(masks):
         # The L pass: new chain state and buffers.
         lctl = [rnd.getrandbits(32) for _ in range(172)]
@@ -175,18 +200,34 @@ def main():
               for x in l[t]] for t in range(8)]
         for t in range(8):
             eng.write(TRACKS + 128 * t, l[t], 'i')
-        calls = eng.words(syms['stub_calls'], 1)[0]
-        eng.write(syms['stub_pass'], [0])
-        eng.write(syms['stub_tails'], [0])
-        # OVERDRIVE (row word 0x28) on for some tracks in some blocks: the
-        # engine runs the native drive then, its own otherwise.
-        drive_on = block % 3 == 1
-        for t in range(8):
-            eng.write(ROWS + 142 * t + 0x50, [0x100 if drive_on and t == 3 else 0], 'h')
         for t in range(8):
             if mask >> t & 1:
-                assert eng.call('st_stereo_claim', t) is not None
+                eng.call('st_stereo_claim', t)
                 eng.write(R0 + 128 * t, r[t], 'i')
+        if mask:
+            assert eng.words(0x40040f30, 4) == [0x454c5301, syms['st_stereo_chain_end'], 2,
+                                                syms['st_stereo_multimode']], 'installed'
+            # the multimode entry: a mono track (not track 0, whose call also
+            # runs R's drive and base-width) and a claimed track
+            mono = next((t for t in range(1, 8) if not mask >> t & 1), None)
+            stereo = max(t for t in range(8) if mask >> t & 1)
+            for t in ([mono] if mono is not None else []) + [stereo]:
+                before = [eng.words(syms[n], 1)[0] for n in counted]
+                rbefore = eng.words(R0 + 128 * t, 32)
+                eng.call('st_stereo_multimode', ROWS + 142 * t + 0x52, TRACKS + 128 * t, 0, t, 0, 0)
+                after = [eng.words(syms[n], 1)[0] for n in counted]
+                assert after[0] == before[0] + 1, ('the native multimode on L', block, t)
+                if t == stereo and t:
+                    assert after[1:] == [before[1] + 1, before[2] + 1], ('R tail and envelope', block, t)
+                    assert eng.words(syms['stub_tail_track'], 1)[0] == t
+                elif t != stereo:
+                    assert after[1:] == before[1:], ('a mono track gets no R', block, t)
+                    assert eng.words(R0 + 128 * t, 32) == rbefore
+            eng.set_state(CONTROL, lctl)
+            eng.set_state(SIGNAL, lsig)
+            for t in range(8):
+                if mask >> t & 1:
+                    eng.write(R0 + 128 * t, r[t], 'i')
         window = bytes(eng.u.mem_read(SEQ, 0x224))
         n = eng.call('st_stereo_chain_end')
         k = bin(mask).count("1")
@@ -200,24 +241,13 @@ def main():
         assert eng.state(CONTROL) == lctl, ('control state after the chain end', block)
         assert eng.state(SIGNAL) == lsig, ('signal state after the chain end', block)
         if mask:
-            assert eng.words(syms['stub_pass'], 1)[0] >= 1
-            native_drive = eng.words(syms['stub_calls'], 1)[0] - calls
-            assert native_drive == (1 if (drive_on and mask >> 3 & 1) or any(lctl_wet(lctl, previous_l, previous_mask, t)
-                                                                                for t in range(8) if mask >> t & 1) else 0),                 ('native drive call', block)
-            log = eng.words(syms['stub_log'], 212)
-            start = previous_l if previous_mask else lctl
-            assert log[:172] == start, ('the R pass control state', block)
-            assert log[172:] == rsig, ('the R pass signal state', block)
-            rsig = eng.state([(0x8000f800, 40)])
-            assert rsig != log[172:]                    # the R pass's writes are kept for R
-            # the multimode's second part, once a claimed track, with the L
-            # pass's coefficients of the track as its targets
-            assert eng.words(syms['stub_tails'], 1)[0] == bin(mask).count('1'), ('multimode tails', block)
-            last = max(t for t in range(8) if mask >> t & 1)
-            assert eng.words(syms['stub_tail_track'], 1)[0] == last
-            assert eng.words(syms['stub_tail_targets'], 8) == lctl[52 + 8 * last:60 + 8 * last], ('targets', block)
-        else:
-            assert eng.words(syms['stub_pass'], 1)[0] == 0
+            assert eng.words(0x8000f8a0, 40) == lctl[:40], ('the drive state kept for the next block', block)
+        for t in range(8):
+            got = eng.words(R0 + 128 * t, 32)
+            if previous_mask >> t & 1 and not mask >> t & 1:
+                assert got == [0] * 32, ('R of a track that left the claim', block, t)
+            elif mask >> t & 1:
+                assert got == [x & 0xffffffff for x in r[t]], ('R kept', block, t)
         seq, got_mask = eng.words(SEQ, 2)
         assert eng.words(SEQ_END, 1)[0] == seq
         shifts = bytes(eng.u.mem_read(SHIFT, 8))
@@ -237,13 +267,15 @@ def main():
                 got += [(w >> 16) - ((w >> 15) & 0x10000), (w & 0xffff) - ((w << 1) & 0x10000)]
             assert got == m, ('mantissas', block, t)
         assert got_mask == want_mask, ('mask', block, hex(got_mask), hex(want_mask))
-        previous_l, previous_mask = lctl, mask
+        previous_mask = mask
+    assert eng.dma > 0
     print('chain end, natives excluded (instructions): ' +
           ', '.join('%s tracks %d' % (k, costs[k]) for k in sorted(costs, key=str)))
     for tracks, budget in BUDGET.items():
         assert costs[tracks] <= budget, ('over budget', tracks, costs[tracks], budget)
-    print('PASS: R pass from the previous L state and its own signal memory, L state restored, '
-          'D mantissas and mask (%d blocks); within budget' % len(masks))
+    print('PASS: version-2 directory installed (none on version 1); multimode entry (mono: native; '
+          'stereo: L, R tail, R envelope); the chain end leaves the chain state, keeps the drive state, '
+          'zeroes R that left the claim; D mantissas and mask by eDMA (%d blocks); within budget' % len(masks))
 
 
 if __name__ == '__main__':
