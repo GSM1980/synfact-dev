@@ -1,7 +1,7 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft, 0.2.0.** 0.1.0 was built with SGDK 2.11 in review; 0.2.0 (the
-review's changes) has not been built with SGDK or run on a unit. The same
+**Draft, 0.2.1.** 0.2.0 was built and tested with SGDK 2.11 in review;
+0.2.1 (cancel on every navigation event) has not. Nothing has run on a unit. The same
 feature has been used on OS 1.42 as a binary patch outside this project;
 this module is its rewrite on core events. Needs core 2.7 (host API
 18, SMZ events 16/17).
@@ -29,9 +29,11 @@ With the bank on:
   YES writes the current pattern's kit into that position of the bank with
   the OS's own Kit encoder and slot writer, then shows `SAVED A09 NAME`. The
   project in memory and its "kit changed" flags are untouched.
-- **Cancel.** A pending confirmation is cancelled by any other key, by moving
-  the selection (encoder or arrows), by YES on another row or on MODE, and by
-  leaving or reopening the page.
+- **Cancel.** A pending confirmation is cancelled by any other key (the
+  arrows included), by any encoder event, by YES on another row or on MODE,
+  and by leaving or reopening the page. Every move of the selection is an
+  arrow key or an encoder event, so moving away and back between two ticks
+  still cancels.
 - **Shortcut.** A long press of **SETTINGS** opens the page from anywhere,
   instead of the LED INTENSITY quick view (LED intensity stays in the
   SETTINGS menu). The page stays open; NO closes it.
@@ -71,6 +73,7 @@ Events only; the module owns no code site.
 | `ST_EV_PATTERN_MENU` (core 2.7) | keeps PatternMenuView, which owns the page (`shared_ptr` at +472) |
 | `ST_EV_SETTINGS` | the KIT BANK row (`additem`: label, YES, LEFT/RIGHT) |
 | `ST_EV_KEY`, global | a long press of SETTINGS (KeyEvent flags bit 5) pushes the page on the global view manager and holds SETTINGS until released; other keys cancel a confirmation |
+| `ST_EV_ENC`, global | any encoder event cancels a pending confirmation (never consumed) |
 | `ST_EV_TICK` | page entry and exit (the page's view on the global view stack, `std::list` at manager +20), and the selected row (Menu vtable +36) against the armed row |
 
 The OS routines it calls (never patches) are in `kitload.h`. LOAD and SAVE
@@ -101,8 +104,9 @@ stubs of the OS routines, at their real addresses:
 - KIT BANK: off by default, YES toggles, LEFT/RIGHT pick P1..P128; off reads
   and writes nothing;
 - the 129 rows are built with no storage access, and the labels read the bank;
-- LOAD and SAVE need two YES on the same row; another key, a selection
-  change, leaving the page cancel;
+- LOAD and SAVE need two YES on the same row; another key, an encoder
+  event, a selection change, leaving the page cancel, including a move away
+  and back with no tick between;
 - the names are read again on each entry (SETTINGS > PATTERN or the
   shortcut), and a failed read shows `?` and is retried on the next entry;
 - LOAD replaces the whole Kit in one COPY of `0x1618` bytes, with what the

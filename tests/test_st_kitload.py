@@ -250,6 +250,11 @@ class Unit:
     def tick(self):
         self.call(self.sym['kl_tick'], [0])
 
+    def enc(self, delta):                        # an encoder event: never consumed
+        ev = self.new([24])
+        self.u.mem_write(ev, struct.pack('>5I', 0x401c2400, 0, 0, 0, delta & 0xffffffff))
+        return self.call(self.sym['kl_enc'], [0, ev])
+
     def yes(self, row):                         # row 0 = MODE, 1..128 = kits
         _, lab, act = self.items_built[row]
         any_ = self.new([16])
@@ -355,6 +360,29 @@ def check(image, sym):
     n.tick()
     n.yes(9)
     assert n.msgs[-1] == 'LOAD A09? YES again' and 'note' not in n.calls
+    # away and back between two ticks: the encoder events cancel, the tick alone would not
+    n.yes(9)
+    assert n.calls['note'] == 1                                                # the armed A09 loads
+    n.tick()
+    n.yes(9)
+    assert n.var('kl_armed') == 9
+    n.selected = 3 + 10; assert n.enc(+1) == 0
+    n.selected = 3 + 9; assert n.enc(-1) == 0                                  # back on A09, no tick
+    n.yes(9)
+    assert n.msgs[-1] == 'LOAD A09? YES again' and n.calls['note'] == 1        # asks again, nothing loaded
+    n.selected = 3 + 10; n.key(DOWN, 1); n.key(DOWN, 0)                       # same with the arrows
+    n.selected = 3 + 9; n.key(14, 1); n.key(14, 0)
+    n.yes(9)
+    assert n.msgs[-1] == 'LOAD A09? YES again' and n.calls['note'] == 1
+    m2 = Unit(image, sym)                                                      # SAVE: the review's case
+    m2.menu(); m2.stack(RM); m2.tick(); m2.selected = 3 + 9
+    m2.yes(0); m2.yes(9)
+    assert m2.msgs[-1] == 'SAVE A09 IN P128? YES'
+    m2.selected = 3 + 10; m2.enc(+1); m2.selected = 3 + 9; m2.enc(-1)
+    m2.yes(9)
+    assert not m2.writes and m2.msgs[-1] == 'SAVE A09 IN P128? YES'
+    m2.yes(9)
+    assert len(m2.writes) == 1
     n.stack(0x48070000)                                                        # NO: the page leaves the stack
     n.tick()
     assert n.var('kl_armed') == 0
@@ -372,7 +400,7 @@ def check(image, sym):
     n.u.mem_write(k, struct.pack('>5I', KEYEV_VT, 0, 0, SETTINGS, 0x20))
     assert n.call(n.sym['kl_key'], [0, k]) == 1                                 # entry by the shortcut
     assert n.label(1) == 'A01 AGAIN'
-    print('page: selection change and leaving cancel; names reread on each entry, both ways in')
+    print('page: encoder, arrows, selection change and leaving cancel (also away and back with no tick); names reread on each entry')
 
     # a failed read is not cached as done
     f = Unit(image, sym)

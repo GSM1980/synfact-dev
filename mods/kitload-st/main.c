@@ -13,9 +13,13 @@
  *   ST_EV_RELOAD_MENU  appends the rows (core 2.7);
  *   ST_EV_PATTERN_MENU keeps PatternMenuView, which owns the page (core 2.7);
  *   ST_EV_SETTINGS     the KIT BANK row;
- *   ST_EV_KEY          long press of SETTINGS opens the page;
- *   ST_EV_TICK         page entry (rereads the names), leaving it or moving
- *                      the selection (cancels a pending confirmation).
+ *   ST_EV_KEY          long press of SETTINGS opens the page; any other key
+ *                      (the arrows included) cancels a pending confirmation;
+ *   ST_EV_ENC          any encoder event cancels it: every move of the
+ *                      selection is an arrow key or an encoder event, so no
+ *                      movement between two ticks is missed;
+ *   ST_EV_TICK         page entry (rereads the names) and leaving it (cancels),
+ *                      and a selection other than the armed row (cancels).
  * The OS builds the SETTINGS menus once at boot, before the saved-project
  * table exists: construction touches no storage.
  */
@@ -451,6 +455,15 @@ int kl_key(void *brain, const unsigned char *ev)
     return 0;
 }
 
+/* ST_EV_ENC (global, before the views): int f(brain, event). Any encoder
+ * event cancels a pending confirmation; never consumed. */
+int kl_enc(void *brain, const void *ev)
+{
+    (void)brain; (void)ev;
+    kl_armed = 0;
+    return 0;
+}
+
 static int initialize(const struct st_smz_api *api)
 {
     if (!api || !api->ui || !api->ui->host || api->ui->host->version < 18) return 1;   /* core 2.7 */
@@ -462,5 +475,6 @@ static const struct st_smz_subscription subscriptions[] = {
     {ST_EV_PATTERN_MENU, (void (*)(void))kl_pattern_menu},
     {ST_EV_SETTINGS, (void (*)(void))kl_settings},
     {ST_EV_KEY, (void (*)(void))kl_key},
+    {ST_EV_ENC, (void (*)(void))kl_enc},
     {ST_EV_TICK, (void (*)(void))kl_tick}};
-const struct st_smz_module kitload_module = {"KITLOAD", initialize, subscriptions, 5};
+const struct st_smz_module kitload_module = {"KITLOAD", initialize, subscriptions, 6};
