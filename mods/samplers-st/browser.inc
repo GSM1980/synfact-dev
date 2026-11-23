@@ -7,8 +7,13 @@
 #define SP_BROWSER_TYPE ((u32 (*)(void *))0x40030622u)
 #define SP_BROWSER_TRACK ((u32 (*)(void *))0x4001ff74u)
 #define SP_BROWSER_GET ((u32 (*)(void *,u32,u8 *))0x40039160u)
-#define SP_BROWSER_TRIG ((u32 (*)(void *))0x400c2dd6u)
-#define SP_BROWSER_RECORD ((u32 (*)(void *))0x400c3582u)
+/* 1.6.1: trigs held within the track length (400c3582: the selection
+ * +158h/+15Ch masked to the length) and live REC (400c3062: +161h and
+ * +16Ah). Until 1.6.1 these were 400c2dd6 (+160h, "a lock was edited during
+ * this hold") and 400c3582 taken for live REC: holding a trig refused the
+ * list. tests/test_st_sampler_natives_emu.py runs all three on OS 1.42. */
+#define SP_BROWSER_TRIG ((u32 (*)(void *))0x400c3582u)
+#define SP_BROWSER_RECORD ((u32 (*)(void *))0x400c3062u)
 #define SP_BROWSER_INVALIDATE ((void (*)(void *))0x400ffe22u)
 #define SP_BROWSER_FONT ((void *(*)(void *))0x400f9478u)
 #define SP_BROWSER_TEXT ((void (*)(void *,void *,int,int,u32,const char *))0x400f8b68u)
@@ -128,5 +133,11 @@ int sp_browser_pre_key(void *view,void *event,u32 phase)
     sp_browser.swallow=key;sp_browser.swallow_view=(u32)view;
     sp_browser_close(view);return 1;
 }
+/* 1.6.1: a held key's repeats (flag 8) are not a new action. A trig held for
+ * a p-lock repeats while SAMP turns: closing on them hid the list at once. */
 void sp_browser_post_key(void *view,void *event,u32 phase)
-{(void)event;(void)phase;sp_browser_close(view);}
+{
+    (void)phase;
+    if(event && (((const u32 *)event)[4]&8u))return;
+    sp_browser_close(view);
+}

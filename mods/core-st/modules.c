@@ -5,6 +5,7 @@
  */
 #include <syntakt/modules.h>
 #include <syntakt/native.h>
+#include "smz.h"
 typedef st_u32 u32;
 extern void *fw_malloc(u32);extern void fw_free(void *);
 extern const struct st_machine_ui_api core_machine_ui_api;
@@ -23,9 +24,11 @@ static struct {const u32 *list;const unsigned char *operand;} events[]={
     E(fs_route),E(fs_write),E(fs_written),E(main_mix),{ev_native,0},
     E(track_send),E(delay_in),E(reverb_in),E(fx_cv)};
 typedef char event_table_size[sizeof events/sizeof events[0]==ST_EV_COUNT?1:-1];
-/* One byte per native operation: zero replays stock immediately; bits 0..6
- * select the first seven list entries. Bit 7 uses the original full-list
- * traversal (including before initialization and for longer subscriptions).
+/* One byte per native operation: zero replays stock immediately; 0x80 is the
+ * original full-list traversal (every entry wants it, an entry past 32, or
+ * before initialization). Core 2.6.1: any other value only says someone is
+ * interested, and the dispatcher takes the entries from the operation's word
+ * in core_native_routes, one bit per list entry (up to 32).
  * The assembly adapters still only test nonzero. A subscriber is
  * interested in every operation unless it narrowed itself (host API 5).
  * Bytes are published atomically with the native list, and fail open before
@@ -38,13 +41,30 @@ typedef char event_table_size[sizeof events/sizeof events[0]==ST_EV_COUNT?1:-1];
  * native.s tests these bytes by address. */
 #define NATIVE_TYPE_TRACKS ST_NATIVE_OPERATION_COUNT
 typedef char native_type_bytes[ST_NATIVE_OPERATION_COUNT==18 && ST_NATIVE_NOTE_ACCEPT==20?1:-1];
-unsigned char core_native_interest[4*NATIVE_WORDS] __attribute__((aligned(4)))=
-    {128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,0xff,1,128,128};
+#define NATIVE_BYTES_INIT {128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,0xff,1,128,128}
+#define NATIVE_ROUTES_INIT {~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u}
+typedef char native_routes_size[ST_NATIVE_OPERATION_LIMIT==22?1:-1];
+#ifdef __mcoldfire__
+/* Core 2.6.1: the words sit 88 bytes before the bytes, so the dispatcher
+ * reads an operation's word with the base it already holds for its byte
+ * (native-routes.s), at no extra instruction. */
+static struct {u32 routes[ST_NATIVE_OPERATION_LIMIT];unsigned char interest[4*NATIVE_WORDS];}
+    native_table __attribute__((aligned(4)))={NATIVE_ROUTES_INIT,NATIVE_BYTES_INIT};
+typedef char native_table_layout[__builtin_offsetof(__typeof__(native_table),interest)==88?1:-1];
+__asm__(".globl core_native_routes\n.set core_native_routes,native_table\n"
+        ".globl core_native_interest\n.set core_native_interest,native_table+88");
+#define core_native_routes (native_table.routes)
+#define core_native_interest (native_table.interest)
+#else
+unsigned char core_native_interest[4*NATIVE_WORDS] __attribute__((aligned(4)))=NATIVE_BYTES_INIT;
+u32 core_native_routes[ST_NATIVE_OPERATION_LIMIT]=NATIVE_ROUTES_INIT;
+#endif
 /* Per subscriber: operation mask (host API 5) and page view class (API 6).
  * A full table leaves the newcomer at every operation and view (open). */
-/* Cover the bank's sixteen module slots. The assembler uses the exported
- * array end, so its lookup cannot silently retain an older capacity. */
-#define NATIVE_SLOTS 16
+/* Cover the bank's module slots (CORE_SMZ_MODULES, 32 since core 2.6.1). The
+ * assembler uses the exported array end, so its lookup cannot silently
+ * retain an older capacity. */
+#define NATIVE_SLOTS CORE_SMZ_MODULES
 #define NATIVE_STRING_(n) #n
 #define NATIVE_STRING(n) NATIVE_STRING_(n)
 #define NATIVE_PAGE_OPS ((1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_NAV))
@@ -84,8 +104,46 @@ __attribute__((noinline)) static u32 native_fill(unsigned char *out,const u32 *l
     return any?0:pv;
 }
 #endif
+/* The words for bit-7 bytes (cold, as the bytes). Same masks and order as
+ * native_fill: an unregistered subscriber wants every operation. */
+__attribute__((noinline)) static void native_routes(u32 *out,const u32 *list)
+{
+    u32 fn,own,op,index=0,all=0,i;
+    for(op=0;op<ST_NATIVE_OPERATION_LIMIT;op++)out[op]=0;
+    while((fn=*list++)){
+        own=~0u;
+#pragma GCC unroll 1
+        for(i=0;i<NATIVE_SLOTS;i++)if(native_masks[i].fn==fn){own=native_masks[i].mask;break;}
+        for(op=0;op<ST_NATIVE_OPERATION_LIMIT;op++)if(own>>op&1u)
+            out[op]=index<32u?out[op]|1u<<index:~0u;
+        if(index<32u)all|=1u<<index;
+        index++;
+    }
+    for(op=0;op<ST_NATIVE_OPERATION_LIMIT;op++)
+        if((all && out[op]==all) || op-ST_NATIVE_OPERATION_COUNT<2u)out[op]=~0u;
+}
+/* The encoder shares bit 7 past the seventh entry. Rewrite each interested
+ * byte from its word: 0x80 the full traversal, otherwise nonzero (the first
+ * seven's own bits, or 0x7f past them) for the word. TYPE bytes stay. */
+__attribute__((noinline)) static void native_merge(unsigned char *bytes,const u32 *words)
+{
+    u32 op,w;
+    for(op=0;op<ST_NATIVE_OPERATION_LIMIT;op++){
+        if(op-ST_NATIVE_OPERATION_COUNT<2u || !bytes[op] || !(w=words[op]))continue;
+        bytes[op]=(unsigned char)(w==~0u?128u:w>>7?127u:w);
+    }
+}
+/* Words first, then the bytes: a positive byte always finds a current word. */
+static u32 native_refresh(void)
+{
+    u32 view;
+    native_routes(core_native_routes,events[ST_EV_NATIVE].list);
+    view=native_fill(core_native_interest,events[ST_EV_NATIVE].list);
+    native_merge(core_native_interest,core_native_routes);
+    return view;
+}
 void core_native_initialize(void)
-{core_native_page_view=native_fill(core_native_interest,events[ST_EV_NATIVE].list);}
+{core_native_page_view=native_refresh();}
 /* Host API 5/6. Call from the subscriber's init, its audio IRQ or an
  * IRQ-masked section. A new slot starts at every operation and view; a full
  * table ignores the newcomer's narrowing (open). field: 1 mask, 2 view. */
@@ -101,18 +159,22 @@ __attribute__((noinline)) static void native_set(void (*callback)(void),u32 valu
     if(!e){if(!slot)return;e=slot;e[0]=(u32)callback;e[1]=~0u;e[2]=0;}
     if(e[field]==value)return;
     e[field]=value;
-    core_native_page_view=native_fill(core_native_interest,events[ST_EV_NATIVE].list);
+    core_native_page_view=native_refresh();
 }
 void core_native_interest_set(void (*callback)(void),u32 mask){native_set(callback,mask,1);}
 void core_native_page_view_set(void (*callback)(void),u32 vtable){native_set(callback,vtable,2);}
 #ifndef __mcoldfire__
 int core_event_native(u32 operation,const u32 *args,u32 *result)
 {
-    const u32 *p=events[ST_EV_NATIVE].list;u32 fn;
-    int bits=core_native_interest[operation];
-    if(bits&128u || operation-ST_NATIVE_OPERATION_COUNT<2u)bits=-1;
+    const u32 *p=events[ST_EV_NATIVE].list;u32 fn,bits=core_native_interest[operation];
+    if(!(bits&128u) && operation-ST_NATIVE_OPERATION_COUNT>=2u)bits=core_native_routes[operation];
+    else bits=~0u;
+    if(bits==~0u){
+        while((fn=*p++))if(((int (*)(u32,const u32 *,u32 *))fn)(operation,args,result))return 1;
+        return 0;
+    }
     while(bits && (fn=*p++)){
-        if((bits&1) && ((int (*)(u32,const u32 *,u32 *))fn)(operation,args,result))return 1;
+        if((bits&1u) && ((int (*)(u32,const u32 *,u32 *))fn)(operation,args,result))return 1;
         bits>>=1;
     }
     return 0;
@@ -149,7 +211,7 @@ int core_event_view(u32 event,void *view,void *data,u32 id)
 }
 int core_modules_bind(const struct st_smz_module *mods,u32 count)
 {
-    u32 i,j,k,e,phase,old[ST_EV_COUNT],add[ST_EV_COUNT],used=0,total=0,patches[4*ST_EV_COUNT+2*NATIVE_WORDS+3],n=0;
+    u32 i,j,k,e,phase,old[ST_EV_COUNT],add[ST_EV_COUNT],used=0,total=0,patches[4*ST_EV_COUNT+2*NATIVE_WORDS+2*ST_NATIVE_OPERATION_LIMIT+3],n=0;
     u32 *memory,*dst,*lists[ST_EV_COUNT];struct st_smz_api api={1,&core_machine_ui_api};
     core_machine_input_reset();
     core_audio_idle_reset();
@@ -184,8 +246,12 @@ int core_modules_bind(const struct st_smz_module *mods,u32 count)
         patches[n++]=(u32)&events[e].list;patches[n++]=(u32)lists[e];
         core_module_subscriptions+=add[e];
     }
-    {union {unsigned char b[4*NATIVE_WORDS];u32 w[NATIVE_WORDS];} next;
-     u32 view=native_fill(next.b,add[ST_EV_NATIVE]?lists[ST_EV_NATIVE]:events[ST_EV_NATIVE].list),*q=patches+n;
+    {union {unsigned char b[4*NATIVE_WORDS];u32 w[NATIVE_WORDS];} next;u32 wide[ST_NATIVE_OPERATION_LIMIT];
+     const u32 *list=add[ST_EV_NATIVE]?lists[ST_EV_NATIVE]:events[ST_EV_NATIVE].list;
+     u32 view,*q=patches+n;
+     native_routes(wide,list);view=native_fill(next.b,list);native_merge(next.b,wide);
+#pragma GCC unroll 1
+     for(i=0;i<ST_NATIVE_OPERATION_LIMIT;i++){*q++=(u32)(core_native_routes+i);*q++=wide[i];}
 #pragma GCC unroll 1
      for(i=0;i<NATIVE_WORDS;i++){*q++=(u32)(core_native_interest+4*i);*q++=next.w[i];}
      *q++=(u32)&core_native_page_view;*q++=view;n=(u32)(q-patches);}

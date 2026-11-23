@@ -138,8 +138,9 @@ header is git-ignored, never committed):
 "$PY" mods/digimono-st/dpro/import_tables.py "$MONOMACHINE_OS"
 ```
 
-A bank holds at most 16 modules: with MD KIT and SY MnM (each brings one)
-COMP no longer fits beside the normal list.
+A bank holds at most 32 modules with core 2.6.1 (16 before, so COMP did not
+fit beside MD KIT, SY MnM and the normal list). Machines stay at 16. A core
+before 2.6.1 refuses a bank with more than 16 modules.
 
 Optional COMP (core 2.4+): import its private UI assets with
 `"$PY" mods/comp-st/tools/import_digitakt.py "$DIGITAKT_OS"` (original

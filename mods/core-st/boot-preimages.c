@@ -4,6 +4,7 @@
  * own preimage declarations, and is checked for drift by the regressions.
  */
 #include "boot-preimages.h"
+#include "smz.h"
 typedef core_u32 u32;typedef core_u8 u8;
 #include "boot-preimages.inc"
 #include "cold.h"
@@ -33,7 +34,9 @@ int core_boot_preimages_ok(const u8 *info)
 {
     u32 i,lfo3=0,skip=0;
     if(!info)return 0;
-    for(i=0;i<16 && info[40*i];i++){
+    /* Every folder of the directory (core 2.6.1: up to 48): LFO3 or MSKIP
+     * listed late must not skip its preimage check. */
+    for(i=0;i<CORE_SMZ_MOD_INFO_MAX && info[40*i];i++){
         if(name_is(info+40*i,"lfo3-st"))lfo3=1;
         if(name_is(info+40*i,"modulation-skip-st"))skip=1;
     }

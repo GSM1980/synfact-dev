@@ -15,7 +15,7 @@ EMPTY(draw) EMPTY(key) EMPTY(enc) EMPTY(settings) EMPTY(render_in) EMPTY(render_
 EMPTY(fs_route) EMPTY(fs_write) EMPTY(fs_written) EMPTY(main_mix) EMPTY(track_send) EMPTY(delay_in) EMPTY(reverb_in) EMPTY(fx_cv)
 const struct st_machine_ui_api core_machine_ui_api={1};
 static u32 fail_alloc,fail_init,published,initialized;static const u32 *ticks;
-static u32 order[3],order_count;
+static u32 order[40],order_count;
 static u32 input_resets;
 void core_machine_input_reset(void){input_resets++;}
 static u32 test_seq=2;
@@ -28,7 +28,7 @@ void *fw_malloc(u32 n){return fail_alloc?0:VirtualAlloc((void *)0x47000000u,n,ME
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
 void core_event_publish(const u32 *p)
 {assert(p[0]==(u32)(core_tick_table+2));ticks=(const u32 *)p[1];assert(p[2] && p[3]==p[1]);
- {u32 k;for(k=4;p[k];k+=2)*(u32 *)p[k]=p[k+1];assert(k==4+2*((ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
+ {u32 k;for(k=4;p[k];k+=2)*(u32 *)p[k]=p[k+1];assert(k==4+2*(ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
  *(const u32 **)p[2]=ticks;published++;}
 static void extra(void *c){(void)c;}
 static int init(const struct st_smz_api *api){assert(api->version==1 && api->ui->version==1);initialized++;
@@ -59,5 +59,14 @@ int main(void)
     assert(ticks[0]==(u32)builtin && ticks[1]==(u32)extra && !ticks[2]);
     assert(core_module_count==3 && core_module_subscriptions==1);fw_free((void *)ticks);
     {u32 i;for(i=0;i<4*NATIVE_WORDS;i++)assert(!core_native_interest[i]);} /* stock fast paths stay active */
-    puts("PASS: module rejection precedes hook initializers; both patchers initialize last; publication remains atomic");return 0;
+    /* Core 2.6.1: a bank of CORE_SMZ_MODULES modules initializes and joins
+     * the list in order; the binder itself has no module count. */
+    {static struct st_smz_module wide[CORE_SMZ_MODULES];u32 i;
+     for(i=0;i<CORE_SMZ_MODULES;i++)wide[i]=(struct st_smz_module){"TEST",normal_init,&s,1};
+     events[ST_EV_TICK].list=ev_tick;   /* the previous case freed its published list */
+     order_count=0;assert(core_modules_bind(wide,CORE_SMZ_MODULES) && published==2 && order_count==CORE_SMZ_MODULES);
+     for(i=0;i<CORE_SMZ_MODULES;i++)assert(ticks[1+i]==(u32)extra);
+     assert(ticks[0]==(u32)builtin && !ticks[1+CORE_SMZ_MODULES] && core_module_count==CORE_SMZ_MODULES);
+     fw_free((void *)ticks);}
+    puts("PASS: module rejection precedes hook initializers; both patchers initialize last; publication remains atomic; 32 modules bind");return 0;
 }

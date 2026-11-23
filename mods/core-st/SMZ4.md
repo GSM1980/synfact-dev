@@ -299,7 +299,7 @@ below; existing sampler UI descriptors require no migration.
 
 ## Optional modules (core 0.8)
 
-Bit 2 enables a directory of 1..16 16-byte `st_smz_module` records:
+Bit 2 enables a directory of 1..32 (core 2.6.1; 1..16 before) 16-byte `st_smz_module` records:
 `{name*, init*, subscriptions*, count}`. Each has up to 16 subscriptions
 `{event, callback*}`. Names are bounded ASCII (32 bytes including terminator);
 callbacks and initializers are validated relocated pointers. `init=ffffffff`
@@ -466,7 +466,7 @@ zone word at file offset 60 (zone+12) is then the directory's offset within the
 MAIN image; it is zero when the bit is clear. The directory is zero-terminated
 and has no count: each record is 40 bytes, the mod's `id` in 24 bytes and its
 `version` in 16, printable ASCII and NUL-padded. A record whose first byte is
-zero ends it, and at most 16 mods fit. Its bytes are plain data, so no relocation
+zero ends it, and at most 48 mods fit (core 2.6.1: 16 machine and 32 module folders; 16 before). Its bytes are plain data, so no relocation
 may touch them. `smz.py` writes one record per mod folder (machine and module
 folders alike), taking `id` and `version` from its `mod.json`. Core 1.1 checks the
 directory during validation and publishes the loaded bank's list to modules as

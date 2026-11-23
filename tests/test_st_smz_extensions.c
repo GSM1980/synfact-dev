@@ -42,6 +42,9 @@ int main(int argc,char **argv)
             memcpy(bad,b,n);at=v.image+core_smz_be(b+v.image+v.ui+8);put(bad+at,32);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
         }
         if(v.nmods){
+            /* Core 2.6.1: up to CORE_SMZ_MODULES (32) modules, never more. */
+            memcpy(bad,b,n);put(bad+36,CORE_SMZ_MODULES+1);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
+            memcpy(bad,b,n);put(bad+36,0);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
             memcpy(bad,b,n);at=v.image+v.modules+12;put(bad+at,17);sum(bad,n,&v);assert(!core_smz_validate(&r,&v));
             memcpy(bad,b,n);at=core_smz_be(b+v.image+v.modules+8);
             if(at==CORE_SMZ_NONE)put(bad+v.image+v.modules+8,0); /* init-only module */

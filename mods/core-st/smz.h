@@ -18,8 +18,12 @@
 #define CORE_SMZ_EXT_STATE (8u*24u*2u)
 #define CORE_SMZ_MAIN_MAX 0x200000u
 #define CORE_SMZ_NONE 0xffffffffu
-/* Feature 8: at most 16 mods in the bank's mod-info directory (SMZ4.md). */
-#define CORE_SMZ_MOD_INFO_MAX 16u
+/* Core 2.6.1: up to 32 modules, each with its own parameter-provider slot,
+ * native mask slot and native route bit (16 until 2.6.0). Machines stay at
+ * 16: their types 64..79 own the parameter IDs 0x1f9..0x3f8. */
+#define CORE_SMZ_MODULES 32u
+/* Feature 8: one record per mod folder, machine or module (SMZ4.md). */
+#define CORE_SMZ_MOD_INFO_MAX (CORE_SMZ_MACHINES+CORE_SMZ_MODULES)
 /* Disk words are BE. Only machines are supported, no runtime patch plans,
  * hook subscriptions or global module initializers. */
 struct core_smz_view {

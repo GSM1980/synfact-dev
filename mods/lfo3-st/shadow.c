@@ -531,6 +531,10 @@ void lfo3_fx_decoded(u32 fx,u32 record,u32 ok)
     if(!sub_decoded(fx,record,1))set_records(fx,FX_SIZE,0,0);
 }
 
+/* 1.3.4: after a successful native pattern encode(record, pattern, flag).
+ * The quick save writes its pattern buffer before encoding the Kit. */
+void lfo3_pattern_encoded(u32 record,u32 pattern)
+{lfo3_meta_notify(ST_SOUND_PATTERN_ENCODE,record,pattern,meta_container(record));}
 /* after the native kit encode(storage, kit, flag) -> ok */
 void lfo3_kit_encoded(u32 storage, u32 kit, u32 ok)
 {

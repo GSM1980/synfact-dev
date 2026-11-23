@@ -28,6 +28,32 @@ static int chain(u32 k,u32 q,u32 *a,u32 *value)
 }
 static int chain_a(u32 q,u32 *a,void *r,u32 *v){(void)r;return chain(0,q,a,v);}
 static int chain_b(u32 q,u32 *a,void *r,u32 *v){(void)r;return chain(1,q,a,v);}
+/* Core 2.6.1: a bank's providers in registration order (SY MnM's selector,
+ * POLY, Chorus, COMP, then LFO3 last) and up to sixteen, one per module.
+ * Each answers query 18 for its own ID only. */
+static u32 slot_calls[16];
+static int slot_query(u32 k,u32 q,u32 *a,u32 *v)
+{slot_calls[k]++;if(q==18 && a[1]==0x3f9+k){*v=200+k;return 1;}return 0;}
+#define SLOT(n) static int slot_##n(u32 q,u32 *a,void *r,u32 *v){(void)r;return slot_query(n,q,a,v);}
+SLOT(0) SLOT(1) SLOT(2) SLOT(3) SLOT(4) SLOT(5) SLOT(6) SLOT(7)
+SLOT(8) SLOT(9) SLOT(10) SLOT(11) SLOT(12) SLOT(13) SLOT(14) SLOT(15)
+static int (*const provider_fns[16])(u32,u32 *,void *,u32 *)={slot_0,slot_1,slot_2,slot_3,slot_4,slot_5,
+    slot_6,slot_7,slot_8,slot_9,slot_10,slot_11,slot_12,slot_13,slot_14,slot_15};
+static void provider_slots(void)
+{
+    u32 i,q[3]={0,0,0},value;
+    memset(core_parameter_providers,0,sizeof core_parameter_providers);
+    for(i=0;i<16;i++)core_parameter_provider_set(provider_fns[i]);
+    for(i=0;i<16;i++)core_parameter_provider_set(provider_fns[i]);    /* re-registration keeps one slot */
+    for(i=0;i<16;i++){
+        q[1]=0x3f9+i;value=0;
+        assert(core_parameter_provider(18,q,0,&value)==1 && value==200+i);
+    }
+    memset(slot_calls,0,sizeof slot_calls);q[1]=0x300;
+    assert(!core_parameter_provider(18,q,0,&value));
+    for(i=0;i<16;i++)assert(slot_calls[i]==1);
+    memset(core_parameter_providers,0,sizeof core_parameter_providers);
+}
 static int codec_final(u32 q,u32 *a,void *result,u32 *value)
 {
     u8 *record=(u8 *)a[q==25?0:1],*sound=(u8 *)a[q==25?1:0];u32 i;
@@ -145,6 +171,7 @@ int main(void)
     struct core_machine_param p[28];struct core_machine_def def[2];
     u32 i,args[3]={0},result[33],value;u8 view[0xa0]={0},sound[0xa4]={0},record[0xac]={0};
     verify_module_only();
+    provider_slots();
     for(i=0;i<28;i++){p[i].label="P";p[i].name="PARAM";p[i].min=0;p[i].max=0x7f00;p[i].initial=0x4000;p[i].alias=0x13;}
     def[0]=(struct core_machine_def){64,28,"TEST","T","SYN",p,ST_MACHINE_NO_INIT,44,5,9};
     def[1]=def[0];def[1].type=65;def[1].params=27;

@@ -35,8 +35,8 @@ def verify(folder,out):
         elif pc==0x40030622:m.ret(state['machine'])
         elif pc==0x4001ff74:m.ret(state['track'])
         elif pc==0x400c3340:m.ret(state['selecting'])
-        elif pc==0x400c2dd6:m.ret(state['held'])
-        elif pc==0x400c3582:m.ret(state['recording'])
+        elif pc==0x400c3582:m.ret(state['held'])        # trigs held (subtype-picker.h)
+        elif pc==0x400c3062:m.ret(state['recording'])   # live REC
         # Boot-created kit/track/snapshot boundaries for native SYN reload.
         elif pc==0x4016e9c8:m.ret(DATA+0x9000)
         elif pc==0x4000f04c:m.ret(DATA+0x9800)

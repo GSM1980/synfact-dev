@@ -582,6 +582,16 @@ On OS 1.42 a native edit of a kit ends in `KitActive::kitChanged`
 +0x10), which re-encodes the Kit into its mirror slots: what survives a
 power cycle without a project save.
 
+FUNC + YES on the MainScreen (key 12 with FUNC, `400341a0`) calls the quick
+save `4001a8d2(obj, temp 1, pattern, 1, 1)`: pattern k is encoded
+(`400a8264`) into `40607754` and written (`40111c0c`, 5C00h bytes) to slot
+128, the Temp Area, at `(k*5C00h+200h)>>9`; then Kit k (`41ad6134 +
+k*1618h`) is encoded (`400a78f4`) into `40600554` and written at
+`(k*1600h+2E0200h)>>9`. FUNC + NO (`4001b168`) reads the pattern into
+`40601b54` and decodes it (`400a80c0`), then the Kit into `405fe354`, decodes
+it (`400a78a0`) and calls `kitChanged`. Live patterns are `40a39b34 +
+k*2138Ch`, directly before the Kits. No project container is involved.
+
 OS 1.42 native Kit new/encode/decode are `400b3384`, `400a78f4`, `400a78a0`;
 native memcpy is `4011613c`. Core 2.4 owns their task-side notifications.
 The two FX VCA gains are D1/D3 at `400905b6`; native clamp/stores continue

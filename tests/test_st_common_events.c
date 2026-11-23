@@ -32,8 +32,10 @@ void *fw_malloc(u32 n)
 {allocations++;return VirtualAlloc((void *)0x47000000u,n,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);}
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
 void core_event_publish(const u32 *p)
-{u32 n=0;while(p[2*n])n++;assert(n==6+(ST_NATIVE_OPERATION_LIMIT+3)/4+1);for(n=0;n<3;n++)*(const u32 **)p[4*n+2]=(const u32 *)p[4*n+3];
- for(n=12;p[n];n+=2){assert(!p[n+1]);*(u32 *)p[n]=p[n+1];}publish_calls++;}   /* no native subscriber */
+{u32 n=0;while(p[2*n])n++;assert(n==6+ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+1);for(n=0;n<3;n++)*(const u32 **)p[4*n+2]=(const u32 *)p[4*n+3];
+ /* Core 2.6.1: the 22 route words first (zero, full for the TYPE bytes 18/19), then the bytes. */
+ for(n=12;n<12+2*ST_NATIVE_OPERATION_LIMIT;n+=2){assert(p[n+1]==((n-12)/2-ST_NATIVE_OPERATION_COUNT<2u?~0u:0));*(u32 *)p[n]=p[n+1];}
+ for(;p[n];n+=2){assert(!p[n+1]);*(u32 *)p[n]=p[n+1];}publish_calls++;}   /* no native subscriber */
 #include "../mods/core-st/modules.c"
 static int init(const struct st_smz_api *a){assert(a->version==2 && a->ui->version==4);init_calls++;return 0;}
 static int legacy_init(const struct st_smz_api *a){assert(a->version==1 && a->ui->version==4);init_calls++;return 0;}

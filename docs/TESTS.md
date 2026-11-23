@@ -116,6 +116,23 @@ full-catalog case. The route suite also checks all sixteen registration
 records and safe overflow without changing its original dispatch/ABI oracles.
 Neither test measures physical CPU percentages or accesses the device.
 
+Core 2.6.1: banks of up to 32 modules. `tests/test_core_st_machines.c`
+registers sixteen parameter providers (2.6.0 fails at the fifth);
+`test_st_native.c` routes twelve native subscribers where only the eleventh
+wants an operation, and a 33rd falling back to the full traversal;
+`test_st_modules.c` binds 32 modules; `test_st_smz_extensions.c` refuses 33;
+`test_st_native_routes_emu.py` and `test_st_native_service_emu.py` cover the
+32-bit routes (the latter: no case costs more instructions than 2.6.0). `test_st_lfo3_provider_slots_emu.py
+--core <build> --bank <bank with SY MnM, POLY, Chorus, COMP> --reference-core
+<2.6.0 build> --out <json>` places the bank's four providers first, runs
+LFO3's real initializer and checks its ten labels; on 2.6.0 they read ERR.
+SP 1.6.1: `test_st_sampler_natives_emu.py --core <build> --out <json>` runs
+the selection getters the sample list uses (held trig, live REC) on OS 1.42.
+ARP 1.10.8 / LFO3 1.3.4: `test_st_arp_quicksave_emu.py --core main.bin
+--bank <bank> --out <json>` covers FUNC+YES / FUNC+NO (see the ARP README).
+ARP 1.10.8: `test_st_arp_view_emu.py` adds `shown_track` (FUNC + YES passed
+to native; the pages drawn for the track shown while TRK is held). It runs
+before the long-gate `arp_frame` case noted below.
 ARP 1.10.7: `test_st_arp_native_stack_emu.py` checks edits beneath permanent
 mute in both opening orders and on both pages, plus track changes before a tick,
 cancelled step holds, native navigation and other-window ownership. The same

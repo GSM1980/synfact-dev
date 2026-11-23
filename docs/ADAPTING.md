@@ -510,6 +510,10 @@ in that order, alongside the ordinary recorder and System info modules.
 See [ARP](../mods/arp-st/README.md) for tests, native boundaries and persistence.
 Project APC1 carriers may be absent when all thirteen associated ARP Sound rows
 are defaults; readers must restore those defaults without requiring a carrier.
+LFO3 1.3.4 adds `ST_SOUND_PATTERN_ENCODE` (record, pattern, container) after a
+native pattern encode. The quick save (FUNC+YES) writes its pattern buffer to
+disk before it encodes the Kit, so data kept in the pattern record's tail is
+filled there (ARP 1.10.8). Observers ignore kinds they do not know.
 
 ## Syntakt: pages added to TRIG (bank modules, no core change)
 

@@ -90,7 +90,7 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
     if(!(core_smz_be(h+24)&2u) && core_smz_be(h+28)){core_smz_failure=__LINE__;return 0;}
     v->modules=core_smz_be(h+32);v->nmods=core_smz_be(h+36);
     if(core_smz_be(h+24)&4u){
-        if(!v->nmods || v->nmods>16 || (v->modules&3)){core_smz_failure=__LINE__;return 0;}
+        if(!v->nmods || v->nmods>CORE_SMZ_MODULES || (v->modules&3)){core_smz_failure=__LINE__;return 0;}
     }else if(v->modules || v->nmods){core_smz_failure=__LINE__;return 0;}
     v->descriptors=core_smz_be(h+40);v->count=count=core_smz_be(h+44);
     if((!count && !v->nmods) || count>CORE_SMZ_MACHINES || (v->descriptors&3) ||

@@ -13,6 +13,8 @@ from test_st_safe_boot_emu import Core,SP
 from unicorn.m68k_const import *
 
 LIST,OUT,ARGS,RESULT,CALLBACK=0x44000000,0x44001004,0x44002000,0x44002100,0x44010000
+WORDS=0x44003000     # core 2.6.1: native_routes() output for the independent oracle
+ALL=0xffffffff
 REGISTERS=[UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,
            UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A2,UC_M68K_REG_A3,
            UC_M68K_REG_A4,UC_M68K_REG_A5,UC_M68K_REG_A6]
@@ -34,6 +36,25 @@ def expected(entries,registry):
     out[18]=t&255;out[19]=t>>8
     return bytes(out),0 if any_view else pv
 
+def expected_routes(entries,registry):
+    """Core 2.6.1: one bit per list entry up to 32, all ones past 32, for
+    every subscriber, and for the TYPE bytes 18/19."""
+    out=[0]*22;every=0
+    for index,fn in enumerate(entries):
+        mask,_=registry.get(fn,(ALL,0))
+        for op in range(22):
+            if mask>>op&1:out[op]=out[op]|1<<index if index<32 else ALL
+        if index<32:every|=1<<index
+    return [ALL if (every and x==every) or op in (18,19) else x for op,x in enumerate(out)]
+
+def merged(flags,words):
+    """Core 2.6.1 native_merge: an interested byte from its word."""
+    out=bytearray(flags)
+    for op in range(22):
+        if op in (18,19) or not out[op] or not words[op]:continue
+        out[op]=128 if words[op]==ALL else 127 if words[op]>>7 else words[op]
+    return bytes(out)
+
 class Routes(Core):
     def __init__(self,folder):
         self.hits=[];self.consume=None;self.operation=None;self.mutator=None;self.instructions=0
@@ -43,10 +64,10 @@ class Routes(Core):
         assert end>masks and (end-masks)%12==0
         self.native_slots=(end-masks)//12
         self.w(ARGS,0x12345678)
-        for i in range(32):self.u.mem_write(CALLBACK+32*i,bytes.fromhex('70004e75'))
+        for i in range(40):self.u.mem_write(CALLBACK+32*i,bytes.fromhex('70004e75'))   # 33+ subscribers
     def code(self,u,pc,size,user):
         self.instructions+=1
-        if CALLBACK<=pc<CALLBACK+32*32 and (pc-CALLBACK)%32==0:
+        if CALLBACK<=pc<CALLBACK+32*40 and (pc-CALLBACK)%32==0:
             op,args,result=self.args(3)
             assert op==self.operation and args==ARGS and result==RESULT
             self.hits.append(pc)
@@ -77,13 +98,30 @@ class Routes(Core):
         flags=bytes(self.u.mem_read(OUT,24));want=expected(entries,registry)
         assert (flags,view)==want,(entries,registry,flags.hex(),want)
         assert self.word(OUT-4)==0xa55a1234 and self.word(OUT+24)==0x1234a55a
-        self.u.mem_write(self.sym['core:core_native_interest'],flags)
-        return flags
-    def dispatch(self,entries,flags,op,consume):
+        # Core 2.6.1: the real word builder and byte rewrite, against the oracle.
+        words=expected_routes(entries,registry);final=merged(flags,words)
+        self.invoke('native_routes',WORDS,LIST)
+        actual=list(struct.unpack('>22I',bytes(self.u.mem_read(WORDS,88))))
+        assert actual==words,(entries,registry,[hex(x) for x in actual],[hex(x) for x in words])
+        self.invoke('native_merge',OUT,WORDS)
+        assert bytes(self.u.mem_read(OUT,24))==final,(bytes(self.u.mem_read(OUT,24)).hex(),final.hex())
+        assert self.sym['core:core_native_interest']-self.sym['core:core_native_routes']==88
+        self.u.mem_write(self.sym['core:core_native_interest'],final)
+        self.u.mem_write(self.sym['core:core_native_routes'],pack(*words))
+        self.oracle_words=words
+        return final
+    def dispatch(self,entries,flags,op,consume,words=None):
         self.operation=op;self.consume=consume;self.hits=[];self.w(RESULT,0xdeadbeef)
         bits=flags[op];want=[]
+        # The setup oracle's words; after the public setters, the core's own.
+        if words is None:words=list(struct.unpack('>22I',bytes(self.u.mem_read(self.sym['core:core_native_routes'],88))))
+        word=words[op]
         for i,fn in enumerate(entries):
-            if op in (18,19) or bits&128 or bits>>i&1:
+            # Core 2.6.1: 0x80 (and ops 18/19) is everyone; another nonzero
+            # byte takes the entries from the operation's word.
+            if op in (18,19) or bits&128:wanted=True
+            else:wanted=bool(bits) and i<32 and word>>i&1
+            if wanted:
                 want.append(fn)
                 if fn==consume:break
         result=self.invoke('core_event_native',op,ARGS,RESULT)
@@ -96,7 +134,7 @@ def verify(folder,out):
     functions=[CALLBACK+32*i for i in range(10)]
     # The real catalog registers ARP/POLY/Chorus/Playhead before the deferred
     # LFO3 initializer. Its fifth narrowing must reach both C and assembly.
-    assert m.native_slots==16,m.native_slots
+    assert m.native_slots==32,m.native_slots
     entries=functions[:5];m.setup(entries,{})
     for i in (1,2,3,4,0):m.invoke('core_native_interest_set',entries[i],1<<21 if i else 0)
     flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
@@ -122,12 +160,16 @@ def verify(folder,out):
     m.invoke('core_native_page_view_set',entries[-2],0x1234)
     assert m.word(m.sym['core:core_native_page_view'])==0x1234
     flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
-    assert flags[9]==128 and flags[17]==0
-    m.dispatch(entries[:-1],flags,9,None)
+    assert flags[9]==127 and flags[17]==0
+    # Core 2.6.1: the 32nd subscriber has its own bit; only it runs.
+    assert m.word(m.sym['core:core_native_routes']+4*9)==1<<31
+    m.dispatch(entries[:-1],flags,9,None);assert m.hits==[entries[-2]]
     m.u.mem_write(LIST,pack(*entries,0));m.invoke('core_native_initialize')
     flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
     assert flags[17]==128
-    m.dispatch(entries,flags,17,None)
+    # The 33rd (no mask slot: every operation) is past 32: full traversal.
+    assert m.word(m.sym['core:core_native_routes']+4*17)==ALL
+    m.dispatch(entries,flags,17,None);assert m.hits==entries
     masks=(0,0xffffffff,1<<17,1<<20,1<<4|0x06000000,1<<4|0xff000000,
            1<<9,1<<10,0x600)
     for count in (0,1,2,3,7,8,9,40):
@@ -135,10 +177,10 @@ def verify(folder,out):
             registry={fn:(rng.choice(masks) if case<16 else rng.getrandbits(32),
                           rng.choice((0,0x1234,0x5678))) for fn in functions[:4]}
             entries=[rng.choice(functions[:4] if case&1 else functions) for _ in range(count)]
-            flags=m.setup(entries,registry)
+            flags=m.setup(entries,registry);words=m.oracle_words
             for op in range(22):
-                m.dispatch(entries,flags,op,None)
-                m.dispatch(entries,flags,op,rng.choice(entries) if entries else None)
+                m.dispatch(entries,flags,op,None,words)
+                m.dispatch(entries,flags,op,rng.choice(entries) if entries else None,words)
                 checks+=2
     # Exercise the real public setter/refresh, including an unchanged value.
     entries=functions[:3];registry={f:(1<<17,0) for f in entries}
@@ -146,7 +188,8 @@ def verify(folder,out):
     for fn in entries:
         m.invoke('core_native_interest_set',fn,1<<20)
         registry[fn]=(1<<20,0)
-        assert bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))==expected(entries,registry)[0]
+        want=expected(entries,registry)[0]
+        assert bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))==merged(want,expected_routes(entries,registry))
         m.invoke('core_native_interest_set',fn,1<<20)
     # A real subscriber narrows other masks while dispatch is in progress.
     # The current snapshot must still visit them; the next dispatch must not.
@@ -166,9 +209,11 @@ def verify(folder,out):
     m.hits=[];assert m.invoke('core_event_native',3,ARGS,RESULT)==0 and m.hits==entries[:1]
     m.mutator=None
     # A deliberately wrong route must be observable in the callback trace.
-    entries=functions[4:6];flags=m.setup(entries,{f:(1<<17,0) for f in entries})
-    m.u.mem_write(m.sym['core:core_native_interest']+17,b'\x02')
-    try:m.dispatch(entries,flags,17,None)
+    entries=functions[4:6];flags=m.setup(entries,{f:(1<<17,0) for f in entries});words=m.oracle_words
+    # Core 2.6.1: a positive byte takes its entries from the word; corrupt both.
+    m.u.mem_write(m.sym['core:core_native_interest']+17,b'\x01')
+    m.w(m.sym['core:core_native_routes']+4*17,2)
+    try:m.dispatch(entries,flags,17,None,words)
     except AssertionError:negative=True
     else:raise AssertionError('corrupt route escaped callback trace oracle')
     result=dict(ok=True,encoder_cases=256,dispatch_cases=checks,abi=True,native_slots=m.native_slots,

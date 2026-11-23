@@ -361,7 +361,9 @@ Envelope +28 points to per-machine UI descriptors; +32/+36 describe optional
 MAIN modules and bounded event subscriptions. A module-only file has zero
 machines. Existing zero-feature banks remain readable; older cores reject
 unknown features. [SMZ4.md](../mods/core-st/SMZ4.md) defines all fields, pointer
-validation, page layouts and callback contracts. Machine graphics belong to
+validation, page layouts and callback contracts. Core 2.6.1 accepts up to 32 modules (+36;
+16 before) and a mod-info directory of up to 48 records; machines stay at 16.
+The layout is unchanged; an older core refuses a bank past its own bound. Machine graphics belong to
 the bank; core storage/loading remains usable without a bank.
 
 Core 0.9.0 appends UI service API 3 edit/clear/input/compound-value services in
@@ -448,5 +450,10 @@ and an ARP1 extension after the existing +Drive LFO3 trailer. Native Sound/Kit
 records and snapshot lengths remain fixed; absent/corrupt metadata gives OFF.
 An all-default Kit and its default pool Sound may leave the APC1 carrier absent;
 the decoder treats that as the same defaults, including for older projects.
+ARP 1.10.8 also writes an APT1 carrier in the same pattern-record tail
+(`[5ac0h, 5c00h)`) of the native quick save's pattern buffer (FUNC+YES, the
+project's Temp Area): the same 320-byte layout, rows not bound to Sound
+records (the Kit is encoded after the pattern), the seal hashed with the Kit
+index. Only the quick reload reads it; a project load reads APC1 only.
 The complete byte layout, validation and compatibility rules are in the ARP
 sources, `mods/arp-st/persist.c`.

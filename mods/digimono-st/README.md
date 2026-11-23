@@ -1,4 +1,13 @@
-# SY MnM 0.8.0
+# SY MnM 0.8.1
+
+## Subtype list during a held trig or live REC (0.8.1)
+
+The subtype list's confirmation and its deferred TYPE edit refuse while a
+trig is held or live REC runs. Their getters were swapped
+(`<syntakt/subtype-picker.h>`): a held trig still refused, by luck, but live
+REC never did. They are now `400c3582` (trigs held within the track length)
+and `400c3062` (live REC); see the SP machines 1.6.1 notes and
+`tests/test_st_sampler_natives_emu.py`, which pins them.
 
 One digital Syntakt machine (type 71), ported from gdeo607's
 [Digi Mono](https://github.com/gdeo607/digi1_mods/tree/32fd22a1fd66fa5833b808b1c1c049a0deb82d88/mods/digimono).

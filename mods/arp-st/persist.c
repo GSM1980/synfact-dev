@@ -18,6 +18,11 @@
 #define KIT_SLOTS 0x2e0200u
 #define POOL_SLOTS 0x390204u
 #define SIDE 1024u
+/* 1.10.8: live patterns (0x40a39b18 + 1Ch, as 4001a36a addresses them),
+ * directly before the live Kits; pattern k plays Kit k. */
+#define PATTERNS 0x40a39b34u
+#define PATTERN 0x2138cu
+#define TEMP_MAGIC 0x41505431u
 struct cell {arp_u32 address,bank;struct arp_settings p[2];};
 struct assoc {arp_u32 address,hash,loaded;struct arp_settings p;};
 struct kit_assoc {arp_u32 address,hash,tags[12];struct arp_settings p[12];};
@@ -34,6 +39,7 @@ static arp_u32 writer_mutex[4] DATA={0};
 static void enter(void){((void (*)(void *))0x40001980u)(writer_mutex);}
 static void leave(void){((void (*)(void *))0x40001aa2u)(writer_mutex);}
 arp_u32 arp_persist_denied DATA=0;
+volatile arp_u32 arp_settings_generation DATA=0;
 static const struct arp_settings defaults __attribute__((aligned(4)))={0,9,1,30,15,0,0xffff,{0}};
 _Static_assert(sizeof(struct arp_settings)==24,"ARP settings word comparison");
 _Static_assert(__builtin_offsetof(struct cell,p)%4==0 && sizeof(struct cell)%4==0,"ARP bank alignment");
@@ -114,7 +120,7 @@ static int store(arp_u32 sound,const struct arp_settings *p)
     __asm__ volatile("" ::: "memory");*(volatile arp_u32 *)&c->bank=bank;return 1;
 }
 int arp_sound_store(arp_u32 sound,const struct arp_settings *p)
-{int ok;enter();ok=store(sound,p);leave();return ok;}
+{int ok;enter();ok=store(sound,p);arp_settings_generation++;leave();return ok;}
 /* Only callbacks authorized by the native full-container scopes call these.
  * The pattern codec ends at 5ab7h; [5ac0h,5c00h) is its slot's checked carrier.
  * Semantic owner is kit/pool index, never that pattern's settings. */
@@ -134,7 +140,7 @@ static arp_u32 row_record(arp_u32 container,unsigned int index,unsigned int row)
 {return row==12?container+POOL_SLOTS+index*RECORD:container+KIT_SLOTS+index*0x1600u+0x2eu+row*RECORD;}
 /* Six-bit signed offsets leave four bytes for binding each row to its native
  * Sound record. A stock import cannot inherit a valid old ARP carrier. */
-static void row_pack(unsigned char *d,const struct arp_settings *p,arp_u32 record)
+static void row_bits(unsigned char *d,const struct arp_settings *p)
 {
     unsigned int i,j,v;
     d[0]=p->mode;d[1]=p->speed;d[2]=p->range;d[3]=p->note_length;d[4]=p->length;d[5]=p->scale;
@@ -144,12 +150,12 @@ static void row_pack(unsigned char *d,const struct arp_settings *p,arp_u32 recor
         v=(unsigned int)(p->offset[i]+24);
         for(j=0;j<6;j++)if(v&(1u<<j))d[8+(i*6+j)/8]|=1u<<((i*6+j)%8);
     }
-    put(d+20,hash((const unsigned char *)record,RECORD));
 }
-static int row_unpack(struct arp_settings *p,const unsigned char *d,arp_u32 record)
+static void row_pack(unsigned char *d,const struct arp_settings *p,arp_u32 record)
+{row_bits(d,p);put(d+20,hash((const unsigned char *)record,RECORD));}
+static int row_read(struct arp_settings *p,const unsigned char *d)
 {
     unsigned int i,j,v;
-    if(word(d+20)!=hash((const unsigned char *)record,RECORD))return 0;
     p->mode=d[0];p->speed=d[1];p->range=d[2];p->note_length=d[3];p->length=d[4];
     p->scale=d[5];p->enabled=((unsigned int)d[6]<<8)|d[7];
     for(i=0;i<16;i++){
@@ -158,6 +164,8 @@ static int row_unpack(struct arp_settings *p,const unsigned char *d,arp_u32 reco
     }
     return valid(p);
 }
+static int row_unpack(struct arp_settings *p,const unsigned char *d,arp_u32 record)
+{return word(d+20)==hash((const unsigned char *)record,RECORD) && row_read(p,d);}
 static void carrier_init(unsigned char *p,arp_u32 container,unsigned int index)
 {unsigned int i;put(p,0x41504331u);for(i=0;i<13;i++)row_pack(p+4+i*24,&defaults,row_record(container,index,i));}
 static void save_row(arp_u32 container,unsigned int index,unsigned int row,const struct arp_settings *p)
@@ -192,6 +200,51 @@ static void load_row(struct arp_settings *p,arp_u32 container,unsigned int index
 {
     const unsigned char *c=carrier(container,index);
     if(!carrier_valid(c,index) || !row_unpack(p,c+4+row*24,row_record(container,index,row)))copy_settings(p,&defaults);
+}
+/* 1.10.8: the native quick save (FUNC+YES, 4001a8d2) encodes pattern k into
+ * its save buffer and writes it to the project's Temp Area before it encodes
+ * Kit k; FUNC+NO reads the pattern into the reload buffer, then the Kit into
+ * another one. Neither has a container, so until 1.10.8 the settings lived
+ * only in RAM, keyed by the save buffer, and the reload found none: all OFF.
+ * Kit k's twelve rows now go in that pattern buffer's free tail ([5ac0h,
+ * 5c00h), as in a project's pattern slot) when the pattern is encoded. The
+ * Kit's Sound records are not encoded yet, so a Temp carrier (APT1) binds
+ * the rows to the Kit index only; a project load never reads APT1. All
+ * defaults leave the tail empty. */
+static int live_kit(arp_u32 kit,unsigned int *index)
+{
+    if(kit<KITS || kit>=KITS+128*KIT || (kit-KITS)%KIT)return 0;
+    *index=(kit-KITS)/KIT;return 1;
+}
+static void temp_save(arp_u32 record,arp_u32 pattern)
+{
+    unsigned char *c=(unsigned char *)(record+CARRIER);unsigned int i,k;arp_u32 kit;
+    if(pattern<PATTERNS || pattern>=PATTERNS+128*PATTERN || (pattern-PATTERNS)%PATTERN)return;
+    k=(pattern-PATTERNS)/PATTERN;kit=KITS+k*KIT;
+    for(i=0;i<12;i++)if(!ordinary(arp_sound_settings(kit+0x2a+i*SOUND)))break;
+    if(i==12){put(c,0);return;}
+    put(c,TEMP_MAGIC);
+    for(i=0;i<13;i++){
+        row_bits(c+4+i*24,i<12?arp_sound_settings(kit+0x2a+i*SOUND):&defaults);put(c+4+i*24+20,0);
+    }
+    put(c+316,hash(c,316)^k^TEMP_MAGIC);
+}
+/* The reload's pattern buffer holds pattern k's record just read with it:
+ * a Temp carrier, or a project's APC1 carrier bound to the reloaded Sound
+ * records (a reload from the project). Zero: none, the caller decides. */
+static int temp_load(arp_u32 kit)
+{
+    const unsigned char *c=(const unsigned char *)(ST_SOUND_PATTERN_RELOAD_BUFFER+CARRIER);
+    unsigned int i,k;int temp;struct arp_settings p;arp_u32 record;
+    if(!live_kit(kit,&k))return 0;
+    temp=word(c)==TEMP_MAGIC && word(c+316)==(hash(c,316)^k^TEMP_MAGIC);
+    if(!temp && !carrier_valid(c,k))return 0;
+    for(i=0;i<12;i++){
+        record=ST_SOUND_KIT_RELOAD_BUFFER+0x2eu+i*RECORD;
+        if(!(temp?row_read(&p,c+4+i*24):row_unpack(&p,c+4+i*24,record)))copy_settings(&p,&defaults);
+        arp_sound_store(kit+0x2a+i*SOUND,&p);
+    }
+    return 1;
 }
 static int record_slot(arp_u32 record,arp_u32 container,unsigned int *index,unsigned int *row)
 {
@@ -296,12 +349,18 @@ static void sound_meta(const arp_u32 *a)
             else for(i=0;i<12;i++){
                 load_row(&p,n,k,i);arp_sound_store(kit+0x2a+i*SOUND,&p);
             }
+        }else if(kind==ST_SOUND_KIT_DECODE && !n && record==ST_SOUND_KIT_RELOAD_BUFFER && temp_load(kit)){
+            /* FUNC+NO: restored from the reloaded pattern record's tail */
         }else{
             struct kit_assoc *entry=kind==ST_SOUND_KIT_ENCODE?kit_remember(record):kit_remembered(record);
             for(i=0;i<12;i++)if(kind==ST_SOUND_KIT_ENCODE)copy_settings(&entry->p[i],arp_sound_settings(kit+0x2a+i*SOUND));
             else arp_sound_store(kit+0x2a+i*SOUND,entry?&entry->p[i]:&defaults);
             if(kind==ST_SOUND_KIT_ENCODE)kit_seal(entry);
         }
+        return;
+    }
+    if(kind==ST_SOUND_PATTERN_ENCODE){
+        if(d==ST_SOUND_PATTERN_SAVE_BUFFER && !n)temp_save(d,s);
         return;
     }
     if(kind==ST_SOUND_KIT_RECORD_COPY){
@@ -367,4 +426,4 @@ static void sound_meta(const arp_u32 *a)
     }
 }
 void arp_sound_meta(const arp_u32 *a)
-{enter();sound_meta(a);leave();}
+{enter();sound_meta(a);arp_settings_generation++;leave();}

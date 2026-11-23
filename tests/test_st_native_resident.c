@@ -19,7 +19,7 @@ void core_audio_idle_reset(void){}
 void core_event_publish(const u32 *p)
 {
     u32 k;for(k=0;p[k];k+=2)*(u32 *)p[k]=p[k+1];                     /* interest + page view words */
-    assert(k==2*((ST_NATIVE_OPERATION_LIMIT+3)/4+1));publications++;
+    assert(k==2*(ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+1));publications++;   /* + core 2.6.1 route words */
 }
 #include "../mods/core-st/modules.c"
 static int interest_open(void){u32 i;for(i=0;i<4*NATIVE_WORDS;i++)if(i<ST_NATIVE_OPERATION_COUNT?!core_native_interest[i]:i==ST_NATIVE_OPERATION_COUNT+1 && !core_native_interest[i])return 0;return 1;}

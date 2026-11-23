@@ -190,7 +190,16 @@ int main(int argc,char **argv)
         if(i==0)track=1;else if(i==1)*(u32 *)(view+0x90)=1;else if(i==2)type=67;else trig=1;
         assert(!press(13,3) && raw==40<<8 && !edits && !clears && !sp_browser_active(view));
     }
-    begin(66,0,35<<8);raw=40<<8;assert(!press(13,11));sp_browser_post_key(view,key,0);assert(!sp_browser_active(view) && !edits);
+    /* 1.6.1: a repeat (flag 8) is no new action: NO's repeat neither reverts
+     * nor closes, nor does a trig held for a p-lock while SAMP turns. The next
+     * real press still closes and accepts. */
+    begin(66,0,35<<8);raw=40<<8;assert(!press(13,11));sp_browser_post_key(view,key,0);assert(sp_browser_active(view) && !edits);
+    assert(!press(24,1));sp_browser_post_key(view,key,0);assert(!sp_browser_active(view) && !edits && raw==40<<8);
+    begin(67,1,35<<8);trig=1;sp_browser_begin(&api,view,67,1);raw=40<<8;locked=1;
+    for(i=0;i<20;i++){assert(!press(24,9));sp_browser_post_key(view,key,0);assert(sp_browser_active(view));}
+    reads=0;assert(sp_browser_draw(&api,&sp_werp,view,pixels,1) && reads==7);
+    assert(!press(24,0));sp_browser_post_key(view,key,0);assert(!sp_browser_active(view) && !edits && !clears);
+    trig=0;locked=0;
     begin(66,0,35<<8);raw=40<<8;sp_browser_post_key(view,key,0);assert(!sp_browser_active(view) && raw==40<<8);
     begin(66,0,35<<8);recording=1;sp_browser_begin(&api,view,66,0);assert(!sp_browser_active(view));recording=0;
     begin(66,0,35<<8);sp_browser_draw(&api,&sp_one_shot,view,pixels,0);

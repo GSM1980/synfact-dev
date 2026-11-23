@@ -1,4 +1,53 @@
-# Syntakt core 2.6.0
+# Syntakt core 2.6.1
+
+**Up to 32 modules** in a bank (16 until 2.6.0), each with its own slot in
+every per-module table. Machines stay at 16: their types 64..79 own the
+parameter IDs `0x1f9..0x3f8`. Sixteen modules was only a bound of ours
+(parser, builders, tables), not of the firmware or the ID space.
+
+- **Parameter providers: one slot per module (32).** Registration used to
+  ignore a fifth provider without a word. A bank with SY MnM (its subtype
+  selector), POLY, Chorus and COMP filled the four slots, and LFO3
+  initializes last (it patches the firmware), so its page appeared with every
+  label reading ERR and controls that did nothing: its IDs reached the native
+  fallbacks. The normal bank has three providers and was not affected.
+- **Native routing: one bit per subscriber, up to 32.** Until 2.6.0 the
+  subscribers past the seventh shared bit 7 of an operation's byte, and bit
+  7 called every subscriber. Now the byte keeps its meaning for the assembly
+  gates (zero: stock at once; 0x80: every subscriber, as before), and any
+  other value takes the subscribers from `core_native_routes`, a 32-bit word
+  per operation, one bit per list entry. The words sit 88 bytes before the
+  bytes, so the dispatcher reads one with the base register it already holds:
+  one instruction replaces the byte copy, and `test_st_native_service_emu.py`
+  measures no case above 2.6.0 (2,880 cases). The encoder is unchanged;
+  `native_merge` rewrites its bytes from the words (0x7f past the seventh).
+  Entries past 32 keep the full traversal. Words and bytes are published
+  atomically with the list; the dispatcher's 28-byte frame, which POLY's
+  stack census observes, is unchanged. Banks so far have six native
+  subscribers.
+- **Native mask slots: 32**, so a subscriber past the sixteenth can still
+  narrow its operations.
+- **Mod-info directory: up to 48 records** (one per mod folder, 16 machine
+  and 32 module folders). The boot preimage check reads all of them: LFO3 or
+  MSKIP listed past the sixteenth folder is still checked before it patches.
+  System info lists up to 48.
+- `elekloader/sdk/syntakt/smz.py` and `js/src/smz-bank.ts` build up to 32
+  modules. A core before 2.6.1 refuses a bank with more than 16 as a whole;
+  banks with 16 or fewer load on either. No hook, host API, SMZ4 contract or
+  AUDIO change. MAIN resident cost: about 500 bytes.
+
+Tests: `test_core_st_machines.c` registers 16 providers each answering its
+own ID (2.6.0 fails at the fifth); `test_st_native.c` routes 12 subscribers
+where only the eleventh wants LFO, then the 7th, 11th and 32nd, and a 33rd
+falling back to the full traversal; `test_st_modules.c` binds 32 modules;
+`test_st_smz_extensions.c` refuses 33; `test_st_native_routes_emu.py` checks
+the real word builder and byte rewrite against an independent oracle and runs
+the resident dispatcher (32 mask slots, the 32nd alone, the 33rd full);
+`test_st_lfo3_provider_slots_emu.py` reproduces the ERR labels on 2.6.0. A
+17-module bank (SY MnM, MD KIT, COMP and the example module) passes the
+2.6.1 parser and is refused by 2.6.0's.
+
+## Core 2.6.0
 
 Core **2.6.0** joins the two lines that followed 2.3.0: main's 2.4.0 and 2.5.0
 (below) and the MD / SY MnM branch's 2.3.1 and 2.3.2 (configuration controls,

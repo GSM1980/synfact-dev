@@ -22,8 +22,13 @@ typedef st_u32 stp_u32;typedef unsigned char stp_u8;
 #define STP_GET ((stp_u32 (*)(void *, stp_u32, stp_u8 *))0x40039160u)
 #define STP_VIEW_TYPE ((stp_u32 (*)(void *))0x40030622u)
 #define STP_VIEW_TRACK ((stp_u32 (*)(void *))0x4001ff74u)
-#define STP_TRIG ((stp_u32 (*)(void *))0x400c2dd6u)
-#define STP_RECORD ((stp_u32 (*)(void *))0x400c3582u)
+/* Trigs held within the track length (400c3582) and live REC (400c3062:
+ * +161h and +16Ah). Until SY MnM 0.8.1 / MD KIT 0.2 these were 400c2dd6
+ * (+160h, "a lock was edited during this hold") and 400c3582 taken for live
+ * REC: a held trig still refused, by the second, and live REC never did.
+ * tests/test_st_sampler_natives_emu.py runs the getters on OS 1.42. */
+#define STP_TRIG ((stp_u32 (*)(void *))0x400c3582u)
+#define STP_RECORD ((stp_u32 (*)(void *))0x400c3062u)
 #define STP_FILL ((void (*)(void *, int, int, int, int, stp_u32))0x400f7fb6u)
 #define STP_SELECTING ((stp_u32 (*)(void *))0x400c3340u)   /* the SYN model shows the machine selector */
 #endif

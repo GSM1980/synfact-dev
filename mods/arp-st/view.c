@@ -52,6 +52,11 @@ static unsigned int arp_page DATA=0;
  * and the native randomizes the page before. One on the chord page: the view
  * leaves on its release, unless YES randomized the chord page meanwhile. */
 static unsigned int arp_trig_flipped DATA=0,arp_trig_opened DATA=0,arp_trig_leaving DATA=0;
+/* 1.10.8: FUNC + YES (save) or FUNC + NO (reload) presses given to native,
+ * bit 0 YES and bit 1 NO, so their releases go there too. */
+static unsigned int arp_func_native DATA=0;
+/* 1.10.8: the settings generation the view last read (persist.h). */
+static arp_u32 arp_seen_generation DATA=0;
 extern int lfo3_pattern_get(void *,arp_u32,arp_u32,arp_u32);
 extern arp_u32 lfo3_pattern_set(void *,arp_u32,arp_u32,arp_u32,int);
 /* The application (4016e804) and its active track model (40019036), as
@@ -424,6 +429,22 @@ static void arp_dirty(void)
     if(arp_view)ARP_DIRTY(arp_view);
     if(trig)ARP_DIRTY(trig);
 }
+/* 1.10.8: the track the MainScreen shows. While TRK is held (the track
+ * selection view on top), the session keeps its track until the selection
+ * ends (arp_sync_track), but the native rows already follow the new track:
+ * NOTE..NOT4 read the active pattern track. Draw that track's Kit Sound
+ * settings too, so SCALE and the arp page never show the previous track's.
+ * Display only: the session, its locks and its held steps are unchanged. */
+static const struct arp_settings *arp_shown_settings(struct arp_settings *p,arp_u32 *track)
+{
+    arp_u32 t=arp_track,sound;
+    if(arp_main && view_word(arp_main,0xa4))
+        t=UI_CALL(0x4001ff74u,arp_u32 (*)(void *))(*(void **)(arp_main+0xa4));
+    if(t!=arp_track && t<ARP_TRACKS && eligible(t) && (sound=active_kit_sound(t))!=0){
+        arp_sound_read(sound,p);*track=t;return p;
+    }
+    *track=arp_track;return &arp_ui_parameters;
+}
 /* Contextual DRAW after the TRIG view (as POLY's page): on an ARP page, its
  * content in x 20..123, rows 0..53, then the native tail and the page
  * indicator over every TRIG page. The native rail (x < 19) and the header
@@ -432,7 +453,8 @@ static void arp_dirty(void)
 static void arp_view_draw(void *v,void *bmp,arp_u32 phase)
 {
     struct arp_canvas c={bmp,arp_text,arp_shape,arp_bitmap};
-    arp_u8 *trig=v;arp_u32 mask,first,index;(void)phase;
+    arp_u8 *trig=v;arp_u32 mask,first,index,track;(void)phase;
+    struct arp_settings other;const struct arp_settings *shown;
     if(!trig || view_word(trig,0)!=ST_TRIG_VIEW || view_word(trig,0x88)!=0x13u)return;
     mask=st_trig_mask(trig);
     if(!(mask&ST_TRIG_ARP) || (index=view_word(trig,0x90))<(first=st_trig_first(mask,ST_TRIG_ARP)))return;
@@ -440,10 +462,11 @@ static void arp_view_draw(void *v,void *bmp,arp_u32 phase)
     if(arp_view && arp_trig_view(arp_main)==trig){
         /* Native TRIG can advance beneath a transparent mute/selection view.
          * The index owns the drawing, even before ARP regains foreground. */
+        shown=arp_shown_settings(&other,&track);
         if(index!=first){
             struct arp_chord_screen cs;const volatile arp_u8 *data=arp_chord_data(0);unsigned int i;
             if(data){
-                cs.track=arp_track;cs.locked=0;cs.scale=arp_ui_parameters.scale;
+                cs.track=track;cs.locked=0;cs.scale=shown->scale;
                 for(i=0;i<4;i++)cs.value[i]=arp_chord_value(data,i,&cs.locked);
                 arp_draw_chord(&cs,&c);
             }
@@ -452,12 +475,13 @@ static void arp_view_draw(void *v,void *bmp,arp_u32 phase)
             icons=*(const volatile arp_u32 *)0x444e0618u;last=*(const volatile arp_u32 *)0x444e061cu;
             count=(last-icons)/28u;
             if(count>=24 && count<=128){
-                s.settings=&arp_ui_parameters;s.track=arp_track;s.selected=arp_selected;
-                s.speed_text=arp_speeds[arp_ui_parameters.speed];
-                s.length_text=arp_length_show && (int)(arp_length_until-arp_host->machine_telemetry[0])>0?
-                    arp_format_note_length(length,arp_ui_parameters.note_length):0;
-                s.length_bitmap=icons+28u*(12u+((count-23u)*arp_ui_parameters.note_length>>7));
-                s.locked=arp_lock_mode?arp_lock_shown:0;
+                s.settings=shown;s.track=track;s.selected=arp_selected;
+                s.speed_text=arp_speeds[shown->speed];
+                s.length_text=shown==&arp_ui_parameters && arp_length_show &&
+                    (int)(arp_length_until-arp_host->machine_telemetry[0])>0?
+                    arp_format_note_length(length,shown->note_length):0;
+                s.length_bitmap=icons+28u*(12u+((count-23u)*shown->note_length>>7));
+                s.locked=shown==&arp_ui_parameters && arp_lock_mode?arp_lock_shown:0;
                 arp_draw(&s,&c);
             }
         }
@@ -556,6 +580,7 @@ static int arp_open(void *app,arp_u32 track,unsigned int page,int covered)
     *(const arp_u32 **)(v+ARP_VIEW_BYTES)=arp_led_vtable+2;
     *(arp_u32 *)(v+ARP_VIEW_BYTES+4)=0;*(arp_u32 *)(v+ARP_VIEW_BYTES+8)=0;
     arp_track=track;arp_proxy=proxy;arp_ui_sound=sound;arp_view=v;arp_main=main;arp_manager=(arp_u8 *)app+0x40;arp_selected=0;
+    arp_seen_generation=arp_settings_generation;
     arp_steps_held=0;arp_steps_edited=0;arp_enc_reset();
     /* Push recomputes visibility and synchronously composes the UI, including
      * core_tick, before attaching the new view. Publish the selected page first
@@ -694,6 +719,14 @@ static void arp_view_tick(void *controller)
         }
     }
     if(!arp_view)return; /* no view also means no held steps or LEN popup */
+    /* 1.10.8: a reload (FUNC+NO) or any other store changed the settings
+     * beneath the view: show them again, with the held trigs' locks. */
+    if(arp_settings_generation!=arp_seen_generation){
+        arp_seen_generation=arp_settings_generation;
+        if(arp_lock_mode)arp_lock_read();
+        else arp_ui_read_settings(arp_ui_sound,arp_track,&arp_ui_parameters);
+        arp_dirty();
+    }
     foreground=arp_foreground();
     if(arp_encoder_active(arp_brain) && !arp_sync_track())return;
     if(foreground){
@@ -795,6 +828,14 @@ static int arp_view_key(void *app,const void *event)
         arp_trig_opened=1;arp_trig_popup(trig);return 1;
     }
     foreground=arp_foreground();
+    /* 1.10.8: FUNC + YES (the native save) and FUNC + NO (the reload) go to
+     * native on both ARP pages: never a step toggle or a close (YES and NO
+     * alone still do those). Each release follows its press. */
+    if(key==12 || key==13){
+        unsigned int bit=key==12?1u:2u;
+        if((flags&1) && ((flags&2) || UI_CALL(0x40102f40u,arp_u32 (*)(arp_u32))(1))){arp_func_native|=bit;return 0;}
+        if(!(flags&1) && (arp_func_native&bit)){arp_func_native&=~bit;return 0;}
+    }
     if(!foreground && arp_steps_held)arp_cancel_steps();
     if(key>=24 && key<=39 && !(flags&1) && (arp_steps_cancelled&(1u<<(key-24)))){
         arp_steps_cancelled&=~(1u<<(key-24));return 1;

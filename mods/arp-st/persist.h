@@ -7,4 +7,7 @@ const struct arp_settings *arp_sound_settings(arp_u32 sound);
 void arp_sound_read(arp_u32 sound,struct arp_settings *);
 int arp_sound_store(arp_u32 sound,const struct arp_settings *);
 void arp_sound_meta(const arp_u32 *);
+/* 1.10.8: advances on every settings store and lifecycle event (a reload,
+ * FUNC+NO, a project load). The view re-reads what it shows when it moves. */
+extern volatile arp_u32 arp_settings_generation;
 #endif

@@ -287,6 +287,16 @@ Codec depth still excludes nested Sound/FX records from standalone trailers;
 post-decode/new still republishes. Older cores keep the original entries.
 Generated lock/owner code and its provenance are unchanged.
 
+## Pattern encode event (LFO3 1.3.4)
+
+After a successful native pattern encode (`400a8264`, already LFO3's site),
+the wrapper publishes `ST_SOUND_PATTERN_ENCODE` (record, pattern, container)
+on the Sound-metadata bus, after its writer section as the Kit events. The
+native quick save (FUNC+YES, `4001a8d2`) encodes pattern k into `40607754`
+and writes it to the Temp Area before it encodes Kit k, so ARP 1.10.8 fills
+its carrier in that record's tail here. No new site, no change to the
+codec or to LFO3's own data.
+
 ## COMP SRAM sharing (LFO3 1.3.3)
 
 The current linked renderer is 822 bytes, ending at `80007676` when copied

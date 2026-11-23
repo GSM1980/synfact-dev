@@ -1,5 +1,5 @@
 {
-  "id": "md-st", "version": "0.1", "license": "GPL-2.0-or-later",
+  "id": "md-st", "version": "0.2", "license": "GPL-2.0-or-later",
   "title": "MD MACHINEDRUM", "category": "Synth", "author": "Synfact port of mdkit (Soejrd, CC0-1.0)",
   "description": "Machinedrum voices from mdkit on one machine: all 30 of mdkit's voices, 13 TRX, 8 EFM and 9 PI, chosen from a list when the machine is selected (prototype).",
   "device": "syntakt", "os": "1.42", "sources": ["main.c"],

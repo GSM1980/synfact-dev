@@ -1,8 +1,36 @@
 # SP sample machines 1.6
 
-Desktop OS 1.42 release: **1.6.0**.
+Desktop OS 1.42 release: **1.6.1**.
 Use core 2.5 or later and the matching bank (SMZ4 contract `0x53594606`).
 On an older core (chain directory version 1) every track stays mono.
+
+## The sample list during a p-lock (1.6.1)
+
+Holding a trig and turning SAMP now opens the sample list, so the locked
+sample's position and name are visible while choosing it. Two causes:
+
+- **The wrong selection getters.** The list asked `400c2dd6` whether a trig
+  was held and `400c3582` whether live REC was running. On OS 1.42 they are
+  "a lock was edited during this hold" (selection +160h) and "a trig is held
+  within the track length": holding a trig looked like live REC, which never
+  opens the list. It now uses `400c3582` for a held trig and `400c3062`
+  (+161h and +16Ah) for live REC. The addresses moved together from OS 1.41,
+  so this was not a port error; the host fixture's doubles hid it.
+- **Key repeats.** A held key repeats (key event flag 8), and every key event
+  the SYN view saw, the held trig's repeats included, dismissed the list.
+  Repeats no longer do; a real press or release still does, and releasing
+  the trig still ends the session (its lock context).
+
+YES, NO and the timeout behave as in 0.9. MAIN code only: the AUDIO bank is
+identical to 1.6.0.
+
+`tests/test_st_sampler_natives_emu.py` runs the three getters on OS 1.42
+MAIN (held trigs inside and outside the track length, the lock-edited flag,
+grid and live REC) and pins the addresses the list uses; 1.6.0 fails the
+pin. `tests/test_st_sampler_browser.c` holds a trig through twenty repeats
+with a lock and draws the list, checks that NO's repeat neither reverts nor
+closes, and that the next real press closes and accepts. Device-checked
+build 1 still had the getters swapped; the panel check is pending.
 
 1.6.0 makes stereo tracks lighter on both CPUs. Every change gives the same
 words as 1.5.2, checked in analog-emu against the native routines

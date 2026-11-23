@@ -161,11 +161,12 @@ static int format(void)
     return 1;
 }
 /* The mod list: a zero-terminated list of 40-byte records (id, version), the
- * core's first. Lists are at most 32 records each. */
+ * core's first. A bank lists up to 48 (core 2.6.1: 16 machine and 32 module
+ * folders); the parser checked the terminator. */
 static u32 list_count(const u8 *p)
 {
     u32 n=0;
-    if(p)for(;p[0] && n<32;p+=40)n++;
+    if(p)for(;p[0] && n<48;p+=40)n++;
     return n;
 }
 static u32 rows(void){return 1+list_count(SI_CORE_INFO)+list_count(SI_BANK_INFO);}

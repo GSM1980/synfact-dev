@@ -490,6 +490,46 @@ def chord_page(core,bank):
             'C push clears held steps; A push leaves NOTE','NO closes on the first TRIG page; reopen starts on the arp page',
             'TRIG+YES: chord page randomized and kept; arp page after a switch; native page before after an opening']
 
+def shown_track(core,bank):
+    """1.10.8: while TRK is held the session keeps its track (no tick sync under
+    the selection view), but both pages draw the shown track's Kit Sound, as
+    NOTE..NOT4 already follow it. FUNC + YES passes to native, both edges."""
+    m=ChordViewMachine(core,bank);page=lambda:m.word(m.sym['arp_page'])
+    m.u.mem_write(SEQ,m.read(TRACKDATA,0x499))
+    kit=0x41ad6134+3*0x1618;m.w(0x43bd843c,kit)
+    other=struct.pack('>6BH16b',3,12,1,30,15,1,0xffff,*([0]*16))
+    m.u.mem_write(W+0x100,other);assert m.call('arp_sound_store',kit+0x2a+0x123,W+0x100)==1
+    ui=lambda:m.read(m.sym['arp_ui_parameters'],24)
+    assert m.open()==1 and page()==0;base=ui()
+    assert m.texts()[:2]==['MODE','OFF']
+    m.track=1;t=m.texts()
+    assert t[:2]!=['MODE','OFF'] and m.word(m.sym['arp_track'])==0 and ui()==base,t
+    m.track=0;assert m.texts()[:2]==['MODE','OFF']
+    # FUNC + YES: the native save, never the selected step's toggle.
+    m.held={1};assert m.key(12,1,800)==0 and m.key(12,1|8,801)==0
+    m.held=set();assert m.key(12,16,802)==0 and ui()==base
+    assert m.key(12,1,803)==1 and ui()!=base and m.key(12,16,804)==1
+    m.key(12,1,805);m.key(12,16,806);assert ui()==base
+    assert m.key(0x13,1,810)==1 and m.key(0x13,16,811)==1 and page()==1
+    m.texts();assert ['toggle',0,24,7] in m.rows
+    m.track=1;m.texts();assert ['toggle',0x100,24,7] in m.rows and ui()==base
+    m.track=0;m.texts();assert ['toggle',0,24,7] in m.rows
+    m.held={1};assert m.key(12,1,820)==0;m.held=set();assert m.key(12,16,821)==0
+    # FUNC + NO (the reload) goes to native and leaves the page open; the
+    # Sound it stores beneath the view shows on the next tick.
+    m.closed=0;m.held={1};assert m.key(13,1,822)==0;m.held=set()
+    assert m.key(13,16,823)==0 and not m.closed and page()==1
+    reloaded=struct.pack('>6BH16b',2,5,1,40,15,1,0xfff0,*([3]*16))
+    m.u.mem_write(W+0x200,reloaded);assert m.call('arp_sound_store',kit+0x2a,W+0x200)==1
+    assert ui()==base;m.dirty=0;m.call('arp_view_tick',APP)
+    assert ui()==reloaded and m.dirty
+    m.texts();assert ['toggle',0x100,24,7] in m.rows          # SCALE as reloaded
+    m.dirty=0;m.call('arp_view_tick',APP);assert m.dirty==0    # nothing new: no redraw
+    m.key(13,1,830);assert m.closed==1;m.dispose()
+    return ['TRK held: arp page and SCALE draw the shown track; the session, its settings and track stay',
+            'FUNC+YES press, repeat and release pass to native on both pages; YES alone still toggles',
+            'FUNC+NO passes to native without closing; a reload beneath the view shows on the next tick']
+
 def encoder_travel(core,bank):
     """1.2: only whole values move; partial travel adds up in the same direction."""
     m=ViewMachine(core,bank);p=m.sym['arp_parameters']
@@ -553,7 +593,7 @@ def page_popups(core,bank):
     return out
 
 def verify(core,bank,out):
-    lock_editing(core,bank);descriptors=page_descriptors(core,bank);popups=page_popups(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);travel=encoder_travel(core,bank);mirror=kit_sound_mirror(core,bank)
+    lock_editing(core,bank);descriptors=page_descriptors(core,bank);popups=page_popups(core,bank);steps=step_editing(core,bank);chord=chord_page(core,bank);shown=shown_track(core,bank);travel=encoder_travel(core,bank);mirror=kit_sound_mirror(core,bank)
     m=ViewMachine(core,bank);initial=m.pool_counts()
     m.w(PARAM+0x90,0);assert not m.key(0x13,1,0) and not m.key(0x13,16,10) and not m.word(m.sym['arp_view'])
     m.w(PARAM+0x90,1);assert m.key(0x13,1,100)==1 and m.word(m.sym['arp_view'])==ROOT+16
@@ -656,7 +696,7 @@ def verify(core,bank,out):
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
     binding=native_key_binding(core,bank);page_handoff=parameter_page_handoff(core,bank)
-    result=dict(ok=True,page_descriptors=descriptors,page_popups=popups,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,encoder_travel=travel,kit_sound_mirror=mirror,drawn_in_trig_view=True,
+    result=dict(ok=True,page_descriptors=descriptors,page_popups=popups,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,shown_track=shown,encoder_travel=travel,kit_sound_mirror=mirror,drawn_in_trig_view=True,
         lifecycle=['TRIG on the last native TRIG page opens with MODE OFF','PAGE_SYNC adds two pages on eligible audio tracks',
                    'tick opens a page reached otherwise','encoders A..F clamp','selected step/mute','modal priority',
                    'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',

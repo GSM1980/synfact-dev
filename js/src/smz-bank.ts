@@ -13,7 +13,9 @@ const word=(a:Uint8Array,n:number)=>new DataView(a.buffer,a.byteOffset,a.byteLen
 const put=(a:Uint8Array,n:number,v:number)=>new DataView(a.buffer,a.byteOffset,a.byteLength).setUint32(n,v)
 const adler=(data:Uint8Array)=>{let a=1,b=0;for(const x of data){a=(a+x)%65521;b=(b+a)%65521}return (b*65536+a)>>>0}
 
-const MOD_INFO_MAX=16
+/** Core 2.6.1: 16 machines (types 64..79 own the parameter IDs), up to 32 modules; one mod-info record per mod folder. Same bounds as smz.py. */
+export const SMZ_MAX_MACHINES=16, SMZ_MAX_MODULES=32
+const MOD_INFO_MAX=SMZ_MAX_MACHINES+SMZ_MAX_MODULES
 /** The bank's mod-info directory: one 40-byte record per mod (id in 24 bytes, version in 16, NUL-padded), then a zero record. Same bytes as smz.py mod_info_directory. */
 export function modInfoDirectory(records:[string,string][]):Uint8Array {
  if(!records.length||records.length>MOD_INFO_MAX) throw Error(`a bank lists 1..${MOD_INFO_MAX} mods`)
@@ -29,7 +31,7 @@ export function modInfoDirectory(records:[string,string][]):Uint8Array {
 
 export function buildSmzBank(spec:SmzBankSpec):Uint8Array {
  const n=spec.machines.length, numModules=spec.modules.length
- if(n>16||numModules>16||(!n&&!numModules)||spec.machines.some(m=>!m.descriptor||!m.ui||!m.update||!m.render))
+ if(n>SMZ_MAX_MACHINES||numModules>SMZ_MAX_MODULES||(!n&&!numModules)||spec.machines.some(m=>!m.descriptor||!m.ui||!m.update||!m.render))
    throw Error('Invalid SMZ machine/module selection')
  const moduleAt=72*n, main=linkSmzImage(spec.main,0,moduleAt+16*numModules), image=main.image
  const rels=main.relocations.slice(), types:number[]=[]

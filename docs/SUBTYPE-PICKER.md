@@ -110,7 +110,8 @@ modulation after clearing the marker.
 
 The OS 1.42 boundaries come from MD's prototype and the existing sample/core
 UI: value getter `40039160`, view machine `40030622`, track `4001ff74`, selector
-predicate `400c3340`, held trigs `400c2dd6`, recording `400c3582`, and native
+predicate `400c3340`, held trigs `400c3582`, live recording `400c3062` (until
+SY MnM 0.8.1 / MD KIT 0.2: `400c2dd6` and `400c3582`, swapped meanings), and native
 rectangle fill `400f7fb6`. SYN view classes/geometry match the current core:
 tag `+88 = 14`, page vector `+7c` begins with 6, model `+6c`, track model `+74`.
 Only recognized native parameter views are interpreted this way. Pointers are

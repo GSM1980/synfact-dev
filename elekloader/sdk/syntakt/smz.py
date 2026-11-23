@@ -45,7 +45,10 @@ def source_inputs(src,folder,inputs,binary=False):
             dependency=base/name
             if dependency.is_file():source_inputs(dependency,folder,inputs,binary=bool(match[3]));break
 
-MOD_INFO_ID,MOD_INFO_VERSION,MOD_INFO_MAX=24,16,16   # feature bit 3: the mods' versions (SMZ4.md)
+# Core 2.6.1: 16 machines (types 64..79 own the parameter IDs) and up to 32
+# modules; the mod-info directory has one record per mod folder (SMZ4.md).
+MAX_MACHINES,MAX_MODULES=16,32
+MOD_INFO_ID,MOD_INFO_VERSION,MOD_INFO_MAX=24,16,MAX_MACHINES+MAX_MODULES   # feature bit 3: the mods' versions
 
 def mod_info_directory(records):
     """-> the bank's mod-info directory: (id, version) per mod as 40-byte records, NUL-padded,
@@ -62,7 +65,8 @@ def mod_info_directory(records):
 def pack(image,relocations,descriptors,section,features=0,ui=0,modules=0,module_count=0,info=0):
     """The builder's inputs are generated from source, never a previous SMZ."""
     rels=sorted(relocations)
-    if (not descriptors and not module_count) or len(descriptors)>16:raise ValueError('bank needs machines or modules; maximum 16 machines')
+    if (not descriptors and not module_count) or len(descriptors)>MAX_MACHINES:raise ValueError('bank needs machines or modules; maximum %d machines'%MAX_MACHINES)
+    if module_count>MAX_MODULES:raise ValueError('maximum %d modules (core 2.6.1)'%MAX_MODULES)
     if len(rels)!=len(set(rels)) or any(a+4>b for a,b in zip(rels,rels[1:])):
         raise ValueError('overlapping relocations')
     if len(image)%4:raise ValueError('MAIN image must be longword aligned')
@@ -151,7 +155,8 @@ def build(directories,stock_path=None,output=None,module_directories=()):
                     audits[str(obj)+':'+sec.name]=audit(sec.data)
             (main_objs if side=='main' else audio_objs).append(str(obj))
     n=len(descriptors)
-    if not 0<=n<=16 or len(modules)>16 or (not n and not modules):raise ValueError('provide machines or modules, up to 16 of each')
+    if not 0<=n<=MAX_MACHINES or len(modules)>MAX_MODULES or (not n and not modules):
+        raise ValueError('provide machines or modules: up to %d machines and %d modules'%(MAX_MACHINES,MAX_MODULES))
     if bool(features&2)!=(bool(uis) and all(uis)) or (any(uis) and not all(uis)):
         raise ValueError('machine-ui-v1 requires a UI descriptor for every machine')
     module_at=(40+(32 if features&2 else 0))*n

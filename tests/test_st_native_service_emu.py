@@ -64,6 +64,10 @@ def verify(folder):
             m.u.mem_write(LIST,pack(*entries,0));m.w(m.sym['core:core_native_list'],LIST)
             for route in (0,1,2,5,128):
                 m.u.mem_write(m.sym['core:core_native_interest'],bytes([route])*24)
+                # Core 2.6.1: a positive byte takes its entries from the word.
+                if 'core:core_native_routes' in m.sym:
+                    m.u.mem_write(m.sym['core:core_native_routes'],
+                                  pack(*[0xffffffff if route&128 else route]*22))
                 for op in (*range(22),22,0xffffffff):
                     for take in ('none','first','last','empty_result'):
                         m.operation=op;m.original=[];m.hits=[];m.timer_reads=0

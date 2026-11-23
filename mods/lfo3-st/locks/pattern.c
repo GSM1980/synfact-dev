@@ -209,7 +209,14 @@ u32 lfo3_pattern_copy(u32 dst,u32 src){u32 result;lfo3_writer_enter();result=lfo
 extern u32 lfo3_pattern_compress_body(void *dst,const void *matrix,u32 flags);
 u32 lfo3_pattern_compress(void *dst,const void *matrix,u32 flags){u32 result;lfo3_writer_enter();result=lfo3_pattern_compress_body(dst,matrix,flags);lfo3_writer_leave();return result;}
 extern u32 lfo3_pattern_encode_body(void *dst,const void *pattern,u32 flags);
-u32 lfo3_pattern_encode(void *dst,const void *pattern,u32 flags){u32 result;lfo3_writer_enter();result=lfo3_pattern_encode_body(dst,pattern,flags);lfo3_writer_leave();return result;}
+extern void lfo3_pattern_encoded(u32 record,u32 pattern);
+/* 1.3.4: published after the writer section, as the Kit codec's events. */
+u32 lfo3_pattern_encode(void *dst,const void *pattern,u32 flags)
+{
+    u32 result;lfo3_writer_enter();result=lfo3_pattern_encode_body(dst,pattern,flags);lfo3_writer_leave();
+    if(result&255u)lfo3_pattern_encoded((u32)dst,(u32)pattern);
+    return result;
+}
 extern u32 lfo3_pattern_update_body(void *dst,const void *matrix,u32 flags,u32 slot,u32 track);
 u32 lfo3_pattern_update(void *dst,const void *matrix,u32 flags,u32 slot,u32 track){u32 result;lfo3_writer_enter();result=lfo3_pattern_update_body(dst,matrix,flags,slot,track);lfo3_writer_leave();return result;}
 extern void lfo3_pattern_clear_body(void *matrix);

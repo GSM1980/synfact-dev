@@ -10,6 +10,7 @@ test('the mod-info directory: id and version NUL-padded, a zero record last; ref
   assert.ok(d.subarray(6, 24).every(b => b === 0))
   assert.deepEqual([...d.subarray(24, 27)], [...new TextEncoder().encode('1.1')])
   assert.ok(d.subarray(80).every(b => b === 0))
-  for (const bad of [[['x'.repeat(24), '1']], [['a', '']], [['a', 'vé']], Array(17).fill(['a', '1']), []] as [string, string][][])
+  assert.equal(modInfoDirectory(Array(48).fill(['a', '1'])).length, 49 * 40)   // core 2.6.1: 16 machine + 32 module folders
+  for (const bad of [[['x'.repeat(24), '1']], [['a', '']], [['a', 'vé']], Array(49).fill(['a', '1']), []] as [string, string][][])
     assert.throws(() => modInfoDirectory(bad), /bank|does not fit|lists/)
 })

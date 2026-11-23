@@ -1,10 +1,56 @@
 # Digitone ARP → Syntakt: experimental source port
 
-Desktop OS 1.42 release: **1.10.7**.
+Desktop OS 1.42 release: **1.10.8**.
 Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
 See [the port notes](../../docs/OS142-PORT.md).
+
+## FUNC + YES and the track held with TRK (1.10.8)
+
+- **FUNC + YES** reaches the native save on both ARP pages. Until 1.10.8 the
+  view took every YES: with FUNC held it toggled the selected step and the
+  save never ran. YES alone still toggles the step; TRIG + YES still
+  randomizes. The press, its repeats and its release all go to native.
+- **TRK held**: switching track while the ARP view is open, the pages now
+  draw the newly shown track's settings at once. NOTE..NOT4 already read the
+  active pattern track, but SCALE and the arp page read the session's
+  settings, which re-bind to the new track only when the selection ends, so
+  SCALE looked as if it switched every track on or off. The drawing reads the
+  shown track's Kit Sound; the session, its locks and its held steps keep
+  their track until then, as before.
+
+- **FUNC + NO reloads with the page open, and the page shows it.** NO with
+  FUNC held goes to native (it closed the view before), and the view re-reads
+  its settings whenever `arp_settings_generation` (persist.h) has moved since
+  it last read: every store and lifecycle event advances it, so a reload, a
+  project load or any other change beneath the view appears on the next tick.
+- **FUNC + YES and FUNC + NO keep the ARP settings.** The native quick save
+  (`4001a8d2`) encodes pattern k into its save buffer (`40607754`) and
+  writes it to the project's Temp Area, then does the same with Kit k
+  (`40600554`); FUNC + NO reads the pattern into `40601b54`, then the Kit
+  into a different buffer, `405fe354`, and decodes it. None of these has a
+  project container, so the settings stayed in RAM, keyed by the save
+  buffer: the reload found nothing and set all twelve tracks OFF, and the
+  Temp Area held no ARP data at all. Now Kit k's rows go in the tail of the
+  saved pattern record (`[5ac0h, 5c00h)`, an APT1 carrier, bound to the Kit
+  index), through LFO3 1.3.4's pattern-encode event, and the Kit decode from
+  the reload buffer reads them back from the reloaded pattern record. A
+  reload from the project reads the APC1 carrier there the same way. All
+  defaults leave the tail empty. Needs LFO3 1.3.4 in the bank.
+
+`tests/test_st_arp_quicksave_emu.py` runs LFO3's real pattern-encode
+wrapper and the native pattern codec: save, edit, reload; a restart between
+save and reload; another Kit or a damaged carrier (defaults); all defaults
+(empty tail); a container encode left to APC1; a reload from the project.
+1.10.7 fails it at the first check. The eMMC round trip is a buffer copy.
+
+`tests/test_st_arp_view_emu.py` (`shown_track`) checks both pages with
+another track shown and its Sound's settings, the session unchanged, FUNC +
+YES press/repeat/release passed to native on both pages and YES alone still
+toggling, FUNC + NO passed without closing and a store beneath the view shown
+on the next tick (once); 1.10.7 fails it. The native save itself and the TRK hold on the
+panel are not emulated: both need a physical check.
 
 ## Editing beneath permanent mute (1.10.7)
 

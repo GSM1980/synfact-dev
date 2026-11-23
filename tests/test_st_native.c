@@ -5,6 +5,7 @@
 #include <syntakt/native.h>
 #include <syntakt/host.h>
 #include <stddef.h>
+#include <string.h>
 /* API 12 core_info/bank_info retain 92/96; API 15 appends audio_idle at 100. */
 typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==104 &&
     offsetof(struct st_machine_host_api,native_query)==84 &&
@@ -29,7 +30,7 @@ void core_event_publish(const u32 *a)
 {
     u32 track=2,result=99;
     assert(a[0]==(u32)(core_key_table+2) && a[1] && a[2] && a[3]==a[1] && a[4] && a[5]);
-    {u32 k;for(k=6;a[k];k+=2)*(u32 *)a[k]=a[k+1];assert(k==6+2*((ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
+    {u32 k;for(k=6;a[k];k+=2)*(u32 *)a[k]=a[k+1];assert(k==6+2*(ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
     *(const u32 **)a[2]=(const u32 *)a[3];*(const u32 **)a[4]=(const u32 *)a[5];
     /* Simulate an IRQ immediately when the publisher unmasks, before bind
      * returns. Its native services must already be visible in the C list. */
@@ -63,6 +64,49 @@ static int changing(u32 op,const u32 *a,u32 *out)
         core_native_interest_set((void (*)(void))first,0);
         core_native_interest_set((void (*)(void))second,0);}
     return 0;
+}
+/* Core 2.6.1: thirty-four distinct subscribers, each counting its calls. */
+static u32 many_calls[34];
+#define MANY(n) static int many_##n(u32 op,const u32 *a,u32 *out){(void)op;(void)a;(void)out;many_calls[n]++;return 0;}
+MANY(0) MANY(1) MANY(2) MANY(3) MANY(4) MANY(5) MANY(6) MANY(7) MANY(8) MANY(9) MANY(10) MANY(11)
+MANY(12) MANY(13) MANY(14) MANY(15) MANY(16) MANY(17) MANY(18) MANY(19) MANY(20) MANY(21) MANY(22)
+MANY(23) MANY(24) MANY(25) MANY(26) MANY(27) MANY(28) MANY(29) MANY(30) MANY(31) MANY(32) MANY(33)
+static int (*const many[34])(u32,const u32 *,u32 *)={many_0,many_1,many_2,many_3,many_4,many_5,many_6,
+    many_7,many_8,many_9,many_10,many_11,many_12,many_13,many_14,many_15,many_16,many_17,many_18,many_19,
+    many_20,many_21,many_22,many_23,many_24,many_25,many_26,many_27,many_28,many_29,many_30,many_31,
+    many_32,many_33};
+static u32 many_total(void){u32 i,t=0;for(i=0;i<34;i++)t+=many_calls[i];return t;}
+static void many_routes(void)
+{
+    u32 list[35],i,a[4]={0},v;
+    memset(native_masks,0,sizeof native_masks);   /* earlier cases' slots */
+    for(i=0;i<34;i++){list[i]=(u32)many[i];core_native_interest_set((void (*)(void))many[i],0);}
+    list[34]=0;
+    /* Twelve subscribers, only the eleventh wants LFO: it alone is called.
+     * Until 2.6.0 entries past the seventh shared bit 7: all twelve ran. */
+    list[12]=0;events[ST_EV_NATIVE].list=list;
+    core_native_interest_set((void (*)(void))many[10],1u<<ST_NATIVE_LFO);
+    assert(core_native_interest[ST_NATIVE_LFO]==127 && core_native_routes[ST_NATIVE_LFO]==1u<<10);
+    for(i=0;i<34;i++)many_calls[i]=0;
+    assert(!core_event_native(ST_NATIVE_LFO,a,&v) && many_calls[10]==1 && many_total()==1);
+    /* The seventh and the thirty-second keep their own bits too. */
+    list[12]=(u32)many[12];list[32]=0;core_native_initialize();
+    core_native_interest_set((void (*)(void))many[6],1u<<ST_NATIVE_LFO);
+    core_native_interest_set((void (*)(void))many[31],1u<<ST_NATIVE_LFO);
+    for(i=0;i<34;i++)many_calls[i]=0;
+    assert(!core_event_native(ST_NATIVE_LFO,a,&v) && many_total()==3 &&
+           many_calls[6]==1 && many_calls[10]==1 && many_calls[31]==1);
+    /* Nobody else wants TRIG: its byte stays zero, the stock replay gate. */
+    assert(!core_native_interest[ST_NATIVE_TRIG] && !core_event_native(ST_NATIVE_TRIG,a,&v) && many_total()==3);
+    /* Past thirty-two the operation falls back to the full traversal. */
+    list[32]=(u32)many[32];list[33]=0;core_native_initialize();
+    core_native_interest_set((void (*)(void))many[32],1u<<ST_NATIVE_LFO);
+    assert(core_native_routes[ST_NATIVE_LFO]==~0u && core_native_interest[ST_NATIVE_LFO]==128);
+    for(i=0;i<34;i++)many_calls[i]=0;
+    assert(!core_event_native(ST_NATIVE_LFO,a,&v) && many_total()==33);
+    for(i=0;i<34;i++)core_native_interest_set((void (*)(void))many[i],~0u);
+    memset(native_masks,0,sizeof native_masks);
+    events[ST_EV_NATIVE].list=ev_native;core_native_initialize();
 }
 static int before(void *v,void *e,u32 phase){assert(v==(void *)1 && e==(void *)2 && phase==1);pre++;return 1;}
 static void after(void *v,void *e,u32 phase){assert(v==(void *)1 && e==(void *)2 && !phase);post++;}
@@ -153,5 +197,6 @@ int main(void)
          native_calls=0;assert(!core_event_native(ST_NATIVE_PUBLISH,a,&v) && native_calls==1);}
         events[ST_EV_NATIVE].list=ev_native;core_native_initialize();
     }
+    many_routes();
     puts("PASS: per-operation interest (fail open, atomic with the list, union, stock replay); shared native list order/consume/stock fallback; API 3 negotiation; consuming pre-KEY isolated from legacy post-KEY; no additional input registry");return 0;
 }

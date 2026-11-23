@@ -1,6 +1,11 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | Internal routing uses existing flag bytes, bits 0..6 = subscriber indices.
-| Bit 7 means legacy full-list traversal (also the pre-init fail-open state).
+| Core 2.6.1 (modules.c): a negative byte (0x80) is the full-list traversal
+| (also the pre-init fail-open state). A positive byte only says someone is
+| interested: the dispatcher takes the subscribers from the operation's word in
+| core_native_routes, one bit per list entry up to 32, which sits 88 bytes
+| before the bytes. This encoder still shares bit 7 past the seventh entry;
+| modules.c then rewrites such bytes from the words.
 | TYPE track bytes 18/19 keep their original layout and semantics.
 | Entirely resident: never put application-time functions in .boot.
 .section .run,"ax"
@@ -133,7 +138,9 @@ core_event_native:
  beq.s native_dispatch_open
  cmpi.l #19,%d2
  beq.s native_dispatch_open
- move.l %d0,%d2
+ | Core 2.6.1: the subscribers from the word (core_native_routes, 88 bytes
+ | before the bytes), the same one instruction as the byte copy it replaces.
+ move.l -88(%a0,%d2.l*4),%d2
  bra.s native_dispatch_loop
 native_dispatch_open:
  move.l (%a2)+,%d0

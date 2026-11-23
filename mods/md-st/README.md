@@ -1,5 +1,14 @@
 # MD MACHINEDRUM for Syntakt (prototype)
 
+## Subtype list during a held trig or live REC (0.2)
+
+The subtype list's confirmation and its deferred TYPE edit refuse while a
+trig is held or live REC runs. Their getters were swapped
+(`<syntakt/subtype-picker.h>`): a held trig still refused, by luck, but live
+REC never did. They are now `400c3582` (trigs held within the track length)
+and `400c3062` (live REC); see the SP machines 1.6.1 notes and
+`tests/test_st_sampler_natives_emu.py`, which pins them.
+
 Machine type **70**, **MD MACHINEDRUM** (short name **MDRM**), category 10,
 rank 15. One machine holds Machinedrum voices, so the Machinedrum costs one
 machine type, not one per voice: selecting the machine shows the list of voices,

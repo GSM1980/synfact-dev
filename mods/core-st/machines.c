@@ -115,9 +115,13 @@ u32 *core_machine_layout(const struct core_machine_def *m,u32 page)
  * A zero result declines to the exact displaced stock entry. These are
  * machine/parameter lookups only, not a runtime hook bus for the file.
  * Host API 7: IDs no loaded machine claims go to the module providers.
- * Host API 13 (core 1.2): up to four, asked in registration order until one
- * answers; notifications (25..29) reach every one. Same args pointer. */
-#define PROVIDERS 4
+ * Host API 13 (core 1.2): asked in registration order until one answers;
+ * notifications (25..29) reach every one. Same args pointer.
+ * Core 2.6.1: one slot per module a bank can hold (32). Four dropped the
+ * fifth silently: with SY MnM's selector, POLY, Chorus and COMP, LFO3 (a
+ * patching module, initialized last) kept its page hooks but no provider,
+ * so every LFO3 label read ERR and its controls did nothing. */
+#define PROVIDERS CORE_SMZ_MODULES
 typedef int (*provider_t)(u32,u32 *,void *,u32 *);
 provider_t core_parameter_providers[PROVIDERS];      /* emulator tests seed slot 0 */
 void core_parameter_provider_set(provider_t provider)

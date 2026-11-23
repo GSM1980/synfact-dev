@@ -599,13 +599,14 @@ def test_mod_info_table_lists_each_linked_mod():
 def test_smz_mod_info_directory():
     """The bank's mod-info directory (SMZ4.md, feature 8): one 40-byte record per mod, its id in
     24 bytes and version in 16, NUL-padded, and a zero record after the last. A record that does
-    not fit, or more than 16 mods, is refused by the builder."""
+    not fit, or more than 48 mods (core 2.6.1: 16 machine and 32 module folders), is refused."""
     from elekloader.sdk.syntakt import smz
     d = smz.mod_info_directory([('arp-st', '1.1'), ('lfo3-st', '1.0')])
     assert len(d) == 3 * 40
     assert d[:6] == b'arp-st' and d[6:24] == bytes(18) and d[24:27] == b'1.1' and d[27:40] == bytes(13)
     assert d[40:46] == b'lfo3-s' and d[80:] == bytes(40)
-    for bad in ([('x' * 24, '1')], [('a', '')], [('a', 'vé')], [('a', '1')] * 17, []):
+    assert len(smz.mod_info_directory([('a', '1')] * 48)) == 49 * 40
+    for bad in ([('x' * 24, '1')], [('a', '')], [('a', 'vé')], [('a', '1')] * 49, []):
         try:
             smz.mod_info_directory(bad)
         except ValueError:
