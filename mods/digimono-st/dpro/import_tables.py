@@ -23,6 +23,16 @@ import reference as R  # noqa: E402
 PAD_WORDS = 32  # zero words after the 33 waves: a shrinking WP window may read past them
 
 
+def interp256(interp):
+    out = []
+    for q in range(256):
+        ph, res = q >> 3, ((q & 7) + 0.5) / 8
+        row = [round(interp[10 * ph + 2 * j] + interp[10 * ph + 2 * j + 1] * res) for j in range(5)]
+        assert all(-(1 << 23) < v < 1 << 23 for v in row)
+        out += [v * 256 for v in row] + [0, 0, 0]
+    return out
+
+
 def partners(bank):
     """dens.render's partner for every level below the top (shift 1..8), as the
     render builds it, Q26; the top level has none (0)."""
@@ -58,6 +68,10 @@ def generate(os_file):
         'wave': ('int32_t', [v * 8 for v in rom.wave_samples()] + [0] * (2 * PAD_WORDS)),
         # the interpolator's (B, 2A) pairs, 32 phases x 5 taps, << 8 for the EMAC
         'interp': ('int32_t', [v * 256 for v in interp]),
+        # DENS's light interpolator: the same kernel at 256 fixed phases (each
+        # phase's eight sub-steps at their middle, B + 2A res), five taps padded
+        # to eight words, << 8 for the EMAC
+        'interp256': ('int32_t', interp256(interp)),
         'pch': ('uint32_t', rom.words(*rom.PCH)),
         'wid': ('uint32_t', rom.words(*rom.WID[0]) + rom.words(*rom.WID[1])),
         'br': ('uint32_t', list(rom.br_table())),

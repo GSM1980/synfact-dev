@@ -362,6 +362,35 @@ static void interp(const int32_t *buf,const struct level *s,int32_t g,int32_t *o
         P+=il;
     }
 }
+/* DENS's light interpolator: the kernel's 5 taps at 256 fixed phases (each of
+ * its 32 phases' eight sub-steps at their middle), one dot product, no slope
+ * term: five products instead of ten. The coefficients move by at most 1/16 of
+ * a phase step (about -60 dB). DM_DENS_KERNEL keeps the kernel. */
+static void interp_fixed(const int32_t *buf,const struct level *s,int32_t g,int32_t *out,int add)
+{
+    uint32_t P=s->fr,il=s->il;
+    for(unsigned k=0;k<N2;k++){
+        uint32_t r=(P&M24)+0x800000u;
+        if(r>=1u<<24)r-=1u<<24;
+        const int32_t *c=dpt_interp256+((r>>16)<<3),*x=buf+(P>>24);
+        int32_t sum;
+#if defined(DP_EMAC)
+        int32_t xv,cv;
+#define DP_FTAP "move.l (%[x])+,%[xv]\n\tmac.l %[xv],%[cv],(%[c])+,%[cv],%%acc0\n\t"
+        __asm__ volatile("move.l (%[c])+,%[cv]\n\t"
+                         DP_FTAP DP_FTAP DP_FTAP DP_FTAP DP_FTAP
+                         "movclr.l %%acc0,%[s]"
+                         :[x]"+a"(x),[c]"+a"(c),[xv]"=&d"(xv),[cv]"=&d"(cv),[s]"=d"(sum)::"cc","memory");
+#undef DP_FTAP
+#else
+        MAC0(x[0],c[0]);MAC0(x[1],c[1]);MAC0(x[2],c[2]);MAC0(x[3],c[3]);MAC0(x[4],c[4]);
+        sum=read0();
+#endif
+        sum=m23(sat(sum),g);
+        out[k]=add?out[k]+sum:sum;
+        P+=il;
+    }
+}
 static inline uint32_t scaled(uint32_t b)
 {
 #if DM_DPRO_OS==1
@@ -427,7 +456,11 @@ static void dens_half(struct dm_dp_voice *v,const uint16_t *p,int32_t *out)
                     buf[j]=sat(read0());
                 }
             }
+#if defined(DM_DENS_KERNEL)
             interp(x,&s,DENS_GAIN,mix,k!=0);
+#else
+            interp_fixed(x,&s,DENS_GAIN,mix,k!=0);
+#endif
         }
         v->u[k]+=b<<PHASE_SH;
     }

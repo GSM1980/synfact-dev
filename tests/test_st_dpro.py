@@ -23,6 +23,7 @@ import reference as R  # noqa: E402
 
 DEFAULTS = {12: [0, 0, 0, 96, 0, 0, 0], 13: [0, 64, 0, 0, 0, 0, 0], 14: [63, 63, 63, 0, 0, 0, 0]}
 NAMES = {12: 'DPRO-WAVE', 13: 'DPRO-DDRW', 14: 'DPRO-DENS'}
+DENS_LEVEL_DB, DENS_BAND_DB, DENS_SNR_DB = 0.5, 1.0, 50.0
 
 
 class Port:
@@ -35,14 +36,49 @@ class Port:
         return list((ctypes.c_uint32 * 7).from_buffer(self.state, self.lib.inc_offset()))
 
 
-def build(cc, out, rate, k44):
+def _spectrum(x):
+    """|X|^2 of a Hann-windowed signal, zero-padded to a power of two (pure Python)"""
+    import cmath
+    n = 1
+    while n < len(x):
+        n *= 2
+    w = [0.5 - 0.5 * math.cos(2 * math.pi * k / (len(x) - 1)) for k in range(len(x))]
+    a = [complex(v * w[k]) for k, v in enumerate(x)] + [0j] * (n - len(x))
+
+    def fft(v):
+        if len(v) == 1:
+            return v
+        even, odd = fft(v[0::2]), fft(v[1::2])
+        t = [cmath.exp(-2j * math.pi * k / len(v)) * odd[k] for k in range(len(v) // 2)]
+        return [even[k] + t[k] for k in range(len(v) // 2)] + [even[k] - t[k] for k in range(len(v) // 2)]
+    X = fft(a)
+    return [abs(c) ** 2 for c in X[:n // 2 + 1]], n
+
+
+def likeness(ours, theirs, rate):
+    """level (dB) and the worst octave band's deviation (dB) among the bands
+    within 30 dB of the loudest, the top octave included"""
+    level = 10 * math.log10((sum(v * v for v in ours) + 1e-30) / (sum(v * v for v in theirs) + 1e-30))
+    (A, n), (B, _) = _spectrum(ours), _spectrum(theirs)
+    f = [k * rate / n for k in range(len(A))]
+    edges = (0, 250, 500, 1000, 2000, 4000, 8000, 16000, rate / 2 + 1)
+    band = lambda P, lo, hi: 10 * math.log10(sum(p for p, x in zip(P, f) if lo <= x < hi) + 1e-30)
+    ba = [band(A, lo, hi) for lo, hi in zip(edges, edges[1:])]
+    bb = [band(B, lo, hi) for lo, hi in zip(edges, edges[1:])]
+    top = max(bb)
+    dev = max((abs(x - y) for x, y in zip(ba, bb) if y > top - 30), default=0.0)
+    return level, dev
+
+
+def build(cc, out, rate, k44, kernel=False):
     out.mkdir(parents=True, exist_ok=True)
     wrapper = out / 'size.c'
     wrapper.write_text('#include <stddef.h>\n#include "dpro/voice.h"\n'
                        'unsigned voice_bytes(void){return sizeof(struct dm_dp_voice);}\n'
                        'unsigned inc_offset(void){return offsetof(struct dm_dp_voice,inc);}\n')
-    dll = out / f'dpro-os{rate}{"-44k" if k44 else ""}.dll'
+    dll = out / f'dpro-os{rate}{"-44k" if k44 else ""}{"-kernel" if kernel else ""}.dll'
     subprocess.run([str(cc), '-O2', '-Wall', '-Werror', f'-DDM_DPRO_OS={rate}', *(['-DDM_DPRO_44K'] if k44 else []),
+                    *(['-DDM_DENS_KERNEL'] if kernel else []),
                     '-I', 'mods/digimono-st',
                     '-shared', 'mods/digimono-st/dpro.c', str(wrapper), '-o', str(dll)], cwd=ROOT, check=True)
     lib = ctypes.CDLL(str(dll))
@@ -106,6 +142,8 @@ def main():
     p.add_argument('--out', type=Path, default=Path('out/dpro-tests'))
     p.add_argument('--os-rate', type=int, choices=(1, 2), default=1)
     p.add_argument('--blocks', type=int, default=24)
+    p.add_argument('--dens-kernel', action='store_true',
+                   help="DENS with the Monomachine's 5-tap interpolator (DM_DENS_KERNEL): compared at 60 dB too")
     p.add_argument('--44k', dest='k44', action='store_true',
                    help="the Monomachine's 44.1 kHz blocks and the converter (DM_DPRO_44K)")
     a = p.parse_args()
@@ -115,7 +153,7 @@ def main():
     assert hashlib.sha256(header).hexdigest() == info['tables_sha256'], 'tables.h differs: run import_tables.py'
     assert hashlib.sha256(a.os.read_bytes()).hexdigest() == info['os_sha256']
     print('PASS: tables.h matches tables.json', info['tables_sha256'][:12], flush=True)
-    lib = build(a.cc, out, a.os_rate, a.k44)
+    lib = build(a.cc, out, a.os_rate, a.k44, a.dens_kernel)
     rate48 = not a.k44
     m = R.load(str(a.os), a.os_rate)
     bank = R.digibank(m, DP / 'out' / f'digibank-{info["os_sha256"][:12]}-'
@@ -156,6 +194,7 @@ def main():
             F = lib.dm_dp_word(kind, pitch)
             pre = lib.dm_dp_word(13, 48 * 64)
             error = power = 0.0
+            ours, theirs = [], []
             for block in range(a.blocks):
                 c = list(controls)
                 if mode == 'change' and block >= a.blocks // 3:
@@ -174,20 +213,36 @@ def main():
                     sample = x / 2 ** 26
                     assert math.isfinite(y) and abs(sample) <= 1.0
                     error += (sample - y) ** 2; power += y * y
+                    ours.append(sample); theirs.append(y)
             snr = 10 * math.log10(max(power, 1e-30) / max(error, 1e-30))
             quiet = power / (16 * a.blocks) < 1e-12
             ok = snr >= 60 or (quiet and error / (16 * a.blocks) < 1e-12)
-            rows.append(dict(type=kind, case=label, snr_db=round(snr, 2), quiet=quiet, ok=ok))
+            row = dict(type=kind, case=label, snr_db=round(snr, 2), quiet=quiet)
+            if kind == 14 and not a.dens_kernel and not quiet:
+                # the fixed-phase interpolator is not the kernel: held to an SNR
+                # floor and its level and octave bands
+                level, dev = likeness(ours, theirs, 48000 if rate48 else 44100)
+                row.update(level_db=round(level, 2), band_dev_db=round(dev, 2))
+                ok = snr >= DENS_SNR_DB and abs(level) <= DENS_LEVEL_DB and dev <= DENS_BAND_DB
+            row['ok'] = ok
+            rows.append(row)
             if not quiet:
                 worst = min(worst, snr)
             if not ok:
                 print('FAIL', NAMES[kind], label, f'{snr:.1f} dB', flush=True)
         print(f'{NAMES[kind]}: {sum(r["type"] == kind for r in rows)} cases, worst {worst:.1f} dB', flush=True)
+        if kind == 14 and not a.dens_kernel:
+            d = [r for r in rows if r['type'] == 14 and not r['quiet']]
+            print('  fixed phases: level within', max(abs(r['level_db']) for r in d), 'dB, bands within',
+                  max(r['band_dev_db'] for r in d), 'dB, SNR', min(r['snr_db'] for r in d), '..',
+                  sorted(r['snr_db'] for r in d)[len(d) // 2], 'dB (median)', flush=True)
     (out / f'results-os{a.os_rate}{"-44k" if a.k44 else ""}.json').write_text(json.dumps(dict(rows=rows, os_rate=a.os_rate, rate48=rate48,
                                                                     hardware_tested=False), indent=2) + '\n')
     bad = [r for r in rows if not r['ok']]
     assert not bad, bad
-    print('PASS:', len(rows), 'DigiPRO DSL cases at >= 60 dB; no device access')
+    print('PASS:', len(rows), 'DigiPRO DSL cases at >= 60 dB' +
+          ('' if a.dens_kernel else f' (DENS fixed phases: SNR {DENS_SNR_DB} dB, level {DENS_LEVEL_DB} dB, bands {DENS_BAND_DB} dB)') +
+          '; no device access')
 
 
 if __name__ == '__main__':

@@ -1,10 +1,11 @@
 {
   "os_sha256": "fe13c09f661cdba5fe57813240fa1574de1ee0a3ddd7047fc39d0318cba1a710",
-  "tables_sha256": "255b6e5a896a8d7c744fb0da0096ba3a0394073cf127601080cc95d20465f3a4",
+  "tables_sha256": "9b40601ccb294a8422411f7ed56b34aa59ac905b003e37e639b95448c9a42178",
   "lengths": {
     "exp": 2048,
     "wave": 16960,
     "interp": 320,
+    "interp256": 2048,
     "pch": 128,
     "wid": 256,
     "br": 256,

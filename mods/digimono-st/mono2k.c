@@ -166,15 +166,18 @@ void dm_ens_chorus(struct dm_ens_voice *t,const uint16_t *p,int16_t *left,int16_
         if (i & 1) { cm[t->ph[5]++ & (ENS_LEN - 1)] = (int16_t)sat16(t->ms[0] >> 1); t->ms[0] = 0; }
         if (chrl) {
             int32_t y[2];
+            uint32_t at = (t->ph[5] << 8) + ((uint32_t)(i & 1) << 7);
             for (int c = 0; c < 2; c++) {
-                uint32_t pos = (t->ph[5] << 8) + ((uint32_t)(i & 1) << 7) - (uint32_t)(d[c] >> 16);
+                uint32_t pos = at - (uint32_t)(d[c] >> 16);
                 uint32_t j = pos >> 8;
                 int32_t f = (int32_t)(pos & 255), y0 = cm[j & (ENS_LEN - 1)];
                 y[c] = y0 + (((cm[(j + 1) & (ENS_LEN - 1)] - y0) * f) >> 8);
                 d[c] += step[c];
             }
             side = sat16(((y[0] - y[1]) * wside) >> 16);
-            s = add_sh15(s * dry, ((y[0] + y[1]) >> 1) * wet);
+            /* add_sh15's sum without its split: s dry and the wet term are each
+             * under 2^30 (|s| < 2^15, dry <= 2^15, wet < 27853), so the sum fits */
+            s = (s * dry + ((y[0] + y[1]) >> 1) * wet) >> 15;
         }
         s = sat16(s);
         left[i] = (int16_t)sat16(s + side);
