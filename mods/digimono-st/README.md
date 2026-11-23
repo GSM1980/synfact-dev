@@ -19,8 +19,7 @@ Chorus FX serves it (a stereo chorus in the machine cost the shared stereo
 service's second pass). ENS, FM+STAT, FM+PAR, FM+DYN and the three DigiPRO
 TYPEs, the heaviest, play on one track at a time between them: while one track
 plays any of them, a second is silent and the list strikes them through. The
-web catalog cannot ship 0.8.0 until it reads
-the Monomachine OS as a donor. See [dpro/README.md](dpro/README.md).
+web catalog leaves 0.8.0 out until it reads the Monomachine OS as a donor. See [dpro/README.md](dpro/README.md).
 
 FM+ is ported to fixed point with original FM tables. Version 0.7.0 ships a balanced
 hybrid backend: self-FM stays at 2x; ramped operators and carrier run at 1x.
@@ -293,5 +292,7 @@ The owner reported CPU below 60% with eight CHORDS tracks on version 0.1;
 the patch/settings were not recorded. This does not benchmark the new SID/FM+
 types. Version 0.1.1 changes UI/core layout
 lookup only; the AUDIO engine is unchanged.
-The browser catalog configuration lists it as an optional machine; publishing
-or regenerating the site catalog is a separate step.
+Since 0.8.0 the browser catalog configuration (`js/config/syntakt-normal.json`)
+leaves it out: its objects would carry the DigiPRO tables, and the catalog
+tools strip only a module whose smz config names a donor recipe. It returns
+to the list with a Monomachine OS donor recipe.
