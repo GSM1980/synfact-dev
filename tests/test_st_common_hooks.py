@@ -128,7 +128,7 @@ def verify(folder):
         bytes.fromhex('700423c041bb32b04e75'))
     assert read(address('core_pool_blob'),12)==(
         jump('core_pool_prepare',0x4eb9)+bytes.fromhex('4ef940082e9c'))
-    assert len({s['addr'] for s in manifest['sites']})==127
+    assert len({s['addr'] for s in manifest['sites']})==129
     assert read(0x400a5046,6)==jump('core_audio_idle_mix',0x4eb9)
     # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
     # `storage`, files.c `io`) has read, write and sectors, each a code address.
