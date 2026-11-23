@@ -29,6 +29,30 @@ static int dm_fits(unsigned track,unsigned type)
     return 1;
 }
 #define STP_ENABLED(track,index) dm_fits(track,index)
+/* right of the names: a drawing of the Monomachine of our own (mnm-icon.h,
+ * tools/mnm_icon.py), drawn after the list; "DPRO WAVE" ends at x 68 */
+static void dm_list_art(void *bitmap);
+#define STP_LIST_ART(bitmap) dm_list_art(bitmap)
+#define STP_LIST_RIGHT 69                     /* the cursor's bar stops left of it */
 #include <syntakt/subtype-picker.h>
+#include "mnm-icon.h"
+#define DM_ICON_X 72                          /* x 72..123, left of the scroll bar */
+#define DM_ICON_TOP 42                        /* the list spans y 2..50: centred */
+/* its runs of lit pixels a row at a time; LCD y up, its top row at DM_ICON_TOP */
+static void dm_list_art(void *bitmap)
+{
+    unsigned r;
+    for (r = 0; r < DM_ICON_H; ++r) {
+        int x = 0;
+        while (x < DM_ICON_W) {
+            int start;
+            while (x < DM_ICON_W && !((dm_icon[r][x >> 5] >> (31 - (x & 31))) & 1u)) ++x;
+            if (x >= DM_ICON_W) break;
+            start = x;
+            while (x < DM_ICON_W && ((dm_icon[r][x >> 5] >> (31 - (x & 31))) & 1u)) ++x;
+            STP_FILL(bitmap, DM_ICON_X + start, DM_ICON_TOP - (int)r, DM_ICON_X + x - 1, DM_ICON_TOP - (int)r, 1);
+        }
+    }
+}
 int dm_picker_idle(void *view){return stp_idle(view);}
 void dm_picker_draw(void *view,void *bitmap){stp_draw(view,bitmap);}

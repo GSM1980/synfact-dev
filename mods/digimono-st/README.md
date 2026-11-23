@@ -56,6 +56,10 @@ dial. Double-tap SYN, highlight **SY MnM**, then press **YES** to open
 **CHOOSE A TYPE**. Encoders or UP/DOWN select a subtype; YES loads the machine
 with that subtype, NO returns to the native machine list. FUNC+UP/DOWN jumps
 seven rows. The fifteen TYPE values and all existing saved Sounds keep their IDs.
+Right of the names the list shows a small drawing of a Monomachine of our own
+(no Elektron artwork or logo): `mnm-icon.h`, written by
+`python mods/digimono-st/tools/mnm_icon.py` (`--preview out.png` also writes it
+eight times larger). It is 52 x 32 at x 72: the DPRO names reach x 68.
 
 Arriving at a Digi Mono SYN page, switching tracks or loading a subtype shows
 its name in a bordered box for about one second. Old views left on SYN 2 are

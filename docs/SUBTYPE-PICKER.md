@@ -38,6 +38,10 @@ GPL-3.0-only, consistent with its combined clean-room generators.
    chosen hidden TYPE through `ui->edit`. **NO** returns to the machine list;
    its release is consumed, and another NO reaches the native selector.
 
+A machine may draw beside its list: `STP_LIST_ART(bitmap)` runs after the names,
+and `STP_LIST_RIGHT` ends the cursor's bar left of the drawing. MD KIT and SY MnM
+each draw an original icon of their own there (`md-icon.h`, `mnm-icon.h`).
+
 Confirmation and the deferred edit refuse trig-held and live-recording states
 to avoid writing a parameter lock. The pending choice belongs to its track and
 model, expires after 60 ticks (two seconds), and covers a late write of native

@@ -397,7 +397,9 @@ subtype helper, twelve names, hidden TYPE, YES/NO/encoder routing, recording
 guards, late defaults, track/model changes, preserved knobs and wrapping ticks.
 `test_st_digimono_picker_emu.py BUILD --out OUTPUT` runs the linked ColdFire
 picker and actual native Bitmap construction/fill, writing PBM previews of all
-twelve name boxes and the selector. Native UI/model/get/edit boundaries are
+twelve name boxes and the selector. Both check the Monomachine drawing beside the
+list pixel for pixel against `mnm-icon.h`, and the cursor bar left of it.
+Native UI/model/get/edit boundaries are
 explicit doubles; a complete native selector/undo/modal lifecycle is not
 emulated. The original MD work is imported read-only with snapshot hashes. Core 2.3.2
 also runs native SYN reload through its real machine-parameter enumeration for

@@ -4,11 +4,22 @@ No full boot or native selector lifecycle: native view/model/get/edit, selection
 track and record queries are explicit doubles. The bank's module initialization,
 key/encoder/idle/draw, state, timing, layout and glyph code execute unmodified.
 """
-import argparse,json,struct
+import argparse,json,re,struct
 from pathlib import Path
 from test_st_digimono_destinations_emu import Destination,ENGINE,DATA
 from test_st_safe_boot_emu import RET
 from unicorn import UC_HOOK_CODE
+
+
+def icon_rows():
+    """mnm-icon.h's rows as lists of 0/1, its left pixel first"""
+    text=(Path(__file__).resolve().parents[1]/'mods/digimono-st/mnm-icon.h').read_text()
+    w=int(re.search(r'DM_ICON_W (\d+)',text).group(1))
+    rows=[]
+    for a,b in re.findall(r'\{0x([0-9a-f]{8})u,0x([0-9a-f]{8})u\}',text):
+        v=(int(a,16)<<32)|int(b,16)
+        rows.append([(v>>(63-c))&1 for c in range(w)])
+    return rows
 
 
 def verify(folder,out):
@@ -50,6 +61,8 @@ def verify(folder,out):
     m.w(view+0x7c,pages);m.w(pages,6)
     u.mem_write(ui,bytes(u.mem_read(m.sym['core:core_machine_ui_api'],48)))
     m.w(ui+24,edit);m.w(s['stp_api'],ui)
+    # SRAM the list's one-track rule reads (picker.c dm_fits): no other SY MnM track yet
+    u.mem_map(0x80000000,0x10000)
     u.mem_write(mask,b'\xff'*1024)
     m.invoke(0x400f72be,bitmap,128,64,pixels,mask)
     def call(name,*args):return m.invoke(s[name],*args)
@@ -104,6 +117,12 @@ def verify(folder,out):
     assert m.word(s['stp_sel'])==1
     clear();call('stp_frame_draw',bitmap,ctrl);pbm('selector-ens')
     selector=bytes(u.mem_read(pixels,1024));assert any(selector)
+    # the Monomachine drawing right of the names (mnm-icon.h), pixel for pixel
+    raw=struct.unpack('>256I',selector)
+    for r,row in enumerate(icon_rows()):
+        for c,lit in enumerate(row):
+            x,y=72+c,42-r
+            assert (raw[2*x+y//32]>>(31-y%32))&1==lit,('icon',r,c)
     assert turn(1)==1 and m.word(s['stp_sel']+8)==5
     assert key(13,1)==1 and key(13,0)==1 and not key(13,1)
     assert state['edits']==0 and state['selecting']
@@ -127,7 +146,7 @@ def verify(folder,out):
     assert not turn(1) and not key(12,1)
     # Execute the linked MAIN sender, with conflicting saved/effective TYPEs.
     # A legacy LFO/Sound Setup route changes the working projection only.
-    for base,size in ((0x80000000,0x10000),(0x10000000,0x10000),(0xfc070000,0x1000)):
+    for base,size in ((0x10000000,0x10000),(0xfc070000,0x1000)):
         u.mem_map(base,size)
     m.w(0x43bdd824,1)
     u.mem_write(0x80002f50,bytes([71])*8)

@@ -91,6 +91,12 @@ int main(void)
     assert(!key(STP_KEY_YES,1) && !turn(1) && !stp_sel.active);machine=71;
     open(view);assert(stp_sel.cursor==4 && tick() && !tick());
     unsigned count=lists;stp_frame_draw(pixels,0);assert(lists==count+1 && rectangles>80);
+    /* the Monomachine drawing right of the names, pixel for pixel, the bar left of it */
+    for(unsigned r=0;r<DM_ICON_H;r++)for(unsigned c=0;c<DM_ICON_W;c++){
+        unsigned x=DM_ICON_X+c,y=DM_ICON_TOP-r,lit=(pixels[2*x+y/32]>>(31-(y%32)))&1u;
+        assert(lit==((dm_icon[r][c>>5]>>(31-(c&31)))&1u));
+    }
+    for(unsigned y=0;y<54;y++)assert(!((pixels[2*70+y/32]>>(31-(y%32)))&1u) && !((pixels[2*71+y/32]>>(31-(y%32)))&1u));
     assert(turn(5) && stp_sel.cursor==5);assert(key(STP_KEY_UP,1) && stp_sel.cursor==4);
     assert(key(STP_KEY_DOWN,3) && stp_sel.cursor==11);assert(key(STP_KEY_DOWN,3) && stp_sel.cursor==14);
     assert(key(STP_KEY_DOWN,1) && stp_sel.cursor==14);
