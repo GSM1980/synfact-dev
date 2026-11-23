@@ -125,7 +125,8 @@ def build(directories,stock_path=None,output=None,module_directories=()):
         if is_module:modules.append(config['descriptor']);features|=4;entries=[]
         else:
             entries=config.get('machines') or [dict(descriptor=config['descriptor'],update=audio['update'],render=audio['render'])]
-            modules.extend(config.get('modules',[]))
+            # a module several machines share (st_subtype_module) is listed once
+            modules.extend(m for m in config.get('modules',[]) if m not in modules)
             if config.get('modules'):features|=4
         descriptors.extend(m['descriptor'] for m in entries)
         uis.extend(m.get('ui') for m in entries)

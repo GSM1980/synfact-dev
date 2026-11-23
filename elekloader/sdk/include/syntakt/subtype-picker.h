@@ -2,8 +2,11 @@
  * Bank-owned subtype selector, adapted from the uncommitted MD prototype.
  * See docs/SUBTYPE-PICKER.md for provenance, config and native boundaries.
  * Include once per MAIN translation unit with STP_MACHINE, STP_CONTROL_ID,
- * STP_CONTROL_INDEX, STP_COUNT, STP_NAMES, STP_DEFAULT, STP_MODULE,
- * STP_MODULE_NAME and STP_CONFIG_INIT(api). No core hooks or AUDIO work.
+ * STP_CONTROL_INDEX, STP_COUNT, STP_NAMES, STP_DEFAULT, STP_ON_LOAD (the name
+ * of the machine's on_load, which this header defines: it registers the
+ * picker) and STP_CONFIG_INIT(api). The bank's one module for every picker is
+ * st_subtype_module ("SUBTYPE SELECTOR"): list it in the machine's mod.json
+ * "modules". No core hooks or AUDIO work.
  * Optional: STP_ENABLED(track, index), 0 for a subtype that cannot be chosen on that
  * track now (struck through, the cursor passes it, YES takes nothing); STP_VIEW_ENCODER,
  * a view's ENC subscription of the machine's own (event view, event, id); STP_LIST_ART(bitmap),
@@ -403,14 +406,98 @@ static void stp_tick(void *ctrl)
     stp_now++;
     if (stp_sel.dirty) {stp_sel.dirty=0;((stp_u8 *)ctrl)[0x20]=1;}
 }
-static const struct st_smz_subscription stp_events[]={
+
+/* ---- one module for every machine's picker ----
+ * A bank holds at most 16 modules, and each machine with a picker used to
+ * bring its own. Now each registers its picker from its on_load (the core
+ * binds the machines before it starts the modules), and one module serves
+ * them all, in registration (bank) order: an event a picker takes goes no
+ * further, as it went no further than its module. Every copy of this header
+ * defines the module and the registry weakly, so a bank keeps one of each, and
+ * the bank builder lists a module that two machines declare once. */
+#define STP_INSTANCES 4u
+struct stp_instance {
+    int (*init)(const struct st_smz_api *);
+    void (*tick)(void *);
+    int (*key)(void *, void *);
+    int (*enc)(void *, void *);
+    void (*view_draw)(void *, void *, stp_u32);
+    void (*frame_draw)(void *, void *);
+    int (*view_enc)(void *, void *, stp_u32);
+};
+const struct stp_instance *st_subtype_instances[STP_INSTANCES] __attribute__((weak));
+static const struct stp_instance stp_self={stp_init,stp_tick,stp_key_global,stp_enc_global,
+    stp_view_draw,stp_frame_draw,
 #ifdef STP_VIEW_ENCODER
-    {ST_EV_ENC|ST_EV_VIEW,(void (*)(void))STP_VIEW_ENCODER},
+    (int (*)(void *, void *, stp_u32))STP_VIEW_ENCODER
+#else
+    0
 #endif
-    {ST_EV_TICK,(void (*)(void))stp_tick},
-    {ST_EV_KEY,(void (*)(void))stp_key_global},
-    {ST_EV_ENC,(void (*)(void))stp_enc_global},
-    {ST_EV_DRAW|ST_EV_VIEW,(void (*)(void))stp_view_draw},
-    {ST_EV_DRAW,(void (*)(void))stp_frame_draw}};
-const struct st_smz_module STP_MODULE={STP_MODULE_NAME,stp_init,stp_events,sizeof stp_events/sizeof stp_events[0]};
+};
+struct core_machine_def;
+int STP_ON_LOAD(const struct core_machine_def *m)
+{
+    stp_u32 i;
+    (void)m;
+    for (i = 0; i < STP_INSTANCES; i++) {
+        if (st_subtype_instances[i] == &stp_self) return 0;
+        if (!st_subtype_instances[i]) { st_subtype_instances[i] = &stp_self; return 0; }
+    }
+    return 1;                                         /* no room: refuse the bank */
+}
+static int stp_hub_init(const struct st_smz_api *api)
+{
+    stp_u32 i;
+    for (i = 0; i < STP_INSTANCES && st_subtype_instances[i]; i++)
+        if (st_subtype_instances[i]->init(api)) return 1;
+    return 0;
+}
+static void stp_hub_tick(void *ctrl)
+{
+    stp_u32 i;
+    for (i = 0; i < STP_INSTANCES && st_subtype_instances[i]; i++) st_subtype_instances[i]->tick(ctrl);
+}
+static int stp_hub_key(void *brain, void *event)
+{
+    stp_u32 i;
+    for (i = 0; i < STP_INSTANCES && st_subtype_instances[i]; i++)
+        if (st_subtype_instances[i]->key(brain, event)) return 1;
+    return 0;
+}
+static int stp_hub_enc(void *brain, void *event)
+{
+    stp_u32 i;
+    for (i = 0; i < STP_INSTANCES && st_subtype_instances[i]; i++)
+        if (st_subtype_instances[i]->enc(brain, event)) return 1;
+    return 0;
+}
+static void stp_hub_view_draw(void *view, void *bitmap, stp_u32 phase)
+{
+    stp_u32 i;
+    for (i = 0; i < STP_INSTANCES && st_subtype_instances[i]; i++)
+        st_subtype_instances[i]->view_draw(view, bitmap, phase);
+}
+static void stp_hub_frame_draw(void *bitmap, void *ctrl)
+{
+    stp_u32 i;
+    for (i = 0; i < STP_INSTANCES && st_subtype_instances[i]; i++)
+        st_subtype_instances[i]->frame_draw(bitmap, ctrl);
+}
+static int stp_hub_view_enc(void *view, void *event, stp_u32 id)
+{
+    stp_u32 i;
+    int r;
+    for (i = 0; i < STP_INSTANCES && st_subtype_instances[i]; i++)
+        if (st_subtype_instances[i]->view_enc && (r = st_subtype_instances[i]->view_enc(view, event, id))) return r;
+    return 0;
+}
+static const struct st_smz_subscription stp_hub_events[]={
+    {ST_EV_ENC|ST_EV_VIEW,(void (*)(void))stp_hub_view_enc},
+    {ST_EV_TICK,(void (*)(void))stp_hub_tick},
+    {ST_EV_KEY,(void (*)(void))stp_hub_key},
+    {ST_EV_ENC,(void (*)(void))stp_hub_enc},
+    {ST_EV_DRAW|ST_EV_VIEW,(void (*)(void))stp_hub_view_draw},
+    {ST_EV_DRAW,(void (*)(void))stp_hub_frame_draw}};
+const struct st_smz_module st_subtype_module __attribute__((weak))=
+    {"SUBTYPE SELECTOR",stp_hub_init,stp_hub_events,sizeof stp_hub_events/sizeof stp_hub_events[0]};
 #endif

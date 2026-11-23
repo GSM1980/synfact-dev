@@ -28,7 +28,7 @@ static const struct core_machine_param dm_controls[9] = {
     ST_MACHINE_PARAM(dm_label[7],dm_label[7],0,0x7f00,0),
     {"TYPE","MONOMACHINE TYPE",0,(DM_TYPES-1u)<<8,DM_DEFAULT_TYPE<<8,ST_MACHINE_CONFIG_PARAMETER}
 };
-const struct core_machine_def dm_monomachine={71,9,"SY MnM","MnM","SYN",dm_controls,ST_MACHINE_NO_INIT,44,10,16};
+const struct core_machine_def dm_monomachine={71,9,"SY MnM","MnM","SYN",dm_controls,dm_picker_on_load,44,10,16};
 
 static int dm_select_type(st_u32 t)
 {

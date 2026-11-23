@@ -62,7 +62,9 @@ static const struct core_machine_param md_controls[9] = {
 /* MD KIT (MDKT): the MD prefix a category of its own, as SP is the samplers'. Menu category 10, beside
  * the SY machines: 13, which no stock machine uses, put it under the MIDI machines with no icon (the
  * unit, 2026-11-20) */
-const struct core_machine_def md_machinedrum={70,9,"MD KIT","MDKT","SYN",md_controls,ST_MACHINE_NO_INIT,44,10,15};
+/* on_load registers the voice picker with the bank's SUBTYPE SELECTOR module */
+int md_picker_on_load(const struct core_machine_def *m);
+const struct core_machine_def md_machinedrum={70,9,"MD KIT","MDKT","SYN",md_controls,md_picker_on_load,44,10,15};
 
 static int md_copy(char *to, const char *from, u32 room)
 {
@@ -127,8 +129,7 @@ static void md_list_art(void *bitmap)
 #define STP_COUNT MD_VOICES
 #define STP_NAMES md_voice_names
 #define STP_DEFAULT 0u
-#define STP_MODULE md_picker_module
-#define STP_MODULE_NAME "MD TYPE SELECTOR"
+#define STP_ON_LOAD md_picker_on_load
 #define STP_CONFIG_INIT(api) md_config_init(api)
 #define STP_ENABLED(track, index) md_fits(track, index)
 #define STP_VIEW_ENCODER md_spare_encoder

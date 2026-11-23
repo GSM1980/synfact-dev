@@ -20,7 +20,7 @@
   },
   "smz": {
     "modules": [
-      "dm_destination_module"
+      "st_subtype_module"
     ],
     "features": [
       "machine-ui-v1"

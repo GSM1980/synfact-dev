@@ -7,6 +7,10 @@
 #include <stdio.h>
 #include <string.h>
 static unsigned values[15],machine=71,track=3,selecting,trigs,recording,edits;
+/* the other tracks' machines and TYPEs, for DPRO WAVE's one-track limit */
+static unsigned track_machine[8],track_type[8];
+#define DM_TRACK_MACHINE(t) track_machine[t]
+#define DM_TRACK_TYPE(t) track_type[t]
 static unsigned registered,boxes,lists,rectangles,foreign_edits;
 static unsigned controls[15][8];
 static unsigned pixels[256];
@@ -132,6 +136,13 @@ int main(void)
     for(unsigned i=0;i<30;i++){tick();idle(view);}draw(view);assert(boxes==old_boxes+1);
     /* Closed/foreign views take no native input. */
     assert(!key(STP_KEY_YES,1) && !turn(1));machine=66;draw(view);assert(!key(STP_KEY_YES,1));
+    /* DPRO WAVE (12) on one track at a time: struck through elsewhere */
+    assert(dm_fits(3,DM_DPWAVE) && dm_fits(3,DM_DPDDRW));
+    track_machine[0]=71;track_type[0]=DM_DPWAVE;
+    assert(!dm_fits(3,DM_DPWAVE) && dm_fits(0,DM_DPWAVE) && dm_fits(3,DM_DPDENS) && dm_fits(3,0));
+    track_machine[0]=70;assert(dm_fits(3,DM_DPWAVE));
+    track_machine[0]=71;track_type[0]=DM_DPDDRW;assert(dm_fits(3,DM_DPWAVE));
+    track_machine[0]=0;track_type[0]=0;
     puts("PASS: hidden TYPE, 15 choices, selector YES/NO/encoders, track/model/recording guards, late defaults, cancellation, bounded name box and wrap; no knob edits");
     return 0;
 }

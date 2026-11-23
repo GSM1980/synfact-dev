@@ -4,7 +4,7 @@
   "description": "Machinedrum voices from mdkit on one machine: all 30 of mdkit's voices, 13 TRX, 8 EFM and 9 PI, chosen from a list when the machine is selected (prototype).",
   "device": "syntakt", "os": "1.42", "sources": ["main.c"],
   "smz": {
-    "modules": ["md_picker_module"],
+    "modules": ["st_subtype_module"],
     "features": ["machine-ui-v1"],
     "machines": [{"descriptor": "md_machinedrum", "ui": "md_machinedrum_ui", "update": "md_update", "render": "md_render"}],
     "audio": {"sources": ["audio/md.c", "audio/md-runtime.c", "audio/md-tables.c",

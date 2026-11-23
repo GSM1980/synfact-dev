@@ -40,7 +40,7 @@ def check_module_composition(report):
         'recorder_module', 'lfo3_module', 'arp_module', 'poly_module',
         'system_info_module', 'sample_manager_module', 'chorus_module',
         'playhead_module', 'modulation_skip_module'}
-    if 71 in report['machines']:expected.add('dm_destination_module')
+    if 71 in report['machines'] or 70 in report['machines']:expected.add('st_subtype_module')
     actual=set(report['modules'])
     assert len(actual)==len(report['modules'])
     assert actual-{'mix_fast_module','icache_lock_module'}==expected

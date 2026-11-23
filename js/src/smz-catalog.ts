@@ -39,7 +39,7 @@ async function build(catalogBytes:Uint8Array, catalogHash:string, selected:strin
         s.data=donorUnfill(s.data,f.copies,regions)
       }
     }
-    spec.main.push(...item.main);spec.audio.push(...item.audio);spec.machines.push(...item.machines);spec.modules.push(...item.modules)
+    spec.main.push(...item.main);spec.audio.push(...item.audio);spec.machines.push(...item.machines);spec.modules.push(...item.modules.filter((m:string)=>!spec.modules.includes(m)))
     spec.modInfo!.push([item.id,item.version])
     spec.samplePool ||= item.samplePool
   }

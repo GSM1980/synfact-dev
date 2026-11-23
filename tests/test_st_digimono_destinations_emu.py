@@ -47,7 +47,7 @@ class Destination(Core):
         directory,count=struct.unpack_from('>II',raw,40)
         assert self.invoke(self.sym['core:core_machine_bind'],BANK+directory,count)==1
         self.u.mem_write(API,struct.pack('>2I',2,self.sym['core:core_machine_ui_api']))
-        module=self.bank_symbols['dm_destination_module']
+        module=self.bank_symbols['st_subtype_module']
         assert self.invoke(self.word(module+4),API)==0
         assert self.word(self.sym['core:core_parameter_providers'])==self.bank_symbols['dm_destination_query']
         self.w(PROXY,0x401c3d4c);self.w(PROXY+0x10,MODEL)

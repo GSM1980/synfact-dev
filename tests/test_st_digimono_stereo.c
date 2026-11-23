@@ -60,6 +60,15 @@ int main(void){
     dm_update(60<<16,voices[0],p);dm_render(out,voices[0]);assert(!memcmp(out,rbuf[0],128));
     extended[0]=2<<8;voices[0][0x38/4]=1;
     dm_update(60<<16,voices[0],p);dm_render(out,voices[0]);assert(!memcmp(out,rbuf[0],128));
+    /* ... for at most DM_STEREO_TAIL blocks while the voice sounds: then mono */
+    {unsigned first=claimed;voices[0][0x38/4]=0;
+     for(unsigned b=0;b<2*DM_STEREO_TAIL;b++){dm_update(60<<16,voices[0],p);dm_render(out,voices[0]);}
+     assert(dm_tracks[0].live && !dm_tracks[0].stereo_tail && claimed-first<DM_STEREO_TAIL);
+     first=claimed;dm_update(60<<16,voices[0],p);dm_render(out,voices[0]);assert(claimed==first);
+     /* the spread back: the R pass again */
+     extended[0]=4<<8;p[slots[7]]=127<<8;voices[0][0x38/4]=1;
+     dm_update(60<<16,voices[0],p);dm_render(out,voices[0]);assert(claimed==first+1 && dm_tracks[0].stereo_tail);
+     p[slots[7]]=0;extended[0]=2<<8;}
     /* AMP sleep feeds silence until filter tails end, then stops claiming. */
     idle=1;voices[0][0x38/4]=0;
     for(unsigned b=0;b<32;b++){dm_update(60<<16,voices[0],p);dm_render(out,voices[0]);}

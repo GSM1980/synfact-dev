@@ -131,14 +131,17 @@ class MidiTransport:
             if len(rx)>=6 and rx[2:4]==struct.pack('>H',seq) and rx[4]==(kind|128):return rx
         raise TimeoutError('Data RPC timed out; no request was retried')
 
+CLOSE_TIMEOUT=120
+
+
 class DataClient:
     def __init__(self,transport,block=2048,rest=0):
         if not 64<=block<=8192 or rest<0:raise ValueError('invalid Data chunk/pause')
         self.transport,self.block,self.rest=transport,block,rest
-    def call(self,kind,payload):
+    def call(self,kind,payload,timeout=15):
         if kind not in range(0x54,0x5a):raise PermissionError('only Data read/write RPC is allowed')
         if self.rest:time.sleep(self.rest)
-        return ok(self.transport.call(kind,payload,timeout=15),kind)
+        return ok(self.transport.call(kind,payload,timeout=timeout),kind)
     def read(self,path,*,header_only=False,progress=None):
         """progress(done, total): object bytes after each partial, once the size is known."""
         n=1 if path in ('/mods','/mods-stage','/mod-status') else sample_slot(path)
@@ -196,6 +199,9 @@ class DataClient:
             try:self.call(0x59,be32(job)+be32(len(obj)))
             except Exception:pass
             raise
-        rx=self.call(0x59,be32(job)+be32(len(obj)))
+        # The close answers once the unit has read back and validated the whole
+        # file (a bank: every byte on eMMC), which grows with its size: a 2.3 MB
+        # bank takes longer than 15 s.
+        rx=self.call(0x59,be32(job)+be32(len(obj)),timeout=CLOSE_TIMEOUT)
         if u32(rx,6)!=job or u32(rx,10)!=len(obj):raise RuntimeError('write close was not confirmed')
         return body

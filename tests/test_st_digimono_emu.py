@@ -108,7 +108,8 @@ class HostVoice:
 class Port(CPU):
     def __init__(self, stock, image, address, symbols, stereo=True):
         # Empty native sample descriptors (TwinShot update reads 4404f754).
-        super().__init__([(0x40000000, 0x60000), (0x42000000, 0x100000),
+        # core 2.2: the bank's AUDIO window is 4 MiB from 4204f750
+        super().__init__([(0x40000000, 0x60000), (0x42000000, 0x500000),
                           (0x44000000, 0x80000), (0x80000000, 0x10000)])
         self.symbols = symbols
         self.stereo = stereo and bool(symbols.get('st_stereo_claim'))
@@ -216,15 +217,27 @@ def main():
     port = Port(stock, sec.data, address, symbols)
     voices = [HostVoice(lib) for _ in range(8)]
     previous = [None]*8
+    blocked = [False]*8
+    waves = 0
     for step in range(12):
         for track in range(8):
             kind = (track+step)%len(PATCHES)
             knobs=[v<<8 for v in PATCHES[kind]]
             neighbour=(track-1)%8
-            expected=voices[track].block(kind,knobs,trig=True,previous=60*64 if previous[neighbour] is not None else None)
+            # DPRO WAVE on one track at a time (audio.c): while another track
+            # still holds it, this one is silent and not rendered
+            blocked[track] = kind == 12 and any(previous[u] == 12 and not blocked[u]
+                                                for u in range(8) if u != track)
             raw, _ = port.block(track, kind, knobs, trig=True)
-            assert raw == port.expected(expected), (track, step)
+            if blocked[track]:
+                silence = tuple([0]*32)
+                assert raw == (silence, silence), (track, step, 'second DPRO WAVE not silent')
+                waves += 1
+            else:
+                expected=voices[track].block(kind,knobs,trig=True,previous=60*64 if previous[neighbour] is not None else None)
+                assert raw == port.expected(expected), (track, step)
             previous[track] = kind; total += 1
+    assert waves, 'the one-WAVE limit was not exercised'
     # A full second fills and wraps the half-rate delay line. Both actual
     # channels, fractional controls, retriggers and chorus clock continuity.
     port = Port(stock,sec.data,address,symbols)

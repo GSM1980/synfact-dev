@@ -1010,50 +1010,63 @@ def test_os142_bank_allows_only_declared_optional_modules():
         'system_info_module','sample_manager_module','chorus_module',
         'playhead_module','modulation_skip_module']}
     check_module_composition(old)
-    new=deepcopy(old);new['machines'].append(71);new['modules'].append('dm_destination_module')
+    new=deepcopy(old);new['machines'].append(71);new['modules'].append('st_subtype_module')
     check_module_composition(new)
     fast=deepcopy(new);fast['modules']+=['mix_fast_module','icache_lock_module']
     check_module_composition(fast)
     bad=[]
-    for module in ('recorder_module','dm_destination_module','sp_sampler_input_module'):
+    for module in ('recorder_module','st_subtype_module','sp_sampler_input_module'):
         report=deepcopy(new);report['modules'].remove(module);bad.append(report)
-    for module in ('unknown_module','dm_destination_module'):
+    for module in ('unknown_module','st_subtype_module'):
         report=deepcopy(new);report['modules'].append(module);bad.append(report)
-    report=deepcopy(old);report['modules'].append('dm_destination_module');bad.append(report)
+    report=deepcopy(old);report['modules'].append('st_subtype_module');bad.append(report)
     for report in bad:
         try:check_module_composition(report)
         except AssertionError:pass
         else:raise AssertionError('accepted unexpected OS 1.42 module composition')
 
 
-def test_digimono_picker_module_has_only_the_declared_ui_events():
+def test_subtype_module_has_only_the_declared_ui_events():
     import hashlib,struct
     from pathlib import Path
-    from st_bank_modules import check_digimono_module
-    path=Path(HERE).parent/'mods/digimono-st/picker.c'
-    raw=bytearray(256);raw[32:32+19]=b'MONO TYPE SELECTOR\0'
-    report={'main_bytes':256,'source_sha256':{str(path):hashlib.sha256(path.read_bytes()).hexdigest()}}
-    struct.pack_into('>4I',raw,0,32,100,128,5)
-    for i,e in enumerate((0,2,3,0x101,1)):struct.pack_into('>II',raw,128+8*i,e,200+2*i)
-    check_digimono_module(report,raw,0,0)
-    for offset,value in ((12,0),(12,6),(128,5),(136,0x102),(140,201),(144,11),(132,256)):
+    from st_bank_modules import check_subtype_module
+    picker=Path(HERE).parent/'mods/digimono-st/picker.c'
+    md=Path(HERE).parent/'mods/md-st/main.c'
+    raw=bytearray(256);raw[32:32+17]=b'SUBTYPE SELECTOR\0'
+    report={'main_bytes':256,'machines':[66,71],
+            'source_sha256':{str(picker):hashlib.sha256(picker.read_bytes()).hexdigest()}}
+    struct.pack_into('>4I',raw,0,32,100,128,6)
+    for i,e in enumerate((0x103,0,2,3,0x101,1)):struct.pack_into('>II',raw,128+8*i,e,200+2*i)
+    check_subtype_module(report,raw,0,0)
+    both=dict(report,machines=[70,71],source_sha256=dict(report['source_sha256'],
+              **{str(md):hashlib.sha256(md.read_bytes()).hexdigest()}))
+    check_subtype_module(both,raw,0,0)
+    for offset,value in ((12,0),(12,5),(128,0x102),(136,5),(140,201),(152,0),(132,256)):
         bad=bytearray(raw);struct.pack_into('>I',bad,offset,value)
-        try:check_digimono_module(report,bad,0,0)
+        try:check_subtype_module(report,bad,0,0)
         except AssertionError:pass
-        else:raise AssertionError('accepted unexpected picker event/ABI')
+        else:raise AssertionError('accepted unexpected selector event/ABI')
     bad=bytearray(raw);bad[32]=ord('X')
-    try:check_digimono_module(report,bad,0,0)
+    try:check_subtype_module(report,bad,0,0)
     except AssertionError:pass
-    else:raise AssertionError('accepted unknown picker')
-    try:check_digimono_module(dict(report,source_sha256={}),raw,0,0)
-    except AssertionError:pass
-    else:raise AssertionError('accepted picker without pinned source')
+    else:raise AssertionError('accepted unknown selector')
+    for r in (dict(report,source_sha256={}),dict(report,machines=[70,71]),dict(report,machines=[66])):
+        try:check_subtype_module(r,raw,0,0)
+        except AssertionError:pass
+        else:raise AssertionError('accepted a selector without its pickers pinned')
+
+
+def test_smz_builder_lists_a_shared_module_once():
+    import inspect
+    from elekloader.sdk.syntakt import smz
+    source=inspect.getsource(smz.build)
+    assert "modules.extend(m for m in config.get('modules',[]) if m not in modules)" in source
 
 
 def test_digimono_audio_change_keeps_every_other_engine_identical():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_audio_change
-    old={'machines':[66,67,68,69,65,71],'modules':['a','dm_destination_module'],
+    old={'machines':[66,67,68,69,65,71],'modules':['a','st_subtype_module'],
          'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(3)}}
     new=deepcopy(old)
     new['object_sha256']['audio2-0.o']='changed adapter'
@@ -1076,7 +1089,7 @@ def test_digimono_audio_change_keeps_every_other_engine_identical():
 def test_digimono_ens_change_is_limited_to_two_existing_objects():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_ens_change
-    old={'machines':[66,67,68,69,65,71],'modules':['st_stereo_module','dm_destination_module'],
+    old={'machines':[66,67,68,69,65,71],'modules':['st_stereo_module','st_subtype_module'],
          'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(4)}}
     new=deepcopy(old)
     for n in (0,3):new['object_sha256'][f'audio2-{n}.o']='ENS '+str(n)
@@ -1101,7 +1114,7 @@ def test_digimono_ens_change_is_limited_to_two_existing_objects():
 def test_digimono_fm_replacement_is_limited_to_its_adapter_and_new_engine():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_fm_change
-    old={'machines':[66,67,68,69,65,71],'modules':['dm_destination_module'],
+    old={'machines':[66,67,68,69,65,71],'modules':['st_subtype_module'],
          'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(4)}}
     new=deepcopy(old)
     for n in (0,3):new['object_sha256'][f'audio2-{n}.o']='FM '+str(n)
@@ -1128,7 +1141,7 @@ def test_digimono_added_to_a_bank_changes_nothing_else():
          'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(2) for n in range(4)}}
     new=deepcopy(old)
     new['machines'].append(71)
-    new['modules']=['a','fm_tone_module','dm_destination_module','b']
+    new['modules']=['a','fm_tone_module','st_subtype_module','b']
     for n in range(6):new['object_sha256'][f'audio2-{n}.o']='mnm'+str(n)
     new['source_sha256']['/mods/digimono-st/dpro.c']='source'
     check_digimono_added(new,old)
@@ -1137,7 +1150,7 @@ def test_digimono_added_to_a_bank_changes_nothing_else():
         report=deepcopy(new);report['object_sha256'][name]='unexpected';bad.append(report)
     report=deepcopy(new);report['object_sha256']['audio3-0.o']='unexpected';bad.append(report)
     report=deepcopy(new);del report['object_sha256']['audio1-1.o'];bad.append(report)
-    report=deepcopy(new);report['modules']=['a','fm_tone_module','b','dm_destination_module'];bad.append(report)
+    report=deepcopy(new);report['modules']=['a','fm_tone_module','b','st_subtype_module'];bad.append(report)
     report=deepcopy(new);report['machines']=[66,67,68,69,65,70];bad.append(report)
     report=deepcopy(new);report['source_sha256'].clear();bad.append(report)
     for report in bad:
@@ -1152,7 +1165,7 @@ def test_digimono_added_to_a_bank_changes_nothing_else():
 def test_digimono_dpro_addition_is_limited_to_its_adapter_and_new_engine():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_dpro_change
-    old={'machines':[66,67,68,69,65,71],'modules':['dm_destination_module'],
+    old={'machines':[66,67,68,69,65,71],'modules':['st_subtype_module'],
          'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(3) for n in range(5)}}
     new=deepcopy(old)
     for n in (0,3):new['object_sha256'][f'audio2-{n}.o']='DPRO '+str(n)

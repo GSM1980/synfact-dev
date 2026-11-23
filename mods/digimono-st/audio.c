@@ -27,16 +27,37 @@ extern int *st_stereo_claim(unsigned) __attribute__((weak));
 #endif
 #define DM_SIGNATURE 0x444d0101u
 #define DM_REST_BLOCKS 32u
+/* After ENS's or DENS's chorus spread stops (CHRL or CHRW 0, or another TYPE),
+ * the R pass goes on this many blocks (about 85 ms) for the R chain's tails,
+ * then the track is mono again. It used to go on while the voice sounded. */
+#define DM_STEREO_TAIL 128u
+/* DPRO WAVE on one track at a time (the unit: one is all 7 stock tracks leave
+ * room for). A second stays silent, unrendered, until it is the only one; the
+ * track first in the block's order keeps it. MAIN's list strikes it through. */
+#define DM_WAVE_TRACKS 1u
 struct dm_track {
     struct mono_voice engine;
     struct dm_m2k_voice m2k;
     struct dm_ens_voice ens;
-    unsigned loaded,pending,live,quiet,increment,stereo_tail;
+    unsigned loaded,pending,live,quiet,increment,stereo_tail,blocked;
     int32_t pitch;
     uint16_t m2p[MONO_PARAMS];
     uint8_t p[MONO_PARAMS];
 };
 static struct dm_track dm_tracks[8];
+/* the block's passes over the SY MnM tracks: a track index that does not grow
+ * starts one; a track counts while dm_update sees it (as MD KIT's budget) */
+static unsigned dm_round,dm_last=8,dm_seen[8];
+static int dm_wave_fits(int t)
+{
+    unsigned u,n=1;
+    for(u=0;u<8;u++){
+        const struct dm_track *o=dm_tracks+u;
+        if((int)u==t || dm_round-dm_seen[u]>2u || o->blocked || o->loaded!=DM_DPWAVE+1u)continue;
+        n++;
+    }
+    return n<=DM_WAVE_TRACKS;
+}
 
 static int dm_track_of(const void *voice)
 {
@@ -70,6 +91,8 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     int t=dm_track_of(voice),note,tune;
     if(t<0)return;
     s=dm_tracks+t;trig=v[0x38/4]!=0;
+    if((unsigned)t<=dm_last)++dm_round;
+    dm_last=(unsigned)t;dm_seen[t]=dm_round;
     if(v[0x6f8/4]!=DM_SIGNATURE || !s->loaded) {
         mono_init(&s->engine);dm_m2k_init(&s->m2k);s->loaded=0;s->pending=DM_DEFAULT_TYPE;
         s->live=0;s->quiet=0;
@@ -90,6 +113,7 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     if(tune < -0x4000)tune=-0x4000;
     if(tune > 0x3f00)tune=0x3f00;
     note=((int32_t)pitch>>9)+(tune>>1); /* Q16 -> 1/128 semitone */
+    s->blocked=s->loaded==DM_DPWAVE+1u && !dm_wave_fits(t);
     s->increment=mono_pitch_inc(note);
     s->pitch=note>>1; /* MONO2K: 1/64 semitone, common TUNE already applied. */
     if(trig) {
@@ -125,16 +149,16 @@ void dm_render(void *out,void *voice)
     s=dm_tracks+t;
     unsigned type=s->loaded-1u,ens=s->loaded==DM_ENS+1u,dens=s->loaded==DM_DPDENS+1u;
     /* ENS and DPRO-DENS: CHRL/CHRW's chorus spreads them across the stereo. */
-    unsigned chorus=ens || dens,want_stereo=chorus && s->live && s->m2p[5] && s->m2p[6];
+    unsigned chorus=ens || dens,want_stereo=chorus && s->live && !s->blocked && s->m2p[5] && s->m2p[6];
     int *rout=0;
     if(want_stereo || s->stereo_tail){
         unsigned sounding=s->live;
         const int *previous=DM_STEREO_PREVIOUS((unsigned)t);
         if(previous)for(i=0;i<32 && !sounding;i++)sounding=previous[i]!=0 || ((const int *)out)[i]!=0;
         if(sounding)rout=DM_STEREO_CLAIM((unsigned)t);
-        s->stereo_tail=rout!=0;
+        s->stereo_tail=!rout?0:want_stereo?DM_STEREO_TAIL:s->stereo_tail-1u;
     }
-    if(s->loaded && s->live) {
+    if(s->loaded && s->live && !s->blocked) {
         if(ens)dm_ens_render(&s->ens,s->m2p,s->pitch,pcm,right);
         else if(DM_IS_DPRO(type)){
             dm_m2k_render(&s->m2k,type,s->m2p,s->pitch,dm_previous_mnm((unsigned)t),pcm);

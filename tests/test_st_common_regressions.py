@@ -67,7 +67,8 @@ def check_digimono_added(current,baseline):
     after FM TONE's, its own AUDIO folder only; every other object identical."""
     assert 71 not in baseline['machines'] and current['machines']==baseline['machines']+[71]
     modules=list(baseline['modules'])
-    modules.insert(modules.index('fm_tone_module')+1,'dm_destination_module')
+    if 'st_subtype_module' not in modules:
+        modules.insert(modules.index('fm_tone_module')+1,'st_subtype_module')
     assert current['modules']==modules
     def objects(report):
         return {Path(n).name:h for n,h in report['object_sha256'].items()
@@ -332,7 +333,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                         '--out',out/'lfo3-activity.json'])
             else:skipped.append('LFO3 event differential: supply --previous-build with LFO3 bank/work')
     else:skipped.append('safe-boot emulation: supply --unicorn-python (and LIBUNICORN_PATH)')
-    if 'dm_destination_module' in json.loads((out/'synfact-machines.smz4.json').read_text())['modules']:
+    if 71 in json.loads((out/'synfact-machines.smz4.json').read_text())['machines']:
         if unicorn_python:run('Digi Mono native destination lists (Unicorn)',[unicorn_python,'-B','tests/test_st_digimono_destinations_emu.py',out])
         else:skipped.append('Digi Mono native destination lists: supply --unicorn-python')
         if any(Path(p).as_posix().endswith('/mods/digimono-st/picker.c') for p in
