@@ -1,49 +1,63 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft. Not yet built with SGDK 2.11 or run on a unit through Synfact.**
-The same feature has been used on OS 1.42 as a binary patch outside this
-project; this module is its rewrite on core events. Needs core 2.7 (host API
+**Draft, 0.2.0.** 0.1.0 was built with SGDK 2.11 in review; 0.2.0 (the
+review's changes) has not been built with SGDK or run on a unit. The same
+feature has been used on OS 1.42 as a binary patch outside this project;
+this module is its rewrite on core events. Needs core 2.7 (host API
 18, SMZ events 16/17).
 
 ## What it does
 
-One saved project, **P128**, is a bank of 128 kits.
+**Off until you turn it on.** SETTINGS > **KIT BANK** reads `OFF`. YES turns
+it on with **P128** offered; LEFT/RIGHT pick any project, P1..P128 (and turn
+it on); YES again turns it off. Installing the module never makes an
+existing project a bank. The choice lasts until power-off: a module has no
+place to keep it yet (see Open questions).
+
+With the bank on:
 
 - **List.** SETTINGS > PATTERN > RELOAD FROM PROJ shows, after WHOLE PATTERN /
   KIT DATA / SEQUENCE DATA, a MODE row and 128 rows `A01 NAME` ... `H16 NAME`,
-  one per kit of P128.
+  one per kit of the bank project. The names are read again each time the
+  page opens; a name that cannot be read shows `A01 ?` and is retried on the
+  next opening.
 - **Load.** In `MODE: LOAD KIT`, YES on a row shows `LOAD A06? YES again`; a
-  second YES on the same row copies that kit's sounds into the current
-  pattern's kit and shows `LOADED A06 NAME`. P128 is only read.
+  second YES on the same row replaces the current pattern's kit with that
+  bank kit, whole, and shows `LOADED A06 NAME`. The bank is only read.
 - **Save.** YES on the MODE row switches to `MODE: SAVE KIT` (every row then
   reads `SAVE A01 ...`). YES on a row shows `SAVE A09 IN P128? YES`; a second
-  YES writes the current pattern's kit into that position of P128 with the
-  OS's own Kit encoder and slot writer, then shows `SAVED A09 NAME`. The
+  YES writes the current pattern's kit into that position of the bank with
+  the OS's own Kit encoder and slot writer, then shows `SAVED A09 NAME`. The
   project in memory and its "kit changed" flags are untouched.
-- **Cancel.** Any other key, another row or the MODE row cancels a pending
-  confirmation; opening the page with the long press does too.
+- **Cancel.** A pending confirmation is cancelled by any other key, by moving
+  the selection (encoder or arrows), by YES on another row or on MODE, and by
+  leaving or reopening the page.
 - **Shortcut.** A long press of **SETTINGS** opens the page from anywhere,
   instead of the LED INTENSITY quick view (LED intensity stays in the
   SETTINGS menu). The page stays open; NO closes it.
-- **No bank.** If P128 is not a saved project in the current format, row 0
-  reads `BANK P128 NOT SAVED`, rows 1 and 2 the slot status (13 = ok) and the
-  storage state (2 = ready); YES on row 0 tries again. Nothing is read or
-  written.
+- **Not saved.** If the bank project is not a saved project in the current
+  format, row 0 reads `BANK P128 NOT SAVED`, rows 1 and 2 the slot status
+  (13 = ok) and the storage state (2 = ready); YES on row 0 tries again.
+  Nothing is read or written.
 
-Only the sounds move on LOAD: the 12 audio tracks' 291-byte sound records
-and the FX track's 71 parameter words, through the core's COPY path
-(`core_meta_copy`), as the stock track-sound reload does. The kit's per-track
-blocks and the pattern's settings stay the pattern's own.
+**What LOAD restores.** Everything the Kit holds: the 12 audio tracks' and
+the FX track's sounds and settings, the kit's per-track blocks and name, and
+every module's per-kit state (LFO3, COMP, Chorus, Playhead's saved modes).
+The record is decoded by the native decoder into a temporary Kit, so the
+core's DECODE notifications give each module its record from the Kit tail;
+one `0x1618`-byte copy through the core's COPY path (`core_meta_copy`) then
+replaces the live Kit, the way the OS copies kits, and the modules move their
+state with it. The pattern and its sequencer data (trigs, notes, parameter
+locks, microtiming, conditions, lengths) live outside the Kit and are not
+touched. Playhead: its saved per-track modes travel with the kit; playback
+position follows Playhead's own load behaviour.
 
 ## Before you use it
 
-- **P128 is written.** Save into a project you made for the purpose. If
-  P128 holds a real project, SAVE replaces its kits. Every write needs SAVE
-  mode and two YES, and the prompt names the project. The bank is fixed at
-  build time (`-DKL_BANK=n`, 1..128). A runtime setting that turns the bank on
-  or picks the slot is not there yet.
+- **The bank project is written.** Pick a project you made for the purpose.
+  Every write needs SAVE mode and two YES, and the prompt names the project.
 - **Samples are per project.** A bank kit's sampler tracks, and pool
-  positions 65..128, play the *current* project's samples, not P128's.
+  positions 65..128, play the *current* project's samples, not the bank's.
 - **Machines are per bank.** A kit that uses SMZ4 machines missing from the
   loaded bank falls back like any project would.
 
@@ -55,26 +69,28 @@ Events only; the module owns no code site.
 |---|---|
 | `ST_EV_RELOAD_MENU` (core 2.7) | appends the MODE row and the 128 kit rows with the OS's MenuItem constructor and `Menu::addItem` |
 | `ST_EV_PATTERN_MENU` (core 2.7) | keeps PatternMenuView, which owns the page (`shared_ptr` at +472) |
+| `ST_EV_SETTINGS` | the KIT BANK row (`additem`: label, YES, LEFT/RIGHT) |
 | `ST_EV_KEY`, global | a long press of SETTINGS (KeyEvent flags bit 5) pushes the page on the global view manager and holds SETTINGS until released; other keys cancel a confirmation |
+| `ST_EV_TICK` | page entry and exit (the page's view on the global view stack, `std::list` at manager +20), and the selected row (Menu vtable +36) against the armed row |
 
 The OS routines it calls (never patches) are in `kitload.h`. LOAD and SAVE
 call the native Kit decoder `400a78a0` and encoder `400a78f4`, the entries the
 core hooks, so the core's ENCODE/DECODE notifications run. SAVE writes the
-whole `0x1600`-byte record, so module records in the encoded Kit tail
-(`[14e0,15f8)`: LFO3, COMP, Playhead) are stored with it, and LOAD hands the
-same bytes to the decoder.
+whole `0x1600`-byte record, module records in the encoded tail
+(`[14e0,15f8)`) included.
 
 Construction touches no storage: the OS builds the SETTINGS menus once at
-boot, before the saved-project table exists. The bank is read when a row is
-drawn or chosen (128 reads of 512 bytes, once per page opening).
+boot, before the saved-project table exists. The bank is read when the page
+is drawn after it opens (128 reads of 512 bytes).
 
-## Open question
+## Open questions
 
-On LOAD the record (tail included) is decoded into a temporary Kit, and
-only sound records are then copied into the live kit. Per-sound module state
-that follows the core's COPY notifications comes along; per-kit records
-(COMP's FX settings, Playhead) stay the live kit's own. Whether LOAD should
-bring those too, and through which audited path, is for the maintainers.
+- **Where KIT BANK is kept.** It resets to OFF at power-off. A module has no
+  settings store of its own; a core place for small module settings would
+  let it persist.
+- **View-stack reading.** Page entry and exit read the global view manager's
+  `std::list` (layout from `40100d86`), a static reading not yet observed on
+  a unit.
 
 ## Tests
 
@@ -82,16 +98,26 @@ bring those too, and through which audited path, is for the maintainers.
 the configured ColdFire compiler and runs the handlers in Unicorn against
 stubs of the OS routines, at their real addresses:
 
+- KIT BANK: off by default, YES toggles, LEFT/RIGHT pick P1..P128; off reads
+  and writes nothing;
 - the 129 rows are built with no storage access, and the labels read the bank;
-- LOAD and SAVE need two YES on the same row; another key cancels;
-- LOAD copies only the sounds, through the COPY path, and notifies the engine;
+- LOAD and SAVE need two YES on the same row; another key, a selection
+  change, leaving the page cancel;
+- the names are read again on each entry (SETTINGS > PATTERN or the
+  shortcut), and a failed read shows `?` and is retried on the next entry;
+- LOAD replaces the whole Kit in one COPY of `0x1618` bytes, with what the
+  decoder produced, and notifies the engine;
 - SAVE writes the whole record, and a LOAD of that position hands the same
   bytes, Kit tail `[14e0,15f8)` included, to the native decoder;
-- with no bank, nothing is read or written;
 - a long press of SETTINGS opens the page once, holds SETTINGS until its
   release, and leaves other event classes alone.
 
-It does not run the real OS, the core's codec hooks or a bank build.
+`python tests/test_st_kitload_restore_emu.py --core ... --bank ...` runs LOAD's
+restore with the real native codecs and the real COMP, Chorus, LFO3, POLY and
+Playhead providers on a built core and bank: the destination Kit must equal a
+native decode of the record, with the source's COMP, Chorus and Playhead
+settings, and the project memory before the Kits and the other Kits must not
+change.
 
 ## Licence
 

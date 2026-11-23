@@ -2,51 +2,50 @@
  * kitload-st: a kit bank in a saved project, from SETTINGS > PATTERN >
  * RELOAD FROM PROJ. See README.md.
  *
- * After the OS's WHOLE PATTERN / KIT DATA / SEQUENCE DATA rows the menu gets
- * a MODE row and 128 rows "A01 NAME" ... "H16 NAME", the kits of project
- * KL_BANK. LOAD copies a bank kit's sounds into the current pattern's kit;
- * SAVE writes the current pattern's kit into a bank position. Both ask for a
- * second YES. A long press of SETTINGS opens the page from anywhere.
+ * Off until SETTINGS > KIT BANK names a project (P1..P128, P128 offered
+ * first). Then the menu gets, after the OS's WHOLE PATTERN / KIT DATA /
+ * SEQUENCE DATA rows, a MODE row and 128 rows "A01 NAME" ... "H16 NAME", the
+ * kits of that project. LOAD replaces the current pattern's kit with a bank
+ * kit; SAVE writes the current pattern's kit into a bank position. Both ask
+ * for a second YES. A long press of SETTINGS opens the page.
  *
  * Events only, no code site of its own:
  *   ST_EV_RELOAD_MENU  appends the rows (core 2.7);
  *   ST_EV_PATTERN_MENU keeps PatternMenuView, which owns the page (core 2.7);
- *   ST_EV_KEY          long press of SETTINGS opens the page; another key
- *                      cancels a pending confirmation.
+ *   ST_EV_SETTINGS     the KIT BANK row;
+ *   ST_EV_KEY          long press of SETTINGS opens the page;
+ *   ST_EV_TICK         page entry (rereads the names), leaving it or moving
+ *                      the selection (cancels a pending confirmation).
  * The OS builds the SETTINGS menus once at boot, before the saved-project
- * table exists: construction touches no storage; the bank is read when a
- * row is drawn or chosen.
+ * table exists: construction touches no storage.
  */
 #include <syntakt/modules.h>
 #include <syntakt/host.h>
 #include "kitload.h"
-#define STR2(x) #x
-#define STR(x) STR2(x)
 #define DATA __attribute__((section(".data")))
 #define LBL 24
 
-char kl_lbl[129][LBL] DATA = {{0}};     /* 0: status row; 1..128: "A01 NAME" */
-static char msg_buf[LBL + 8] DATA = {0};
+char kl_lbl[129][LBL] DATA = {{0}};     /* 1..128: "A01 NAME" */
+static char msg_buf[LBL + 16] DATA = {0};
 static char lab_buf[LBL + 8] DATA = {0};
-u32 kl_valid DATA = 0;                  /* kl_lbl holds the bank's names */
+u32 kl_bank DATA = 0;                   /* 0 off, else the bank project 1..128 */
+u32 kl_pick DATA = KL_DEFAULT;          /* the project KIT BANK offers */
+u32 kl_valid DATA = 0;                  /* names: 0 to read, 1 read, 2 a read failed (retry on entry) */
 u32 kl_mode DATA = 0;                   /* 0 LOAD, 1 SAVE */
 u32 kl_armed DATA = 0;                  /* row (1..128) waiting for its second YES */
 u32 kl_pm DATA = 0;                     /* PatternMenuView */
+u32 kl_rm DATA = 0;                     /* PatternReloadMenuView */
+u32 kl_open DATA = 0;                   /* the page was on the view stack at the last tick */
 u32 kl_eat DATA = 0;                    /* SETTINGS opened the page: hold it until released */
+static const struct st_machine_host_api *kl_host DATA = 0;
 
-static const char s_stat[] = "STATUS ";
-static const char s_ok[] = " (13=OK)";
-static const char s_dev[] = "DEVICE STATE ";
-static const char s_dok[] = " (2=OK)";
-static const char s_none[] = "BANK P" STR(KL_BANK) " NOT SAVED";
-static const char s_found[] = "Bank P" STR(KL_BANK) " found";
+static const char s_off[] = "KIT BANK OFF: SETTINGS";
 static const char s_dash[] = "-";
 static const char s_mload[] = "MODE: LOAD KIT";
 static const char s_msave[] = "MODE: SAVE KIT";
 static const char s_pload[] = "List mode: LOAD";
 static const char s_psave[] = "List mode: SAVE";
-static const char s_pre[] = "SAVE ";
-static const char e_slot[] = "Bank P" STR(KL_BANK) " not saved";
+static const char e_off[] = "Turn on KIT BANK";
 static const char e_read[] = "Bank read error";
 static const char e_dec[] = "Bank kit invalid";
 static const char e_enc[] = "Kit encode failed";
@@ -65,6 +64,28 @@ static void cpy(char *d, const char *s, u32 n)
     d[i] = 0;
 }
 
+static u32 put_num(char *d, u32 v)      /* decimal, returns its length */
+{
+    char t[12];
+    u32 k = 0, n = 0;
+    do { t[k++] = (char)('0' + v % 10u); v /= 10u; } while (v && k < 11);
+    while (k) d[n++] = t[--k];
+    d[n] = 0;
+    return n;
+}
+
+/* pre + "P" + bank + post, into d (LBL + 8 bytes) */
+static const char *bank_text(char *d, const char *pre, const char *post)
+{
+    u32 n;
+    cpy(d, pre, LBL);
+    for (n = 0; d[n]; n++) ;
+    d[n++] = 'P';
+    n += put_num(d + n, kl_bank);
+    cpy(d + n, post, LBL + 8 - n);
+    return d;
+}
+
 static void label_for(u32 j, const char *name)          /* "A01 " + kit j's name */
 {
     char *d = kl_lbl[j + 1];
@@ -81,68 +102,83 @@ static void label_for(u32 j, const char *name)          /* "A01 " + kit j's name
     d[n] = 0;
 }
 
-static void num_label(char *d, const char *pre, int v, const char *post)
-{
-    char t[12];
-    u32 n = 0, k = 0, u;
-    cpy(d, pre, LBL);
-    while (d[n]) n++;
-    if (v < 0) { d[n++] = '-'; u = (u32)(-v); } else u = (u32)v;
-    do { t[k++] = (char)('0' + u % 10u); u /= 10u; } while (u && k < 11);
-    while (k) d[n++] = t[--k];
-    cpy(d + n, post, LBL - n);
-}
-
-static void read_name(u32 mgr, u32 slot, u32 j)        /* 512 bytes: the record is 512-aligned */
+static int read_name(u32 mgr, u32 slot, u32 j)         /* 512 bytes: the record is 512-aligned */
 {
     char name[NAME_MAX + 1];
     const char *p = (const char *)SCRATCH;
     u32 k;
     name[0] = 0;
-    if (SREAD(mgr, SCRATCH, slot, (KITS_AT + KIT_STORED * j) >> 9, 512) == 0 && *(const u32 *)SCRATCH == 11u) {
+    if (SREAD(mgr, SCRATCH, slot, (KITS_AT + KIT_STORED * j) >> 9, 512) != 0) {
+        name[0] = '?'; name[1] = 0;     /* unknown: shown as "A01 ?", read again on the next entry */
+        label_for(j, name);
+        return 0;
+    }
+    if (*(const u32 *)SCRATCH == 11u) {
         for (k = 0; k < NAME_MAX; k++) name[k] = p[NAME_AT + k];
         name[NAME_MAX] = 0;
     }
     label_for(j, name);
+    return 1;
 }
 
-/* Is the bank a saved project in the current format? Reads the 128 names once. */
+/* Is the bank on and a saved project in the current format? Reads the 128
+ * names once per page entry; a failed read is not cached as done. */
 static int bank_ok(void)
 {
-    u32 mgr = MGR(), j;
-    if (SSTAT(mgr, KL_BANK - 1u) != 13) { kl_valid = 0; return 0; }
+    u32 mgr, j, ok = 1;
+    if (!kl_bank) return 0;
+    mgr = MGR();
+    if (SSTAT(mgr, kl_bank - 1u) != 13) { kl_valid = 0; return 0; }
     if (!kl_valid) {
-        for (j = 0; j < 128u; j++) read_name(mgr, KL_BANK - 1u, j);
-        kl_valid = 1;
+        for (j = 0; j < 128u; j++) ok &= (u32)read_name(mgr, kl_bank - 1u, j);
+        kl_valid = ok ? 1u : 2u;
     }
     return 1;
 }
 
-/* Bank kit src -> current project's kit dst. Decoded through the native
- * decoder into a temporary Kit; only the sounds move, through the core's COPY
- * path, as the stock track-sound reload does. */
+static u32 live_kit(u32 obj, u32 idx)
+{
+    u32 base = ((u32 (*)(u32))(*(u32 **)obj)[10])(obj);               /* vfunc +40: the kits */
+    return base + KITS_RAM_OFS + KIT_RAM * idx;
+}
+
+/* A stored Kit record -> the Kit at kit, whole. The native decoder fills a
+ * temporary Kit (the core's DECODE notifications give every module its
+ * record); one 0x1618-byte copy through the core's COPY path then replaces
+ * the Kit, as the OS copies kits, so modules move their per-kit state (COMP,
+ * Playhead, LFO3, Chorus's FX values) with it. The pattern, its trigs and
+ * every other sequencer field are outside the Kit and untouched. */
+int kl_restore_kit(u32 kit, const void *record)
+{
+    u32 tmp[2] = {0, 0};
+    kl_tmpkit(tmp);
+    if (!tmp[0] || KDEC((void *)tmp[0], (void *)record) == 0) {
+        if (tmp[1]) SPREL(&tmp[1]);
+        return 0;
+    }
+    MEMCPY((void *)kit, (const void *)tmp[0], KIT_RAM);
+    SPREL(&tmp[1]);
+    return 1;
+}
+
+/* ... the current project's Kit dst, then the engine is told. */
+int kl_restore(u32 obj, u32 dst, const void *record)
+{
+    if (!kl_restore_kit(live_kit(obj, dst), record)) return 0;
+    KNOTE((char *)obj + 304, dst, 0);
+    return 1;
+}
+
+/* Bank kit src -> current project's kit dst. */
 static void load(u32 src, u32 dst)
 {
-    u32 mgr, slot = KL_BANK - 1u, base, obj, t, tmp[2] = {0, 0};
-    void *kit;
-    if (src > 127u || dst > 127u) return;
+    u32 mgr, slot = kl_bank - 1u, obj;
+    if (src > 127u || dst > 127u || !kl_bank) return;
     obj = CUROBJ();
     mgr = MGR();
-    if (SSTAT(mgr, slot) != 13) { say(e_slot); return; }
+    if (SSTAT(mgr, slot) != 13) { say(bank_text(msg_buf, "Bank ", " not saved")); return; }
     if (SREAD(mgr, SCRATCH, slot, (KIT_STORED * src + KITS_AT) >> 9, KIT_STORED) != 0) { say(e_read); return; }
-    base = ((u32 (*)(u32))(*(u32 **)obj)[10])(obj);                     /* vfunc +40: the kits */
-    kit = (void *)(base + KITS_RAM_OFS + KIT_RAM * dst);
-    kl_tmpkit(tmp);
-    if (!tmp[0] || KDEC((void *)tmp[0], SCRATCH) == 0) {
-        if (tmp[1]) SPREL(&tmp[1]);
-        say(e_dec);
-        return;
-    }
-    for (t = 0; t < SND_N; t++)
-        MEMCPY((char *)kit + SND_AT + SND_LEN * t, (const char *)tmp[0] + SND_AT + SND_LEN * t, SND_LEN);
-    MEMCPY((char *)kit + FXS_AT, (const char *)tmp[0] + FXS_AT, FXS_LEN);
-    SPREL(&tmp[1]);
-    KNOTE((char *)obj + 304, dst, 0);
+    if (!kl_restore(obj, dst, SCRATCH)) { say(e_dec); return; }
     cpy(msg_buf, "LOADED ", 8);
     cpy(msg_buf + 7, kl_lbl[src + 1], 16);                              /* popups hold 22 characters */
     say(msg_buf);
@@ -159,22 +195,19 @@ static void pattern_name(u32 obj, u32 idx, char *dst)
 }
 
 /* Current kit src -> bank position dst: the native encoder, then the slot
- * writer, as SAVE KIT. The whole 0x1600-byte record is written, so module
- * records in the encoded tail travel with it. The project in memory and its
- * "kit changed" flags are untouched. */
+ * writer, as SAVE KIT. The whole 0x1600-byte record is written, module
+ * records in the encoded tail included. The project in memory and its "kit
+ * changed" flags are untouched. */
 static void save(u32 src, u32 dst)
 {
-    u32 mgr, slot = KL_BANK - 1u, base, obj, k;
+    u32 mgr, slot = kl_bank - 1u, obj, k;
     char name[NAME_MAX + 1];
-    void *kit;
     int r;
-    if (src > 127u || dst > 127u) return;
+    if (src > 127u || dst > 127u || !kl_bank) return;
     obj = CUROBJ();
     mgr = MGR();
-    if (SSTAT(mgr, slot) != 13) { say(e_slot); return; }
-    base = ((u32 (*)(u32))(*(u32 **)obj)[10])(obj);
-    kit = (void *)(base + KITS_RAM_OFS + KIT_RAM * src);
-    if (KENC(SAVEBUF, kit, 0) == 0) { say(e_enc); return; }
+    if (SSTAT(mgr, slot) != 13) { say(bank_text(msg_buf, "Bank ", " not saved")); return; }
+    if (KENC(SAVEBUF, (void *)live_kit(obj, src), 0) == 0) { say(e_enc); return; }
     pattern_name(obj, src, (char *)SAVEBUF + NAME_AT);
     r = SWRITE(mgr, SAVEBUF, slot, (KIT_STORED * dst + KITS_AT) >> 9, KIT_STORED);
     if (r != 0) { say(r == 3 ? e_prot : e_wr); return; }
@@ -202,15 +235,17 @@ u32 kl_label_c(void *ret, u32 j)
 {
     char dummy;
     const char *s;
-    u32 ok = (u32)bank_ok();
-    if (j == 0)
-        s = !ok ? s_none : (kl_mode ? s_msave : s_mload);
-    else if (!ok) {                                     /* no bank: status codes on rows 1 and 2 */
-        if (j == 1) { num_label(lab_buf, s_stat, SSTAT(MGR(), KL_BANK - 1u), s_ok); s = lab_buf; }
-        else if (j == 2) { num_label(lab_buf, s_dev, (int)SDEV(MGR()), s_dok); s = lab_buf; }
+    if (!kl_bank)
+        s = j == 0 ? s_off : s_dash;
+    else if (!bank_ok()) {
+        if (j == 0) s = bank_text(lab_buf, "BANK ", " NOT SAVED");
+        else if (j == 1) { cpy(lab_buf, "STATUS ", LBL); put_num(lab_buf + 7, (u32)SSTAT(MGR(), kl_bank - 1u)); s = lab_buf; }
+        else if (j == 2) { cpy(lab_buf, "DEVICE STATE ", LBL); put_num(lab_buf + 13, SDEV(MGR())); s = lab_buf; }
         else s = s_dash;
-    } else if (kl_mode) {                               /* SAVE marks every row */
-        cpy(lab_buf, s_pre, LBL);
+    } else if (j == 0)
+        s = kl_mode ? s_msave : s_mload;
+    else if (kl_mode) {                                 /* SAVE marks every row */
+        cpy(lab_buf, "SAVE ", LBL);
         cpy(lab_buf + 5, kl_lbl[j], LBL + 3);
         s = lab_buf;
     } else
@@ -227,38 +262,33 @@ __asm__(".text\n.globl kl_label_inv\nkl_label_inv:\n"
         "  addq.l #8,%sp\n"
         "  rts\n");
 
-/* YES on a row: row 0 switches the mode (or retries a missing bank); LOAD and
- * SAVE want a second YES on the same row. */
+/* YES on a row: row 0 switches the mode; LOAD and SAVE want a second YES
+ * on the same row. */
 void kl_act_inv(u32 *any, void *item)
 {
     u32 j = any[0];
     (void)item;
     if (j > 128u) return;
+    if (!kl_bank) { kl_armed = 0; say(e_off); return; }
     if (j == 0) {
         kl_armed = 0;
         if (!bank_ok()) {
-            SREFR(MGR(), KL_BANK - 1u);
-            say(bank_ok() ? s_found : e_slot);
+            SREFR(MGR(), kl_bank - 1u);
+            kl_valid = 0;
+            say(bank_ok() ? bank_text(msg_buf, "Bank ", " found") : bank_text(msg_buf, "Bank ", " not saved"));
             return;
         }
         kl_mode ^= 1u;
-        kl_valid = 0;                                   /* reread the names */
-        bank_ok();
         say(kl_mode ? s_psave : s_pload);
         return;
     }
-    if (!bank_ok()) { kl_armed = 0; say(e_slot); return; }
+    if (!bank_ok()) { kl_armed = 0; say(bank_text(msg_buf, "Bank ", " not saved")); return; }
     if (kl_armed != j) {
         kl_armed = j;
-        if (kl_mode) {                                  /* "SAVE A01 IN P128?" names the project written */
-            cpy(msg_buf, "SAVE ", 6);
-            msg_buf[5] = kl_lbl[j][0]; msg_buf[6] = kl_lbl[j][1]; msg_buf[7] = kl_lbl[j][2];
-            cpy(msg_buf + 8, " IN P" STR(KL_BANK) "? YES", 14);
-        } else {
-            cpy(msg_buf, "LOAD ", 6);
-            msg_buf[5] = kl_lbl[j][0]; msg_buf[6] = kl_lbl[j][1]; msg_buf[7] = kl_lbl[j][2];
-            cpy(msg_buf + 8, "? YES again", 12);
-        }
+        cpy(msg_buf, kl_mode ? "SAVE " : "LOAD ", 6);
+        msg_buf[5] = kl_lbl[j][0]; msg_buf[6] = kl_lbl[j][1]; msg_buf[7] = kl_lbl[j][2];
+        if (kl_mode) bank_text(msg_buf + 8, " IN ", "? YES");     /* "SAVE A09 IN P128? YES" */
+        else cpy(msg_buf + 8, "? YES again", 12);
         say(msg_buf);
         return;
     }
@@ -286,6 +316,7 @@ static void add_item(void *menu, u32 j)
 void kl_reload_menu(void *menu)
 {
     u32 j;
+    kl_rm = (u32)menu;
     kl_mode = 0; kl_armed = 0; kl_valid = 0;
     for (j = 0; j <= 128u; j++) add_item(menu, j);
 }
@@ -293,13 +324,98 @@ void kl_reload_menu(void *menu)
 /* ST_EV_PATTERN_MENU: f(menu), PatternMenuView; its RELOAD FROM PROJ view is at +472/+476. */
 void kl_pattern_menu(void *menu) { kl_pm = (u32)menu; }
 
+/* ---- SETTINGS > KIT BANK: OFF, or the bank project. YES turns it on (with
+ * the last project offered, P128 at first) or off; LEFT/RIGHT pick the
+ * project and turn it on. Kept until power-off. */
+const char *kl_bank_text(void)
+{
+    return kl_bank ? bank_text(lab_buf, "KIT BANK: ", "") : "KIT BANK: OFF";
+}
+__asm__(".text\n.globl kl_bank_label\nkl_bank_label:\n"
+        "  move.l %a0,-(%sp)\n"
+        "  jsr kl_bank_text\n"
+        "  move.l (%sp),%a0\n"
+        "  pea 3(%sp)\n"                                /* the allocator argument: unused */
+        "  move.l %d0,-(%sp)\n"
+        "  move.l %a0,-(%sp)\n"
+        "  jsr 0x401bf31e\n"                            /* std::string(const char *) */
+        "  lea 12(%sp),%sp\n"
+        "  move.l (%sp)+,%d0\n"
+        "  rts\n");
+
+static void bank_changed(u32 bank)
+{
+    kl_bank = bank;
+    if (bank) kl_pick = bank;
+    kl_valid = 0; kl_armed = 0; kl_mode = 0;
+}
+void kl_bank_select(const u32 *fn)
+{
+    bank_changed(kl_bank ? 0u : kl_pick);
+    if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
+}
+void kl_bank_change(const u32 *fn, int amount)
+{
+    int p = (int)(kl_bank ? kl_bank : kl_pick) + amount;
+    if (p < 1) p = 1;
+    if (p > 128) p = 128;
+    bank_changed((u32)p);
+    if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
+}
+void kl_bank_draw(const u32 *fn, void *item, void *bmp, int x, int y)
+{
+    (void)fn; (void)item; (void)bmp; (void)x; (void)y;
+}
+void kl_settings(void *menu)
+{
+    extern void kl_bank_label(void);
+    static const void *row[4] = {(const void *)kl_bank_label, (const void *)kl_bank_select,
+                                 (const void *)kl_bank_draw, (const void *)kl_bank_change};
+    kl_host->additem(menu, row);
+}
+
+/* ---- page state */
+
+/* Is the RELOAD FROM PROJ view on the global view stack? Both entries (the
+ * shortcut and SETTINGS > PATTERN) push on that manager. */
+static int page_on_stack(void)
+{
+    u32 mgr = UIROOT() + 64u, sentinel = mgr + VM_LIST, node, n;
+    u32 view = kl_pm ? ((const u32 *)kl_pm)[PM_KITVIEW / 4] : 0;
+    node = *(const u32 *)sentinel;
+    for (n = 0; n < 32u && node && node != sentinel; n++) {
+        u32 v = *(const u32 *)(node + NODE_VIEW);
+        if (v && (v == kl_rm || v == view)) return 1;
+        node = *(const u32 *)node;
+    }
+    return 0;
+}
+
+/* ST_EV_TICK: void f(ctrl). Entering the page rereads the names; leaving it,
+ * or a selection other than the armed row (the encoder or the arrows),
+ * cancels a pending confirmation. */
+void kl_tick(void *ctrl)
+{
+    u32 open;
+    (void)ctrl;
+    if (!kl_rm) return;
+    open = (u32)page_on_stack();
+    if (open && !kl_open) { kl_valid = 0; kl_armed = 0; }
+    if (!open) kl_armed = 0;
+    else if (kl_armed) {
+        u32 row = ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);
+        if (row != ROW_MODE + kl_armed) kl_armed = 0;
+    }
+    kl_open = open;
+}
+
 /* Push the page on the GLOBAL view manager, as the main loop's messages do.
  * PatternMenuView's own manager (+100) only exists while that menu is open. */
 static void open_page(void)
 {
     u32 sp[2];
     const u32 *pm = (const u32 *)kl_pm;
-    kl_armed = 0;
+    kl_armed = 0; kl_valid = 0;
     sp[0] = pm[PM_KITVIEW / 4];
     SPCOPY(&sp[1], (u32 *)&pm[(PM_KITVIEW + 4) / 4]);
     PUSHVIEW(UIROOT() + 64u, sp, 0);
@@ -310,8 +426,8 @@ static void open_page(void)
  * A long press of SETTINGS (flags bit 5) opens the page instead of the LED
  * INTENSITY quick view; SETTINGS is then held until an event with none of
  * bits 0 (pressed), 3 (repeat), 5 (long): its release, so no later SETTINGS
- * event of that press reaches the views. Any other key
- * press cancels a pending confirmation. */
+ * event of that press reaches the views. Any other key press cancels a
+ * pending confirmation. */
 int kl_key(void *brain, const unsigned char *ev)
 {
     u32 code, fl;
@@ -338,10 +454,13 @@ int kl_key(void *brain, const unsigned char *ev)
 static int initialize(const struct st_smz_api *api)
 {
     if (!api || !api->ui || !api->ui->host || api->ui->host->version < 18) return 1;   /* core 2.7 */
+    kl_host = api->ui->host;
     return 0;
 }
 static const struct st_smz_subscription subscriptions[] = {
     {ST_EV_RELOAD_MENU, (void (*)(void))kl_reload_menu},
     {ST_EV_PATTERN_MENU, (void (*)(void))kl_pattern_menu},
-    {ST_EV_KEY, (void (*)(void))kl_key}};
-const struct st_smz_module kitload_module = {"KITLOAD", initialize, subscriptions, 3};
+    {ST_EV_SETTINGS, (void (*)(void))kl_settings},
+    {ST_EV_KEY, (void (*)(void))kl_key},
+    {ST_EV_TICK, (void (*)(void))kl_tick}};
+const struct st_smz_module kitload_module = {"KITLOAD", initialize, subscriptions, 5};

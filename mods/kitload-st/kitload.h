@@ -6,8 +6,8 @@
 typedef unsigned int u32;
 typedef struct { u32 d0, d1, mgr, inv; } fn_t;                         /* std::function, 16 bytes */
 
-#ifndef KL_BANK
-#define KL_BANK 128                     /* the bank project (1..128); its slot is KL_BANK - 1 */
+#ifndef KL_DEFAULT
+#define KL_DEFAULT 128                  /* the project offered when the bank is turned on (1..128) */
 #endif
 
 /* menu items, as PatternReloadMenuView's constructor (40181f40) builds its own */
@@ -48,6 +48,11 @@ typedef struct { u32 d0, d1, mgr, inv; } fn_t;                         /* std::f
 
 /* views */
 #define UIROOT   ((u32 (*)(void))0x4016e044u)                          /* UI root; +64 = the view manager */
+#define VM_LIST  20u                    /* view manager: std::list<shared_ptr<View>> sentinel (40100d86) */
+#define NODE_VIEW 8u                    /* list node: next +0, prev +4, View * +8 */
+#define MENU_SEL 9u                     /* Menu vtable slot (+36): the selected row */
+#define ROW_MODE 3u                     /* rows 0..2 the OS's, 3 MODE, 4.. the kits */
+#define INVALIDATE ((void (*)(void *))0x400ffe22u)                     /* (view + 0x38): redraw */
 #define PUSHVIEW ((u32 (*)(u32,u32 *,u32))0x40100d86u)                 /* (manager, shared_ptr<View> *, replace) */
 #define PM_KITVIEW 472u                 /* PatternMenuView: RELOAD FROM PROJ view (+476: control block) */
 
@@ -67,7 +72,7 @@ typedef struct { u32 d0, d1, mgr, inv; } fn_t;                         /* std::f
 #define FXS_AT   (SND_AT + SND_LEN * SND_N)
 #define FXS_LEN  142u
 #define KIT_STORED   5632u              /* 0x1600: the encoded Kit, module records included */
-#define KIT_RAM      5656u
+#define KIT_RAM      5656u              /* 0x1618: a Kit in RAM, as the OS copies it */
 #define KITS_AT      3015168u           /* 512 + 128 * 0x5c00: the kits in a project slot */
 #define KITS_RAM_OFS 17417756u
 #define NAME_AT  4u                     /* the record begins with 11, then the 16-byte name */

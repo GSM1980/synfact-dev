@@ -3,16 +3,18 @@
 Compiles mods/kitload-st/main.c with the configured ColdFire compiler (the
 device's cflags; ELEKLOADER_CROSS or --cc), links it alone and runs its event
 handlers. Every OS routine it calls is a Python stub at its real address.
-It checks: the RELOAD FROM PROJ rows and that building them touches no
-storage; LOAD and SAVE need two YES on the same row and another key cancels;
+It checks: the bank is off until SETTINGS > KIT BANK picks a project, and
+the picker; the RELOAD FROM PROJ rows and that building them touches no
+storage; LOAD and SAVE need two YES on the same row, and another key, a
+selection change (encoder or arrows) or leaving the page cancels; names are
+reread on every page entry and a failed read is retried on the next one;
 SAVE writes the whole encoded record and LOAD hands the same bytes to the
-native decoder, so the module records in the Kit tail ([14e0,15f8): LFO3,
-COMP, Playhead) round-trip through the bank; LOAD moves only the sounds,
-through the core's COPY path; a long press of SETTINGS opens the page and
-holds SETTINGS until released.
+native decoder, then replaces the live Kit whole (0x1618 bytes) through the
+core's COPY path; a long press of SETTINGS opens the page and holds SETTINGS
+until released.
 
-It does not build the bank, run the real OS or the core's codec hooks: the
-regressions and a unit do.
+It does not run the real OS, the core's codec hooks or module metadata:
+tests/test_st_kitload_restore_emu.py does, with a built core and bank.
 
     python tests/test_st_kitload.py [--cc m68k-elf-gcc]
 """
@@ -28,6 +30,7 @@ from unicorn.m68k_const import (UC_CPU_M68K_CFV4E, UC_M68K_REG_A7, UC_M68K_REG_S
                                 UC_M68K_REG_D0, UC_M68K_REG_A0)
 
 CODE, HEAP, OBJ, BASE, STOP = 0x46100000, 0x48000000, 0x48100000, 0x49000000, 0x46fffff0
+RM, PM, SEL_FN, HOST = 0x48010000, 0x48020000, 0x40001200, 0x48250000
 VFN, PATNAME_VT, UIROOT_V, MGR_V = 0x40001000, 0x40001100, 0x48200000, 0x4f000000
 KIT_STORED, KIT_RAM, KITS_AT, KITS_RAM_OFS = 0x1600, 5656, 3015168, 17417756
 SND_AT, SND_LEN, FXS_AT, FXS_LEN = 42, 291, 42 + 291 * 12, 142
@@ -79,6 +82,15 @@ class Unit:
         self.calls = {}
         self.items, self.msgs, self.strings, self.pushes, self.copies = [], [], [], [], []
         self.writes, self.decoded = [], []
+        self.selected, self.fail_reads, self.rows = 0, set(), []
+        # the reload menu: vtable slot 9 (+36) = selected row
+        u.mem_write(RM, struct.pack('>I', RM + 0x800))
+        u.mem_write(RM + 0x800 + 36, struct.pack('>I', SEL_FN))
+        # the global view manager (UIROOT + 64): empty std::list, sentinel at +20
+        self.sentinel = UIROOT_V + 64 + 20
+        u.mem_write(self.sentinel, struct.pack('>2I', self.sentinel, self.sentinel))
+        # host API 18 with additem at +48
+        u.mem_write(HOST, struct.pack('>I', 18) + b'\0' * 44 + struct.pack('>I', 0x40001300))
         # the project object: vfunc +40 returns BASE; pattern names empty
         u.mem_write(OBJ, struct.pack('>I', OBJ + 0x40000))
         u.mem_write(OBJ + 0x40000 + 40, struct.pack('>I', VFN))
@@ -97,6 +109,7 @@ class Unit:
             0x40177318: self.tmpkit, 0x4016ea6e: lambda a: 1, 0x400c347c: self.msg,
             0x4016eb0a: lambda a: 1, 0x400c2154: lambda a: self.cur, 0x4016e9c8: lambda a: OBJ,
             0x4016e044: lambda a: UIROOT_V, 0x40100d86: self.push,
+            SEL_FN: lambda a: self.selected, 0x40001300: self.additem, 0x400ffe22: lambda a: self.log('invalidate', 0),
         }
         for at, fn in stubs.items():
             u.mem_write(at, b'\x4e\x75')
@@ -130,6 +143,9 @@ class Unit:
 
     def sread(self, a):
         self.log('read', 0)
+        self.slots = getattr(self, 'slots', set()) | {a[2]}
+        if a[3] in self.fail_reads:
+            return 5
         self.u.mem_write(a[1], bytes(self.slot[a[3] * 512:a[3] * 512 + a[4]]))
         return 0
 
@@ -172,6 +188,9 @@ class Unit:
         self.tmp = kit
         return out
 
+    def additem(self, a):
+        self.rows.append(struct.unpack('>4I', self.u.mem_read(a[1], 16)))
+
     def msg(self, a):
         self.msgs.append(self.cstr(a[1]))
 
@@ -196,9 +215,40 @@ class Unit:
     def var(self, name):
         return u32(self.u.mem_read(self.sym[name], 4))
 
-    def menu(self):
-        self.call(self.sym['kl_reload_menu'], [0x48010000])
-        self.call(self.sym['kl_pattern_menu'], [0x48020000])
+    def set(self, name, v):
+        self.u.mem_write(self.sym[name], struct.pack('>I', v))
+
+    def menu(self, bank=128):
+        self.set('kl_host', HOST)
+        self.call(self.sym['kl_reload_menu'], [RM])
+        self.call(self.sym['kl_pattern_menu'], [PM])
+        self.u.mem_write(PM + 472, struct.pack('>2I', RM, 0x48040000))
+        self.call(self.sym['kl_settings'], [0x48060000])
+        if bank:
+            self.bank_change(bank - 128)                                   # from P128 (offered first)
+            assert self.var('kl_bank') == bank
+
+    def bank_select(self):
+        fn = self.new([16]); self.u.mem_write(fn, struct.pack('>I', 0x48060000))
+        self.call(self.rows[0][1], [fn])
+
+    def bank_change(self, amount):
+        fn = self.new([16]); self.u.mem_write(fn, struct.pack('>I', 0x48060000))
+        self.call(self.rows[0][3], [fn, amount & 0xffffffff])
+
+    def bank_label(self):
+        self.call(self.rows[0][0], [0, 0], a0=self.new([32]))
+        return self.strings[-1]
+
+    def stack(self, *views):                     # the global view stack's views
+        nodes = [self.new([16]) for _ in views]
+        chain = nodes + [self.sentinel]
+        self.u.mem_write(self.sentinel, struct.pack('>I', chain[0]))
+        for n, v, nxt in zip(nodes, views, chain[1:]):
+            self.u.mem_write(n, struct.pack('>3I', nxt, 0, v))
+
+    def tick(self):
+        self.call(self.sym['kl_tick'], [0])
 
     def yes(self, row):                         # row 0 = MODE, 1..128 = kits
         _, lab, act = self.items_built[row]
@@ -220,6 +270,27 @@ class Unit:
 
 
 def check(image, sym):
+    # off by default: nothing read or written until SETTINGS > KIT BANK picks a project
+    o = Unit(image, sym)
+    o.menu(bank=0)
+    assert o.var('kl_bank') == 0 and o.bank_label() == 'KIT BANK: OFF'
+    assert o.label(0) == 'KIT BANK OFF: SETTINGS' and o.label(5) == '-'
+    o.yes(5); o.yes(5)
+    assert o.msgs[-1] == 'Turn on KIT BANK' and 'read' not in o.calls and 'stat' not in o.calls and not o.writes
+    o.bank_select()                                                            # YES: on, P128 offered
+    assert o.var('kl_bank') == 128 and o.bank_label() == 'KIT BANK: P128'
+    o.bank_change(-28)
+    assert o.bank_label() == 'KIT BANK: P100'
+    o.bank_change(-500)
+    assert o.bank_label() == 'KIT BANK: P1'
+    o.bank_change(+500)
+    assert o.bank_label() == 'KIT BANK: P128'
+    o.bank_select()
+    assert o.bank_label() == 'KIT BANK: OFF'
+    o.bank_select()
+    assert o.bank_label() == 'KIT BANK: P128'                                  # the last pick again
+    print('settings: off by default, YES toggles, LEFT/RIGHT pick P1..P128')
+
     m = Unit(image, sym)
     m.menu()
     assert len(m.items_built) == 129 and len(m.items) == 129
@@ -236,10 +307,12 @@ def check(image, sym):
     m.yes(6)
     assert m.calls['note'] == 1 and m.msgs[-1] == 'LOADED A06 KIT 05'
     live = BASE + KITS_RAM_OFS + KIT_RAM * m.cur
-    sizes = [n for d, s, n in m.copies]
-    assert sizes == [SND_LEN] * 12 + [FXS_LEN]                                 # only the sounds, via COPY
-    assert [d - live for d, s, n in m.copies] == [SND_AT + SND_LEN * t for t in range(12)] + [FXS_AT]
-    print('load: confirmation, cancel, sounds only through the COPY path, engine notified')
+    assert [(d, s_, n) for d, s_, n in m.copies] == [(live, m.tmp, KIT_RAM)]     # the whole Kit, one COPY
+    got = bytes(m.u.mem_read(live, KIT_RAM))
+    assert got == bytes((i * 3 + 1) & 0xff for i in range(KIT_RAM))              # what the decoder produced
+    assert bytes(m.u.mem_read(live - 16, 16)) == b'\0' * 16                    # nothing before ...
+    assert bytes(m.u.mem_read(live + KIT_RAM, 16)) == b'\0' * 16               # ... or after the Kit
+    print('load: confirmation, cancel, the whole Kit replaced through one COPY, engine notified')
 
     # SAVE then LOAD: the encoded tail round-trips
     m.yes(0)
@@ -259,22 +332,72 @@ def check(image, sym):
     assert src == data and src[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]   # ... and handed back to the decoder
     print('save/load: the whole record, Kit tail [14e0,15f8) included, round-trips through the bank')
 
-    # no bank: nothing read or written
-    n = Unit(image, sym, bank=False)
+    # another bank project
+    p = Unit(image, sym)
+    p.menu(bank=7)
+    p.yes(2); p.yes(2)
+    assert p.msgs[-1].startswith('LOADED A02') and p.calls['read'] == 128 + 1 and p.slots == {6}
+
+    # selection changes and leaving the page cancel; entering rereads the names
+    n = Unit(image, sym)
     n.menu()
-    assert n.label(0) == 'BANK P128 NOT SAVED' and n.label(1) == 'STATUS 0 (13=OK)'
-    n.yes(3)
-    n.yes(3)
-    assert 'read' not in n.calls and not n.writes and n.msgs[-1] == 'Bank P128 not saved'
+    n.stack(0x48070000, RM)                                                    # the page is open
+    n.tick()
+    n.selected = 3 + 9
+    n.yes(9)
+    assert n.var('kl_armed') == 9
+    n.tick()
+    assert n.var('kl_armed') == 9                                              # still on A09
+    n.selected = 3 + 10                                                        # encoder: A10
+    n.tick()
+    assert n.var('kl_armed') == 0
+    n.selected = 3 + 9                                                         # back on A09: asks again
+    n.tick()
+    n.yes(9)
+    assert n.msgs[-1] == 'LOAD A09? YES again' and 'note' not in n.calls
+    n.stack(0x48070000)                                                        # NO: the page leaves the stack
+    n.tick()
+    assert n.var('kl_armed') == 0
+    reads = n.calls['read']
+    n.slot[KITS_AT + 4:KITS_AT + 20] = b'RENAMED'.ljust(16, b'\0')
+    n.stack(0x48070000, RM)                                                    # entry by SETTINGS > PATTERN
+    n.tick()
+    assert n.label(1) == 'A01 RENAMED' and n.calls['read'] == reads + 128
+    n.label(2)
+    assert n.calls['read'] == reads + 128                                       # cached within the visit
+    n.stack(0x48070000)
+    n.tick()
+    n.slot[KITS_AT + 4:KITS_AT + 20] = b'AGAIN'.ljust(16, b'\0')
+    k = n.new([24])
+    n.u.mem_write(k, struct.pack('>5I', KEYEV_VT, 0, 0, SETTINGS, 0x20))
+    assert n.call(n.sym['kl_key'], [0, k]) == 1                                 # entry by the shortcut
+    assert n.label(1) == 'A01 AGAIN'
+    print('page: selection change and leaving cancel; names reread on each entry, both ways in')
+
+    # a failed read is not cached as done
+    f = Unit(image, sym)
+    f.menu()
+    f.fail_reads = {(KITS_AT + 3 * KIT_STORED) >> 9}
+    assert f.label(4) == 'A04 ?' and f.var('kl_valid') == 2
+    f.fail_reads = set()
+    f.stack(RM); f.tick()                                                      # next entry retries
+    assert f.label(4) == 'A04 KIT 03' and f.var('kl_valid') == 1
+    print('names: a failed read shows "?" and is retried on the next entry')
+
+    # bank project not saved: nothing read or written
+    z = Unit(image, sym, bank=False)
+    z.menu()
+    assert z.label(0) == 'BANK P128 NOT SAVED' and z.label(1) == 'STATUS 0'
+    z.yes(3)
+    z.yes(3)
+    assert 'read' not in z.calls and not z.writes and z.msgs[-1] == 'Bank P128 not saved'
 
     # long press of SETTINGS
     k = Unit(image, sym)
     assert k.key(SETTINGS, 0x20) == 0 and not k.pushes                         # before PatternMenuView: stock
     k.menu()
-    pm = 0x48020000
-    k.u.mem_write(pm + 472, struct.pack('>2I', 0x48030000, 0x48040000))
     assert k.key(SETTINGS, 0x20) == 1
-    assert k.pushes == [(UIROOT_V + 64, 0x48030000, 0x48040000, 0)]
+    assert k.pushes == [(UIROOT_V + 64, RM, 0x48040000, 0)]
     assert k.key(SETTINGS, 0x21) == 1 and k.key(SETTINGS, 0x08) == 1           # still held
     assert k.key(SETTINGS, 0x00) == 1 and k.var('kl_eat') == 0                  # the release, held too
     assert k.key(SETTINGS, 0x01) == 0 and k.key(SETTINGS, 0x10) == 0           # then SETTINGS is stock
