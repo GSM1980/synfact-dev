@@ -23,6 +23,14 @@ class ComparatorTests(unittest.TestCase):
         bad=bytearray(example(4));bad[98]=1
         with self.assertRaises(ValueError):verify(example(4),bytes(bad))
 
+    def test_empty_string_only_on_a_terminator(self):
+        # "" folded into the end of "A" in each link: equivalent
+        self.assertEqual(verify(example(5),example(9)),1)
+        # zero-filled data, such as two weak copies of the subtype selector's registry in
+        # .bss, is not an empty string: the browser bank used the wrong copy
+        with self.assertRaises(ValueError):verify(example(12),example(13))
+        with self.assertRaises(ValueError):verify(example(5),example(12))
+
 
 class SelectionTests(unittest.TestCase):
     def test_two_machines_share_one_registered_selector(self):

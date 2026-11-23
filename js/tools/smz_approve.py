@@ -26,7 +26,11 @@ def verify(reference,candidate):
             end=buf.find(0,at)
             if end<at:return None
             s=buf[at:end]
-            return bytes(s) if all(32<=v<127 for v in s) else None
+            if not all(32<=v<127 for v in s):return None
+            # "" only as string merging places it, on a printable string's terminator: zero-filled
+            # data (two weak copies of one registry in .bss) is not a string
+            if not s and not (at>0 and 32<=buf[at-1]<127):return None
+            return bytes(s)
         if text(ma,x) is None or text(ma,x)!=text(mb,y):raise ValueError('Non-equivalent relocation at '+hex(r))
         ma[r:r+4]=mb[r:r+4]=b'\0'*4;changes+=1
     if ma!=mb:raise ValueError('MAIN differs outside equivalent string targets')
