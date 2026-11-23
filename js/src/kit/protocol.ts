@@ -9,7 +9,7 @@
 // { id, log } for each line while a build runs, then { id, ok: true, result } or { id, ok: false, error }.
 //
 // PROTOCOL changes when a call or a reply changes shape; init's reply carries it, so a page knows what it talks to.
-export const PROTOCOL = 4
+export const PROTOCOL = 5
 
 export type Call = { id: number; call: string; args?: Record<string, unknown>; data?: ArrayBuffer }
 export type Answer = { id: number; log: string } | { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string }

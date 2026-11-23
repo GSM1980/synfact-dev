@@ -30,11 +30,21 @@ export function linkSmzImage(objects:SmzObject[], base:number, directoryBytes=0,
     if(start!==s.size)throw Error('Unterminated SMZ string')
   }
   const canonical=new Map<string,string>()
-  for(const key of strings.keys()){
-    let best=key
-    for(const candidate of strings.keys())if(candidate.length>key.length&&candidate.endsWith(key)&&
-      ![...strings.keys()].some(other=>other.length>candidate.length&&other.endsWith(candidate))){best=candidate;break}
-    canonical.set(key,best)
+  // GNU BFD merge_strings walks strings in descending reverse-byte order.
+  // When several roots share a suffix (including the empty label), choosing
+  // the first source occurrence changes AUDIO pointers despite equal text.
+  const bySuffix=[...strings.keys()].sort((a,b)=>{
+    for(let i=a.length-2,j=b.length-2;i>=0&&j>=0;i--,j--){
+      const difference=a.charCodeAt(i)-b.charCodeAt(j)
+      if(difference)return difference
+    }
+    return a.length-b.length
+  })
+  let root=''
+  for(let i=bySuffix.length-1;i>=0;i--){
+    const key=bySuffix[i]
+    if(!root.endsWith(key))root=key
+    canonical.set(key,root)
   }
   const stringOffsets=new Map<string,number>()
   const compacted=objects.map(()=>new Map<number,Uint8Array>())

@@ -920,9 +920,9 @@ def test_a_donor_recipe_wants_its_own_os_file():
     else:
         raise AssertionError('accepted a file that is no OS')
     try:
-        donor.rebuild(dict(recipe, schema=2), b'')
+        donor.rebuild(dict(recipe, schema=3), b'')
     except donor.DonorError as e:
-        assert 'schema 1' in str(e)
+        assert 'schema 2' in str(e)
     else:
         raise AssertionError('accepted another schema')
 

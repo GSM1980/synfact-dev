@@ -457,3 +457,15 @@ records (the Kit is encoded after the pattern), the seal hashed with the Kit
 index. Only the quick reload reads it; a project load reads APC1 only.
 The complete byte layout, validation and compatibility rules are in the ARP
 sources, `mods/arp-st/persist.c`.
+
+## Browser catalogs and donor recipes
+
+The firmware SMZ4 format and core contract remain unchanged by this web update.
+The separate browser SMZ catalog schema 4 adds a pinned `core-parser-wasm`
+validator and explicit per-module `requires`, `conflicts`, `always` rules.
+Each result must pass that parser; exact output pins remain additional checks
+when listed. Schemas 1–3 retain mandatory output pins in production.
+Donor recipe schema 2 adds hashed `monomachine-digipro-v1` derived regions and
+whole-symbol copy plans to blank and restore SY MnM tables; schema 1 raw-region
+recipes remain supported. The kit protocol is 5; its general catalog stays
+schema 1. See [INTEGRATING.md](INTEGRATING.md) for the complete separation.

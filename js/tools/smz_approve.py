@@ -32,6 +32,14 @@ def verify(reference,candidate):
     if ma!=mb:raise ValueError('MAIN differs outside equivalent string targets')
     return changes
 
+def verify_selection(artifacts, report):
+    # The SDK and browser linker register a shared descriptor only once.
+    # SY MnM and MD kit both supply st_subtype_module.
+    modules=list(dict.fromkeys(m for item in artifacts for m in item['modules']))
+    if modules!=report['modules'] or sum(len(item['machines']) for item in artifacts)!=len(report['machines']):
+        raise ValueError('Reference contains a different module or machine selection')
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--catalog',type=Path,required=True);p.add_argument('--candidate',type=Path,required=True)
@@ -58,9 +66,7 @@ def main():
         item=json.loads(raw);artifacts.append(item)
         if item['id']!=pin['id'] or item['manifestSha256'] not in report['source_sha256'].values():
             raise ValueError('Reference does not include the selected source manifest')
-    modules=[m for item in artifacts for m in item['modules']]
-    if modules!=report['modules'] or sum(len(item['machines']) for item in artifacts)!=len(report['machines']):
-        raise ValueError('Reference contains a different module or machine selection')
+    verify_selection(artifacts,report)
     changes=verify(reference,candidate)
     for file in (a.reference,a.candidate):subprocess.run([str(a.parser),str(file.resolve())],check=True)
     entry={'ids':ids,'sha256':hashlib.sha256(candidate).hexdigest(),

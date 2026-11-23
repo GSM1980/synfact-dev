@@ -25,3 +25,19 @@ test('SMZ rejects unresolved and overlapping relocations',()=>{
  const c=object();c.sections.push({name:'.unexpected',align:4,size:4,data:new Uint8Array(4)})
  assert.throws(()=>linkSmzImage([c],0,0),/Unsupported allocated SMZ section/)
 })
+
+
+test('AUDIO empty labels use GNU suffix order instead of source order',()=>{
+ const strings=new TextEncoder().encode('RAMP\0CDEC\0\0')
+ const obj:SmzObject={
+   sections:[{name:'',align:1,size:0,data:new Uint8Array()},
+     {name:'.text',align:4,size:4,data:new Uint8Array(4)},
+     {name:'.rodata.str1.1',align:1,size:strings.length,data:strings,flags:0x32}],
+   symbols:[{name:'',value:10,size:0,bind:0,section:2}],
+   relocations:[{section:1,offset:0,type:1,symbol:0,addend:0}]
+ }
+ const base=0x4204f920, linked=linkSmzImage([obj],base,0,true)
+ // CDEC precedes RAMP in reverse-byte order, so its terminator owns "".
+ assert.equal(new DataView(linked.image.buffer).getUint32(0),base+13)
+ assert.deepEqual([...linked.image.subarray(4,14)],[...strings.subarray(0,10)])
+})

@@ -1,7 +1,8 @@
 """Prepare the artifacts a website serves for one release: the SMZ catalog and, optionally, the core package.
 
 From a clean, committed source tree it builds the complete bank in the config's order, checks it with the core's
-parser, exports the audited objects (smz_artifacts.py), validates the selections (smz_matrix.py): with --previous
+parser, exports the audited objects (smz_artifacts.py), validates directed selections with the core wasm parser (default), or the exhaustive matrix
+with --validation exhaustive: with --previous
 only those containing a module whose artifact changed, the rest reused when every artifact is unchanged
 (smz_merge.py --require-complete). With --core-build it also packages a verified core build (syntakt_package.py).
 Writes RELEASE.json with the source commit and every pin. Needs the toolchain environment of docs/SYNTAKT-BUILD.md.
@@ -32,19 +33,24 @@ def main():
     p.add_argument('--config', type=Path, default=ROOT / 'js/config/syntakt-normal.json')
     p.add_argument('--parser', type=Path, required=True, help="the core's smz-parser.exe, built by the regressions")
     p.add_argument('--out', type=Path, required=True, help='new local directory')
+    p.add_argument('--validation', choices=['directed', 'exhaustive'], default='directed')
+    p.add_argument('--validator', type=Path, help='pinned validator.json for directed runtime-parser releases')
+    p.add_argument('--native-parser', type=Path, help='native shared library built from smz_validator.c')
     p.add_argument('--previous', type=Path, help="the previous release's complete catalog, to reuse its unchanged selections")
     p.add_argument('--core-build', type=Path, help='a verified Syntakt core build (verification.json, audio/) to package')
     p.add_argument('--meter', action='store_true', help='the core build used --system-info')
     p.add_argument('--jobs', type=int, default=2)
-    p.add_argument('--donor', type=Path, help="the OS file a module's donor recipe reads (FM TONE: the Digitone OS 1.44)")
+    p.add_argument('--donor',type=Path,action='append',default=[],help="the OS file a module's donor recipe reads (FM TONE: the Digitone OS 1.44)")
     p.add_argument('--allow-dirty', action='store_true', help='development only: sources with uncommitted changes')
     a = p.parse_args()
     if os.environ.get('ELEKLOADER_CROSS') is None:
         raise SystemExit('Set the toolchain environment of docs/SYNTAKT-BUILD.md first (ELEKLOADER_CROSS, PATH, GCC_EXEC_PREFIX).')
 
+    if a.validation == 'directed' and (not a.validator or not a.native_parser):
+        p.error('Directed releases need --validator and --native-parser; build both with build_smz_validator.py --native.')
     config = json.loads(a.config.read_text(encoding='utf-8'))
     mods = config['modules']
-    paths = [m['path'] for m in mods] + ['elekloader/sdk', 'js/config'] + (['mods/core-st', 'mods/machines-st'] if a.core_build else [])
+    paths = ['elekloader', 'js', 'mods']
     dirty = git('status', '--porcelain', '--', *paths)
     if dirty and not a.allow_dirty:
         raise SystemExit('Commit these sources first; the release must come from a commit:\n' + dirty)
@@ -66,29 +72,40 @@ def main():
     smz = out / 'smz'
     run(sys.executable, TOOLS / 'smz_artifacts.py', '--bank', bank,
         *[x for m in machines for x in ('--machine', m)], *[x for m in modules for x in ('--module', m)], '--out', smz,
-        *(['--donor', a.donor.resolve()] if a.donor else []))
+        *[x for f in a.donor for x in ('--donor', f.resolve())])
     catalog = json.loads((smz / 'catalog.json').read_text(encoding='utf-8'))
     pins = {m['id']: m['sha256'] for m in catalog['modules']}
 
-    # Validate what changed; reuse what did not.
     changed = list(pins)
     if a.previous:
         old = {m['id']: m['sha256'] for m in json.loads(a.previous.read_text(encoding='utf-8'))['modules']}
         changed = [i for i in pins if old.get(i) != pins[i]]
-    print('Modules to validate:', ', '.join(changed) or 'none', flush=True)
-    if changed:
-        only = [] if not a.previous else [x for i in changed for x in ('--only-id', i)]
-        run(sys.executable, TOOLS / 'smz_matrix.py', '--catalog', smz / 'catalog.json', '--config', a.config.resolve(),
-            '--source-root', ROOT, '--parser', a.parser.resolve(), '--out', out / 'matrix', '--jobs', a.jobs, *only,
-            *(['--donor', a.donor.resolve()] if a.donor else []))
-    final = smz / 'catalog-validated.json'
-    if a.previous:
-        final = smz / 'catalog-complete.json'
-        run(sys.executable, TOOLS / 'smz_merge.py', '--catalog', smz / ('catalog-validated.json' if changed else 'catalog.json'),
-            '--config', a.config.resolve(), '--reuse', a.previous.resolve(), '--out', final, '--require-complete')
+    print('Changed artifacts:', ', '.join(changed) or 'none', flush=True)
+    if a.validation == 'directed':
+        runtime = out / 'runtime'
+        run(sys.executable, TOOLS / 'smz_runtime.py', '--catalog', smz / 'catalog.json',
+            '--config', a.config.resolve(), '--validator', a.validator.resolve(), '--out', runtime)
+        run(sys.executable, TOOLS / 'smz_directed.py', '--catalog', runtime / 'catalog-runtime.json',
+            '--config', a.config.resolve(), '--audited-bank', bank,
+            '--native-parser', a.native_parser.resolve(), '--jobs', a.jobs, '--out', out / 'directed',
+            *[x for f in a.donor for x in ('--donor', f.resolve())])
+        final = runtime / 'catalog-directed.json'
+    else:
+        # Legacy output-pin policy remains available, without weakening its completeness check.
+        if changed:
+            only = [] if not a.previous else [x for i in changed for x in ('--only-id', i)]
+            run(sys.executable, TOOLS / 'smz_matrix.py', '--catalog', smz / 'catalog.json', '--config', a.config.resolve(),
+                '--source-root', ROOT, '--parser', a.parser.resolve(), '--out', out / 'matrix', '--jobs', a.jobs, *only,
+                *[x for f in a.donor for x in ('--donor', f.resolve())])
+        final = smz / 'catalog-validated.json'
+        if a.previous:
+            final = smz / 'catalog-complete.json'
+            run(sys.executable, TOOLS / 'smz_merge.py', '--catalog', smz / ('catalog-validated.json' if changed else 'catalog.json'),
+                '--config', a.config.resolve(), '--reuse', a.previous.resolve(), '--out', final, '--require-complete')
 
     release = {
         'commit': commit, 'dirty': bool(dirty), 'config': a.config.resolve().relative_to(ROOT).as_posix(),
+        'validation': a.validation,
         'smz': {'catalog': final.relative_to(out).as_posix(), 'sha256': sha(final), 'changed': changed,
                 'modules': [{'id': m['id'], 'version': json.loads((smz / m['file']).read_text())['version']} for m in catalog['modules']]},
     }

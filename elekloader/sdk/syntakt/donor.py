@@ -21,7 +21,7 @@ import json
 from ... import devices, formats
 
 FORMAT = 'synfact-donor'
-SCHEMA = 1
+SCHEMA = 2
 FILL_RUN = 16          # a repeated pattern this long becomes a "fill"
 CANDIDATES = 4096      # copies tried per position, for the commonest runs
 
@@ -37,6 +37,20 @@ def sha(data):
 def regions(recipe, raw):
     """The recipe's regions, read from the owner's OS file `raw` (bytes) and
     checked. -> {name: bytes}."""
+    if recipe.get('device') == 'monomachine':
+        from ...devices.monomachine import digipro_tables, TRANSFORM, VERSION
+        if recipe.get('schema')!=2 or VERSION not in recipe['versions']:raise DonorError(recipe['title']+' needs '+wanted(recipe))
+        try: derived = digipro_tables(raw)
+        except ValueError as e: raise DonorError(str(e)) from e
+        out = {}
+        for r in recipe['regions']:
+            if r.get('transform') != TRANSFORM or r['name'] not in derived:
+                raise DonorError('Unsupported Monomachine donor region')
+            data = derived[r['name']]
+            if len(data) != r['length'] or sha(data) != r['sha256']:
+                raise DonorError('Monomachine reconstructed table hash mismatch: ' + r['name'])
+            out[r['name']] = data
+        return out
     try:
         parsed, dev, rel = formats.load(raw)
     except (devices.UnknownFirmware, formats.FormatError) as e:
@@ -55,7 +69,7 @@ def regions(recipe, raw):
 
 def wanted(recipe):
     """-> 'the <device> OS <versions> file' a recipe reads."""
-    name = next((d.name for d in devices.devices() if d.key == recipe['device']), recipe['device'])
+    name = next((d.name for d in devices.devices() if d.key == recipe['device']), 'Monomachine' if recipe['device']=='monomachine' else recipe['device'])
     return 'the %s OS %s file' % (name, ' or '.join(recipe['versions']))
 
 
@@ -84,7 +98,7 @@ def apply(ops, sources):
 
 def rebuild(recipe, raw):
     """The owner's OS file -> {output name: bytes}, each checked."""
-    if recipe.get('format') != FORMAT or recipe.get('schema') != SCHEMA:
+    if recipe.get('format') != FORMAT or recipe.get('schema') not in (1, SCHEMA):
         raise DonorError('not a %s recipe of schema %d' % (FORMAT, SCHEMA))
     sources = regions(recipe, raw)
     out = {}
@@ -161,7 +175,7 @@ def ops(target, sources, minimum=4):
 
 def spec(recipe):
     """What a build needs to read an owner's file for a recipe: no outputs."""
-    return {k: recipe[k] for k in ('title', 'device', 'versions', 'minimum', 'regions')}
+    return dict({k: recipe[k] for k in ('title', 'device', 'versions', 'minimum', 'regions')}, schema=recipe.get('schema',1))
 
 
 def fills(data, sources, minimum=4):
@@ -228,7 +242,7 @@ def make(title, raw, device, versions, region_specs, outputs, minimum=4):
             raise DonorError('region %s is outside section %d' % (r['name'], r['section']))
         specs.append(dict(r, sha256=sha(data)))
         sources[r['name']] = data
-    recipe = {'format': FORMAT, 'schema': SCHEMA, 'title': title, 'device': device,
+    recipe = {'format': FORMAT, 'schema': 1, 'title': title, 'device': device,
               'versions': list(versions), 'minimum': minimum, 'regions': specs, 'outputs': []}
     for name, data in outputs.items():
         recipe['outputs'].append({'name': name, 'length': len(data), 'sha256': sha(data),

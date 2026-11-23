@@ -6,7 +6,8 @@ key/encoder/idle/draw, state, timing, layout and glyph code execute unmodified.
 """
 import argparse,json,re,struct
 from pathlib import Path
-from test_st_digimono_destinations_emu import Destination,ENGINE,DATA
+from test_st_digimono_destinations_emu import Destination,ENGINE,DATA,BANK
+from elekloader.sdk.elf import Elf,STT_FILE
 from test_st_safe_boot_emu import RET
 from unicorn import UC_HOOK_CODE
 
@@ -23,7 +24,17 @@ def icon_rows():
 
 
 def verify(folder,out):
-    m=Destination(folder);u=m.u;s=m.bank_symbols
+    m=Destination(folder);u=m.u;s=dict(m.bank_symbols)
+    # Both machines instantiate subtype-picker.h. Its static stp_* names
+    # occur twice in the full bank: choose SY MnM's compilation unit, not
+    # the last matching local symbol (MD kit).
+    linked=Elf.load(Path(folder)/'synfact-machines.work/main.elf')
+    section=linked.section('.image');picker=False;scoped=set()
+    for symbol in linked.symbols:
+        if symbol.type==STT_FILE:picker=Path(symbol.name).name=='picker.c'
+        elif picker and symbol.name.startswith('stp_') and symbol.shndx==section.idx:
+            s[symbol.name]=symbol.value+BANK;scoped.add(symbol.name)
+    assert {'stp_api','stp_sel','stp_key_global','stp_enc_global'}<=scoped
     view,model,track_model,pages,event,ctrl,bitmap,pixels,mask,ui=[DATA+0x5000+0x800*i for i in range(10)]
     assert ui+64<DATA+0x10000
     state=dict(track=3,machine=71,selecting=0,held=0,recording=0,value=4<<8,edits=0,reloads=0)

@@ -6,9 +6,14 @@ import {sha} from '../src/bytes.ts'
 import {buildSmzCandidate} from '../src/smz-catalog.ts'
 const [,,catalogPath,out,...rest]=process.argv
 // --donor <file>: the OS file a selected module takes bytes from (FM TONE: the Digitone OS 1.44)
-const at=rest.indexOf('--donor'),donor=at<0?undefined:readFileSync(rest[at+1])
-const ids=at<0?rest:[...rest.slice(0,at),...rest.slice(at+2)]
-if(!catalogPath||!out||!ids.length||(at>=0&&!rest[at+1]))throw Error('Usage: node smz_candidate.ts catalog.json output.smz4 [--donor os-file] id...')
+const ids:string[]=[],donor:Uint8Array[]=[]
+for(let i=0;i<rest.length;i++){
+  if(rest[i]==='--donor'){
+    if(!rest[i+1]||rest[i+1].startsWith('--'))throw Error('--donor needs an OS file')
+    donor.push(readFileSync(rest[++i]))
+  }else ids.push(rest[i])
+}
+if(!catalogPath||!out||!ids.length)throw Error('Usage: node smz_candidate.ts catalog.json output.smz4 [--donor os-file]... id...')
 const raw=readFileSync(catalogPath)
 const result=await buildSmzCandidate(raw,sha(raw),ids,async name=>readFileSync(join(dirname(catalogPath),name)),donor)
 writeFileSync(out,result.data,{flag:'wx'})

@@ -778,3 +778,15 @@ afterwards. The native list, mutex, ABI, resident budgets, instruction counts
 and audio/render paths are unchanged. No module API or SDK field is added.
 This general UI lifecycle fix is part of the core, not a private ARP hook.
 See [the patch and regression](../mods/core-st/VIEW-CLEANUP.md).
+
+## Adding a mod to the browser release
+
+Add its ordered entry and dependencies/conflicts to `js/config/syntakt-normal.json`.
+If it needs another instrument's OS bytes, provide a hashed donor recipe and
+blank every imported symbol during artifact export. Test reconstruction against
+the independent native importer. Protocol 5 accepts multiple OS donors; schema 4
+allows free valid selections after the pinned C core parser accepts the result.
+Run the directed native comparison suite and focused module/emulator regressions;
+core/linker/format changes need the relevant deeper checks. Legacy output-pin
+catalogs retain their exhaustive approval requirement. No firmware ABI changes
+were made for this workflow. See [INTEGRATING.md](INTEGRATING.md).

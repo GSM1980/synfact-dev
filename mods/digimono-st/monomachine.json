@@ -1,0 +1,141 @@
+{
+  "format": "synfact-donor",
+  "schema": 2,
+  "title": "SY MnM",
+  "device": "monomachine",
+  "versions": [
+    "1.32B"
+  ],
+  "minimum": 4,
+  "regions": [
+    {
+      "name": "exp",
+      "transform": "monomachine-digipro-v1",
+      "length": 8192,
+      "sha256": "e87bd771f41147a2ac40ca82453573385c582d09265947534eec13a2a9b47a12"
+    },
+    {
+      "name": "wave",
+      "transform": "monomachine-digipro-v1",
+      "length": 67840,
+      "sha256": "c044d1723a39b5a0e93ea083d36198f87f87f9cd0118fc79c62a38820858a221"
+    },
+    {
+      "name": "interp",
+      "transform": "monomachine-digipro-v1",
+      "length": 1280,
+      "sha256": "a0af0de67f4a9102edb35a6b58eb906f9c027f8fe662f570f0f63aa267e557a5"
+    },
+    {
+      "name": "interp256",
+      "transform": "monomachine-digipro-v1",
+      "length": 8192,
+      "sha256": "8a13a21e3710a1761bd96309ff698b50e8057510aa8f5bb1bbf23ed8bdfa6aa0"
+    },
+    {
+      "name": "pch",
+      "transform": "monomachine-digipro-v1",
+      "length": 512,
+      "sha256": "79d5c3d6ba5b0d1552500d3df779755e23ce49e3a5176da4e76d508c65341ecb"
+    },
+    {
+      "name": "wid",
+      "transform": "monomachine-digipro-v1",
+      "length": 1024,
+      "sha256": "958184468f0376f6b42ef28326b06af2b7cfdd15a0bdc5052f2479c02a9ca56d"
+    },
+    {
+      "name": "br",
+      "transform": "monomachine-digipro-v1",
+      "length": 1024,
+      "sha256": "e6ccfce4c65a58c476adace4567b2d7e803a0a24d9c68c351c91975f3a7bfa0e"
+    },
+    {
+      "name": "digibank",
+      "transform": "monomachine-digipro-v1",
+      "length": 262144,
+      "sha256": "3c663d0f9a2c31362905f3c88afb9715b8d42c47ee0230463dd1ae6a3d6c5645"
+    },
+    {
+      "name": "partner",
+      "transform": "monomachine-digipro-v1",
+      "length": 262144,
+      "sha256": "805f3b39f2b2c4aec4b370d92e5e758cb6abacaf29dd942b52bf3a062335601f"
+    }
+  ],
+  "outputs": [],
+  "symbol_copies": {
+    "dpt_exp": [
+      [
+        0,
+        "exp",
+        0,
+        8192
+      ]
+    ],
+    "dpt_wave": [
+      [
+        0,
+        "wave",
+        0,
+        67840
+      ]
+    ],
+    "dpt_interp": [
+      [
+        0,
+        "interp",
+        0,
+        1280
+      ]
+    ],
+    "dpt_interp256": [
+      [
+        0,
+        "interp256",
+        0,
+        8192
+      ]
+    ],
+    "dpt_pch": [
+      [
+        0,
+        "pch",
+        0,
+        512
+      ]
+    ],
+    "dpt_wid": [
+      [
+        0,
+        "wid",
+        0,
+        1024
+      ]
+    ],
+    "dpt_br": [
+      [
+        0,
+        "br",
+        0,
+        1024
+      ]
+    ],
+    "dpt_digibank": [
+      [
+        0,
+        "digibank",
+        0,
+        262144
+      ]
+    ],
+    "dpt_partner": [
+      [
+        0,
+        "partner",
+        0,
+        262144
+      ]
+    ]
+  }
+}

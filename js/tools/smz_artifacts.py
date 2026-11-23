@@ -50,7 +50,7 @@ def main():
         if str(path) not in report['source_sha256']:raise ValueError('Directory was not part of the audited build')
         doc=json.loads(path.read_text(encoding='utf-8-sig'))
         cfg=doc['smz_module' if module else 'smz']; audio=cfg.get('audio',{})
-        recipe=sources=None;donor_fills=[]
+        recipe=sources=None;donor_fills=[];seen_symbols=set()
         if cfg.get('donor'):
             recipe=json.loads((folder.resolve()/cfg['donor']['recipe']).read_text(encoding='utf-8'))
             for os_file in donor_files:
@@ -69,7 +69,19 @@ def main():
                 if sources and name in cfg['donor']['sources']:
                     for k,s in enumerate(obj.sections):
                         if not s.flags&2 or not s.data:continue
-                        blanked,copies=donor.fills(s.data,sources,recipe['minimum'])
+                        strict=[];initial=bytearray(s.data)
+                        for symbol in obj.symbols:
+                            if symbol.shndx!=k:continue
+                            plan=recipe.get('symbol_copies',{}).get(symbol.name)
+                            if plan is None:continue
+                            seen_symbols.add(symbol.name)
+                            if symbol.value+symbol.size>len(initial):raise ValueError('Donor symbol outside section')
+                            restored=donor.unfill(bytes(symbol.size),plan,sources)
+                            if restored!=s.data[symbol.value:symbol.value+symbol.size]:raise ValueError('Donor symbol reconstruction differs: '+symbol.name)
+                            initial[symbol.value:symbol.value+symbol.size]=bytes(symbol.size)
+                            strict.extend([[symbol.value+at,region,offset,length] for at,region,offset,length in plan])
+                        blanked,copies=donor.fills(bytes(initial),sources,recipe['minimum'])
+                        copies+=strict
                         if donor.unfill(blanked,copies,sources)!=s.data:raise ValueError('donor fills do not restore '+str(path))
                         if copies:
                             sections[k]['data']=blanked.hex()
@@ -87,7 +99,8 @@ def main():
               'machines':machines,'modules':[cfg['descriptor']] if module else cfg.get('modules',[]),
               'samplePool':'sample-pool-v1' in cfg.get('features',[])}
         if recipe:
-            item['donor']=dict(donor.spec(recipe),fills=donor_fills);schema=2
+            if seen_symbols!=set(recipe.get('symbol_copies',{})):raise ValueError('A required donor symbol was not exported')
+            item['donor']=dict(donor.spec(recipe),fills=donor_fills);schema=max(schema,3 if recipe.get('schema',1)==2 else 2)
         payload=(json.dumps(item,separators=(',',':'))+'\n').encode()
         name=f'{i:02d}-{doc["id"]}.json'
         if not re.fullmatch(r'[\w.-]+\.json',name):raise ValueError('Unsafe module id')

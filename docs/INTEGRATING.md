@@ -231,20 +231,87 @@ Protocol 2 adds `builder.buildSyntakt(stockBlob, manifestFile, manifestSha256, l
 
 Create the private artifact package from an independently verified Syntakt build using `python js/tools/syntakt_package.py --reference <build-dir> --core <core.elemod> --machines <machines.elemod> --meter --out <new-dir>`. Omit `--meter` for a build without `--system-info`. The command prints the manifest pin. The tool does not certify that the supplied artifacts can be redistributed: review the origin, licenses and build audit before publishing. Never commit stock firmware, derived firmware or built artifacts. This route is experimental, and tests against physical hardware and across browsers remain necessary.
 
-## Experimental SMZ4 selection
+## SMZ4 selection and donor files (protocol 5)
 
-Protocol 3 adds `builder.buildSmz(catalogFile, catalogSha256, selectedIds)` after `load()`. It links pinned, previously compiled module objects inside the worker. Catalog order defines machine/module and event order; a site must present only combinations listed in its validated catalog. An unlisted selection, altered artifact or unexpected output hash is refused. The result contains `{data, sha256, bytes, selected}`, with `data` as an ArrayBuffer.
+`builder.buildSmz(catalogFile, catalogSha256, selectedIds, donors)` links audited,
+pinned compiled objects in the worker and returns `{data, sha256, bytes, selected}`.
+`donors` accepts one Blob (legacy callers) or a list of Blobs. Protocol 5 also
+adds `builder.call('inspect_donor', {}, await file.arrayBuffer())`, which recognizes
+an OS without replacing the Syntakt stock file. On the wire `build_smz` accepts
+`args.donors: ArrayBuffer[]` (at most eight); the legacy single `data` donor is
+still understood. Files remain local to the worker.
 
-Protocol 4 adds the owner's file a module takes bytes from: `builder.buildSmz(catalogFile, catalogSha256, selectedIds, donor)`. FM TONE's DSP, tables and drawings are the Digitone's, so its objects come in the catalog with those bytes blanked to zero. Its catalog entry says so: `"donor": {"title": "SY FM DTONE", "device": "digitone-mk1", "versions": ["1.44"]}`. When the selection holds such a module, the page asks the visitor for that OS file and passes it as `donor` (a Blob). The worker checks the file and the parts it reads by sha256, puts the bytes back and links. The validated output hash checks the result. Without the file, or with another one, the build is refused with the words to show: `SY FM DTONE needs the Digitone mk1 OS 1.44 file`. The file stays in the worker, as the stock file does. An SMZ catalog with such a module has `schema` 2; the engine reads 1 and 2. To export one, give `smz_artifacts.py` (and `smz_matrix.py`, `smz_release.py`) `--donor <the OS file>`, and run `mods/fm-tone-st/tools/import_digitone.py` before the native builds. A previous catalog of schema 1 cannot be merged into one of schema 2: validate every selection once.
+Catalog donor metadata names the required device and versions. Group inputs by
+device/version so SY FM DTONE and Chorus share the Digitone OS 1.44 input.
+COMP needs Digitakt OS 1.54, and SY MnM needs Monomachine OS 1.32B. The worker
+refuses missing, modified or incorrect OS files and verifies each reconstructed
+region by SHA-256. Monomachine is a donor-only device profile: it is not added
+as a generic firmware-patching target.
 
-To prepare the catalog, compile a complete source bank using the exact documented Syntakt toolchain. Run `js/tools/smz_artifacts.py` with that bank and the same ordered `--machine` and `--module` directories to export the audited object files and source pins. This private output is not proof of redistribution rights. FM TONE's objects in particular hold the Digitone's bytes, which its source rebuilds from the owner's own Digitone OS file (mods/fm-tone-st/README.md): export them only with `--donor`, which blanks those bytes (protocol 4, below). Do not commit or publish such material without a separate provenance review.
+Donor recipe schema 1 describes raw regions; schema 2 adds the pinned
+`monomachine-digipro-v1` transformation and strict whole-symbol copy plans.
+Prepare deterministic COMP/SY MnM recipes with `js/tools/prepare_donors.py`;
+run the module importers before native compilation. `smz_artifacts.py` accepts
+repeated `--donor` arguments, verifies reconstructed objects against the audited
+native objects and blanks the donor symbols, including repeated bitmaps. Export
+all donor modules this way; the full private native objects must not be served.
 
-`js/tools/smz_matrix.py` accepts a JSON config listing the same IDs in order, each with `path`, `kind` (`machine` or `module`), optional `requires` and `conflicts`. For each allowed nonempty combination it compiles a fresh reference from source, produces a browser candidate, runs both through the independently compiled core parser, and compares relocation tables, MAIN bytes and AUDIO bytes; different relocation values are accepted only when they point to identical printable strings. It writes the approved selections and hashes to a new catalog next to the artifacts and writes rejected cases to the local output directory. A build, parser or comparison failure means that selection is excluded, not that the module is necessarily incompatible. Inspect failures, fix causes and rerun the matrix before promising all combinations. New modules require a new audited full bank, catalog, config and matrix. `js/tools/smz_candidate.ts` and `smz_approve.py` provide the same workflow for individual candidates. The Python preparation tools need a checkout of the complete SDK and its target toolchain; the standalone website kit alone is not a native build environment.
+### Catalog validation policies
 
-`js/config/syntakt-normal.json` lists the groups in the normal Syntakt build, including ARP, and excludes profiling, timing and diagnostic modules. Modules marked `"always": true` (the mix-fast kernels, the I-cache lock and the modulation skip) are in every selection: the matrix asks only for selections containing all of them, and `smz_merge.py` reuses no other. With ten optional groups, ARP requiring LFO3 and those three always included, that is 768 selections, one of them the always-included modules alone, so a build with no optional mod still produces an SMZ bank.
+SMZ schemas 1–3 retain exact approved output hashes for every production selection.
+Schema 2 introduced raw donors; schema 3 permits transformed schema-2 recipes.
+The general kit catalog remains schema 1; it is a different format.
 
-For an incremental update, `smz_matrix.py --only-id <id>` validates combinations containing that module; repeat `--only-id` to validate those containing any of several. `smz_merge.py` can reuse previous results only when every selected artifact hash is unchanged and the new config permits the selection. Pass `--require-complete` to refuse a merged catalog missing any permitted selection; runtime output hashes remain enforced.
+SMZ schema 4 keeps all input pins and adds required `requires`, `conflicts` and
+`always` fields on every module plus `validation`, a pinned wasm parser manifest:
+`{kind:'core-parser-wasm', api:1, file, sha256, contract, coreVersion}`. The worker
+enforces these rules and runs the actual unmodified core C parser on every
+result, including combinations without an output golden. An `approved` entry,
+when present, still adds an exact output-hash check. The wasm has no imports,
+an 18 MiB memory cap and a bounded input; it parses bytes without executing the
+bank or accessing the instrument. The site must pair it with the same firmware
+core version and contract. A failed check returns no bank.
 
-`js/tools/smz_release.py` runs these steps for one release: from committed sources (it refuses uncommitted ones), it builds the complete bank in the config's order, checks it with the core's parser, exports the objects, validates with the matrix only the selections containing a module whose artifact differs from `--previous` (all of them without it), merges the rest with `--require-complete`, optionally packages a verified core build (`--core-build`, `--meter`), and writes `RELEASE.json` with the source commit, the changed modules, every version and the catalog's pin. It needs the same toolchain environment and core parser as the matrix. Its output is private and must not be committed.
+`js/config/syntakt-normal.json` contains thirteen optional groups, including
+MD kit, COMP and SY MnM, and three `always` optimizations (mix-fast, I-cache lock,
+modulation skip). ARP requires LFO3. With these dependencies there are 6,144
+permitted selections; an empty optional selection still emits the three internals.
 
-These checks are static and host-side; they do not establish runtime compatibility, CPU limits, successful boot or safe installation. A release still requires appropriate regressions, emulator or physical-device testing and a reviewed recovery procedure. Do not upload experimental banks to the instrument based on this matrix alone.
+### Preparing a release
+
+Use the unchanged target compiler/flags in [SYNTAKT-BUILD.md](SYNTAKT-BUILD.md).
+Build and audit the complete native bank, then export pinned blanked objects.
+Build the parser with `ZIG` set to Zig 0.13.0 and `LLVM_MINGW_BIN` configured:
+
+```bash
+python js/tools/build_smz_validator.py --out out/web-parser --native
+python js/tools/smz_release.py --parser out/core/smz-parser.exe \
+  --validator out/web-parser/validator.json --native-parser out/web-parser/smz-validator.dll \
+  --donor "$DIGITONE_OS" --donor "$DIGITAKT_OS" --donor "$MONOMACHINE_OS" \
+  --jobs 4 --out out/web-release
+```
+
+The default `--validation directed` packages schema 4, compares native/browser
+outputs for singles, pairs, full-bank boundaries and selected interactions,
+and writes `runtime/catalog-directed.json`, `directed/summary.json` and
+`RELEASE.json`. The first thirteen-group run compared 109 distinct banks in
+62.39 seconds with audited objects prepared. This timing excludes a cold
+toolchain setup, source compilation, regressions and manual review.
+
+`smz_cached_reference.py` reuses only audited objects whose inputs and original
+compiler commands match, and uses the original SDK linker/auditor. Every result
+is checked by native C and wasm parsers; AUDIO must match exactly. MAIN accepts
+alternative relocation targets only for identical printable strings. The
+parser corruption corpus repairs checksums to exercise deeper structural checks.
+
+`--validation exhaustive` retains the old matrix and optional `--previous`
+reuse of unchanged selections with `smz_merge.py --require-complete`.
+Directed releases rerun their compact suite even with `--previous`; they do
+not claim exhaustive output comparison. Core, linker, recipe or format changes
+require focused regressions beyond the directed suite. Parser validation does
+not establish musical behavior or CPU capacity. The owner tests the instrument.
+
+The release helper refuses dirty relevant sources by default (`--allow-dirty`
+is for private local review). `--core-build` and `--meter` package a verified
+core when it changes. Generated firmware, catalogs, objects and reports stay
+local and ignored. Publish the corresponding committed source with object code.
