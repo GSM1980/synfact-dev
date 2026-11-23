@@ -790,3 +790,28 @@ Run the directed native comparison suite and focused module/emulator regressions
 core/linker/format changes need the relevant deeper checks. Legacy output-pin
 catalogs retain their exhaustive approval requirement. No firmware ABI changes
 were made for this workflow. See [INTEGRATING.md](INTEGRATING.md).
+
+## Syntakt core 2.7: PATTERN menu build events
+
+Two new collections, SMZ module events 16 and 17, for mods that add entries
+to the PATTERN menus. Host API 18 adds no field; older core parsers reject a
+bank that subscribes to 16 or 17.
+
+| Event | Site | Handler |
+|---|---|---|
+| `ST_EV_PATTERN_MENU` (`ev_pattern_menu`) | `4004ae0c`, end of PatternMenuView's constructor (`4004a8e0`) | `void f(void *menu)` |
+| `ST_EV_RELOAD_MENU` (`ev_reload_menu`) | `40182212`, end of PatternReloadMenuView's constructor (`40181f40`, SETTINGS > PATTERN > RELOAD FROM PROJ) | `void f(void *menu)` |
+
+Both run in the UI task, after the menu's native items exist, with the menu
+fully built: PatternMenuView already holds its RELOAD FROM PROJ view as a
+`shared_ptr` at +472/+476. A handler may append items (`core_additem`, or the
+OS's MenuItem constructor `400fa84c` and `Menu::addItem` `400fa082`) and may keep
+the menu's address: the OS builds each of these menus once, at boot. No IO.
+With no subscriber the replaced epilogue runs at once. Each adapter restores
+d0-d1/a0-a1 for the stock epilogue; handlers keep the C ABI.
+
+`tests/test_st_menu_events.py` checks the manifest, the event numbering, the
+parser's bound and the host API; with an assembler it runs both adapters in
+Unicorn (0, 1 and 3 handlers) and with `--stock` checks the stock bytes. The
+key IDs these menus' users need (SONG MODE, SETTINGS, FX) and the long-press
+flag are in [MACHINE-REFERENCE.md](MACHINE-REFERENCE.md).

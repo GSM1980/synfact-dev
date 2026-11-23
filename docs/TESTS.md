@@ -2,6 +2,12 @@
 
 # Tests
 
+Core 2.7: `tests/test_st_menu_events.py [--as AS --ld LD] [--stock STOCK]`
+checks the PATTERN menu events' manifest entries, SMZ event numbers 16/17,
+the bank parser's bound and host API 18; with binutils it runs both adapters
+in Unicorn, with `--stock` it checks the stock epilogues. `kitload-st`'s
+`tests/test_st_kitload.py` is described in its README.
+
 COMP 0.1 / core 2.4: `tests/test_st_comp_emu.py --core <main.bin> --bank
 <bank.smz4> [--preview <png>]` executes the linked compact DSP against the
 upstream fixed-point model (384 blocks), native FX VCA hook and bypass, six

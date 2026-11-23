@@ -366,7 +366,8 @@ def suggested_name(descs, version):
 
 EVENT_NAMES = {'ev_tick': 'UI tick, 30 Hz', 'ev_draw': 'Screen draw', 'ev_key': 'Keys',
                'ev_enc': 'Encoders', 'ev_settings': 'SETTINGS menu rows',
-               'ev_render_in': 'Audio render start', 'ev_render_out': 'Audio render end'}
+               'ev_render_in': 'Audio render start', 'ev_render_out': 'Audio render end',
+               'ev_pattern_menu': 'PATTERN menu built', 'ev_reload_menu': 'RELOAD FROM PROJ menu built'}
 C = {                                     # a dark theme, like a game's mod manager
     'bg': '#16181d', 'panel': '#1e2128', 'raised': '#262a33', 'line': '#323743',
     'text': '#e6e8ec', 'muted': '#9197a3', 'accent': '#e8903a', 'accent2': '#f0a55c',

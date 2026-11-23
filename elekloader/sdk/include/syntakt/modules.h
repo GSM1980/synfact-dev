@@ -12,7 +12,13 @@ enum st_smz_event { ST_EV_TICK,ST_EV_DRAW,ST_EV_KEY,ST_EV_ENC,ST_EV_SETTINGS,
      * void f(struct st_fx_cv *). Gains are unsigned native CV values; only
      * left/right may change. hardware is borrowed. No heap/IO, preserve
      * ACC2/3; ACC0/1 are scratch. Native clamp/store still executes. */
-    ST_EV_FX_CV,ST_EV_COUNT };
+    ST_EV_FX_CV,
+    /* Core 2.7: the PATTERN menu's build events, task context.
+     * void f(void *menu) at the end of PatternMenuView's (16) and
+     * PatternReloadMenuView's (17) constructors, after the native items;
+     * add items with core_additem or the OS's MenuItem/addItem. The OS builds
+     * each menu once, at boot. Older core parsers reject events 16/17. */
+    ST_EV_PATTERN_MENU,ST_EV_RELOAD_MENU,ST_EV_COUNT };
 struct st_fx_cv {void *hardware;int left,right;};
 /* Core 0.10 / module service API 2: opt into the native receiving-view phase
  * of the SAME event collection. Ordinary subscriptions retain their ABI and

@@ -228,3 +228,13 @@ slave bitmap in the same existing native IMMEDIATE exclusion. Analog machine
 changes use that operation from TICK, never an added audio-block check. See
 [POLY evidence and budgets](../poly-st/README.md) for the stock layout audit,
 linked checks and pending physical profiling.
+
+## 2.7: PATTERN menu build events
+
+Two sites and two collections, both new contexts with no existing owner:
+the epilogues of PatternMenuView's (`4004ae0c`) and PatternReloadMenuView's
+(`40182212`) constructors. They are menu construction, not key or draw
+handling, so no existing collection fits. Keys on these menus, including
+the long press of SETTINGS, stay in `ev_key`: the main loop builds the
+KeyEvent from the queued message's flags word before `ev_key` sees it
+(MACHINE-REFERENCE.md), so no MainScreen adapter is added.

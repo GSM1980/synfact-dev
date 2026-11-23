@@ -117,7 +117,10 @@ def verify(folder):
                          (0x400a78a0,'core_meta_kit_decode',8),
                          (0x400905b6,'core_fx_cv',6)):
         assert read(at,size)==jump(name,0x4eb9 if name=='core_fx_cv' else 0x4ef9)+bytes.fromhex('4e71')*((size-6)//2),name
-    assert len(manifest['sites'])==127 and len(manifest['collections'])==17
+    # 2.5: the PATTERN and RELOAD FROM PROJ menus' build events, at their constructors' epilogues.
+    for at,name in ((0x4004ae0c,'core_pattern_menu'),(0x40182212,'core_reload_menu')):
+        assert read(at,6)==jump(name),name
+    assert len(manifest['sites'])==129 and len(manifest['collections'])==19
     assert read(0x40083026,8)==jump('core_pool_sender_done',0x4eb9)+bytes.fromhex('4e71')
     # 2.1.1: the sender's end also returns the bank's file (its AUDIO section) to the heap.
     assert read(address('core_pool_sender_done'),22)==(
