@@ -139,15 +139,17 @@ int main(void)
     /* DPRO WAVE (12) on one track at a time: struck through elsewhere */
     assert(dm_fits(3,DM_DPWAVE) && dm_fits(3,DM_DPDDRW));
     track_machine[0]=71;track_type[0]=DM_DPWAVE;
-    assert(!dm_fits(3,DM_DPWAVE) && dm_fits(0,DM_DPWAVE) && dm_fits(3,DM_DPDENS) && dm_fits(3,0));
+    assert(!dm_fits(3,DM_DPWAVE) && dm_fits(0,DM_DPWAVE) && !dm_fits(3,DM_DPDENS) && dm_fits(3,0));
     track_machine[0]=70;assert(dm_fits(3,DM_DPWAVE));
-    track_machine[0]=71;track_type[0]=DM_DPDDRW;assert(dm_fits(3,DM_DPWAVE) && !dm_fits(3,DM_DPDDRW) && dm_fits(3,DM_DPDENS));
-    track_type[0]=DM_DPDENS;assert(!dm_fits(3,DM_DPDENS) && dm_fits(3,DM_DPDDRW));
+    track_machine[0]=71;track_type[0]=DM_DPDDRW;assert(!dm_fits(3,DM_DPWAVE) && !dm_fits(3,DM_ENS) && dm_fits(3,DM_SID));
     for(unsigned k=0;k<DM_TYPES;k++){
         track_machine[0]=71;track_type[0]=k;
         unsigned heavy=k==DM_ENS || (k>=DM_FMSTAT && k<=DM_DPDENS);
-        assert(dm_fits(3,k)==!heavy && dm_fits(0,k));
-        if(k!=DM_SID)assert(dm_fits(3,DM_SID));
+        /* one heavy TYPE on another track strikes every heavy TYPE here */
+        for(unsigned j=0;j<DM_TYPES;j++){
+            unsigned other=j==DM_ENS || (j>=DM_FMSTAT && j<=DM_DPDENS);
+            assert(dm_fits(3,j)==!(heavy && other) && dm_fits(0,j));
+        }
     }
     track_machine[0]=0;track_type[0]=0;
     puts("PASS: hidden TYPE, 15 choices, selector YES/NO/encoders, track/model/recording guards, late defaults, cancellation, bounded name box and wrap; no knob edits");

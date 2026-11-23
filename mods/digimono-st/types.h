@@ -51,10 +51,10 @@ static const char *const dm_labels[DM_TYPES][8] = {
     {64,0,0,127,0,0,0,64}, {64,61,64,80,32,82,64,64}, \
     {64,61,64,82,64,104,80,64}, {64,64,64,64,0,74,80,32}, \
     {64,0,0,0,96,0,0,0}, {64,0,64,0,0,0,0,0}, {64,63,63,63,0,0,0,0} }
-/* The heavy TYPEs, each on one track at a time (audio.c, picker.c): ENS
- * (its stereo chorus), FM+STAT/PAR/DYN and the three DigiPRO. A second track
- * with the same TYPE is silent and unrendered until it is alone; the list
- * strikes it through. */
+/* The heavy TYPEs: ENS (its stereo chorus), FM+STAT/PAR/DYN and the three
+ * DigiPRO. One track at a time plays any of them (audio.c, picker.c): a
+ * second track with a heavy TYPE is silent and unrendered until it is the
+ * only one; the list strikes them through. */
 #define DM_ONE_TRACK(type) ((type)==DM_ENS || ((type)>=DM_FMSTAT && (type)<=DM_DPDENS))
 static inline unsigned dm_clamp_type(unsigned raw)
 { unsigned t = raw >> 8; return t < DM_TYPES ? t : DM_TYPES - 1u; }

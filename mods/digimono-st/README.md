@@ -17,8 +17,8 @@ no port of it. DDRW's TIME and BR follow De-Pattern's host mapping. In this
 release DENS has no chorus of its own: its CHRL/CHRW are hidden, and the bank's
 Chorus FX serves it (a stereo chorus in the machine cost the shared stereo
 service's second pass). ENS, FM+STAT, FM+PAR, FM+DYN and the three DigiPRO
-TYPEs, the heaviest, each play on one track at a time: a second track with
-the same TYPE is silent and struck through in the list. The
+TYPEs, the heaviest, play on one track at a time between them: while one track
+plays any of them, a second is silent and the list strikes them through. The
 web catalog cannot ship 0.8.0 until it reads
 the Monomachine OS as a donor. See [dpro/README.md](dpro/README.md).
 

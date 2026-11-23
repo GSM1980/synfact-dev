@@ -174,7 +174,7 @@ int main(void)
         fixture[prev][0x6f8/4]=0;
         assert(dm_previous_pitch(&dm_tracks[target],target)==48*64+((p8[6]*24)>>8));
     }
-    /* DPRO WAVE on one track at a time: the second is silent until it is alone */
+    /* a second heavy track (here DPRO WAVE twice) is silent until it is alone */
     for(unsigned t=0;t<8;t++){prepare(t,t?0:DM_DPWAVE);block(t,1,60,out);}
     for(unsigned b=0;b<3;b++)for(unsigned t=0;t<8;t++){
         if(t==2){ext[2][0]=DM_DPWAVE<<8;}
@@ -182,9 +182,21 @@ int main(void)
         if(t==0)assert(!dm_tracks[0].blocked);
         if(t==2 && b){assert(dm_tracks[2].loaded==DM_DPWAVE+1 && dm_tracks[2].blocked);silent(out);}
     }
-    ext[0][0]=DM_DPDDRW<<8;
+    /* one track at a time plays any heavy TYPE, and the track that plays one
+     * keeps it: track 0 leaves WAVE (light SID), track 2's WAVE plays; then
+     * every heavy TYPE on track 0 is silent, every light one plays */
+    ext[0][0]=DM_SID<<8;
     for(unsigned b=0;b<2;b++)for(unsigned t=0;t<8;t++)block(t,1,60,out);
-    assert(dm_tracks[0].loaded==DM_DPDDRW+1 && !dm_tracks[2].blocked);
+    assert(!dm_tracks[2].blocked && !dm_tracks[0].blocked);
+    for(unsigned k=0;k<DM_TYPES;k++){
+        unsigned heavy=k==DM_ENS || (k>=DM_FMSTAT && k<=DM_DPDENS);
+        ext[0][0]=(unsigned short)(k<<8);
+        for(unsigned b=0;b<2;b++)for(unsigned t=0;t<8;t++)block(t,1,60,out);
+        assert(dm_tracks[0].loaded==k+1 && dm_tracks[0].blocked==heavy && !dm_tracks[2].blocked);
+        if(heavy){block(0,0,60,out);silent(out);}
+    }
+    ext[0][0]=DM_SID<<8;
+    for(unsigned b=0;b<2;b++)for(unsigned t=0;t<8;t++)block(t,1,60,out);
     {int any=0;block(2,0,60,out);for(unsigned i=0;i<32;i++)any|=out[i]!=0;assert(any);}
     prepare(0,0);input[0][slots[0]]=0x4c00;block(0,1,60,out);
     assert(dm_tracks[0].increment==mono_pitch_inc(72*128));
