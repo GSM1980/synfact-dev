@@ -43,6 +43,7 @@ bank that can change without reinstalling the firmware:
 | [POLY](mods/poly-st) | polyphonic play for digital and compatible analog tracks |
 | [System info](mods/system-info-smz-st) | CPU and memory pages |
 | [Sample Manager](mods/sample-manager-st) | the sample pool and library, in folders |
+| [Kit bank](mods/kitload-st) | draft: 128 kits of P128 in RELOAD FROM PROJ, load and save; long press SETTINGS opens it |
 
 ## Build it
 
