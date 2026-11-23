@@ -73,13 +73,23 @@ box uses the machine's own SYN layer so later overlays cover it.
 
 Include the implementation once in a machine's MAIN translation unit. Define
 `STP_MACHINE`, `STP_CONTROL_ID`, `STP_CONTROL_INDEX`, `STP_COUNT`, `STP_NAMES`,
-`STP_DEFAULT`, `STP_MODULE`, `STP_MODULE_NAME` and `STP_CONFIG_INIT(api)` first.
+`STP_DEFAULT`, `STP_ON_LOAD` and `STP_CONFIG_INIT(api)` first, and list
+`st_subtype_module` in the machine's `mod.json` `"modules"`.
 Use `stp_idle(view)` and `stp_draw(view, bitmap)` from the machine UI. The module
 uses TICK, global KEY/ENC, view DRAW and global DRAW in the existing event bus;
 it requires module service API 2 and UI API 7 with `edit`. Digi Mono's config
-requires host API 17 for the non-modulated TYPE. Its existing
-module symbol remains `dm_destination_module`, now named **MONO TYPE SELECTOR**.
-There is no second registry, core event site or additional module slot.
+requires host API 17 for the non-modulated TYPE.
+
+Every machine with a picker shares one module, **SUBTYPE SELECTOR**
+(`st_subtype_module`): each machine's `on_load` (`STP_ON_LOAD`) adds its picker
+to the registry `st_subtype_instances` (up to four), and the module passes each
+event to them in bank order. Every copy of the header defines the module and the
+registry weakly, so the bank must keep one definition of each **and send every
+reference to it**, as GNU ld does. The browser's linker (`js/src/smz-link.ts`)
+used to send an object's references to its own weak copy: each machine then
+registered in a registry of its own, only the first machine in the bank (SY MnM
+in the web config) opened its list, and YES on the others loaded their first
+subtype. `js/test/smz-link.test.ts` covers it.
 
 Two optional definitions extend it without changing a machine that leaves them out:
 
@@ -92,7 +102,7 @@ Two optional definitions extend it without changing a machine that leaves them o
   for a machine's own handling of its knobs (MD's knobs past a voice's last control).
 
 MD KIT (type 70) uses the helper for its thirty voices since its branch merged this
-one: `md_picker_module`, **MD TYPE SELECTOR**, six subscriptions. Its TYPE is a configuration
+one, through the same **SUBTYPE SELECTOR** module. Its TYPE is a configuration
 control as SY MnM's; an older Sound's out-of-range TYPE shows and plays as the first voice.
 
 The separate user requirement that TYPE cannot be modulated needs core 2.3.1:
