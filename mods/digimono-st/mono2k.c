@@ -138,7 +138,8 @@ void dm_ens_render(struct dm_ens_voice *v,const uint16_t *p,int32_t pitch,int16_
     }
 }
 
-void dm_ens_chorus(struct dm_ens_voice *t,const uint16_t *p,int16_t *left,int16_t *right)
+#if defined(DM_DENS_CHORUS_FULL)
+static void chorus_full(struct dm_ens_voice *t,const uint16_t *p,int16_t *left,int16_t *right)
 {
     /* ens.inc's chorus after DPRO-DENS (CHRL p[5], CHRW p[6]): the
      * Monomachine's DENS has the same CHRL/CHRW chorus after the machine.
@@ -183,4 +184,73 @@ void dm_ens_chorus(struct dm_ens_voice *t,const uint16_t *p,int16_t *left,int16_
         left[i] = (int16_t)sat16(s + side);
         right[i] = (int16_t)sat16(s - side);
     }
+}
+#endif
+/* DENS's chorus: the same line, taps, mix and spread as ens.inc's, with the
+ * taps and their wet terms computed once a pair of samples, at the even one;
+ * the odd sample takes the mean of its two even neighbours (the line itself
+ * runs at half rate). ens.inc reads the odd sample's taps 1.5 line samples
+ * after its even one; this reads them halfway, so the wet path moves by one
+ * line sample on the odd samples. DM_DENS_CHORUS_FULL keeps every sample's
+ * taps (chorus_full). The 0.2 Hz LFO's delays are computed at the block's
+ * first and last samples and taken linearly between them. ENS keeps ens.inc. */
+static inline void chorus_taps(const int16_t *cm,uint32_t at,const int32_t *d,int32_t wet,
+                               int32_t wside,int32_t *mid,int32_t *side)
+{
+    int32_t y[2];
+    for (int c = 0; c < 2; c++) {
+        uint32_t pos = at - (uint32_t)(d[c] >> 16);
+        uint32_t j = pos >> 8;
+        int32_t f = (int32_t)(pos & 255), y0 = cm[j & (ENS_LEN - 1)];
+        y[c] = y0 + (((cm[(j + 1) & (ENS_LEN - 1)] - y0) * f) >> 8);
+    }
+    *side = sat16(((y[0] - y[1]) * wside) >> 16);
+    *mid = ((y[0] + y[1]) >> 1) * wet;                 /* under 2^30 */
+}
+void dm_ens_chorus(struct dm_ens_voice *t,const uint16_t *p,int16_t *left,int16_t *right)
+{
+#if defined(DM_DENS_CHORUS_FULL)
+    chorus_full(t,p,left,right);
+#else
+    int32_t chrl = P8(t, P_SYN + 5), chrw = P8(t, P_SYN + 6);
+    int32_t dry = 32768 - (chrl * 27197) / (127 * 256), wet = (chrl * 27853) / (127 * 256);
+    wet = (wet * tq_u16(T_ENS_G, chrw)) >> 15;
+    int32_t wside = (wet * tq_u16(T_ENS_W, chrw)) >> 15;
+    int16_t *cm = t->line;
+    uint32_t ph = t->ph[4];
+    t->ph[4] = ph + 32 * ENS_CINC;
+    int32_t d[2], step[2], m0 = 0, s0 = 0, m1, s1;
+    for (int c = 0; c < 2; c++) {
+        int32_t a = (2 << 8) + ENS_CDEP + ((ENS_CDEP * sinp(ph + ENS_CINC + ((uint32_t)c << 30))) >> 15);
+        int32_t b = (2 << 8) + ENS_CDEP + ((ENS_CDEP * sinp(ph + 32 * ENS_CINC + ((uint32_t)c << 30))) >> 15);
+        d[c] = a << 16;                        /* 16 fraction bits */
+        step[c] = ((b - a) << 16) / 31 * 2;    /* a pair's step */
+    }
+    if (chrl) chorus_taps(cm, t->ph[5] << 8, d, wet, wside, &m0, &s0);
+    for (unsigned i = 0; i < 32; i += 2) {
+        int32_t s = left[i], x;
+        t->ms[0] += s;
+        if (chrl) s = (s * dry + m0) >> 15;
+        s = sat16(s);
+        left[i] = (int16_t)sat16(s + s0);
+        right[i] = (int16_t)sat16(s - s0);
+        x = left[i + 1];
+        t->ms[0] += x;
+        cm[t->ph[5]++ & (ENS_LEN - 1)] = (int16_t)sat16(t->ms[0] >> 1); t->ms[0] = 0;
+        if (chrl) {
+            d[0] += step[0]; d[1] += step[1];
+            chorus_taps(cm, t->ph[5] << 8, d, wet, wside, &m1, &s1);
+            x = (x * dry + ((m0 >> 1) + (m1 >> 1))) >> 15;
+            int32_t side = (s0 + s1) >> 1;
+            m0 = m1; s0 = s1;
+            x = sat16(x);
+            left[i + 1] = (int16_t)sat16(x + side);
+            right[i + 1] = (int16_t)sat16(x - side);
+        } else {
+            x = sat16(x);
+            left[i + 1] = (int16_t)x;
+            right[i + 1] = (int16_t)x;
+        }
+    }
+#endif
 }
