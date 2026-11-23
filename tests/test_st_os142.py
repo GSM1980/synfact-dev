@@ -63,7 +63,7 @@ def verify(stock_path, folder, previous=None):
         count += 1
 
     manifest = json.loads((ROOT / 'mods/core-st/mod.json').read_text())
-    assert manifest['os'] == '1.42' and len(manifest['sites']) == 127
+    assert manifest['os'] == '1.42' and len(manifest['sites']) == 129
     for path in sorted((ROOT / 'mods').glob('*-st/mod.json')):
         definition = json.loads(path.read_text())
         assert definition['os'] == '1.42'
