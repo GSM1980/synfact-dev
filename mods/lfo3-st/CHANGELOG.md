@@ -1,12 +1,17 @@
 # Changelog: Third LFO
 
-Generated from git history by `tools/changelog.py`. Latest version: 1.3.3.
+Generated from git history by `tools/changelog.py`. Latest version: 1.3.4.
+
+## 1.3.4 (2026-11-23)
+
+- Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes (`a7a19a5`, 2026-11-23)
 
 ## 1.3.3 (2026-11-20)
 
 - Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
 - Changelogs: COMP 1.0.0 (`c148d93`, 2026-11-22)
 - Changelogs: COMP 1.0.0 ATK/REL in ms (`3ddf7da`, 2026-11-22)
+- Changelogs: core 2.6.0 and SY MnM 0.8.0 (`43276e6`, 2026-11-22)
 - Changelogs: COMP 0.3.0 (`a81bb0b`, 2026-11-21)
 - Add FX-bus COMP with shared core services and SRAM optimization (`e1e51bf`, 2026-11-20)
 - Changelogs: COMP 0.2.0 and core 2.4.0 FX services (`307482a`, 2026-11-20)

@@ -1,12 +1,68 @@
 {
   "id": "digimono-st",
   "title": "SY MnM",
-  "latest": "0.8.0",
+  "latest": "0.8.1",
   "entries": [
+    {
+      "version": "0.8.1",
+      "date": "2026-11-23",
+      "commits": [
+        {
+          "sha": "a7a19a5",
+          "date": "2026-11-23",
+          "subject": "Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes"
+        }
+      ]
+    },
     {
       "version": "0.8.0",
       "date": "2026-11-22",
       "commits": [
+        {
+          "sha": "a36cbe6",
+          "date": "2026-11-23",
+          "subject": "One SUBTYPE SELECTOR module, a bounded stereo tail, one DPRO WAVE"
+        },
+        {
+          "sha": "99dee02",
+          "date": "2026-11-23",
+          "subject": "SY MnM: each DigiPRO TYPE on one track at a time"
+        },
+        {
+          "sha": "ec3bf34",
+          "date": "2026-11-23",
+          "subject": "DENS: the kernel at 256 fixed phases; a lighter chorus mix"
+        },
+        {
+          "sha": "c60fe03",
+          "date": "2026-11-23",
+          "subject": "DENS chorus: taps and wet terms once a pair of samples"
+        },
+        {
+          "sha": "cff9908",
+          "date": "2026-11-23",
+          "subject": "DENS: no chorus of its own in this release; CHRL/CHRW hidden"
+        },
+        {
+          "sha": "06b0d11",
+          "date": "2026-11-23",
+          "subject": "SY MnM: the seven heaviest TYPEs each on one track at a time"
+        },
+        {
+          "sha": "4334b87",
+          "date": "2026-11-23",
+          "subject": "SY MnM: one track at a time plays any of the seven heavy TYPEs"
+        },
+        {
+          "sha": "1ad79c7",
+          "date": "2026-11-23",
+          "subject": "SY MnM: a Monomachine drawing beside the type list"
+        },
+        {
+          "sha": "5b2d637",
+          "date": "2026-11-23",
+          "subject": "SY MnM stays out of the web catalog until a Monomachine donor recipe"
+        },
         {
           "sha": "0049211",
           "date": "2026-11-22",
@@ -16,6 +72,11 @@
           "sha": "3bb565d",
           "date": "2026-11-22",
           "subject": "SY MnM 0.8.0: DigiPRO at about half the instructions"
+        },
+        {
+          "sha": "43276e6",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.6.0 and SY MnM 0.8.0"
         }
       ]
     },

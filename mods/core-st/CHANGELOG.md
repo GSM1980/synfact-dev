@@ -1,6 +1,14 @@
 # Changelog: core
 
-Generated from git history by `tools/changelog.py`. Latest version: 2.5.0.
+Generated from git history by `tools/changelog.py`. Latest version: 2.6.1.
+
+## 2.6.1 (2026-11-23)
+
+- Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes (`a7a19a5`, 2026-11-23)
+
+## 2.6.0 (2026-11-22)
+
+- Changelogs: core 2.6.0 and SY MnM 0.8.0 (`43276e6`, 2026-11-22)
 
 ## 2.5.0 (2026-11-22)
 

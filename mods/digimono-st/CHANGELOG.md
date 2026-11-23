@@ -1,11 +1,25 @@
 # Changelog: SY MnM
 
-Generated from git history by `tools/changelog.py`. Latest version: 0.8.0.
+Generated from git history by `tools/changelog.py`. Latest version: 0.8.1.
+
+## 0.8.1 (2026-11-23)
+
+- Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes (`a7a19a5`, 2026-11-23)
 
 ## 0.8.0 (2026-11-22)
 
+- One SUBTYPE SELECTOR module, a bounded stereo tail, one DPRO WAVE (`a36cbe6`, 2026-11-23)
+- SY MnM: each DigiPRO TYPE on one track at a time (`99dee02`, 2026-11-23)
+- DENS: the kernel at 256 fixed phases; a lighter chorus mix (`ec3bf34`, 2026-11-23)
+- DENS chorus: taps and wet terms once a pair of samples (`c60fe03`, 2026-11-23)
+- DENS: no chorus of its own in this release; CHRL/CHRW hidden (`cff9908`, 2026-11-23)
+- SY MnM: the seven heaviest TYPEs each on one track at a time (`06b0d11`, 2026-11-23)
+- SY MnM: one track at a time plays any of the seven heavy TYPEs (`4334b87`, 2026-11-23)
+- SY MnM: a Monomachine drawing beside the type list (`1ad79c7`, 2026-11-23)
+- SY MnM stays out of the web catalog until a Monomachine donor recipe (`5b2d637`, 2026-11-23)
 - SY MnM 0.8.0: DPRO WAVE, DDRW and DENS from De-Pattern (`0049211`, 2026-11-22)
 - SY MnM 0.8.0: DigiPRO at about half the instructions (`3bb565d`, 2026-11-22)
+- Changelogs: core 2.6.0 and SY MnM 0.8.0 (`43276e6`, 2026-11-22)
 
 ## 0.7.0 (2026-11-19)
 

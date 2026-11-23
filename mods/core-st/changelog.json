@@ -1,8 +1,30 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.5.0",
+  "latest": "2.6.1",
   "entries": [
+    {
+      "version": "2.6.1",
+      "date": "2026-11-23",
+      "commits": [
+        {
+          "sha": "a7a19a5",
+          "date": "2026-11-23",
+          "subject": "Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes"
+        }
+      ]
+    },
+    {
+      "version": "2.6.0",
+      "date": "2026-11-22",
+      "commits": [
+        {
+          "sha": "43276e6",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.6.0 and SY MnM 0.8.0"
+        }
+      ]
+    },
     {
       "version": "2.5.0",
       "date": "2026-11-22",

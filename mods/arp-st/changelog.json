@@ -1,8 +1,19 @@
 {
   "id": "arp-st",
   "title": "ARP experiment",
-  "latest": "1.10.7",
+  "latest": "1.10.8",
   "entries": [
+    {
+      "version": "1.10.8",
+      "date": "2026-11-23",
+      "commits": [
+        {
+          "sha": "a7a19a5",
+          "date": "2026-11-23",
+          "subject": "Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes"
+        }
+      ]
+    },
     {
       "version": "1.10.7",
       "date": "2026-11-18",
@@ -21,6 +32,11 @@
           "sha": "3ddf7da",
           "date": "2026-11-22",
           "subject": "Changelogs: COMP 1.0.0 ATK/REL in ms"
+        },
+        {
+          "sha": "43276e6",
+          "date": "2026-11-22",
+          "subject": "Changelogs: core 2.6.0 and SY MnM 0.8.0"
         },
         {
           "sha": "a81bb0b",

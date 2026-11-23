@@ -7,6 +7,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.2.1.
 - Changelogs: core 2.5.0 and samplers 1.6.0 (`2eed3fc`, 2026-11-22)
 - Changelogs: COMP 1.0.0 (`c148d93`, 2026-11-22)
 - Changelogs: COMP 1.0.0 ATK/REL in ms (`3ddf7da`, 2026-11-22)
+- Changelogs: core 2.6.0 and SY MnM 0.8.0 (`43276e6`, 2026-11-22)
 - Changelogs: COMP 0.3.0 (`a81bb0b`, 2026-11-21)
 - Changelogs: core 2.1.1 (`2b37c65`, 2026-11-19)
 - Changelogs: core 2.1.2 (`84d9065`, 2026-11-19)
