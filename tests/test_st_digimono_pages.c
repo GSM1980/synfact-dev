@@ -48,7 +48,7 @@ static void init_view(u8 *view)
 }
 static void check_view(u8 *view,unsigned kind)
 {
-    static const unsigned counts[DM_TYPES]={1,4,7,8,8,8,6,8,8,8,8,8,7,8,7};
+    static const unsigned counts[DM_TYPES]={1,4,7,8,8,8,6,8,8,8,8,8,7,8,5};
     unsigned seen=0,i;u32 old,args[2],value;
     *(u32 *)(view+0x100)=kind<<8;
     /* A saved view that used SYN 2 is clamped to the only SYN page. TYPE

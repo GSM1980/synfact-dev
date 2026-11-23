@@ -22,7 +22,7 @@ BANK=0x46100000
 DATA=0x49000000
 PROXY,MODEL,SOUND,API,OUT=DATA,DATA+0x1000,DATA+0x2000,DATA+0x3000,DATA+0x4000
 ENGINE=0x1f9+(71-64)*32
-ACTIVE=((0,),(0,1,2,3),(0,1,2,3,5,6,7),tuple(range(8)),tuple(range(8)),tuple(range(8)),tuple(range(6)),tuple(range(8)))+(tuple(range(8)),)*4+((0,1,2,3,4,5,6),tuple(range(8)),(0,1,2,3,4,6,7))
+ACTIVE=((0,),(0,1,2,3),(0,1,2,3,5,6,7),tuple(range(8)),tuple(range(8)),tuple(range(8)),tuple(range(6)),tuple(range(8)))+(tuple(range(8)),)*4+((0,1,2,3,4,5,6),tuple(range(8)),(0,1,2,3,4))
 
 
 class Destination(Core):

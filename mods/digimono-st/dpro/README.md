@@ -88,8 +88,13 @@ Four oscillators on one Digibank wave, three at PCH2..4's ratios (equal-tempered
 ±12 semitones and just intervals; the middle is OFF), each band-limited by mip
 level with the partner crossfade, mixed at 0.633 each; an oscillator at 20 kHz
 or more, or at the first one's whole Hz, is silent. PCH's table is ENS's,
-word for word, so the labels are ENS's. **CHRL/CHRW** are the Monomachine's
-chorus after the machine, which De-Pattern does not model: here they are
+word for word, so the labels are ENS's. **CHRL/CHRW are hidden in this
+release**: DENS plays mono and the bank's Chorus FX serves it. A chorus in the
+machine with CHRW's stereo spread needs the shared stereo service's second
+pass, which with seven stock tracks did not fit on the unit (99 % AUDIO). The
+chorus written for it stays in `mono2k.c` (`dm_ens_chorus`), unused: the
+Monomachine's CHRL/CHRW are its chorus after the machine, which De-Pattern does
+not model; that one is
 MONO2K's ENS chorus (measured on the Monomachine's SWAVE-ENS), with its stereo
 spread; for DENS its 0.2 Hz LFO's two delays are computed at each block's first
 and last samples and taken linearly between them (they move under 0.2 of a line
@@ -146,9 +151,10 @@ counting native gain/mix, AMP, FLTR or FX:
 
 With knobs changed every render (DDRW fading all the time, DENS's four
 oscillators at random intervals) the worst seen is DDRW 10,600 and DENS 11,600.
-DENS's chorus (CHRL above 0) adds about 4,000, and a stereo DENS (CHRL and CHRW
-above 0) also pays the shared stereo service's second native pass, as ENS does:
-the linked test's worst stereo DENS render is about 27,000 with native calls.
+DENS's interpolator now reads the kernel at 256 fixed phases (worst 60.5 dB
+against the DSL, level and bands unchanged; `DM_DENS_KERNEL` keeps the kernel):
+the heavy DENS render is 7,200-8,200. DENS has no chorus of its own in this
+release (see above).
 FM+ 0.7.0 is 11,000 to 12,700 by the same linked measure. These are instruction
 counts without cache stalls, not AUDIO CPU percentages; how many fit beside
 other tracks is for the unit's AUDIO meter. Nothing here was run on a Syntakt.

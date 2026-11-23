@@ -102,7 +102,7 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     /* TYPE is note-latched: no phase restarts in the middle of a held note. */
     if(!s->loaded || (trig && s->loaded!=s->pending+1u)) {
         mono_init(&s->engine);dm_m2k_init(&s->m2k);s->loaded=s->pending+1u;s->live=0;s->quiet=0;
-        if(s->loaded==DM_ENS+1u || s->loaded==DM_DPDENS+1u)dm_ens_init(&s->ens);
+        if(s->loaded==DM_ENS+1u)dm_ens_init(&s->ens);
     }
     for(i=0;i<MONO_PARAMS;i++) {
         unsigned k=params[slots[i+1]]>>8;
@@ -147,9 +147,13 @@ void dm_render(void *out,void *voice)
     struct dm_track *s;
     if(t<0) {for(i=0;i<32;i++)((int32_t *)out)[i]=0;return;}
     s=dm_tracks+t;
-    unsigned type=s->loaded-1u,ens=s->loaded==DM_ENS+1u,dens=s->loaded==DM_DPDENS+1u;
+    unsigned type=s->loaded-1u,ens=s->loaded==DM_ENS+1u;
     /* ENS and DPRO-DENS: CHRL/CHRW's chorus spreads them across the stereo. */
-    unsigned chorus=ens || dens,want_stereo=chorus && s->live && !s->blocked && s->m2p[5] && s->m2p[6];
+    /* ENS: CHRL/CHRW's chorus spreads it across the stereo. DPRO DENS has no
+     * chorus of its own in this release (its CHRL/CHRW are hidden): the bank's
+     * Chorus FX serves it, without a second (R) pass. dm_ens_chorus keeps the
+     * chorus written for it (mono2k.c), unused. */
+    unsigned chorus=ens,want_stereo=chorus && s->live && !s->blocked && s->m2p[5] && s->m2p[6];
     int *rout=0;
     if(want_stereo || s->stereo_tail){
         unsigned sounding=s->live;
@@ -162,7 +166,6 @@ void dm_render(void *out,void *voice)
         if(ens)dm_ens_render(&s->ens,s->m2p,s->pitch,pcm,right);
         else if(DM_IS_DPRO(type)){
             dm_m2k_render(&s->m2k,type,s->m2p,s->pitch,dm_previous_mnm((unsigned)t),pcm);
-            if(dens)dm_ens_chorus(&s->ens,s->m2p,pcm,right);
         }else if(type>=DM_SID)dm_m2k_render(&s->m2k,type,s->m2p,s->pitch,
                                            dm_previous_pitch(s,(unsigned)t),pcm);
         else mono_render(&s->engine,dm_engine_type[s->loaded-1u],s->p,s->increment,pcm,32);

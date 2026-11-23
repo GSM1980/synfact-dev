@@ -13,8 +13,11 @@ and saved Sounds unchanged). **Building it needs your Monomachine OS 1.32B:**
 the DigiPRO tables are Elektron's data, made by
 `python mods/digimono-st/dpro/import_tables.py "$MONOMACHINE_OS"` into a
 git-ignored header, never committed. DPRO BBOX is not included: De-Pattern has
-no port of it. DDRW's TIME and BR follow De-Pattern's host mapping; DENS's
-CHRL/CHRW are ENS's chorus. The web catalog cannot ship 0.8.0 until it reads
+no port of it. DDRW's TIME and BR follow De-Pattern's host mapping. In this
+release DENS has no chorus of its own: its CHRL/CHRW are hidden, and the bank's
+Chorus FX serves it (a stereo chorus in the machine cost the shared stereo
+service's second pass). Each DigiPRO TYPE plays on one track at a time. The
+web catalog cannot ship 0.8.0 until it reads
 the Monomachine OS as a donor. See [dpro/README.md](dpro/README.md).
 
 FM+ is ported to fixed point with original FM tables. Version 0.7.0 ships a balanced
@@ -116,7 +119,7 @@ MAIN selection/name-box mechanism is adapted, with exact snapshot hashes in
 | FM+DYN | TUNE | 1FRQ | 1FEN | 1VOL | 1VEN | 2FRQ | 2ENV | 2FB |
 | DPRO WAVE | TUNE | WAVE | WP | WPM | WPRS | SYNC | SFRQ | |
 | DPRO DDRW | TUNE | WAV1 | MIX | WAV2 | TIME | BR1 | WID | BR2 |
-| DPRO DENS | TUNE | PCH2 | PCH3 | PCH4 | WAVE | | CHRL | CHRW |
+| DPRO DENS | TUNE | PCH2 | PCH3 | PCH4 | WAVE | | | |
 
 The three DigiPRO TYPE values are appended (12..14) in 0.8.0. DPRO WAVE's WAVE
 shows the wave 0..31, WPRS ON/OFF, SYNC OFF/SFRQ/PRCH; DDRW's WAV1/WAV2 and
@@ -187,8 +190,10 @@ at the owner's request, with their extraction recipe and hashes.
   drive/FLTR/AMP states and passes both channels to MAIN. Gain/declick ramps
   advance once per block. Include `mods/samplers-st` for that shared service;
   a standalone bank folds ENS to centered mono. No core firmware change.
-  Stereo is claimed when CHRL and CHRW are nonzero, then retained until the
-  track and filter tails are silent, including after TYPE/width changes.
+  Stereo is claimed when CHRL and CHRW are nonzero, then retained for 128
+  blocks (about 85 ms) after the spread stops, or until the track and filter
+  tails are silent (0.8.0: it used to last while the voice sounded, also after
+  a TYPE change).
 - Independent oscillator/filter/envelope state per digital track in bank-owned
   DDR. No core hooks or new SRAM.
 - Two 16-sample control blocks per native 32-frame render; envelope timing,

@@ -117,10 +117,6 @@ int main(void)
                 else if(DM_IS_DPRO(kind)){
                     /* No preceding SY MnM track: PRCH has no pitch (-1). */
                     dm_m2k_render(&mref,kind,p8,(int)note*64,-1,expected);
-                    if(kind==DM_DPDENS){
-                        dm_ens_chorus(&eref,p8,expected,eright);
-                        for(unsigned i=0;i<32;i++)expected[i]=(int16_t)(((int32_t)expected[i]+eright[i])>>1);
-                    }
                 }
                 else dm_m2k_render(&mref,kind,p8,(int)note*64,dm_previous_pitch(&dm_tracks[0],0),expected);
                 for(unsigned i=0;i<32;i++)assert(out[i+1]==(int32_t)expected[i]*65536);
@@ -128,7 +124,6 @@ int main(void)
                 if(kind==DM_ENS)assert(!memcmp(&eref,&dm_tracks[0].ens,sizeof eref));
                 else if(kind<DM_SID)assert(!memcmp(&ref,&dm_tracks[0].engine,sizeof ref));
                 else assert(!memcmp(&mref,&dm_tracks[0].m2k,sizeof mref));
-                if(kind==DM_DPDENS)assert(!memcmp(&eref,&dm_tracks[0].ens,sizeof eref));
                 cases++;
             }
         }

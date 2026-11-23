@@ -37,7 +37,7 @@ static const char *const dm_labels[DM_TYPES][8] = {
     {"TUNE", "1FRQ", "1FEN", "1VOL", "1VEN", "2FRQ", "2ENV", "2FB"},
     {"TUNE", "WAVE", "WP", "WPM", "WPRS", "SYNC", "SFRQ", ""},
     {"TUNE", "WAV1", "MIX", "WAV2", "TIME", "BR1", "WID", "BR2"},
-    {"TUNE", "PCH2", "PCH3", "PCH4", "WAVE", "", "CHRL", "CHRW"}
+    {"TUNE", "PCH2", "PCH3", "PCH4", "WAVE", "", "", ""}   /* CHRL/CHRW hidden: the bank's Chorus FX */
 };
 /* Reference init patches in ENGINE order, not Digitakt knob order.
  * Used by offline tests and documented as starting points; TYPE never
