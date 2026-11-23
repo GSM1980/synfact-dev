@@ -31,11 +31,9 @@ extern int *st_stereo_claim(unsigned) __attribute__((weak));
  * the R pass goes on this many blocks (about 85 ms) for the R chain's tails,
  * then the track is mono again. It used to go on while the voice sounded. */
 #define DM_STEREO_TAIL 128u
-/* Each DigiPRO TYPE on one track at a time (the unit: one is what 7 stock
- * tracks leave room for). A second track with the same TYPE stays silent,
- * unrendered, until it is the only one; the track first in the block's order
- * keeps it. MAIN's list strikes it through. */
-#define DM_ONE_TRACK(type) DM_IS_DPRO(type)
+/* The heavy TYPEs (types.h, DM_ONE_TRACK) on one track at a time: a second
+ * track with the same TYPE stays silent, unrendered, until it is the only one;
+ * the track first in the block's order keeps it. MAIN's list strikes it. */
 struct dm_track {
     struct mono_voice engine;
     struct dm_m2k_voice m2k;

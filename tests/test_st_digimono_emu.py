@@ -33,6 +33,7 @@ PATCHES = ((64, 0, 0, 0, 0, 0, 0, 0), (64, 0, 0, 0, 0, 0, 0, 0),
            (64,0,0,0,96,0,0,0),(64,0,64,0,0,0,0,0),(64,63,63,63,0,0,0,0))
 ENGINES = (0, 1, 2, 3, 4, 5, 6, 8, None, None, None, None, None, None, None)
 DPRO = (12, 13, 14)       # DPRO WAVE, DDRW, DENS (mono: DENS's CHRL/CHRW are hidden)
+ONE_TRACK = (4, 9, 10, 11, 12, 13, 14)   # each on one track at a time (types.h)
 
 
 def host_engine(cc, out):
@@ -221,9 +222,9 @@ def main():
             kind = (track+step)%len(PATCHES)
             knobs=[v<<8 for v in PATCHES[kind]]
             neighbour=(track-1)%8
-            # each DigiPRO TYPE on one track at a time (audio.c): while another
+            # each heavy TYPE on one track at a time (types.h): while another
             # track still holds it, this one is silent and not rendered
-            blocked[track] = kind in DPRO and any(previous[u] == kind and not blocked[u]
+            blocked[track] = kind in ONE_TRACK and any(previous[u] == kind and not blocked[u]
                                                 for u in range(8) if u != track)
             raw, _ = port.block(track, kind, knobs, trig=True)
             if blocked[track]:

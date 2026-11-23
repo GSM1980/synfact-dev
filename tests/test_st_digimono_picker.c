@@ -143,6 +143,12 @@ int main(void)
     track_machine[0]=70;assert(dm_fits(3,DM_DPWAVE));
     track_machine[0]=71;track_type[0]=DM_DPDDRW;assert(dm_fits(3,DM_DPWAVE) && !dm_fits(3,DM_DPDDRW) && dm_fits(3,DM_DPDENS));
     track_type[0]=DM_DPDENS;assert(!dm_fits(3,DM_DPDENS) && dm_fits(3,DM_DPDDRW));
+    for(unsigned k=0;k<DM_TYPES;k++){
+        track_machine[0]=71;track_type[0]=k;
+        unsigned heavy=k==DM_ENS || (k>=DM_FMSTAT && k<=DM_DPDENS);
+        assert(dm_fits(3,k)==!heavy && dm_fits(0,k));
+        if(k!=DM_SID)assert(dm_fits(3,DM_SID));
+    }
     track_machine[0]=0;track_type[0]=0;
     puts("PASS: hidden TYPE, 15 choices, selector YES/NO/encoders, track/model/recording guards, late defaults, cancellation, bounded name box and wrap; no knob edits");
     return 0;

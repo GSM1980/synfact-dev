@@ -12,7 +12,7 @@
 #define STP_DEFAULT DM_DEFAULT_TYPE
 #define STP_ON_LOAD dm_picker_on_load
 #define STP_CONFIG_INIT(api) dm_destination_init(api)
-/* Each DigiPRO TYPE on one track at a time (audio.c, DM_ONE_TRACK): the list
+/* The heavy TYPEs on one track at a time (types.h, DM_ONE_TRACK): the list
  * strikes one through while another track's SY MnM plays it. A track's machine type and
  * its TYPE as the core's sender sends a configuration control (the Sound
  * mirror's slot 0x36), as MD KIT reads them. */
@@ -23,7 +23,7 @@
 static int dm_fits(unsigned track,unsigned type)
 {
     unsigned t;
-    if(!DM_IS_DPRO(type) || track>=8)return 1;
+    if(!DM_ONE_TRACK(type) || track>=8)return 1;
     for(t=0;t<8;t++)
         if(t!=track && DM_TRACK_MACHINE(t)==DM_TYPE && DM_TRACK_TYPE(t)==type)return 0;
     return 1;
