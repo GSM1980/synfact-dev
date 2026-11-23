@@ -31,10 +31,11 @@ extern int *st_stereo_claim(unsigned) __attribute__((weak));
  * the R pass goes on this many blocks (about 85 ms) for the R chain's tails,
  * then the track is mono again. It used to go on while the voice sounded. */
 #define DM_STEREO_TAIL 128u
-/* DPRO WAVE on one track at a time (the unit: one is all 7 stock tracks leave
- * room for). A second stays silent, unrendered, until it is the only one; the
- * track first in the block's order keeps it. MAIN's list strikes it through. */
-#define DM_WAVE_TRACKS 1u
+/* Each DigiPRO TYPE on one track at a time (the unit: one is what 7 stock
+ * tracks leave room for). A second track with the same TYPE stays silent,
+ * unrendered, until it is the only one; the track first in the block's order
+ * keeps it. MAIN's list strikes it through. */
+#define DM_ONE_TRACK(type) DM_IS_DPRO(type)
 struct dm_track {
     struct mono_voice engine;
     struct dm_m2k_voice m2k;
@@ -48,15 +49,14 @@ static struct dm_track dm_tracks[8];
 /* the block's passes over the SY MnM tracks: a track index that does not grow
  * starts one; a track counts while dm_update sees it (as MD KIT's budget) */
 static unsigned dm_round,dm_last=8,dm_seen[8];
-static int dm_wave_fits(int t)
+static int dm_alone(int t,unsigned loaded)
 {
-    unsigned u,n=1;
+    unsigned u;
     for(u=0;u<8;u++){
         const struct dm_track *o=dm_tracks+u;
-        if((int)u==t || dm_round-dm_seen[u]>2u || o->blocked || o->loaded!=DM_DPWAVE+1u)continue;
-        n++;
+        if((int)u!=t && dm_round-dm_seen[u]<=2u && !o->blocked && o->loaded==loaded)return 0;
     }
-    return n<=DM_WAVE_TRACKS;
+    return 1;
 }
 
 static int dm_track_of(const void *voice)
@@ -113,7 +113,7 @@ void dm_update(unsigned pitch,void *voice,const unsigned short *params)
     if(tune < -0x4000)tune=-0x4000;
     if(tune > 0x3f00)tune=0x3f00;
     note=((int32_t)pitch>>9)+(tune>>1); /* Q16 -> 1/128 semitone */
-    s->blocked=s->loaded==DM_DPWAVE+1u && !dm_wave_fits(t);
+    s->blocked=s->loaded && DM_ONE_TRACK(s->loaded-1u) && !dm_alone(t,s->loaded);
     s->increment=mono_pitch_inc(note);
     s->pitch=note>>1; /* MONO2K: 1/64 semitone, common TUNE already applied. */
     if(trig) {

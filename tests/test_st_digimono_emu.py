@@ -224,20 +224,20 @@ def main():
             kind = (track+step)%len(PATCHES)
             knobs=[v<<8 for v in PATCHES[kind]]
             neighbour=(track-1)%8
-            # DPRO WAVE on one track at a time (audio.c): while another track
-            # still holds it, this one is silent and not rendered
-            blocked[track] = kind == 12 and any(previous[u] == 12 and not blocked[u]
+            # each DigiPRO TYPE on one track at a time (audio.c): while another
+            # track still holds it, this one is silent and not rendered
+            blocked[track] = kind in DPRO and any(previous[u] == kind and not blocked[u]
                                                 for u in range(8) if u != track)
             raw, _ = port.block(track, kind, knobs, trig=True)
             if blocked[track]:
                 silence = tuple([0]*32)
-                assert raw == (silence, silence), (track, step, 'second DPRO WAVE not silent')
+                assert raw == (silence, silence), (track, step, 'second DigiPRO track not silent')
                 waves += 1
             else:
                 expected=voices[track].block(kind,knobs,trig=True,previous=60*64 if previous[neighbour] is not None else None)
                 assert raw == port.expected(expected), (track, step)
             previous[track] = kind; total += 1
-    assert waves, 'the one-WAVE limit was not exercised'
+    assert waves, 'the one-track DigiPRO limit was not exercised'
     # A full second fills and wraps the half-rate delay line. Both actual
     # channels, fractional controls, retriggers and chorus clock continuity.
     port = Port(stock,sec.data,address,symbols)
