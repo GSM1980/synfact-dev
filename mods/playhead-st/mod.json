@@ -1,5 +1,5 @@
 {
-  "id":"playhead-st","version":"1.2.1","title":"Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
+  "id":"playhead-st","version":"1.3.0","title":"Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
   "device":"syntakt","os":"1.42","license":"GPL-2.0-or-later",
   "sources":["main.c","seq-direction.c","seq-direction.s","persist.c"],"smz_module":{"descriptor":"playhead_module"}
 }

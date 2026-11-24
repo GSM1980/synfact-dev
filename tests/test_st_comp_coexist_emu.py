@@ -44,7 +44,22 @@ def verify(core,bank):
     assert [m.call('getglobal',api,ID+i) for i in range(7)]==values
     assert [m.call('getglobal',api,0x403+i) for i in range(7)]==chorus
     assert m.word(m.lfo['hooks_installed'])==1
-    print('PASS four real providers: COMP/Chorus values, LFO3 Kit depth/trailer, native codecs and owning copy')
+    # 1.1.0: a kit slot of a container only LFO3 knows (registered as its serializer
+    # registers one; kitChanged's mirror slots are such slots): the real codec's
+    # Sound metadata names it, so COMP's record is written and read back there,
+    # which the core's notification alone never did.
+    m.w(0x800030b8,KIT);m.w(0x800030bc,KIT+0xdce)
+    container=0x4c000000;mirror=container+0x2e0200+5*0x1600
+    m.u.mem_map(container,0x400000)                # a whole native container (3e6604h), zeroed
+    m.w(m.bs['containers'],container)
+    assert m.call('kitenc',mirror,KIT,0)&255
+    assert m.word(mirror+0x15d0)>>16==0x4351,'COMP record in the LFO3-named container'
+    m.call('kitnew',KIT)
+    assert [m.call('getglobal',api,ID+i) for i in range(7)]!=values
+    assert m.call('kitdec',KIT,mirror)&255
+    assert [m.call('getglobal',api,ID+i) for i in range(7)]==values,'COMP back from the mirror'
+    m.w(m.bs['containers'],0)
+    print('PASS four real providers: COMP/Chorus values, LFO3 Kit depth/trailer, native codecs and owning copy, COMP in an LFO3-named container')
 
 
 if __name__=='__main__':

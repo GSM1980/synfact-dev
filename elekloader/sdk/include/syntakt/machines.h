@@ -79,11 +79,19 @@ struct st_machine_action_codec {
     st_u32 (*get)(void *proxy);
     st_u32 (*set)(void *proxy,st_u32 raw,st_u32 track,st_u32 flag7,st_u32 flag6);
 };
+/* AUDIO: a playhead snapshot for MAIN's display (ui api->cursor). The record
+ * {454c4301, fn} is at the pool service's +32. It is found through the ABI
+ * directory's channel table (service + b80h, whose own record {454c4801,
+ * table} is at +40), so it follows the service wherever the core puts it.
+ * Until samplers 1.6.2 this looked at 42100770, the service's place before
+ * core 2.2, so from core 2.2.0 to 2.6.x no playhead reached MAIN. */
 static __inline__ void st_machine_cursor_publish(st_u32 track,st_u32 pointer,st_u32 frames,st_u32 position,st_u32 active)
 {
-    const volatile st_u32 *api=(const volatile st_u32 *)0x42100770u;
-    if(api[0]==0x454c4301u)
-        ((void (*)(st_u32,st_u32,st_u32,st_u32,st_u32))api[1])(track,pointer,frames,position,active);
+    const volatile st_u32 *api=(const volatile st_u32 *)0x40040f50u,*service;
+    if(api[0]!=0x454c5001u || !api[3])return;
+    service=(const volatile st_u32 *)(api[3]-0xb80u);
+    if(service[10]==0x454c4801u && service[11]==api[3] && service[8]==0x454c4301u)
+        ((void (*)(st_u32,st_u32,st_u32,st_u32,st_u32))service[9])(track,pointer,frames,position,active);
 }
 struct st_machine_ui_api {
     st_u32 version;

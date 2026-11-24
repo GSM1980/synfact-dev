@@ -176,6 +176,15 @@ Core 2.2: `tests/test_st_pool_service.c` (the regressions' `pool-service`) maps 
 pool's new addresses and checks that the AUDIO companion installs the service at
 `4404ff50`, publishes its descriptors and writes the channel table into the ABI
 directory, and that a corrupt or misplaced service publishes nothing.
+Samplers 1.6.2: `tests/test_st_cursor_publish.c` (the regressions'
+`cursor-publish`) checks that `st_machine_cursor_publish` finds the cursor
+record through that directory at both service places (`4404ff50`, and
+`42100750` before core 2.2), ignores a record left at the old fixed address,
+and publishes nothing without the directory, the record or a matching table.
+MD KIT 0.3 / SY MnM 0.8.2: `tests/test_st_kit_sound.c` (the regressions'
+`kit-sound`) maps the playing-Kit pointer and the 128 live Kits and checks
+`<syntakt/kit.h>`: a track's machine at `+a2` and values at `+14 + 2 * slot`,
+nothing without a live Kit, and the answer following the pointer to another Kit.
 Disk, heap, semaphore, notification and mailbox delivery are boundaries, not a full
 RTOS boot or hardware validation. The host project-pool fixture additionally
 covers empty/oversized headers, missing disk, read/allocation failures, exact

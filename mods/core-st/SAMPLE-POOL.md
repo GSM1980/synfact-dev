@@ -238,8 +238,12 @@ The stereo-capable cache is an owned native-heap allocation, approximately 98 Ki
 entries, outside the 64 KiB code reserve, allocated on first request. Allocation failure leaves no waveform;
 it does not prevent audio playback.
 
-Machines can publish a bounded playhead snapshot through the core AUDIO API
-at `42100770` (`454c4301`, function pointer). EPS command 6 reads eight
+Machines can publish a bounded playhead snapshot through the core AUDIO API:
+the record `{454c4301, function}` at the pool service's +32 (`4404ff70` from
+core 2.2). `st_machine_cursor_publish` (machines.h) finds it through the ABI
+directory's channel table (service + `b80`, checked against `{454c4801, table}`
+at +40). Until samplers 1.6.2 it looked at `42100770`, the service's place
+before core 2.2, so from core 2.2.0 to 2.6.x no playhead reached MAIN. EPS command 6 reads eight
 `{PCM pointer, frames, position, active}` records, with sequence/checksum and ACK.
 UI polling never waits. A core ownership flag arbitrates the shared window with
 System info and sample transfers. The core lends a cursor only if its PCM

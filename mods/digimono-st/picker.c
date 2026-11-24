@@ -14,11 +14,13 @@
 #define STP_CONFIG_INIT(api) dm_destination_init(api)
 /* One track at a time plays a heavy TYPE (types.h, DM_ONE_TRACK): the list
  * strikes them all through while another track's SY MnM plays one. A track's machine type and
- * its TYPE as the core's sender sends a configuration control (the Sound
- * mirror's slot 0x36), as MD KIT reads them. */
+ * its stored TYPE (slot 0x36), from the playing Kit (syntakt/kit.h), as MD KIT reads them.
+ * Until 0.8.2 they were the SRAM copies AUDIO was last sent, stale until each track
+ * played after a pattern change or a cleared track. */
 #ifndef DM_TRACK_MACHINE
-#define DM_TRACK_MACHINE(t) (*(const volatile unsigned char *)(0x80002f50u+(t)))
-#define DM_TRACK_TYPE(t) (((const volatile unsigned short *)(0x800021ccu+(t)*0x8eu))[0x36]>>8)
+#include <syntakt/kit.h>
+#define DM_TRACK_MACHINE(t) st_kit_track_machine(t)
+#define DM_TRACK_TYPE(t) (st_kit_track_value((t),0x36u)>>8)
 #endif
 static int dm_fits(unsigned track,unsigned type)
 {

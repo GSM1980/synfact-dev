@@ -1,4 +1,13 @@
-# SY MnM 0.8.1
+# SY MnM 0.8.2
+
+## The one-track rule follows the tracks (0.8.2)
+
+The list strikes the heavy TYPEs through while another track's SY MnM plays
+one. It read each track's machine and TYPE from the copies AUDIO was last
+sent (`80002f50`, `800021cc`), which the firmware writes only when a track
+plays: after a pattern change, or with a track cleared or given another
+machine, the list was wrong until every digital track had played. It now reads
+the playing Kit (`<syntakt/kit.h>`), as MD KIT does, so it is right at once.
 
 ## Subtype list during a held trig or live REC (0.8.1)
 

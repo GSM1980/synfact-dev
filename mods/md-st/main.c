@@ -40,11 +40,14 @@ typedef st_u32 u32;typedef unsigned char u8;
 #define MD_GET ((u32 (*)(void *, u32, u8 *))0x40039160u)
 #define MD_VIEW_TYPE ((u32 (*)(void *))0x40030622u)
 #define MD_FILL ((void (*)(void *, int, int, int, int, u32))0x400f7fb6u)
-/* a digital track's machine type, and its TYPE control as the core's sender sends a
- * configuration control (mods/core-st/machine-params.c: slot 0x36 of the Sound's mirror,
- * not the modulated working row) */
-#define MD_TRACK_TYPE(t) (*(const volatile u8 *)(0x80002f50u + (t)))
-#define MD_TRACK_VOICE(t) (((const volatile unsigned short *)(0x800021ccu + (t) * 0x8eu))[0x36] >> 8)
+/* a digital track's machine type and its TYPE control (slot 0x36, a configuration
+ * control: the stored value, not the modulated one), from the playing Kit (syntakt/kit.h).
+ * Until MD KIT 0.3 these were the SRAM copies AUDIO was last sent (80002f50 + t,
+ * 800021cc + t * 8Eh): a track cleared or changed, or a new pattern, did not count
+ * until each track played. */
+#include <syntakt/kit.h>
+#define MD_TRACK_TYPE(t) st_kit_track_machine(t)
+#define MD_TRACK_VOICE(t) (st_kit_track_value((t), 0x36u) >> 8)
 #else
 #define STP_TEST_NATIVE 1
 #endif
@@ -133,12 +136,29 @@ static void md_list_art(void *bitmap)
 #define STP_CONFIG_INIT(api) md_config_init(api)
 #define STP_ENABLED(track, index) md_fits(track, index)
 #define STP_VIEW_ENCODER md_spare_encoder
+static void md_load_voice(void *view, u32 type);
+#define STP_LOAD(view, type) md_load_voice(view, type)
 #ifdef MD_PICK_NATIVE
 #define STP_GET MD_GET
 #define STP_VIEW_TYPE MD_VIEW_TYPE
 #define STP_FILL MD_FILL
 #endif
 #include <syntakt/subtype-picker.h>
+#include "md-load.h"
+
+/* MD KIT 0.3: a voice chosen from the list loads its own knob values (md-load.h, a
+ * Machinedrum's as photographed), through the picker's native edit service, so the
+ * Sound, undo and the screen follow as a turned knob. Only the knobs that differ. */
+static void md_load_voice(void *view, u32 type)
+{
+    u32 i, now, want;
+    if (type >= MD_VOICES) return;
+    for (i = 0; i < 8; ++i) {
+        now = stp_value(view, MD_ENGINE + i);
+        want = (u32)md_voice_load[type][i] << 8;
+        if (now != want) stp_api->edit(view, MD_ENGINE + i, (int)want - (int)now, i);
+    }
+}
 
 /* a knob past the voice's last control does nothing (md.c sends the voice its own
  * controls only): its encoder is taken, so no value changes and no popup shows */
@@ -151,12 +171,19 @@ static int md_spare_encoder(void *view, void *event, u32 id)
 }
 
 /* ---- the machine's UI ---- */
+/* MD KIT 0.3: the voices whose PTCH the Machinedrum shows centred, -64..63 (PI-BD,
+ * PI-SD, PI-MT, PI-ML, PI-RS); stored and played 0..127 as ever (md-load.h) */
+#define MD_CENTRED ((1u << 21) | (1u << 22) | (1u << 23) | (1u << 24) | (1u << 26))
+static u32 md_shown;                             /* the voice idle() last saw on screen */
+static int md_centred(u32 type, u32 index) {return index == 0 && type < MD_VOICES && ((MD_CENTRED >> type) & 1u);}
 static int md_idle(const struct st_machine_ui_api *api, const struct core_machine_def *m, void *view, u32 page)
 {
     u32 type, i;
     int changed = 0;
     (void)api; (void)m; (void)page;
     type = stp_type_of(view);
+    changed |= md_shown != type;
+    md_shown = type;
     for (i = 0; i < 8; ++i) {
         changed |= md_copy(md_label[i], md_voice_labels[type][i], sizeof md_label[i]);
         changed |= md_copy(md_long[i], md_voice_labels[type][i], sizeof md_long[i]);
@@ -187,7 +214,16 @@ static const char *md_format(const struct st_machine_ui_api *api, const struct c
         md_copy(md_text, md_voice_names[t < MD_VOICES ? t : 0], sizeof md_text);
         return md_text;
     }
-    return 0;                                   /* the knobs: 0..127, as the native */
+    if (md_centred(md_shown, index)) {           /* -64..63, as the Machinedrum shows it */
+        int n = (int)(raw >> 8) - 64;
+        char *p = md_text;
+        u32 v;
+        if (n < 0) {*p++ = '-'; v = (u32)-n;} else v = (u32)n;
+        if (v >= 10) *p++ = (char)('0' + v / 10);
+        *p++ = (char)('0' + v % 10); *p = 0;
+        return md_text;
+    }
+    return 0;                                   /* the other knobs: 0..127, as the native */
 }
 
 /* one page, the voice's eight knobs; the voice itself is on none */

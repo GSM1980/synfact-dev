@@ -91,15 +91,22 @@ registered in a registry of its own, only the first machine in the bank (SY MnM
 in the web config) opened its list, and YES on the others loaded their first
 subtype. `js/test/smz-link.test.ts` covers it.
 
-Two optional definitions extend it without changing a machine that leaves them out:
+Optional definitions extend it without changing a machine that leaves them out:
 
 - `STP_ENABLED(track, index)`: 0 for a subtype that cannot be chosen on that track now.
   The list draws its name struck through (a line across its middle row), the cursor passes it
   (encoders, UP/DOWN, FUNC+UP/DOWN stop on the next one that can be chosen, or stay), YES
   takes nothing, and the list opens on the stored subtype or the nearest one that can be
-  chosen. MD KIT uses it for its CPU budget (`mods/md-st/main.c`).
+  chosen. MD KIT uses it for its CPU budget (`mods/md-st/main.c`) and SY MnM for its
+  one-track rule. Both read the other tracks' machine and stored TYPE from the playing Kit
+  (`<syntakt/kit.h>`) since MD KIT 0.3 and SY MnM 0.8.2: the SRAM copies AUDIO was last
+  sent (`80002f50`, `800021cc`) change only when a track plays, so after a pattern change
+  or a cleared track the list was wrong until every digital track had played.
 - `STP_VIEW_ENCODER`: a function `(view, event, id)` added as an `ENC | VIEW` subscription,
   for a machine's own handling of its knobs (MD's knobs past a voice's last control).
+- `STP_LOAD(view, type)`: the machine's own values for the subtype just chosen, set with
+  `stp_api->edit` when the choice is first applied and again whenever late native defaults
+  made the retry set the subtype again. MD KIT 0.3 loads each voice's knobs (`md-load.h`).
 
 MD KIT (type 70) uses the helper for its thirty voices since its branch merged this
 one, through the same **SUBTYPE SELECTOR** module. Its TYPE is a configuration

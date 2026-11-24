@@ -749,6 +749,17 @@ def run_key(stock_path, bank_path):
             assert draw() == highlighted(field(12)), ('incremental highlight', key, field(12))
             assert state['writes'] <= 216
     press(13)
+    # 1.3: LEFT / RIGHT move to the other column on the same row; RIGHT from
+    # WALK (row 4, no neighbour) goes to WALK+. The highlight stays incremental.
+    press(14)
+    assert field(12) == FORWARDS
+    for key, expected in ((17, 5), (17, 5), (16, 0), (16, 0), (15, 1), (17, 6), (15, 7), (16, 2),
+                          (15, 3), (15, 4), (17, 8), (16, 3)):
+        press(key)
+        assert field(12) == expected, ('column move', key, expected, field(12))
+        assert draw() == highlighted(field(12)) and state['writes'] <= 216
+    assert mode() == FORWARDS and not state['changed']
+    press(13)
     # Commit each option with YES, once, to the track captured at opening.
     for expected in range(1, 9):
         press(14)
@@ -763,10 +774,31 @@ def run_key(stock_path, bank_path):
     assert field(12) == FORWARDS and mode() == WALK_PLUS
     press(13)
     assert mode() == WALK_PLUS
-    # Track or pattern changes dismiss the stale selector, with no selection.
-    press(14); state['track'] = 5; press(12)
-    assert not field(0) and mode() == WALK_PLUS and mode(5) == FORWARDS
+    # 1.3: TRK, and a trig key while TRK is held, stay native with the selector
+    # open (the stock track change); the selector then follows the new track,
+    # its highlight on that track's mode, nothing applied. A lone trig key
+    # stays modal.
+    modes_at = sym['playhead_modes'] + 16 * KIT_INDEX
+    u.mem_write(modes_at + 5, bytes([PENDULUM]))
+    changes = len(state['changed'])
+    press(14)
+    assert field(0) and field(8) == 4 and field(12) == WALK_PLUS
+    send(2, 1, 0); send(24, 1, 0); send(24, 0x10, 0); send(2, 0x10, 0)
+    state['track'] = 5
+    frame5 = draw()
+    assert field(0) and field(8) == 5 and field(12) == PENDULUM and frame5 != b'\xaa' * 1024
+    state['held'] = False
+    send(24, 1); send(24, 0x10)
+    state['held'] = True
+    assert field(0) and field(8) == 5
+    press(15); press(13)
+    assert not field(0) and mode() == WALK_PLUS and mode(5) == PENDULUM and len(state['changed']) == changes
+    u.mem_write(modes_at + 5, bytes([FORWARDS]))
+    # On a track without modes (past the FX track) it closes; YES there applies nothing.
+    press(14); state['track'] = 13; press(12)
+    assert not field(0) and mode() == WALK_PLUS and len(state['changed']) == changes
     state['track'] = 4
+    # Pattern or view changes dismiss the stale selector, with no selection.
     press(14); m.w32(CURRENT_KIT, KITS + (KIT_INDEX+1)*KIT_BYTES)
     assert draw() == b'\xaa' * 1024 and not field(0)
     m.w32(CURRENT_KIT, KITS + KIT_INDEX*KIT_BYTES)

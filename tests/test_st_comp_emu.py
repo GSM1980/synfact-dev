@@ -35,7 +35,7 @@ class NativeStrings(Machine):
 
 class NativeDraw(NativeStrings):
     def __init__(self,*args):
-        self.dials=[];self.invalidations=[];self.page_draws=0;super().__init__(*args)
+        self.dials=[];self.invalidations=[];self.texts=[];self.page_draws=0;super().__init__(*args)
         self.u.mem_map(0x4a000000,0x200000);self.heap=0x4a000000
 
     def code(self,u,pc,n,a):
@@ -43,6 +43,14 @@ class NativeDraw(NativeStrings):
             arg=self.word(u.reg_read(UC_M68K_REG_A7)+8)
             self.dials.append(struct.unpack('>8I',self.read(arg,32)))
         if pc==0x400ffe22:self.invalidations.append(self.word(u.reg_read(UC_M68K_REG_A7)+4));self.ret(0);return
+        # 1.1.0's GR readout (F, x 59) uses the native printf-style text with the
+        # page's label font, whose object the boot constructors fill: a boundary.
+        # Its calls are recorded as (y, align, text) with the format checked.
+        if pc==0x400f8bd0:
+            a=struct.unpack('>8I',self.read(u.reg_read(UC_M68K_REG_A7),32))
+            if a[2]==0x443db230 and a[3]==59:
+                assert self.read(a[6],3)==b'%s'+bytes(1)
+                self.texts.append((a[4],a[5],self.read(a[7],16).split(bytes(1))[0].decode()));self.ret(0);return
         if pc==0x4003a244:self.page_draws+=1
         if pc in (0x400f72be,0x400f8f70,0x4003a244):return
         # Native application/model selection and held-key/sequencer state
@@ -100,6 +108,36 @@ def fixture(core,bank):
     m=Machine(core,bank);initialize(m);return m
 
 
+def rat_limit_frames():
+    """1.1.0's RAT dials for 50.00, 100.0 and INF, made here as ui.c's rat_limit_make
+    makes them, from the imported 20.00 frame (never stored)."""
+    import re
+    t=(ROOT/'mods/comp-st/imported/dials.h').read_text()
+    nums=[int(x,16) for x in re.findall(r'0x([0-9a-fA-F]+)',re.search(r'comp_rat_bits\[8\]\[38\]=\{(.*?)\};',t,re.S).group(1))]
+    base=nums[7*38:8*38]
+    def glyph(f,x,rows):
+        for r,row in enumerate(rows):
+            for c,ch in enumerate(row):
+                if ch=='#':f[x+c]|=1<<(27+r)
+    five,zero,one=('###','#..','###','..#','###'),('###','#.#','#.#','#.#','###'),('#',)*5
+    out=[]
+    for edge in (9,7,9):
+        f=list(base)
+        for c in range(2,18):f[c]&=~(1<<31)
+        for c in range(9,18):f[c]&=~(0xf<<27)
+        for c in range(2,edge+1):f[c]|=1<<31
+        out.append(f)
+    glyph(out[0],11,five);glyph(out[0],15,zero)
+    glyph(out[1],9,one);glyph(out[1],11,zero);glyph(out[1],15,zero)
+    f=out[2]
+    for r,row in enumerate(('.##.##.','#..#..#','.##.##.')):
+        for c,ch in enumerate(row):
+            if ch=='#':f[11+c]|=1<<(28+r)
+    for c in range(6,17):f[c]=(f[c]|1<<23)&~(1<<22)
+    assert all(f[19:]==base[19:] for f in out),'the mask is 20.00s'
+    return out
+
+
 def test_controls(m):
     for i,name in enumerate(NAMES):
         assert m.call(0x4000d94a,W,ID+i)==DEFAULT[i]
@@ -113,23 +151,32 @@ def test_controls(m):
     layout=m.word(W+0x240)
     assert struct.unpack('>8I',m.read(layout+8,32))==(ID,ID+1,ID+2,ID+3,ID+4,0,ID+SCF,ID+5)
     set_values(m,[0,0x7f00,0,0,0x700,0x7f00,0x7f00])
-    for i,top in ((4,0x700),(SCF,0x7f00)):
+    # 1.1.0: RAT's eight Digitakt positions, then 50.00, 100.0 and INF (0xa00)
+    for i,top in ((4,0xa00),(SCF,0x7f00)):
         assert m.call(0x4000da32,W,ID+i,0xffff,0,0,1)==0
         assert m.call(0x4000d94a,W,ID+i)==top
         assert m.call(0x4000da32,W,ID+i,0x3ff,0,0,1)==0
         assert m.call(0x4000d94a,W,ID+i)==0x300
-    print('PASS controls: original seven names, ranges, F empty, G SCF (128 positions), global model IO')
+    # 1.1.0: RAT's 50.00, 100.0 and INF dials, made at init from 20.00's
+    made=struct.unpack('>114I',m.read(m.sym['rat_limit_bits'],3*38*4))
+    assert [list(made[k*38:(k+1)*38]) for k in range(3)]==rat_limit_frames(),'RAT 50/100/INF dials'
+    print('PASS controls: original seven names, ranges (RAT to INF, its 50/100/INF dials), F empty, G SCF (128 positions), global model IO')
 
 
 def test_math(core,bank):
     spec=importlib.util.spec_from_file_location('upstream_comp_math',ROOT/'mods/comp-st/upstream/dsp.py')
     dsp=importlib.util.module_from_spec(spec);spec.loader.exec_module(dsp)
     checks=0
-    for ratio in [0,3,7]:
+    # 1.1.0's 50.00, 100.0 and INF: the same curve, slope 1/R in Q31 (INF: 0)
+    limit={8:0x028f5c29,9:0x0147ae14,10:0}
+    assert limit[8]==round(2**31/50) and limit[9]==round(2**31/100)
+    for ratio in [0,3,7,8,9,10]:
         for mix in [0,0x1234,0x4000,0x7f00]:
             m=fixture(core,bank)
             values=[0x4000,0x1800,0x2000,0x2000,ratio<<8,mix]
-            set_values(m,values);oracle=dsp.Compact(dsp.Preset(*values[:4],ratio))
+            preset=dsp.Preset(*values[:4],min(ratio,7))
+            if ratio in limit:preset.slope=limit[ratio]
+            set_values(m,values);oracle=dsp.Compact(preset)
             for n in range(32):
                 rng=random.Random(100+n)
                 left=[int(2**29*math.sin((n*32+i)*.31)) for i in range(32)]
@@ -224,7 +271,31 @@ def test_persistence(m):
     set_values(m,values)
     m.call(0x400b3384,KIT,sr=0x2000)
     assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
-    print('PASS persistence: full Q8, SCF in RAT low byte, 0.2.0 record, 16 corrupt-record cases, neighboring mods and native Kit constructor')
+    # 1.1.0: the mirror slots kitChanged re-encodes (what survives a power cycle
+    # without a project save) are in a container only LFO3's Sound metadata
+    # names (ST_NATIVE_SOUND_META 21: KIT_ENCODE 5 {slot, kit, container},
+    # KIT_DECODE 6 {kit, slot, container}). The core's notification alone never
+    # wrote COMP's record there and read the initial values back at power-up.
+    container=0x4c000000;mirror=container+0x2e0200+3*0x1600
+    m.u.mem_map(0x4c2e0000,0x10000);m.u.mem_write(mirror,bytes(0x1600))
+    def core_meta(kind,a,b):m.u.mem_write(W+0x300,struct.pack('>5I',kind,a,b,1,1));m.call('comp_meta',W+0x300)
+    def lfo3_meta(kind,a,b,c):m.u.mem_write(W+0x340,struct.pack('>4I',kind,a,b,c));assert m.call('comp_native',21,W+0x340,W+0x360)==0
+    set_values(m,values)
+    core_meta(5,mirror,KIT);assert m.read(mirror+0x15d0,16)==bytes(16),'the core alone cannot place the mirror'
+    lfo3_meta(5,mirror,KIT,container);assert m.read(mirror+0x15d0,16)==saved,'the mirror gets the record'
+    # Power-up: either notification may come first for the same decode.
+    set_values(m,DEFAULT);core_meta(6,KIT,mirror)
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
+    lfo3_meta(6,KIT,mirror,container)
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==values,'restored from the mirror'
+    set_values(m,DEFAULT);lfo3_meta(6,KIT,mirror,container);core_meta(6,KIT,mirror)
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==values,'the core does not undo it'
+    # Without the container the slot is unknown: the initial values, as before.
+    lfo3_meta(6,KIT,mirror,0)
+    assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
+    # A known slot is the same through either notification.
+    set_values(m,values);lfo3_meta(5,slot,KIT,0);assert m.read(slot+0x15d0,16)==saved
+    print('PASS persistence: full Q8, SCF in RAT low byte, 0.2.0 record, 16 corrupt-record cases, neighboring mods, native Kit constructor, LFO3-named mirror container (power cycle without a save)')
 
 
 def test_native_codec(core,bank):
@@ -283,11 +354,12 @@ def test_page(core,bank,out):
     m.call(0x400f72be,bitmap,128,64,pixels,0)
     draw_frame(m,view,bitmap)
     assert sorted((a[1],a[2]) for a in m.dials)==list(zip(range(ID,ID+7),DEFAULT))
+    assert m.texts[-2:]==[(13,2,'0.0'),(0,2,'GR')],'1.1.0: F reads GR 0.0 with no reduction'
     # Original format strings, including decimal MUP and the discrete RAT;
     # ATK and REL as their time constants in ms; SCF's eight positions.
     for pid,raw,expected in ((ID,0x7f00,'127'),(ID+1,0,'0.10'),(ID+1,0x1800,'3.67'),(ID+1,0x7f00,'100'),
                              (ID+2,0,'10.0'),(ID+2,0x2000,'73.4'),(ID+2,0x7f00,'2000'),(ID+3,0,'0.0'),
-                             (ID+3,0x7f00,'24.0'),(ID+4,0x700,'20.00'),(ID+5,0x4000,'64'),
+                             (ID+3,0x7f00,'24.0'),(ID+4,0x700,'20.00'),(ID+4,0x800,'50.00'),(ID+4,0x900,'100.0'),(ID+4,0xa00,'INF'),(ID+5,0x4000,'64'),
                              (ID+SCF,0,'OFF'),(ID+SCF,0x100,'60Hz'),(ID+SCF,0x1300,'90Hz'),(ID+SCF,0x2a00,'150Hz'),
                              (ID+SCF,0x7e00,'978Hz'),(ID+SCF,0x7f00,'1kHz')):
         assert m.string(m.call(0x4007bbe2,pid,raw))==expected
@@ -309,7 +381,7 @@ def test_page(core,bank,out):
                         chunk(b'IDAT',zlib.compress(rows))+chunk(b'IEND',b''))
     m.w(view+0x90,0);m.dials.clear();m.call('comp_draw',view,bitmap,0)
     assert not m.dials and m.word(pages)==32
-    print('PASS native Source/base navigation, seven original Digitakt dials/formats, empty F, SCF on G and DRIVE retained')
+    print('PASS native Source/base navigation, seven original Digitakt dials/formats, GR readout on F, SCF on G and DRIVE retained')
 
 
 def main():
