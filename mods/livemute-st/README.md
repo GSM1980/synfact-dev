@@ -1,6 +1,6 @@
 # Live mute (livemute-st)
 
-**Draft, 0.2.0.** Not yet run on a unit.
+**0.2.0.** Tried on a unit (OS 1.42, core 2.7.0, an OXI ONE mk2 sequencing over MIDI): muted tracks go quiet, LIVE MUTE OFF restores the stock behaviour.
 
 On the Syntakt, MUTE stops a track's sequencer trigs but not live notes:
 a track played from MIDI in (an external sequencer such as an OXI ONE) or
