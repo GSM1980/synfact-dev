@@ -363,8 +363,9 @@ def check(image, sym):
 
     # LOAD: two YES; another key cancels
     m.yes(6)
-    assert m.msgs[-1] == 'LOAD A06? YES again' and 'note' not in m.calls
+    assert m.msgs[-1] == 'LOAD A06? YES again' and 'note' not in m.calls and m.label(6) == 'LOAD A06? YES again'
     assert m.key(DOWN, 1) == 0 and m.var('kl_armed') == 0                       # cancels, not consumed
+    assert m.label(6) == 'A06 KIT 05'                                          # and the row reads its kit again
     m.yes(6)
     assert 'note' not in m.calls
     m.yes(6)
@@ -382,7 +383,9 @@ def check(image, sym):
     assert m.msgs[-1] == 'List mode: SAVE' and m.label(9) == 'SAVE A09 KIT 08'
     m.yes(9)
     assert m.msgs[-1] == 'SAVE A09 IN P128? YES' and not m.writes
+    assert m.label(9) == 'SAVE A09 IN P128? YES' and m.label(10) == 'SAVE A10 KIT 09'   # the row asks too
     m.yes(9)
+    assert m.label(9).startswith('SAVE A09 ') and '?' not in m.label(9)      # answered: the row again
     (block, data), = m.writes
     assert block * 512 == KITS_AT + 8 * KIT_STORED and len(data) == KIT_STORED
     assert data[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]                  # module records written

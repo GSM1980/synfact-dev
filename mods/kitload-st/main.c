@@ -9,7 +9,8 @@
  * built at boot but kept out of the menu's item list until the bank is on
  * (one row, BANK Pn NOT SAVED, while that project is not saved). LOAD replaces the current pattern's kit with a bank
  * kit; SAVE writes the current pattern's kit into a bank position. Both ask
- * for a second YES. A long press of SETTINGS opens the page.
+ * for a second YES: the row then reads the question ("SAVE A09 IN P128? YES")
+ * until it is answered or cancelled. A long press of SETTINGS opens the page.
  *
  * Events only, no code site of its own:
  *   ST_EV_RELOAD_MENU  appends the rows (core 2.7);
@@ -35,6 +36,7 @@
 char kl_lbl[129][LBL] DATA = {{0}};     /* 1..128: "A01 NAME" */
 static char msg_buf[LBL + 16] DATA = {0};
 static char lab_buf[LBL + 8] DATA = {0};
+static char ask_buf[LBL + 8] DATA = {0};  /* the armed row's question, shown in place of its label */
 u32 kl_bank DATA = 0;                   /* 0 off, else the bank project 1..128 */
 u32 kl_pick DATA = KL_DEFAULT;          /* the project KIT BANK offers */
 u32 kl_valid DATA = 0;                  /* names: 0 to read, 1 read, 2 a read failed (retry on entry) */
@@ -252,6 +254,8 @@ u32 kl_label_c(void *ret, u32 j)
         s = j == 0 ? bank_text(lab_buf, "BANK ", " NOT SAVED") : s_dash;
     else if (j == 0)
         s = kl_mode ? s_msave : s_mload;
+    else if (j == kl_armed)                             /* waiting for its second YES */
+        s = ask_buf;
     else if (kl_mode) {                                 /* SAVE marks every row */
         cpy(lab_buf, "SAVE ", LBL);
         cpy(lab_buf + 5, kl_lbl[j], LBL + 3);
@@ -328,6 +332,7 @@ void kl_act_inv(u32 *any, void *item)
         msg_buf[5] = kl_lbl[j][0]; msg_buf[6] = kl_lbl[j][1]; msg_buf[7] = kl_lbl[j][2];
         if (kl_mode) bank_text(msg_buf + 8, " IN ", "? YES");     /* "SAVE A09 IN P128? YES" */
         else cpy(msg_buf + 8, "? YES again", 12);
+        cpy(ask_buf, msg_buf, LBL + 8);                 /* the row reads it too, until answered */
         say(msg_buf);
         return;
     }
