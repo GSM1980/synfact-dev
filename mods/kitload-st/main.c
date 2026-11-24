@@ -5,7 +5,9 @@
  * Off until SETTINGS > KIT BANK names a project (P1..P128, P128 offered
  * first). Then the menu gets, after the OS's WHOLE PATTERN / KIT DATA /
  * SEQUENCE DATA rows, a MODE row and 128 rows "A01 NAME" ... "H16 NAME", the
- * kits of that project. LOAD replaces the current pattern's kit with a bank
+ * kits of that project. With KIT BANK off the page is stock: the rows are
+ * built at boot but kept out of the menu's item list until the bank is on
+ * (one row, BANK Pn NOT SAVED, while that project is not saved). LOAD replaces the current pattern's kit with a bank
  * kit; SAVE writes the current pattern's kit into a bank position. Both ask
  * for a second YES. A long press of SETTINGS opens the page.
  *
@@ -18,8 +20,9 @@
  *   ST_EV_ENC          any encoder event cancels it: every move of the
  *                      selection is an arrow key or an encoder event, so no
  *                      movement between two ticks is missed;
- *   ST_EV_TICK         page entry (rereads the names) and leaving it (cancels),
- *                      and a selection other than the armed row (cancels).
+ *   ST_EV_TICK         page entry (rereads the names, shows the rows the bank
+ *                      state wants) and leaving it (cancels), and a selection
+ *                      other than the armed row (cancels).
  * The OS builds the SETTINGS menus once at boot, before the saved-project
  * table exists: construction touches no storage.
  */
@@ -41,6 +44,10 @@ u32 kl_pm DATA = 0;                     /* PatternMenuView */
 u32 kl_rm DATA = 0;                     /* PatternReloadMenuView */
 u32 kl_open DATA = 0;                   /* the page was on the view stack at the last tick */
 u32 kl_eat DATA = 0;                    /* SETTINGS opened the page: hold it until released */
+u32 kl_base DATA = 0;                   /* the menu's own rows (3) */
+u32 kl_rows DATA = 0;                   /* our rows in the menu's list now: 0, 1 or 129 */
+u32 kl_managed DATA = 0;                /* the 129 rows were found where we added them */
+u32 kl_item[129][2] DATA = {{0}};       /* their shared_ptr<MenuItem>s, to put back */
 static const struct st_machine_host_api *kl_host DATA = 0;
 
 static const char s_off[] = "KIT BANK OFF: SETTINGS";
@@ -241,12 +248,9 @@ u32 kl_label_c(void *ret, u32 j)
     const char *s;
     if (!kl_bank)
         s = j == 0 ? s_off : s_dash;
-    else if (!bank_ok()) {
-        if (j == 0) s = bank_text(lab_buf, "BANK ", " NOT SAVED");
-        else if (j == 1) { cpy(lab_buf, "STATUS ", LBL); put_num(lab_buf + 7, (u32)SSTAT(MGR(), kl_bank - 1u)); s = lab_buf; }
-        else if (j == 2) { cpy(lab_buf, "DEVICE STATE ", LBL); put_num(lab_buf + 13, SDEV(MGR())); s = lab_buf; }
-        else s = s_dash;
-    } else if (j == 0)
+    else if (!bank_ok())
+        s = j == 0 ? bank_text(lab_buf, "BANK ", " NOT SAVED") : s_dash;
+    else if (j == 0)
         s = kl_mode ? s_msave : s_mload;
     else if (kl_mode) {                                 /* SAVE marks every row */
         cpy(lab_buf, "SAVE ", LBL);
@@ -266,6 +270,34 @@ __asm__(".text\n.globl kl_label_inv\nkl_label_inv:\n"
         "  addq.l #8,%sp\n"
         "  rts\n");
 
+/* ---- which rows the menu shows. Menu keeps its rows in a
+ * std::vector<shared_ptr<MenuItem>> at +4 (begin), +8 (end), +12 (capacity),
+ * 8 bytes each (Menu::addItem, 400fa082); its row count is (end - begin) / 8
+ * (vtable +12) and vtable +36 clamps the selection to it. The 129 rows are
+ * added once, at boot; hiding them moves end back, showing them writes the
+ * same shared_ptrs back below the capacity they were added with. Nothing is
+ * freed or allocated, and nothing else adds rows to this menu. */
+static u32 rows_wanted(void)
+{
+    if (!kl_bank) return 0;
+    return SSTAT(MGR(), kl_bank - 1u) == 13 ? 129u : 1u;
+}
+
+static void set_rows(u32 n)
+{
+    u32 *v, j;
+    if (!kl_managed || n == kl_rows) return;
+    v = (u32 *)(kl_rm + 4u);
+    if (v[0] + 8u * (kl_base + n) > v[2]) return;
+    for (j = 0; j < n; j++) {
+        u32 *e = (u32 *)(v[0] + 8u * (kl_base + j));
+        e[0] = kl_item[j][0]; e[1] = kl_item[j][1];
+    }
+    v[1] = v[0] + 8u * (kl_base + n);
+    kl_rows = n;
+    ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);                    /* clamp the selection */
+}
+
 /* YES on a row: row 0 switches the mode; LOAD and SAVE want a second YES
  * on the same row. */
 void kl_act_inv(u32 *any, void *item)
@@ -276,14 +308,17 @@ void kl_act_inv(u32 *any, void *item)
     if (!kl_bank) { kl_armed = 0; say(e_off); return; }
     if (j == 0) {
         kl_armed = 0;
-        if (!bank_ok()) {
+        if (!bank_ok()) {                       /* BANK Pn NOT SAVED: look again */
             SREFR(MGR(), kl_bank - 1u);
             kl_valid = 0;
-            say(bank_ok() ? bank_text(msg_buf, "Bank ", " found") : bank_text(msg_buf, "Bank ", " not saved"));
+            if (!bank_ok()) { say(bank_text(msg_buf, "Bank ", " not saved")); return; }
+        } else if (!kl_managed || kl_rows == 129u) {
+            kl_mode ^= 1u;
+            say(kl_mode ? s_psave : s_pload);
             return;
         }
-        kl_mode ^= 1u;
-        say(kl_mode ? s_psave : s_pload);
+        say(bank_text(msg_buf, "Bank ", " found"));    /* saved since the page opened */
+        set_rows(129u);
         return;
     }
     if (!bank_ok()) { kl_armed = 0; say(bank_text(msg_buf, "Bank ", " not saved")); return; }
@@ -319,10 +354,19 @@ static void add_item(void *menu, u32 j)
 /* ST_EV_RELOAD_MENU: f(menu), PatternReloadMenuView fully built. No storage access here. */
 void kl_reload_menu(void *menu)
 {
-    u32 j;
+    u32 j, *v = (u32 *)((u32)menu + 4u);
     kl_rm = (u32)menu;
     kl_mode = 0; kl_armed = 0; kl_valid = 0;
+    kl_base = (v[1] - v[0]) / 8u;
     for (j = 0; j <= 128u; j++) add_item(menu, j);
+    kl_managed = v[1] - v[0] == 8u * (kl_base + 129u);
+    if (!kl_managed) return;                    /* not as expected: leave the rows shown */
+    for (j = 0; j <= 128u; j++) {
+        const u32 *e = (const u32 *)(v[0] + 8u * (kl_base + j));
+        kl_item[j][0] = e[0]; kl_item[j][1] = e[1];
+    }
+    kl_rows = 129;
+    set_rows(0);                                /* the bank is off at boot */
 }
 
 /* ST_EV_PATTERN_MENU: f(menu), PatternMenuView; its RELOAD FROM PROJ view is at +472/+476. */
@@ -352,6 +396,7 @@ static void bank_changed(u32 bank)
     kl_bank = bank;
     if (bank) kl_pick = bank;
     kl_valid = 0; kl_armed = 0; kl_mode = 0;
+    set_rows(rows_wanted());
 }
 void kl_bank_select(const u32 *fn)
 {
@@ -401,10 +446,16 @@ static int page_on_stack(void)
 void kl_tick(void *ctrl)
 {
     u32 open;
-    (void)ctrl;
     if (!kl_rm) return;
     open = (u32)page_on_stack();
-    if (open && !kl_open) { kl_valid = 0; kl_armed = 0; }
+    if (open && !kl_open) {
+        kl_valid = 0; kl_armed = 0;
+        u32 want = rows_wanted();
+        if (kl_rows != want) {
+            set_rows(want);
+            if (ctrl) *((unsigned char *)ctrl + 0x20) = 1;                /* redraw */
+        }
+    }
     if (!open) kl_armed = 0;
     else if (kl_armed) {
         u32 row = ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);
@@ -420,6 +471,7 @@ static void open_page(void)
     u32 sp[2];
     const u32 *pm = (const u32 *)kl_pm;
     kl_armed = 0; kl_valid = 0;
+    set_rows(rows_wanted());
     sp[0] = pm[PM_KITVIEW / 4];
     SPCOPY(&sp[1], (u32 *)&pm[(PM_KITVIEW + 4) / 4]);
     PUSHVIEW(UIROOT() + 64u, sp, 0);

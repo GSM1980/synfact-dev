@@ -5,7 +5,8 @@ device's cflags; ELEKLOADER_CROSS or --cc), links it alone and runs its event
 handlers. Every OS routine it calls is a Python stub at its real address.
 It checks: the bank is off until SETTINGS > KIT BANK picks a project, and
 the picker; the RELOAD FROM PROJ rows and that building them touches no
-storage; LOAD and SAVE need two YES on the same row, and another key, a
+storage; the menu shows only its own rows while the bank is off, one row
+while the bank project is not saved, all of them when it is; LOAD and SAVE need two YES on the same row, and another key, a
 selection change (encoder or arrows) or leaving the page cancels; names are
 reread on every page entry and a failed read is retried on the next one;
 SAVE writes the whole encoded record and LOAD hands the same bytes to the
@@ -83,9 +84,15 @@ class Unit:
         self.items, self.msgs, self.strings, self.pushes, self.copies = [], [], [], [], []
         self.writes, self.decoded = [], []
         self.selected, self.fail_reads, self.rows = 0, set(), []
-        # the reload menu: vtable slot 9 (+36) = selected row
+        # the reload menu: vtable slot 9 (+36) = clamp and return the selected row;
+        # its rows: std::vector<shared_ptr<MenuItem>> at +4/+8/+12, the OS's three first
         u.mem_write(RM, struct.pack('>I', RM + 0x800))
         u.mem_write(RM + 0x800 + 36, struct.pack('>I', SEL_FN))
+        self.vec = RM + 0x1000
+        u.mem_write(RM + 4, struct.pack('>3I', self.vec, self.vec + 24, self.vec + 8 * 256))
+        u.mem_write(self.vec, struct.pack('>6I', 0x4a000000, 0x4b000000, 0x4a000001, 0x4b000001,
+                                          0x4a000002, 0x4b000002))
+        self.ctrl = HEAP + 0x100
         # the global view manager (UIROOT + 64): empty std::list, sentinel at +20
         self.sentinel = UIROOT_V + 64 + 20
         u.mem_write(self.sentinel, struct.pack('>2I', self.sentinel, self.sentinel))
@@ -100,7 +107,7 @@ class Unit:
         stubs = {
             VFN: lambda a: BASE, VFN + 0x10: lambda a: 0,
             0x4010394c: self.new, 0x401bf31e: self.strctor, 0x400fa84c: self.itemctor,
-            0x400fa082: lambda a: self.items.append(a[1]), 0x4016dc10: lambda a: 0,
+            0x400fa082: self.add_row, 0x4016dc10: lambda a: 0,
             0x4016f292: lambda a: self.log('mgr', MGR_V), 0x4011067e: lambda a: self.log('stat', 13 if self.bank else 0),
             0x40110952: lambda a: self.log('refr', 0), 0x401101c4: lambda a: self.log('dev', 2),
             0x40110892: self.sread, 0x40111c0c: self.swrite, 0x400a78a0: self.kdec, 0x400a78f4: self.kenc,
@@ -109,7 +116,7 @@ class Unit:
             0x40177318: self.tmpkit, 0x4016ea6e: lambda a: 1, 0x400c347c: self.msg,
             0x4016eb0a: lambda a: 1, 0x400c2154: lambda a: self.cur, 0x4016e9c8: lambda a: OBJ,
             0x4016e044: lambda a: UIROOT_V, 0x40100d86: self.push,
-            SEL_FN: lambda a: self.selected, 0x40001300: self.additem, 0x400ffe22: lambda a: self.log('invalidate', 0),
+            SEL_FN: self.sel, 0x40001300: self.additem, 0x400ffe22: lambda a: self.log('invalidate', 0),
         }
         for at, fn in stubs.items():
             u.mem_write(at, b'\x4e\x75')
@@ -188,6 +195,22 @@ class Unit:
         self.tmp = kit
         return out
 
+    def add_row(self, a):                       # Menu::addItem: push_back(shared_ptr)
+        self.items.append(a[1])
+        end = u32(self.u.mem_read(RM + 8, 4))
+        self.u.mem_write(end, struct.pack('>2I', a[1], 0x4c000000 + len(self.items)))
+        self.u.mem_write(RM + 8, struct.pack('>I', end + 8))
+
+    def shown(self):                            # the menu's row count, and its entries
+        b, e, _ = struct.unpack('>3I', self.u.mem_read(RM + 4, 12))
+        return (e - b) // 8, [struct.unpack('>2I', self.u.mem_read(x, 8)) for x in range(b, e, 8)]
+
+    def sel(self, a):                           # vtable +36: clamp the selection to the rows
+        n = self.shown()[0]
+        if self.selected >= n:
+            self.selected = max(n - 1, 0)
+        return self.selected
+
     def additem(self, a):
         self.rows.append(struct.unpack('>4I', self.u.mem_read(a[1], 16)))
 
@@ -221,6 +244,7 @@ class Unit:
     def menu(self, bank=128):
         self.set('kl_host', HOST)
         self.call(self.sym['kl_reload_menu'], [RM])
+        self.build_calls = dict(self.calls)
         self.call(self.sym['kl_pattern_menu'], [PM])
         self.u.mem_write(PM + 472, struct.pack('>2I', RM, 0x48040000))
         self.call(self.sym['kl_settings'], [0x48060000])
@@ -248,7 +272,9 @@ class Unit:
             self.u.mem_write(n, struct.pack('>3I', nxt, 0, v))
 
     def tick(self):
-        self.call(self.sym['kl_tick'], [0])
+        self.u.mem_write(self.ctrl + 0x20, b'\0')
+        self.call(self.sym['kl_tick'], [self.ctrl])
+        return self.u.mem_read(self.ctrl + 0x20, 1)[0]
 
     def enc(self, delta):                        # an encoder event: never consumed
         ev = self.new([24])
@@ -296,10 +322,42 @@ def check(image, sym):
     assert o.bank_label() == 'KIT BANK: P128'                                  # the last pick again
     print('settings: off by default, YES toggles, LEFT/RIGHT pick P1..P128')
 
+    # the rows the menu shows: none of ours while off, one while not saved, all when saved
+    v = Unit(image, sym, bank=False)
+    v.menu(bank=0)
+    native = v.shown()[1][:3]
+    assert v.shown()[0] == 3 and len(v.items) == 129                           # built, kept out of the list
+    full = [(it, 0x4c000000 + i + 1) for i, it in enumerate(v.items)]
+    v.selected = 50
+    v.bank_select()                                                            # on, P128 not saved
+    assert v.shown() == (4, native + full[:1]) and v.label(0) == 'BANK P128 NOT SAVED'
+    v.bank = True
+    v.yes(0)                                                                   # YES looks again: found
+    assert v.msgs[-1] == 'Bank P128 found' and v.shown() == (132, native + full)
+    v.selected = 100
+    v.bank_select()                                                            # off: stock rows, selection clamped
+    assert v.shown() == (3, native) and v.selected == 2
+    v.bank_select()
+    assert v.shown() == (132, native + full)                                   # the same items back
+    v.bank_select()
+    v.stack(RM)
+    assert v.tick() == 0 and v.shown()[0] == 3                                 # entry with the bank off: stock
+    v.stack(); v.tick()
+    v.set('kl_bank', 128)                                                      # on (another path), page entered
+    v.stack(RM)
+    assert v.tick() == 1 and v.shown()[0] == 132                               # rows shown, redraw asked
+    w = Unit(image, sym)
+    w.menu(bank=0)
+    w.u.mem_write(RM + 12, struct.pack('>I', w.vec + 8 * 100))                # capacity short of 132
+    w.bank_select()
+    assert w.shown()[0] == 3                                                   # never written past it
+    print('rows: stock page while off, one row while the bank is not saved, all 129 when saved; '
+          'same items back, selection clamped, entry redraws')
+
     m = Unit(image, sym)
     m.menu()
     assert len(m.items_built) == 129 and len(m.items) == 129
-    assert not any(k in m.calls for k in ('stat', 'read', 'mgr')), m.calls      # building touches no storage
+    assert not any(k in m.build_calls for k in ('stat', 'read', 'mgr')), m.build_calls  # building touches no storage
     assert m.label(0) == 'MODE: LOAD KIT' and m.label(1) == 'A01 KIT 00' and m.label(128) == 'H16 KIT 127'
     print('rows: 129 built without storage access; labels read the bank on draw')
 
@@ -415,7 +473,7 @@ def check(image, sym):
     # bank project not saved: nothing read or written
     z = Unit(image, sym, bank=False)
     z.menu()
-    assert z.label(0) == 'BANK P128 NOT SAVED' and z.label(1) == 'STATUS 0'
+    assert z.label(0) == 'BANK P128 NOT SAVED' and z.label(1) == '-'
     z.yes(3)
     z.yes(3)
     assert 'read' not in z.calls and not z.writes and z.msgs[-1] == 'Bank P128 not saved'

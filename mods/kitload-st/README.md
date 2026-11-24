@@ -1,7 +1,7 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft, 0.2.1.** 0.2.0 was built and tested with SGDK 2.11 in review;
-0.2.1 (cancel on every navigation event) has not. Nothing has run on a unit. The same
+**Draft, 0.2.2.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
+(the stock RELOAD FROM PROJ page while KIT BANK is off) has not. The same
 feature has been used on OS 1.42 as a binary patch outside this project;
 this module is its rewrite on core events. Needs core 2.7 (host API
 18, SMZ events 16/17).
@@ -13,6 +13,11 @@ it on with **P128** offered; LEFT/RIGHT pick any project, P1..P128 (and turn
 it on); YES again turns it off. Installing the module never makes an
 existing project a bank. The choice lasts until power-off: a module has no
 place to keep it yet (see Open questions).
+
+While it is off, RELOAD FROM PROJ is the stock page: the module's rows are
+built at boot but kept out of the menu until the bank is on. While the bank
+project is not saved, the page shows one row, `BANK P128 NOT SAVED`; YES on
+it looks again (after you save that project) and brings the list.
 
 With the bank on:
 
@@ -104,6 +109,9 @@ stubs of the OS routines, at their real addresses:
 - KIT BANK: off by default, YES toggles, LEFT/RIGHT pick P1..P128; off reads
   and writes nothing;
 - the 129 rows are built with no storage access, and the labels read the bank;
+- the menu shows only its own three rows while KIT BANK is off, one row while
+  the bank project is not saved and all 129 when it is, with the same items
+  put back and the selection clamped when rows go;
 - LOAD and SAVE need two YES on the same row; another key, an encoder
   event, a selection change, leaving the page cancel, including a move away
   and back with no tick between;
