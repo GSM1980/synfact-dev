@@ -1,8 +1,9 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft, 0.2.3.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
+**Draft, 0.2.4.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
 (the stock page while KIT BANK is off, the row confirmation and its repaint)
-was tried on a unit; 0.2.3 (a project named KITBANK) has not. The same
+was tried on a unit; 0.2.3 (a project named KITBANK) and 0.2.4 (the OS's
+confirmation box) have not. The same
 feature has been used on OS 1.42 as a binary patch outside this project;
 this module is its rewrite on core events. Needs core 2.7 (host API
 18, SMZ events 16/17).
@@ -39,22 +40,15 @@ With the bank on:
   one per kit of the bank project. The names are read again each time the
   page opens; a name that cannot be read shows `A01 ?` and is retried on the
   next opening.
-- **Load.** In `MODE: LOAD KIT`, YES on a row turns it into `LOAD A06? YES again`
-  (as for SAVE); a
-  second YES on the same row replaces the current pattern's kit with that
-  bank kit, whole, and shows `LOADED A06 NAME`. The bank is only read.
+- **Load.** In `MODE: LOAD KIT`, YES on a row opens the Syntakt's own
+  confirmation box, `LOAD KIT A06?` / `CONFIRM Y/N` (the box CLEAR TRACK
+  SOUND? uses). YES in the box replaces the current pattern's kit with that
+  bank kit, whole; NO closes it. The bank is only read.
 - **Save.** YES on the MODE row switches to `MODE: SAVE KIT` (every row then
-  reads `SAVE A01 ...`). YES on a row turns that row into `SAVE A09 IN P128? YES` until it is
-  answered (the OS's message popup is drawn behind the menu, so the row
-  carries the question; the module asks the menu to repaint); a second
-  YES writes the current pattern's kit into that position of the bank with
-  the OS's own Kit encoder and slot writer, then shows `SAVED A09 NAME`. The
-  project in memory and its "kit changed" flags are untouched.
-- **Cancel.** A pending confirmation is cancelled by any other key (the
-  arrows included), by any encoder event, by YES on another row or on MODE,
-  and by leaving or reopening the page. Every move of the selection is an
-  arrow key or an encoder event, so moving away and back between two ticks
-  still cancels.
+  reads `SAVE A01 ...`). YES on a row opens the box, `SAVE TO A09?`; YES
+  there writes the current pattern's kit into that position of the bank with
+  the OS's own Kit encoder and slot writer, and the row shows the new name.
+  The project in memory and its "kit changed" flags are untouched.
 - **Shortcut.** A long press of **SETTINGS** opens the page from anywhere,
   instead of the LED INTENSITY quick view (LED intensity stays in the
   SETTINGS menu). The page stays open; NO closes it.
@@ -78,7 +72,7 @@ position follows Playhead's own load behaviour.
 ## Before you use it
 
 - **The bank project is written.** Pick a project you made for the purpose.
-  Every write needs SAVE mode and two YES, and the prompt names the project.
+  Every write needs SAVE mode and a YES in the confirmation box.
 - **Samples are per project.** A bank kit's sampler tracks, and pool
   positions 65..128, play the *current* project's samples, not the bank's.
 - **Machines are per bank.** A kit that uses SMZ4 machines missing from the
@@ -93,9 +87,17 @@ Events only; the module owns no code site.
 | `ST_EV_RELOAD_MENU` (core 2.7) | appends the MODE row and the 128 kit rows with the OS's MenuItem constructor and `Menu::addItem` |
 | `ST_EV_PATTERN_MENU` (core 2.7) | keeps PatternMenuView, which owns the page (`shared_ptr` at +472) |
 | `ST_EV_SETTINGS` | the KIT BANK row (`additem`: label, YES, LEFT/RIGHT) |
-| `ST_EV_KEY`, global | a long press of SETTINGS (KeyEvent flags bit 5) pushes the page on the global view manager and holds SETTINGS until released; other keys cancel a confirmation |
-| `ST_EV_ENC`, global | any encoder event cancels a pending confirmation (never consumed) |
-| `ST_EV_TICK` | page entry and exit (the page's view on the global view stack, `std::list` at manager +20), and the selected row (Menu vtable +36) against the armed row |
+| `ST_EV_KEY`, global | a long press of SETTINGS (KeyEvent flags bit 5) pushes the page on the global view manager and holds SETTINGS until released |
+| `ST_EV_TICK` | page entry (the page's view on the global view stack, `std::list` at manager +20): names reread, rows shown; one redraw after a label changes |
+
+**The confirmation box** is the OS's ConfirmWindow, built as CLEAR TRACK
+SOUND? (`400653ae`) builds it: `operator new(0x7c)`, the constructor
+`400f6156(this, question, "CONFIRM Y/N", std::function<void(bool)>, 0)`, a
+shared_ptr control block `{401c88b0, 1, 1, box}`, pushed on the global view
+manager (`40100d86`, as the shortcut pushes the page). YES or NO closes the
+box, then calls the function with 1 or 0 (`400f6304`/`400f6330` → `40184a4e`).
+It is drawn over the menu by the OS; the message popup (`400c347c`) is drawn
+behind it, which is why the earlier confirmation could not use it.
 
 The OS routines it calls (never patches) are in `kitload.h`. LOAD and SAVE
 call the native Kit decoder `400a78a0` and encoder `400a78f4`, the entries the
@@ -136,11 +138,11 @@ stubs of the OS routines, at their real addresses:
   the bank slot holds no loadable project (empty or another status) and all
   129 when it does, with the same items
   put back and the selection clamped when rows go;
-- LOAD and SAVE need two YES on the same row, and the row shows the question
-  while it waits; arming, answering, cancelling and MODE invalidate the view
-  and ask the tick for one redraw; another key, an encoder
-  event, a selection change, leaving the page cancel, including a move away
-  and back with no tick between;
+- YES on a kit row opens the confirmation box with `LOAD KIT A06?` /
+  `SAVE TO A09?` and `CONFIRM Y/N`, its function carrying the row and mode,
+  its shared_ptr and push as the OS's own; the box's NO does nothing, its YES
+  loads or saves; a box answered after KIT BANK went off does nothing; an
+  answered SAVE and MODE invalidate the view and ask the tick for one redraw;
 - the names are read again on each entry (SETTINGS > PATTERN or the
   shortcut), and a failed read shows `?` and is retried on the next entry;
 - LOAD replaces the whole Kit in one COPY of `0x1618` bytes, with what the

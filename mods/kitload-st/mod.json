@@ -1,5 +1,5 @@
 {
-  "id": "kitload-st", "version": "0.2.3", "title": "Kit bank",
+  "id": "kitload-st", "version": "0.2.4", "title": "Kit bank",
   "description": "The 128 kits of a saved project, chosen in SETTINGS > KIT BANK (off by default), in SETTINGS > PATTERN > RELOAD FROM PROJ: load a whole kit into the current pattern, or save the current kit into the bank. Long press SETTINGS opens the page.",
   "author": "Safie Flato (steveflato)",
   "device": "syntakt", "os": "1.42", "license": "GPL-2.0-or-later",

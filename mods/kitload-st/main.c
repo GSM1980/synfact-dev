@@ -14,21 +14,17 @@
  * (one row, BANK Pn EMPTY or BANK Pn FORMAT n, while that slot holds no
  * loadable project). LOAD replaces the current pattern's kit with a bank
  * kit; SAVE writes the current pattern's kit into a bank position. Both ask
- * for a second YES: the row then reads the question ("SAVE A09 IN P128? YES")
- * until it is answered or cancelled. A long press of SETTINGS opens the page.
+ * first in the OS's own confirmation box ("LOAD KIT A06?" / "SAVE TO A09?",
+ * CONFIRM Y/N), the one CLEAR TRACK SOUND? uses: YES there does it, NO
+ * closes it. A long press of SETTINGS opens the page.
  *
  * Events only, no code site of its own:
  *   ST_EV_RELOAD_MENU  appends the rows (core 2.7);
  *   ST_EV_PATTERN_MENU keeps PatternMenuView, which owns the page (core 2.7);
  *   ST_EV_SETTINGS     the KIT BANK row;
- *   ST_EV_KEY          long press of SETTINGS opens the page; any other key
- *                      (the arrows included) cancels a pending confirmation;
- *   ST_EV_ENC          any encoder event cancels it: every move of the
- *                      selection is an arrow key or an encoder event, so no
- *                      movement between two ticks is missed;
+ *   ST_EV_KEY          long press of SETTINGS opens the page;
  *   ST_EV_TICK         page entry (rereads the names, shows the rows the bank
- *                      state wants) and leaving it (cancels), and a selection
- *                      other than the armed row (cancels).
+ *                      state wants) and a redraw after a label changes.
  * The OS builds the SETTINGS menus once at boot, before the saved-project
  * table exists: construction touches no storage.
  */
@@ -41,14 +37,12 @@
 char kl_lbl[129][LBL] DATA = {{0}};     /* 1..128: "A01 NAME" */
 static char msg_buf[LBL + 16] DATA = {0};
 static char lab_buf[LBL + 8] DATA = {0};
-static char ask_buf[LBL + 8] DATA = {0};  /* the armed row's question, shown in place of its label */
 u32 kl_bank DATA = 0;                   /* 0 off, else the bank project 1..128 */
 u32 kl_pick DATA = KL_DEFAULT;          /* the project KIT BANK offers */
 u32 kl_scanned DATA = 0;                /* the slot cache was completed once since power-on */
 u32 kl_user DATA = 0;                   /* KIT BANK changed by hand since power-on: no naming */
 u32 kl_valid DATA = 0;                  /* names: 0 to read, 1 read, 2 a read failed (retry on entry) */
 u32 kl_mode DATA = 0;                   /* 0 LOAD, 1 SAVE */
-u32 kl_armed DATA = 0;                  /* row (1..128) waiting for its second YES */
 u32 kl_pm DATA = 0;                     /* PatternMenuView */
 u32 kl_rm DATA = 0;                     /* PatternReloadMenuView */
 u32 kl_open DATA = 0;                   /* the page was on the view stack at the last tick */
@@ -62,6 +56,8 @@ static const struct st_machine_host_api *kl_host DATA = 0;
 
 static const char s_off[] = "KIT BANK OFF: SETTINGS";
 static const char s_dash[] = "-";
+static const char s_confirm[] = "CONFIRM Y/N";   /* the OS's own second line (4024f15d) */
+static const char e_box[] = "No confirm box";
 static const char s_mload[] = "MODE: LOAD KIT";
 static const char s_msave[] = "MODE: SAVE KIT";
 static const char s_pload[] = "List mode: LOAD";
@@ -87,10 +83,6 @@ static void redraw(void)
     kl_dirty = 1;
 }
 
-static void disarm(void)
-{
-    if (kl_armed) { kl_armed = 0; redraw(); }
-}
 
 static void cpy(char *d, const char *s, u32 n)
 {
@@ -322,8 +314,6 @@ u32 kl_label_c(void *ret, u32 j)
         s = j == 0 ? bank_why(lab_buf, 1) : s_dash;
     else if (j == 0)
         s = kl_mode ? s_msave : s_mload;
-    else if (j == kl_armed)                             /* waiting for its second YES */
-        s = ask_buf;
     else if (kl_mode) {                                 /* SAVE marks every row */
         cpy(lab_buf, "SAVE ", LBL);
         cpy(lab_buf + 5, kl_lbl[j], LBL + 3);
@@ -370,6 +360,33 @@ static void set_rows(u32 n)
     ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);                    /* clamp the selection */
 }
 
+/* Ask in the OS's confirmation box: "LOAD KIT A06?" or "SAVE TO A09?" over
+ * CONFIRM Y/N. 0 if it could not be opened. */
+void kl_confirm_inv(const u32 *any, u32 yes);
+static int confirm(u32 j, u32 mode)
+{
+    u32 q[1], sub[1], box, *cb, sp[2];
+    char alloc;
+    fn_t fn = {j, mode, (u32)kl_mgr, (u32)kl_confirm_inv};
+    cpy(msg_buf, mode ? "SAVE TO " : "LOAD KIT ", 10);
+    {
+        char *d = msg_buf + (mode ? 8 : 9);
+        d[0] = kl_lbl[j][0]; d[1] = kl_lbl[j][1]; d[2] = kl_lbl[j][2]; d[3] = '?'; d[4] = 0;
+    }
+    box = NEW(CW_SIZE);
+    if (!box) return 0;
+    STRCTOR(q, msg_buf, &alloc);
+    STRCTOR(sub, s_confirm, &alloc);
+    CW_CTOR(box, q, sub, &fn, 0);
+    cb = (u32 *)NEW(16u);
+    cb[0] = CW_SP_VT; cb[1] = 1; cb[2] = 1; cb[3] = box;
+    sp[0] = box; sp[1] = (u32)cb;
+    PUSHVIEW(UIROOT() + 64u, sp, 0);                    /* the manager keeps its own reference */
+    SPREL(&sp[1]);
+    STRDTOR(sub); STRDTOR(q);                           /* after the push, as 400653ae does */
+    return 1;
+}
+
 /* YES on a row: row 0 switches the mode; LOAD and SAVE want a second YES
  * on the same row. */
 void kl_act_inv(u32 *any, void *item)
@@ -377,9 +394,8 @@ void kl_act_inv(u32 *any, void *item)
     u32 j = any[0];
     (void)item;
     if (j > 128u) return;
-    if (!kl_bank) { kl_armed = 0; say(e_off); return; }
+    if (!kl_bank) { say(e_off); return; }
     if (j == 0) {
-        kl_armed = 0;
         if (!bank_ok()) {                       /* BANK Pn EMPTY/FORMAT: look again */
             SREFR(MGR(), kl_bank - 1u);
             kl_valid = 0;
@@ -395,22 +411,19 @@ void kl_act_inv(u32 *any, void *item)
         redraw();
         return;
     }
-    if (!bank_ok()) { kl_armed = 0; say(bank_why(msg_buf, 0)); return; }
-    if (kl_armed != j) {
-        kl_armed = j;
-        cpy(msg_buf, kl_mode ? "SAVE " : "LOAD ", 6);
-        msg_buf[5] = kl_lbl[j][0]; msg_buf[6] = kl_lbl[j][1]; msg_buf[7] = kl_lbl[j][2];
-        if (kl_mode) bank_text(msg_buf + 8, " IN ", "? YES");     /* "SAVE A09 IN P128? YES" */
-        else cpy(msg_buf + 8, "? YES again", 12);
-        cpy(ask_buf, msg_buf, LBL + 8);                 /* the row reads it too, until answered */
-        say(msg_buf);
-        redraw();
-        return;
-    }
-    kl_armed = 0;
-    redraw();
-    if (!kl_mode) load(j - 1u, CURIDX(CURSRC()));
+    if (!bank_ok()) { say(bank_why(msg_buf, 0)); return; }
+    if (!confirm(j, kl_mode)) say(e_box);
+}
+
+/* The box's answer: invoker(any, answer), any = {row, mode} as confirm() set
+ * it. Runs after the box has closed itself. */
+void kl_confirm_inv(const u32 *any, u32 yes)
+{
+    u32 j = any[0];
+    if (!(yes & 0xffu) || j < 1u || j > 128u || !kl_bank || !bank_ok()) return;
+    if (!any[1]) load(j - 1u, CURIDX(CURSRC()));
     else save(CURIDX(CURSRC()), j - 1u);
+    redraw();
 }
 
 static void add_item(void *menu, u32 j)
@@ -433,7 +446,7 @@ void kl_reload_menu(void *menu)
 {
     u32 j, *v = (u32 *)((u32)menu + 4u);
     kl_rm = (u32)menu;
-    kl_mode = 0; kl_armed = 0; kl_valid = 0;
+    kl_mode = 0; kl_valid = 0;
     kl_base = (v[1] - v[0]) / 8u;
     for (j = 0; j <= 128u; j++) add_item(menu, j);
     kl_managed = v[1] - v[0] == 8u * (kl_base + 129u);
@@ -474,7 +487,7 @@ static void bank_changed(u32 bank)
 {
     kl_bank = bank;
     if (bank) kl_pick = bank;
-    kl_valid = 0; kl_armed = 0; kl_mode = 0;
+    kl_valid = 0; kl_mode = 0;
     set_rows(rows_wanted());
 }
 
@@ -531,9 +544,8 @@ static int page_on_stack(void)
     return 0;
 }
 
-/* ST_EV_TICK: void f(ctrl). Entering the page rereads the names; leaving it,
- * or a selection other than the armed row (the encoder or the arrows),
- * cancels a pending confirmation. */
+/* ST_EV_TICK: void f(ctrl). Entering the page rereads the names and shows
+ * the rows the bank state wants; a changed label asks for one redraw. */
 void kl_tick(void *ctrl)
 {
     u32 open;
@@ -541,18 +553,13 @@ void kl_tick(void *ctrl)
     open = (u32)page_on_stack();
     if (open && !kl_open) {
         u32 want;
-        kl_valid = 0; kl_armed = 0;
+        kl_valid = 0;
         auto_bank();
         want = rows_wanted();
         if (kl_rows != want) {
             set_rows(want);
             if (ctrl) *((unsigned char *)ctrl + 0x20) = 1;                /* redraw */
         }
-    }
-    if (!open) kl_armed = 0;
-    else if (kl_armed) {
-        u32 row = ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);
-        if (row != ROW_MODE + kl_armed) disarm();
     }
     kl_open = open;
     if (kl_dirty) {
@@ -567,7 +574,7 @@ static void open_page(void)
 {
     u32 sp[2];
     const u32 *pm = (const u32 *)kl_pm;
-    kl_armed = 0; kl_valid = 0;
+    kl_valid = 0;
     auto_bank();
     set_rows(rows_wanted());
     sp[0] = pm[PM_KITVIEW / 4];
@@ -580,8 +587,7 @@ static void open_page(void)
  * A long press of SETTINGS (flags bit 5) opens the page instead of the LED
  * INTENSITY quick view; SETTINGS is then held until an event with none of
  * bits 0 (pressed), 3 (repeat), 5 (long): its release, so no later SETTINGS
- * event of that press reaches the views. Any other key press cancels a
- * pending confirmation. */
+ * event of that press reaches the views. */
 int kl_key(void *brain, const unsigned char *ev)
 {
     u32 code, fl;
@@ -589,10 +595,7 @@ int kl_key(void *brain, const unsigned char *ev)
     if (*(const u32 *)ev != KEYEV_VT) return 0;
     code = *(const u32 *)(ev + 12);
     fl = *(const u32 *)(ev + 16);
-    if (code != KEY_SETTINGS) {
-        if (code != KEY_YES && (fl & EV_DOWN)) disarm();
-        return 0;
-    }
+    if (code != KEY_SETTINGS) return 0;
     if (kl_eat) {
         if (!(fl & (EV_DOWN | EV_REPT | EV_LONG))) kl_eat = 0;   /* the release: held too */
         return 1;
@@ -602,15 +605,6 @@ int kl_key(void *brain, const unsigned char *ev)
         open_page();
         return 1;
     }
-    return 0;
-}
-
-/* ST_EV_ENC (global, before the views): int f(brain, event). Any encoder
- * event cancels a pending confirmation; never consumed. */
-int kl_enc(void *brain, const void *ev)
-{
-    (void)brain; (void)ev;
-    disarm();
     return 0;
 }
 
@@ -625,6 +619,5 @@ static const struct st_smz_subscription subscriptions[] = {
     {ST_EV_PATTERN_MENU, (void (*)(void))kl_pattern_menu},
     {ST_EV_SETTINGS, (void (*)(void))kl_settings},
     {ST_EV_KEY, (void (*)(void))kl_key},
-    {ST_EV_ENC, (void (*)(void))kl_enc},
     {ST_EV_TICK, (void (*)(void))kl_tick}};
-const struct st_smz_module kitload_module = {"KITLOAD", initialize, subscriptions, 6};
+const struct st_smz_module kitload_module = {"KITLOAD", initialize, subscriptions, 5};

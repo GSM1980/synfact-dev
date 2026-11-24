@@ -16,6 +16,17 @@ typedef struct { u32 d0, d1, mgr, inv; } fn_t;                         /* std::f
 #define ITEMCTOR ((void (*)(void *,fn_t *,fn_t *,fn_t *,fn_t *,int,int))0x400fa84cu)
 #define ADDITEM  ((void (*)(void *,void *))0x400fa082u)                /* Menu::addItem */
 #define FNDTOR   ((void (*)(fn_t *))0x4016dc10u)                       /* ~std::function */
+#define STRDTOR  ((void (*)(void *))0x401bd86eu)                       /* ~std::string */
+
+/* The OS's ConfirmWindow, as CLEAR TRACK SOUND? (400653ae) opens one: 0x7c
+ * bytes from operator new, constructed with (this, question, second line,
+ * std::function<void(bool)>, 0), owned by a shared_ptr whose 16-byte control
+ * block is {CW_SP_VT, use 1, weak 1, ptr}, pushed on the view manager. YES
+ * (400f6304) or NO (400f6330) closes it, then calls the function through
+ * 40184a4e: invoker(any, answer) with YES 1, NO 0. */
+#define CW_SIZE  0x7cu
+#define CW_CTOR  ((void (*)(u32,void *,void *,fn_t *,u32))0x400f6156u)
+#define CW_SP_VT 0x401c88b0u
 #define DRAW_MGR 0x40181508u            /* KIT DATA item's draw functor: manager and invoker */
 #define DRAW_INV 0x40180cf6u
 

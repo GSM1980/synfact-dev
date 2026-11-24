@@ -7,8 +7,9 @@ It checks: the bank is off until SETTINGS > KIT BANK picks a project, and
 the picker; the RELOAD FROM PROJ rows and that building them touches no
 storage; the menu shows only its own rows while the bank is off, one row
 while the bank slot is empty or another format (saying which), all of
-them when it holds a project; LOAD and SAVE need two YES on the same row, and another key, a
-selection change (encoder or arrows) or leaving the page cancels; names are
+them when it holds a project; YES on a kit row opens the OS's confirmation
+box (ConfirmWindow, as CLEAR TRACK SOUND? builds it) with the question, and
+only its YES loads or saves; names are
 reread on every page entry and a failed read is retried on the next one;
 SAVE writes the whole encoded record and LOAD hands the same bytes to the
 native decoder, then replaces the live Kit whole (0x1618 bytes) through the
@@ -83,6 +84,7 @@ class Unit:
             self.slot[o + 4:o + 20] = ('KIT %02d' % j).encode().ljust(16, b'\0')
         self.calls = {}
         self.items, self.msgs, self.strings, self.pushes, self.copies = [], [], [], [], []
+        self.boxes = []
         self.writes, self.decoded = [], []
         self.selected, self.fail_reads, self.rows = 0, set(), []
         # the reload menu: vtable slot 9 (+36) = clamp and return the selected row;
@@ -118,6 +120,7 @@ class Unit:
             0x4016eb0a: lambda a: 1, 0x400c2154: lambda a: self.cur, 0x4016e9c8: lambda a: OBJ,
             0x4016e044: lambda a: UIROOT_V, 0x40100d86: self.push,
             SEL_FN: self.sel, 0x40001300: self.additem, 0x400ffe22: self.invalidate,
+            0x400f6156: self.cwctor, 0x401bd86e: lambda a: self.log('strdtor', 0),
         }
         for at, fn in stubs.items():
             u.mem_write(at, b'\x4e\x75')
@@ -232,6 +235,16 @@ class Unit:
     def msg(self, a):
         self.msgs.append(self.cstr(a[1]))
 
+    def cwctor(self, a):                        # ConfirmWindow(this, question, second line, function, 0)
+        self.boxes.append(dict(box=a[0], q=self.strings[-2], sub=self.strings[-1], flag=a[4],
+                               fn=struct.unpack('>4I', self.u.mem_read(a[3], 16))))
+
+    def answer(self, yes):                      # the box's YES (1) or NO (0): invoker(any, answer)
+        fn = self.boxes[-1]['fn']
+        any_ = self.new([16])
+        self.u.mem_write(any_, struct.pack('>4I', *fn))
+        self.call(fn[3], [any_, yes])
+
     def push(self, a):
         self.pushes.append((a[0], *struct.unpack('>2I', self.u.mem_read(a[1], 8)), a[2]))
         return 1
@@ -291,11 +304,6 @@ class Unit:
         self.call(self.sym['kl_tick'], [self.ctrl])
         return self.u.mem_read(self.ctrl + 0x20, 1)[0]
 
-    def enc(self, delta):                        # an encoder event: never consumed
-        ev = self.new([24])
-        self.u.mem_write(ev, struct.pack('>5I', 0x401c2400, 0, 0, 0, delta & 0xffffffff))
-        return self.call(self.sym['kl_enc'], [0, ev])
-
     def yes(self, row):                         # row 0 = MODE, 1..128 = kits
         _, lab, act = self.items_built[row]
         any_ = self.new([16])
@@ -321,8 +329,8 @@ def check(image, sym):
     o.menu(bank=0)
     assert o.var('kl_bank') == 0 and o.bank_label() == 'KIT BANK: OFF'
     assert o.label(0) == 'KIT BANK OFF: SETTINGS' and o.label(5) == '-'
-    o.yes(5); o.yes(5)
-    assert o.msgs[-1] == 'Turn on KIT BANK' and 'read' not in o.calls and 'stat' not in o.calls and not o.writes
+    o.yes(5)
+    assert o.msgs[-1] == 'Turn on KIT BANK' and not o.boxes and 'read' not in o.calls and 'stat' not in o.calls and not o.writes
     o.bank_select()                                                            # YES: on, P128 offered
     assert o.var('kl_bank') == 128 and o.bank_label() == 'KIT BANK: P128'
     o.bank_change(-28)
@@ -409,40 +417,44 @@ def check(image, sym):
     assert m.label(0) == 'MODE: LOAD KIT' and m.label(1) == 'A01 KIT 00' and m.label(128) == 'H16 KIT 127'
     print('rows: 129 built without storage access; labels read the bank on draw')
 
-    # LOAD: two YES; another key cancels
+    # LOAD: YES opens the OS's confirmation box; its NO does nothing, its YES loads
     m.yes(6)
-    assert m.msgs[-1] == 'LOAD A06? YES again' and 'note' not in m.calls and m.label(6) == 'LOAD A06? YES again'
-    assert m.key(DOWN, 1) == 0 and m.var('kl_armed') == 0                       # cancels, not consumed
-    assert m.label(6) == 'A06 KIT 05'                                          # and the row reads its kit again
-    print('confirmation: the row shows the question, back to its kit when cancelled')
+    (b,) = m.boxes
+    assert (b['q'], b['sub'], b['flag']) == ('LOAD KIT A06?', 'CONFIRM Y/N', 0) and 'note' not in m.calls
+    assert b['fn'][:2] == (6, 0) and b['fn'][2] == m.sym['kl_mgr'] and b['fn'][3] == m.sym['kl_confirm_inv']
+    mgr_, box, ctrl, flag = m.pushes[-1]
+    assert (mgr_, box, flag) == (UIROOT_V + 64, b['box'], 0)                    # on the global view manager
+    assert struct.unpack('>4I', m.u.mem_read(ctrl, 16)) == (0x401c88b0, 1, 1, b['box'])  # its shared_ptr
+    assert m.calls['sprel'] >= 1 and m.calls['strdtor'] == 2                    # our references dropped
+    m.answer(0)
+    assert 'note' not in m.calls                                               # NO: nothing
     m.yes(6)
-    assert 'note' not in m.calls
-    m.yes(6)
+    m.answer(1)
     assert m.calls['note'] == 1 and m.msgs[-1] == 'LOADED A06 KIT 05'
+    print('confirmation: the OS box asks, its NO does nothing, its YES loads')
     live = BASE + KITS_RAM_OFS + KIT_RAM * m.cur
     assert [(d, s_, n) for d, s_, n in m.copies] == [(live, m.tmp, KIT_RAM)]     # the whole Kit, one COPY
     got = bytes(m.u.mem_read(live, KIT_RAM))
     assert got == bytes((i * 3 + 1) & 0xff for i in range(KIT_RAM))              # what the decoder produced
     assert bytes(m.u.mem_read(live - 16, 16)) == b'\0' * 16                    # nothing before ...
     assert bytes(m.u.mem_read(live + KIT_RAM, 16)) == b'\0' * 16               # ... or after the Kit
-    print('load: confirmation, cancel, the whole Kit replaced through one COPY, engine notified')
+    print('load: the whole Kit replaced through one COPY, engine notified')
 
     # SAVE then LOAD: the encoded tail round-trips
     m.yes(0)
     assert m.msgs[-1] == 'List mode: SAVE' and m.label(9) == 'SAVE A09 KIT 08'
     m.yes(9)
-    assert m.msgs[-1] == 'SAVE A09 IN P128? YES' and not m.writes
-    assert m.label(9) == 'SAVE A09 IN P128? YES' and m.label(10) == 'SAVE A10 KIT 09'   # the row asks too
-    m.yes(9)
-    assert m.label(9).startswith('SAVE A09 ') and '?' not in m.label(9)      # answered: the row again
+    assert m.boxes[-1]['q'] == 'SAVE TO A09?' and m.boxes[-1]['fn'][:2] == (9, 1) and not m.writes
+    m.answer(0)
+    assert not m.writes
+    m.yes(9); m.answer(1)
     (block, data), = m.writes
     assert block * 512 == KITS_AT + 8 * KIT_STORED and len(data) == KIT_STORED
     assert data[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]                  # module records written
     assert data[20:] == m.encoded[20:] and m.msgs[-1].startswith('SAVED A09')
     m.yes(0)
     m.decoded.clear()
-    m.yes(9)
-    m.yes(9)
+    m.yes(9); m.answer(1)
     (src,) = m.decoded
     assert src == data and src[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]   # ... and handed back to the decoder
     print('save/load: the whole record, Kit tail [14e0,15f8) included, round-trips through the bank')
@@ -450,53 +462,22 @@ def check(image, sym):
     # another bank project
     p = Unit(image, sym)
     p.menu(bank=7)
-    p.yes(2); p.yes(2)
+    p.yes(2); p.answer(1)
     assert p.msgs[-1].startswith('LOADED A02') and p.calls['read'] == 128 + 1 and p.slots == {6}
 
-    # selection changes and leaving the page cancel; entering rereads the names
+    # entering the page rereads the names; a box answered after the bank went off does nothing
     n = Unit(image, sym)
     n.menu()
     n.stack(0x48070000, RM)                                                    # the page is open
     n.tick()
-    n.selected = 3 + 9
     n.yes(9)
-    assert n.var('kl_armed') == 9
-    n.tick()
-    assert n.var('kl_armed') == 9                                              # still on A09
-    n.selected = 3 + 10                                                        # encoder: A10
-    n.tick()
-    assert n.var('kl_armed') == 0
-    n.selected = 3 + 9                                                         # back on A09: asks again
-    n.tick()
-    n.yes(9)
-    assert n.msgs[-1] == 'LOAD A09? YES again' and 'note' not in n.calls
-    # away and back between two ticks: the encoder events cancel, the tick alone would not
-    n.yes(9)
-    assert n.calls['note'] == 1                                                # the armed A09 loads
-    n.tick()
-    n.yes(9)
-    assert n.var('kl_armed') == 9
-    n.selected = 3 + 10; assert n.enc(+1) == 0
-    n.selected = 3 + 9; assert n.enc(-1) == 0                                  # back on A09, no tick
-    n.yes(9)
-    assert n.msgs[-1] == 'LOAD A09? YES again' and n.calls['note'] == 1        # asks again, nothing loaded
-    n.selected = 3 + 10; n.key(DOWN, 1); n.key(DOWN, 0)                       # same with the arrows
-    n.selected = 3 + 9; n.key(14, 1); n.key(14, 0)
-    n.yes(9)
-    assert n.msgs[-1] == 'LOAD A09? YES again' and n.calls['note'] == 1
-    m2 = Unit(image, sym)                                                      # SAVE: the review's case
-    m2.menu(); m2.stack(RM); m2.tick(); m2.selected = 3 + 9
-    m2.yes(0); m2.yes(9)
-    assert m2.msgs[-1] == 'SAVE A09 IN P128? YES'
-    m2.selected = 3 + 10; m2.enc(+1); m2.selected = 3 + 9; m2.enc(-1)
-    m2.yes(9)
-    assert not m2.writes and m2.msgs[-1] == 'SAVE A09 IN P128? YES'
-    m2.yes(9)
-    assert len(m2.writes) == 1
+    n.bank_select()                                                            # KIT BANK off meanwhile
+    n.answer(1)
+    assert 'note' not in n.calls
+    n.bank_select()
     n.stack(0x48070000)                                                        # NO: the page leaves the stack
     n.tick()
-    assert n.var('kl_armed') == 0
-    reads = n.calls['read']
+    reads = n.calls.get('read', 0)
     n.slot[KITS_AT + 4:KITS_AT + 20] = b'RENAMED'.ljust(16, b'\0')
     n.stack(0x48070000, RM)                                                    # entry by SETTINGS > PATTERN
     n.tick()
@@ -510,24 +491,17 @@ def check(image, sym):
     n.u.mem_write(k, struct.pack('>5I', KEYEV_VT, 0, 0, SETTINGS, 0x20))
     assert n.call(n.sym['kl_key'], [0, k]) == 1                                 # entry by the shortcut
     assert n.label(1) == 'A01 AGAIN'
-    # the menu does not repaint after an action: arming, answering and cancelling invalidate it
+    # the menu does not repaint after an action: an answered SAVE and MODE invalidate it
     r = Unit(image, sym)
-    r.menu(); r.stack(RM); r.tick(); r.selected = 3 + 9
-    r.invalidated = []
+    r.menu(); r.stack(RM); r.tick(); r.invalidated = []
     r.yes(9)
-    assert r.invalidated == [RM + 0x38] and r.tick() == 1                     # armed: view and tick redraw
-    assert r.tick() == 0                                                       # once
-    r.yes(9)
-    assert r.invalidated == [RM + 0x38] * 2 and r.tick() == 1                 # answered: back to the label
-    r.yes(9); r.tick(); r.invalidated = []
-    r.enc(+1)
-    assert r.invalidated == [RM + 0x38] and r.tick() == 1                     # cancelled
-    r.enc(+1); r.key(DOWN, 1)
-    assert r.invalidated == [RM + 0x38] and r.tick() == 0                     # nothing armed: no redraw
+    assert not r.invalidated and r.tick() == 0                                 # the box is the OS's to draw
+    r.answer(1)
+    assert r.invalidated == [RM + 0x38] and r.tick() == 1 and r.tick() == 0    # once
     r.yes(0)
     assert r.invalidated == [RM + 0x38] * 2 and r.tick() == 1                 # MODE: every label changes
-    print('redraw: arming, answering, cancelling and MODE invalidate the view and ask the tick once')
-    print('page: encoder, arrows, selection change and leaving cancel (also away and back with no tick); names reread on each entry')
+    print('redraw: an answered box and MODE invalidate the view and ask the tick once')
+    print('page: names reread on each entry; a box answered after KIT BANK went off does nothing')
 
     # a failed read is not cached as done
     f = Unit(image, sym)
@@ -544,8 +518,7 @@ def check(image, sym):
     z.menu()
     assert z.label(0) == 'BANK P128 EMPTY' and z.label(1) == '-'
     z.yes(3)
-    z.yes(3)
-    assert 'read' not in z.calls and not z.writes and z.msgs[-1] == 'Bank P128 empty'
+    assert 'read' not in z.calls and not z.writes and z.msgs[-1] == 'Bank P128 empty' and not z.boxes
     z.status = 12                                                              # another format: says which
     assert z.label(0) == 'BANK P128 FORMAT 12'
     z.yes(0)
