@@ -152,6 +152,10 @@ Chorus in the bank command. See [COMP](../mods/comp-st/README.md).
 Core 2.7+: the kit bank goes after COMP (or after Chorus without COMP):
 `--module mods/kitload-st`. See [kitload-st](../mods/kitload-st/README.md).
 
+Optional Live mute (host API 10, core 0.12.22+): append
+`--module mods/livemute-st` after COMP (after Chorus without COMP). See
+[livemute-st](../mods/livemute-st/README.md).
+
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \
     --module mods/playhead-st --module mods/recorder-st --module mods/lfo3-st --module mods/arp-st --module mods/poly-st --module mods/system-info-smz-st --module mods/sample-manager-st \
