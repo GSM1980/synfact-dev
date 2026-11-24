@@ -947,5 +947,6 @@ module with the device's flags and runs its NOTE_ACCEPT handler in Unicorn
 against the OS's mute words (80003048, 8000304c, 43bdd828): a live note-on on
 a muted track is consumed; unmuted tracks, sequencer trigs, releases, the FX
 track and other operations pass; solo and the pattern/song mute count; init
-refuses host API < 10 and registers NOTE_ACCEPT only. Without a ColdFire
-compiler it is skipped.
+refuses host API < 10 and registers NOTE_ACCEPT only; SETTINGS > LIVE MUTE
+starts ON, YES toggles, LEFT/RIGHT set it, each redraws, and OFF passes every
+note. Without a ColdFire compiler it is skipped.

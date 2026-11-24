@@ -9,6 +9,10 @@
  * result, which reaches the same native event release. Note-offs, sequencer
  * trigs and every other event pass, so nothing is left hanging. MAIN IRQ;
  * reads three OS words, writes nothing.
+ *
+ * SETTINGS > LIVE MUTE turns it on and off (YES, or LEFT/RIGHT); it is ON
+ * after power-on, since a bank with the module asks for it, and the choice
+ * lasts until power-off (a module has no settings store yet).
  */
 #include <syntakt/modules.h>
 #include <syntakt/host.h>
@@ -19,13 +23,17 @@
 #define LM_KIND_LIVE 2u        /* event +12: 1 sequencer, 2 live input */
 #define LM_NOTE_ON 1u          /* event +4: 1 note on, 2 release */
 
+#define INVALIDATE ((void (*)(void *))0x400ffe22u)   /* (view + 0x38): redraw, as KIT BANK does */
+
 unsigned int lm_dropped __attribute__((section(".data"))) = 0;
+unsigned int lm_on __attribute__((section(".data"))) = 1;   /* SETTINGS > LIVE MUTE */
+static const struct st_machine_host_api *lm_host __attribute__((section(".data"))) = 0;
 
 /* args = {event, sound, effective time, frame end} */
 int lm_native(unsigned int op, const unsigned int *a, unsigned int *result)
 {
     const unsigned int *e;
-    if (op != ST_NATIVE_NOTE_ACCEPT || !a || !a[0]) return 0;
+    if (op != ST_NATIVE_NOTE_ACCEPT || !lm_on || !a || !a[0]) return 0;
     e = (const unsigned int *)a[0];
     if (e[3] != LM_KIND_LIVE || e[1] != LM_NOTE_ON || e[2] >= LM_TRACKS) return 0;
     if (!((st_muted_tracks() >> e[2]) & 1u)) return 0;
@@ -34,14 +42,52 @@ int lm_native(unsigned int op, const unsigned int *a, unsigned int *result)
     return 1;
 }
 
+/* SETTINGS > LIVE MUTE: the row's four MenuItem callbacks (label, select,
+ * draw, change), added with the host's additem, as KIT BANK's. */
+const char *lm_text(void) { return lm_on ? "LIVE MUTE: ON" : "LIVE MUTE: OFF"; }
+__asm__(".text\n.globl lm_label\nlm_label:\n"
+        "  move.l %a0,-(%sp)\n"
+        "  jsr lm_text\n"
+        "  move.l (%sp),%a0\n"
+        "  pea 3(%sp)\n"                                /* the allocator argument: unused */
+        "  move.l %d0,-(%sp)\n"
+        "  move.l %a0,-(%sp)\n"
+        "  jsr 0x401bf31e\n"                            /* std::string(const char *) */
+        "  lea 12(%sp),%sp\n"
+        "  move.l (%sp)+,%d0\n"
+        "  rts\n");
+void lm_select(const unsigned int *fn)
+{
+    lm_on ^= 1u;
+    if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
+}
+void lm_change(const unsigned int *fn, int amount)
+{
+    lm_on = amount > 0;
+    if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
+}
+void lm_draw(const unsigned int *fn, void *item, void *bmp, int x, int y)
+{
+    (void)fn; (void)item; (void)bmp; (void)x; (void)y;
+}
+void lm_settings(void *menu)
+{
+    extern void lm_label(void);
+    static const void *row[4] = {(const void *)lm_label, (const void *)lm_select,
+                                 (const void *)lm_draw, (const void *)lm_change};
+    if (lm_host) lm_host->additem(menu, row);
+}
+
 static int initialize(const struct st_smz_api *api)
 {
     const struct st_machine_host_api *h;
     if (!api || !api->ui || !(h = api->ui->host) || h->version < 10 || !h->native_interest) return 1;
+    lm_host = h;
     h->native_interest((void (*)(void))lm_native, 1u << ST_NATIVE_NOTE_ACCEPT);
     return 0;
 }
 
 static const struct st_smz_subscription subscriptions[] = {
+    {ST_EV_SETTINGS, (void (*)(void))lm_settings},
     {ST_EV_NATIVE, (void (*)(void))lm_native}};
-const struct st_smz_module livemute_module = {"LIVE MUTE", initialize, subscriptions, 1};
+const struct st_smz_module livemute_module = {"LIVE MUTE", initialize, subscriptions, 2};

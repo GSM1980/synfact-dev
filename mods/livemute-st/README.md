@@ -1,6 +1,6 @@
 # Live mute (livemute-st)
 
-**Draft, 0.1.0.** Not yet run on a unit.
+**Draft, 0.2.0.** Not yet run on a unit.
 
 On the Syntakt, MUTE stops a track's sequencer trigs but not live notes:
 a track played from MIDI in (an external sequencer such as an OXI ONE) or
@@ -14,9 +14,10 @@ module in the bank, a muted track also ignores live notes.
   that started before you muted is released normally and nothing hangs. A
   note already sounding when you mute keeps its tail, as with the sequencer.
 - **Sequencer trigs** are untouched: the OS already mutes them.
-- **The option** is the module itself: include it in the bank to get this
-  behaviour, leave it out for the stock one. It has no settings and keeps no
-  state.
+- **SETTINGS > LIVE MUTE** turns it on and off: YES toggles, LEFT/RIGHT
+  set OFF/ON. It is ON after power-on (a bank with the module asks for it)
+  and the choice lasts until power-off: a module has no settings store yet.
+  OFF is the stock behaviour. Leaving the module out of the bank is OFF too.
 - ARP on a muted track: its live arps are muted too (their notes are live
   notes); sequence arps were already muted by the OS.
 
@@ -25,8 +26,11 @@ Chorus without COMP); see [SYNTAKT-BUILD](../../docs/SYNTAKT-BUILD.md).
 
 ## How it is built
 
-One subscription, the core's native bus, with interest in NOTE_ACCEPT only
-(host `native_interest`). NOTE_ACCEPT runs in the MAIN IRQ after the OS's
+Two subscriptions: SETTINGS (the LIVE MUTE row, four MenuItem callbacks
+through the host's `additem`, as KIT BANK's; select and change redraw the
+menu with `400ffe22(view + 0x38)`), and the core's native bus, with interest
+in NOTE_ACCEPT only (host `native_interest`); while LIVE MUTE is OFF the
+handler returns at once. NOTE_ACCEPT runs in the MAIN IRQ after the OS's
 mute and stale filter (`400a421a`) and before the note's effects; its
 arguments are `{event, sound, effective time, frame end}`. The event's
 words +4 (action: 1 note-on, 2 release), +8 (track) and +12 (kind: 1

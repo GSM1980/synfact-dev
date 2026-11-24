@@ -8,7 +8,9 @@ a live note-on (kind 2, action 1) on a muted track is consumed with a nonzero
 result; the same note on an unmuted track, a sequencer trig (kind 1), a
 release (action 2), the FX track and other operations pass untouched; solo
 mutes every track not soloed; the pattern/song mute counts too; the module
-registers its interest in NOTE_ACCEPT only, and refuses a host before API 10.
+registers its interest in NOTE_ACCEPT only, and refuses a host before API 10;
+SETTINGS > LIVE MUTE starts ON, YES toggles it, LEFT/RIGHT set OFF/ON, each
+redraws the menu, and while OFF every note passes.
 
 It does not run the real OS or the core's dispatcher.
 
@@ -27,6 +29,7 @@ from unicorn.m68k_const import UC_CPU_M68K_CFV4E, UC_M68K_REG_A7, UC_M68K_REG_D0
 CODE, DATA, STOP = 0x46100000, 0x48000000, 0x46fffff0
 EVENT, ARGS, RESULT, HOST, UI, API, INTEREST = (DATA + o for o in (0, 0x100, 0x200, 0x300, 0x400, 0x500, 0x600))
 NOTE_ACCEPT = 20
+ADDITEM, VIEW = DATA + 0x700, DATA + 0x800
 
 
 def build(cc):
@@ -49,12 +52,23 @@ class Unit:
         self.sym, self.u = sym, Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
         u = self.u
         u.ctl_set_cpu_model(UC_CPU_M68K_CFV4E)
-        for at, n in ((0x43b00000, 0x100000), (0x46000000, 0x1000000), (DATA, 0x10000), (0x80000000, 0x10000)):
+        for at, n in ((0x40000000, 0x200000), (0x43b00000, 0x100000), (0x46000000, 0x1000000), (DATA, 0x10000), (0x80000000, 0x10000)):
             u.mem_map(at, n)
         u.mem_write(CODE, image)
-        self.interest = []
-        u.mem_write(INTEREST, b'\x4e\x75')
-        u.hook_add(UC_HOOK_CODE, self._interest, begin=INTEREST, end=INTEREST)
+        self.interest, self.invalidated, self.rows = [], [], []
+        for at, fn in ((INTEREST, self._interest), (0x400ffe22, self._invalidate), (ADDITEM, self._additem)):
+            u.mem_write(at, b'\x4e\x75')
+            u.hook_add(UC_HOOK_CODE, fn, begin=at, end=at)
+
+    def _invalidate(self, u, at, size, _):
+        self.invalidated.append(struct.unpack('>I', u.mem_read(u.reg_read(UC_M68K_REG_A7) + 4, 4))[0])
+
+    def _additem(self, u, at, size, _):
+        menu, row = struct.unpack('>2I', u.mem_read(u.reg_read(UC_M68K_REG_A7) + 4, 8))
+        self.rows.append((menu, struct.unpack('>4I', u.mem_read(row, 16))))
+
+    def text(self):
+        return bytes(self.u.mem_read(self.call(self.sym['lm_text'], []), 20)).split(b'\0')[0].decode()
 
     def _interest(self, u, at, size, _):
         sp = u.reg_read(UC_M68K_REG_A7)
@@ -85,12 +99,13 @@ def offsets(cc):
     w = Path(tempfile.mkdtemp())
     src = w / 'o.c'
     src.write_text('#include <stddef.h>\n#include <syntakt/modules.h>\n#include <syntakt/host.h>\n'
-                   'const unsigned int o[2]={offsetof(struct st_machine_ui_api,host),'
-                   'offsetof(struct st_machine_host_api,native_interest)};\n')
+                   'const unsigned int o[3]={offsetof(struct st_machine_ui_api,host),'
+                   'offsetof(struct st_machine_host_api,native_interest),'
+                   'offsetof(struct st_machine_host_api,additem)};\n')
     subprocess.run([cc, '-mcpu=5475', '-I', str(ROOT / 'elekloader/sdk/include'), '-c', str(src), '-o', str(w / 'o.o')],
                    check=True)
     subprocess.run([cc[:-3] + 'objcopy', '-O', 'binary', '-j', '.rodata', str(w / 'o.o'), str(w / 'o.bin')], check=True)
-    return struct.unpack('>2I', (w / 'o.bin').read_bytes()[:8])
+    return struct.unpack('>3I', (w / 'o.bin').read_bytes()[:12])
 
 
 def check(image, sym):
@@ -112,6 +127,21 @@ def check(image, sym):
     assert all(u.note(t) == (0, 0xdead) for t in range(12))                    # nothing muted: all pass
     assert u.u.mem_read(0x80003048, 8) == b'\0' * 8                            # read only
     print('rule: solo mutes every other track, the pattern/song mute counts, nothing muted passes all')
+    # SETTINGS > LIVE MUTE: ON after power-on; YES toggles; LEFT/RIGHT set; each redraws
+    fn = DATA + 0x900
+    u.u.mem_write(fn, struct.pack('>I', VIEW))
+    u.mutes(track=1 << 3)
+    assert u.text() == 'LIVE MUTE: ON'
+    u.call(sym['lm_select'], [fn])
+    assert u.text() == 'LIVE MUTE: OFF' and u.invalidated == [VIEW + 0x38]
+    assert u.note(3) == (0, 0xdead)                                            # OFF: muted track plays live notes
+    u.call(sym['lm_change'], [fn, 1])
+    assert u.text() == 'LIVE MUTE: ON' and u.note(3) == (1, 1)
+    u.call(sym['lm_change'], [fn, 0xffffffff])
+    assert u.text() == 'LIVE MUTE: OFF' and u.note(3) == (0, 0xdead)
+    u.call(sym['lm_select'], [fn]); u.call(sym['lm_select'], [0])           # no view: no redraw
+    assert u.text() == 'LIVE MUTE: OFF' and len(u.invalidated) == 4
+    print('settings: LIVE MUTE starts ON, YES toggles, LEFT/RIGHT set OFF/ON, redraws, OFF passes every note')
     print('dropped count:', struct.unpack('>I', u.u.mem_read(sym['lm_dropped'], 4))[0])
 
 
@@ -122,16 +152,19 @@ def check_init(image, sym, offs):
         desc = struct.unpack('>4I', image[sym['livemute_module'] - CODE:sym['livemute_module'] - CODE + 16])
         u.u.mem_write(HOST, struct.pack('>I', version) + b'\0' * 0x100)
         u.u.mem_write(HOST + offs[1], struct.pack('>I', INTEREST))
+        u.u.mem_write(HOST + offs[2], struct.pack('>I', ADDITEM))
         u.u.mem_write(UI, b'\0' * 0x40)
         u.u.mem_write(UI + offs[0], struct.pack('>I', HOST))
         u.u.mem_write(API, struct.pack('>2I', 3, UI))
         rc = u.call(desc[1], [API])
         if ok:
             assert rc == 0 and u.interest == [(sym['lm_native'], 1 << 20)], (version, rc, u.interest)
+            u.call(sym['lm_settings'], [0x48009000])
+            assert u.rows == [(0x48009000, (sym['lm_label'], sym['lm_select'], sym['lm_draw'], sym['lm_change']))]
         else:
             assert rc == 1 and not u.interest, (version, rc)
-        assert desc[3] == 1
-    print('init: refuses host API < 10; registers NOTE_ACCEPT interest only; one subscription')
+        assert desc[3] == 2
+    print('init: refuses host API < 10; registers NOTE_ACCEPT interest only; SETTINGS row added through additem')
 
 
 def main():
