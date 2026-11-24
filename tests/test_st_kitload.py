@@ -116,7 +116,7 @@ class Unit:
             0x40177318: self.tmpkit, 0x4016ea6e: lambda a: 1, 0x400c347c: self.msg,
             0x4016eb0a: lambda a: 1, 0x400c2154: lambda a: self.cur, 0x4016e9c8: lambda a: OBJ,
             0x4016e044: lambda a: UIROOT_V, 0x40100d86: self.push,
-            SEL_FN: self.sel, 0x40001300: self.additem, 0x400ffe22: lambda a: self.log('invalidate', 0),
+            SEL_FN: self.sel, 0x40001300: self.additem, 0x400ffe22: self.invalidate,
         }
         for at, fn in stubs.items():
             u.mem_write(at, b'\x4e\x75')
@@ -194,6 +194,10 @@ class Unit:
         self.u.mem_write(out, struct.pack('>2I', kit, 0x48300000))
         self.tmp = kit
         return out
+
+    def invalidate(self, a):
+        self.invalidated = getattr(self, 'invalidated', []) + [a[0]]
+        return self.log('invalidate', 0)
 
     def add_row(self, a):                       # Menu::addItem: push_back(shared_ptr)
         self.items.append(a[1])
@@ -333,6 +337,7 @@ def check(image, sym):
     assert v.shown() == (4, native + full[:1]) and v.label(0) == 'BANK P128 NOT SAVED'
     v.bank = True
     v.yes(0)                                                                   # YES looks again: found
+    v.tick()                                                                   # (its redraw request: page not open)
     assert v.msgs[-1] == 'Bank P128 found' and v.shown() == (132, native + full)
     v.selected = 100
     v.bank_select()                                                            # off: stock rows, selection clamped
@@ -366,6 +371,7 @@ def check(image, sym):
     assert m.msgs[-1] == 'LOAD A06? YES again' and 'note' not in m.calls and m.label(6) == 'LOAD A06? YES again'
     assert m.key(DOWN, 1) == 0 and m.var('kl_armed') == 0                       # cancels, not consumed
     assert m.label(6) == 'A06 KIT 05'                                          # and the row reads its kit again
+    print('confirmation: the row shows the question, back to its kit when cancelled')
     m.yes(6)
     assert 'note' not in m.calls
     m.yes(6)
@@ -461,6 +467,23 @@ def check(image, sym):
     n.u.mem_write(k, struct.pack('>5I', KEYEV_VT, 0, 0, SETTINGS, 0x20))
     assert n.call(n.sym['kl_key'], [0, k]) == 1                                 # entry by the shortcut
     assert n.label(1) == 'A01 AGAIN'
+    # the menu does not repaint after an action: arming, answering and cancelling invalidate it
+    r = Unit(image, sym)
+    r.menu(); r.stack(RM); r.tick(); r.selected = 3 + 9
+    r.invalidated = []
+    r.yes(9)
+    assert r.invalidated == [RM + 0x38] and r.tick() == 1                     # armed: view and tick redraw
+    assert r.tick() == 0                                                       # once
+    r.yes(9)
+    assert r.invalidated == [RM + 0x38] * 2 and r.tick() == 1                 # answered: back to the label
+    r.yes(9); r.tick(); r.invalidated = []
+    r.enc(+1)
+    assert r.invalidated == [RM + 0x38] and r.tick() == 1                     # cancelled
+    r.enc(+1); r.key(DOWN, 1)
+    assert r.invalidated == [RM + 0x38] and r.tick() == 0                     # nothing armed: no redraw
+    r.yes(0)
+    assert r.invalidated == [RM + 0x38] * 2 and r.tick() == 1                 # MODE: every label changes
+    print('redraw: arming, answering, cancelling and MODE invalidate the view and ask the tick once')
     print('page: encoder, arrows, selection change and leaving cancel (also away and back with no tick); names reread on each entry')
 
     # a failed read is not cached as done

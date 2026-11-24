@@ -48,6 +48,7 @@ u32 kl_open DATA = 0;                   /* the page was on the view stack at the
 u32 kl_eat DATA = 0;                    /* SETTINGS opened the page: hold it until released */
 u32 kl_base DATA = 0;                   /* the menu's own rows (3) */
 u32 kl_rows DATA = 0;                   /* our rows in the menu's list now: 0, 1 or 129 */
+u32 kl_dirty DATA = 0;                  /* a label changed: redraw at the next tick */
 u32 kl_managed DATA = 0;                /* the 129 rows were found where we added them */
 u32 kl_item[129][2] DATA = {{0}};       /* their shared_ptr<MenuItem>s, to put back */
 static const struct st_machine_host_api *kl_host DATA = 0;
@@ -69,6 +70,20 @@ u32 kl_tmpkit(u32 *out);                /* TMPKIT takes its result's address in 
 __asm__(".text\n.globl kl_tmpkit\nkl_tmpkit:\n  move.l 4(%sp),%a0\n  jmp 0x40177318\n");
 
 static void say(const char *s) { MSG(MSGCTX(), s); }
+
+/* The menu does not repaint after a row's action: the OS's message popup is
+ * drawn behind it, and a changed label shows only once something repaints.
+ * Invalidate the view (as the KIT BANK row does) and ask the tick for one. */
+static void redraw(void)
+{
+    if (kl_rm) INVALIDATE((char *)kl_rm + 0x38);
+    kl_dirty = 1;
+}
+
+static void disarm(void)
+{
+    if (kl_armed) { kl_armed = 0; redraw(); }
+}
 
 static void cpy(char *d, const char *s, u32 n)
 {
@@ -319,10 +334,12 @@ void kl_act_inv(u32 *any, void *item)
         } else if (!kl_managed || kl_rows == 129u) {
             kl_mode ^= 1u;
             say(kl_mode ? s_psave : s_pload);
+            redraw();
             return;
         }
         say(bank_text(msg_buf, "Bank ", " found"));    /* saved since the page opened */
         set_rows(129u);
+        redraw();
         return;
     }
     if (!bank_ok()) { kl_armed = 0; say(bank_text(msg_buf, "Bank ", " not saved")); return; }
@@ -334,9 +351,11 @@ void kl_act_inv(u32 *any, void *item)
         else cpy(msg_buf + 8, "? YES again", 12);
         cpy(ask_buf, msg_buf, LBL + 8);                 /* the row reads it too, until answered */
         say(msg_buf);
+        redraw();
         return;
     }
     kl_armed = 0;
+    redraw();
     if (!kl_mode) load(j - 1u, CURIDX(CURSRC()));
     else save(CURIDX(CURSRC()), j - 1u);
 }
@@ -464,9 +483,13 @@ void kl_tick(void *ctrl)
     if (!open) kl_armed = 0;
     else if (kl_armed) {
         u32 row = ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);
-        if (row != ROW_MODE + kl_armed) kl_armed = 0;
+        if (row != ROW_MODE + kl_armed) disarm();
     }
     kl_open = open;
+    if (kl_dirty) {
+        kl_dirty = 0;
+        if (open && ctrl) *((unsigned char *)ctrl + 0x20) = 1;          /* redraw */
+    }
 }
 
 /* Push the page on the GLOBAL view manager, as the main loop's messages do.
@@ -497,7 +520,7 @@ int kl_key(void *brain, const unsigned char *ev)
     code = *(const u32 *)(ev + 12);
     fl = *(const u32 *)(ev + 16);
     if (code != KEY_SETTINGS) {
-        if (code != KEY_YES && (fl & EV_DOWN)) kl_armed = 0;
+        if (code != KEY_YES && (fl & EV_DOWN)) disarm();
         return 0;
     }
     if (kl_eat) {
@@ -517,7 +540,7 @@ int kl_key(void *brain, const unsigned char *ev)
 int kl_enc(void *brain, const void *ev)
 {
     (void)brain; (void)ev;
-    kl_armed = 0;
+    disarm();
     return 0;
 }
 

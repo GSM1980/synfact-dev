@@ -26,13 +26,14 @@ With the bank on:
   one per kit of the bank project. The names are read again each time the
   page opens; a name that cannot be read shows `A01 ?` and is retried on the
   next opening.
-- **Load.** In `MODE: LOAD KIT`, YES on a row shows `LOAD A06? YES again`
-  (popup and row, as for SAVE); a
+- **Load.** In `MODE: LOAD KIT`, YES on a row turns it into `LOAD A06? YES again`
+  (as for SAVE); a
   second YES on the same row replaces the current pattern's kit with that
   bank kit, whole, and shows `LOADED A06 NAME`. The bank is only read.
 - **Save.** YES on the MODE row switches to `MODE: SAVE KIT` (every row then
-  reads `SAVE A01 ...`). YES on a row shows `SAVE A09 IN P128? YES`, as a
-  popup and in place of the row until it is answered; a second
+  reads `SAVE A01 ...`). YES on a row turns that row into `SAVE A09 IN P128? YES` until it is
+  answered (the OS's message popup is drawn behind the menu, so the row
+  carries the question; the module asks the menu to repaint); a second
   YES writes the current pattern's kit into that position of the bank with
   the OS's own Kit encoder and slot writer, then shows `SAVED A09 NAME`. The
   project in memory and its "kit changed" flags are untouched.
@@ -115,7 +116,8 @@ stubs of the OS routines, at their real addresses:
   the bank project is not saved and all 129 when it is, with the same items
   put back and the selection clamped when rows go;
 - LOAD and SAVE need two YES on the same row, and the row shows the question
-  while it waits; another key, an encoder
+  while it waits; arming, answering, cancelling and MODE invalidate the view
+  and ask the tick for one redraw; another key, an encoder
   event, a selection change, leaving the page cancel, including a move away
   and back with no tick between;
 - the names are read again on each entry (SETTINGS > PATTERN or the
