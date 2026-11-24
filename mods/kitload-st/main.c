@@ -11,8 +11,9 @@
  * SEQUENCE DATA rows, a MODE row and 128 rows "A01 NAME" ... "H16 NAME", the
  * kits of that project. With KIT BANK off the page is stock: the rows are
  * built at boot but kept out of the menu's item list until the bank is on
- * (one row, BANK Pn EMPTY or BANK Pn FORMAT n, while that slot holds no
- * loadable project). LOAD replaces the current pattern's kit with a bank
+ * (one row while that slot holds no loadable project: CREATE KITBANK IN Pn
+ * for an empty slot, which makes the bank with PROJECT's own copy, paste and
+ * rename, or BANK Pn FORMAT n). LOAD replaces the current pattern's kit with a bank
  * kit; SAVE writes the current pattern's kit into a bank position. Both ask
  * first in the OS's own confirmation box ("LOAD KIT A06?" / "SAVE TO A09?",
  * CONFIRM Y/N), the one CLEAR TRACK SOUND? uses: YES there does it, NO
@@ -52,12 +53,18 @@ u32 kl_rows DATA = 0;                   /* our rows in the menu's list now: 0, 1
 u32 kl_dirty DATA = 0;                  /* a label changed: redraw at the next tick */
 u32 kl_managed DATA = 0;                /* the 129 rows were found where we added them */
 u32 kl_item[129][2] DATA = {{0}};       /* their shared_ptr<MenuItem>s, to put back */
+u32 kl_busy DATA = 0;                   /* creating the bank */
+u32 kl_from DATA = 0, kl_to DATA = 0;   /* its source and destination slots, 0..127 */
 static const struct st_machine_host_api *kl_host DATA = 0;
 
 static const char s_off[] = "KIT BANK OFF: SETTINGS";
 static const char s_dash[] = "-";
 static const char s_confirm[] = "CONFIRM Y/N";   /* the OS's own second line (4024f15d) */
 static const char e_box[] = "No confirm box";
+static const char s_creating[] = "CREATING KITBANK...";
+static const char s_kitbank[] = "KITBANK";
+static const char s_jobname[] = "Kit Bank Create";
+static const char e_unsaved[] = "SAVE THIS PROJECT FIRST";
 static const char s_mload[] = "MODE: LOAD KIT";
 static const char s_msave[] = "MODE: SAVE KIT";
 static const char s_pload[] = "List mode: LOAD";
@@ -72,7 +79,21 @@ static const char e_wr[] = "Bank write error";
 u32 kl_tmpkit(u32 *out);                /* TMPKIT takes its result's address in a0 */
 __asm__(".text\n.globl kl_tmpkit\nkl_tmpkit:\n  move.l 4(%sp),%a0\n  jmp 0x40177318\n");
 
-static void say(const char *s) { MSG(MSGCTX(), s); }
+/* A message in the OS's text box, drawn over the menu (the message popup,
+ * 400c347c, is drawn behind it). */
+static void say(const char *m)
+{
+    u32 str[1], obj, sp[2];
+    char alloc;
+    obj = NEW(TB_SIZE);
+    if (!obj) return;
+    STRCTOR(str, m, &alloc);
+    TB_CTOR(obj, str);
+    TB_SP(sp, obj);
+    PUSHVIEW(VIEWMGR(UIROOT()), sp, 0);
+    SPREL(&sp[1]);
+    STRDTOR(str);
+}
 
 /* The menu does not repaint after a row's action: the OS's message popup is
  * drawn behind it, and a changed label shows only once something repaints.
@@ -101,16 +122,21 @@ static u32 put_num(char *d, u32 v)      /* decimal, returns its length */
     return n;
 }
 
-/* pre + "P" + bank + post, into d (LBL + 8 bytes) */
-static const char *bank_text(char *d, const char *pre, const char *post)
+/* pre + "P" + project + post, into d (LBL + 8 bytes) */
+static const char *proj_text(char *d, const char *pre, u32 project, const char *post)
 {
     u32 n;
     cpy(d, pre, LBL);
     for (n = 0; d[n]; n++) ;
     d[n++] = 'P';
-    n += put_num(d + n, kl_bank);
+    n += put_num(d + n, project);
     cpy(d + n, post, LBL + 8 - n);
     return d;
+}
+
+static const char *bank_text(char *d, const char *pre, const char *post)
+{
+    return proj_text(d, pre, kl_bank, post);
 }
 
 /* Why the bank is not usable: "BANK P128 EMPTY" (no saved project there) or
@@ -311,7 +337,10 @@ u32 kl_label_c(void *ret, u32 j)
     if (!kl_bank)
         s = j == 0 ? s_off : s_dash;
     else if (!bank_ok())
-        s = j == 0 ? bank_why(lab_buf, 1) : s_dash;
+        s = j != 0 ? s_dash
+          : kl_busy ? s_creating
+          : SSTAT(MGR(), kl_bank - 1u) < 0 ? bank_text(lab_buf, "CREATE KITBANK IN ", "")
+          : bank_why(lab_buf, 1);
     else if (j == 0)
         s = kl_mode ? s_msave : s_mload;
     else if (kl_mode) {                                 /* SAVE marks every row */
@@ -362,15 +391,64 @@ static void set_rows(u32 n)
 
 /* Ask in the OS's confirmation box: "LOAD KIT A06?" or "SAVE TO A09?" over
  * CONFIRM Y/N. 0 if it could not be opened. */
+/* Create the bank: PROJECT's own COPY of the current project's saved slot,
+ * PASTE into the empty bank slot, and RENAME to KITBANK, as one job on the
+ * OS's job queue. The current project stays current and is not touched; the
+ * project clipboard is replaced, as COPY PROJECT replaces it. Only into an
+ * empty slot, and only from a saved project. */
+u32 kl_create_work(const u32 *any)
+{
+    u32 st = PROJS(), h;
+    (void)any;
+    if (!PCOPY(st, kl_from) || !PPASTE(st, kl_to, 0)) return 0;
+    h = PHEAD(st, kl_to);
+    if (h) {
+        fn_t none = {0, 0, 0, 0};
+        char *n = (char *)(h + 8u);
+        u32 k;
+        for (k = 0; k < 16u; k++) n[k] = k < 7u ? s_kitbank[k] : 0;
+        PHEADW(st, kl_to, &none);
+        FNDTOR(&none);
+    }
+    return 1;
+}
+
+void kl_create_done(const u32 *any, u32 ok)
+{
+    (void)any;
+    kl_busy = 0;
+    SREFR(MGR(), kl_to);
+    kl_valid = 0;
+    if (kl_bank == kl_to + 1u) set_rows(rows_wanted());
+    redraw();
+    say(proj_text(msg_buf, (ok & 0xffu) ? "KITBANK CREATED IN " : "KITBANK NOT CREATED IN ", kl_to + 1u, ""));
+}
+
+static void create(void)
+{
+    u32 cur = CURSLOT(CUROBJ()), mgr = MGR();
+    fn_t work = {0, 0, (u32)kl_mgr, (u32)kl_create_work};
+    fn_t done = {0, 0, (u32)kl_mgr, (u32)kl_create_done};
+    if (kl_busy || !kl_bank) return;
+    if (SSTAT(mgr, kl_bank - 1u) >= 0) { say(bank_why(msg_buf, 0)); return; }   /* never over a project */
+    if (cur > 127u || SSTAT(mgr, cur) != 13) { say(e_unsaved); return; }
+    kl_from = cur; kl_to = kl_bank - 1u; kl_busy = 1;
+    redraw();
+    JOBPOST(JOBQ(), s_jobname, &work, &done);
+}
+
 void kl_confirm_inv(const u32 *any, u32 yes);
 static int confirm(u32 j, u32 mode)
 {
     u32 q[1], sub[1], box, *cb, sp[2];
     char alloc;
     fn_t fn = {j, mode, (u32)kl_mgr, (u32)kl_confirm_inv};
-    cpy(msg_buf, mode ? "SAVE TO " : "LOAD KIT ", 10);
-    {
-        char *d = msg_buf + (mode ? 8 : 9);
+    if (mode == 2)
+        bank_text(msg_buf, "CREATE KITBANK ", "?");    /* "CREATE KITBANK P128?" */
+    else {
+        char *d;
+        cpy(msg_buf, mode ? "SAVE TO " : "LOAD KIT ", 10);
+        d = msg_buf + (mode ? 8 : 9);
         d[0] = kl_lbl[j][0]; d[1] = kl_lbl[j][1]; d[2] = kl_lbl[j][2]; d[3] = '?'; d[4] = 0;
     }
     box = NEW(CW_SIZE);
@@ -399,7 +477,15 @@ void kl_act_inv(u32 *any, void *item)
         if (!bank_ok()) {                       /* BANK Pn EMPTY/FORMAT: look again */
             SREFR(MGR(), kl_bank - 1u);
             kl_valid = 0;
-            if (!bank_ok()) { say(bank_why(msg_buf, 0)); return; }
+            if (!bank_ok()) {
+                if (kl_busy) return;
+                if (SSTAT(MGR(), kl_bank - 1u) < 0) {   /* empty: offer to create it */
+                    if (!confirm(0, 2)) say(e_box);
+                    return;
+                }
+                say(bank_why(msg_buf, 0));
+                return;
+            }
         } else if (!kl_managed || kl_rows == 129u) {
             kl_mode ^= 1u;
             say(kl_mode ? s_psave : s_pload);
@@ -420,7 +506,9 @@ void kl_act_inv(u32 *any, void *item)
 void kl_confirm_inv(const u32 *any, u32 yes)
 {
     u32 j = any[0];
-    if (!(yes & 0xffu) || j < 1u || j > 128u || !kl_bank || !bank_ok()) return;
+    if (!(yes & 0xffu) || !kl_bank) return;
+    if (any[1] == 2u) { create(); return; }
+    if (j < 1u || j > 128u || !bank_ok()) return;
     if (!any[1]) load(j - 1u, CURIDX(CURSRC()));
     else save(CURIDX(CURSRC()), j - 1u);
     redraw();

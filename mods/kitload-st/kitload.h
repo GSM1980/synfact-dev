@@ -27,6 +27,26 @@ typedef struct { u32 d0, d1, mgr, inv; } fn_t;                         /* std::f
 #define CW_SIZE  0x7cu
 #define CW_CTOR  ((void (*)(u32,void *,void *,fn_t *,u32))0x400f6156u)
 #define CW_SP_VT 0x401c88b0u
+
+/* The OS's text box ("COPY PROJECT", 4005c83c): operator new(0xa0),
+ * 400fdfc8(this, std::string *), a shared_ptr made by 40184b38(sp, this),
+ * pushed on 40008392(UIROOT()). Drawn over the menus. */
+#define TB_SIZE  0xa0u
+#define TB_CTOR  ((void (*)(u32,void *))0x400fdfc8u)
+#define TB_SP    ((void (*)(u32 *,u32))0x40184b38u)
+#define VIEWMGR  ((u32 (*)(u32))0x40008392u)
+
+/* PROJECT's own copy, paste and rename (4005a788, 4005a7aa, 4005a6f8), run
+ * as jobs: 400bdc48(queue, name, std::function<bool()> *work,
+ * std::function<void(bool)> *done) on the queue 4016ec18() returns. */
+#define PROJS    ((u32 (*)(void))0x4016f15au)                          /* the project store */
+#define PCOPY    ((u32 (*)(u32,u32))0x400c1e54u)                       /* (store, slot): into the clipboard */
+#define PPASTE   ((u32 (*)(u32,u32,u32))0x400c1ffau)                   /* (store, slot, 0): the clipboard into it */
+#define PHEAD    ((u32 (*)(u32,u32))0x400c1b64u)                       /* (store, slot): header, name at +8 (16) */
+#define PHEADW   ((u32 (*)(u32,u32,fn_t *))0x400c1cbcu)                /* (store, slot, empty function): write it */
+#define CURSLOT  ((u32 (*)(u32))0x40018c2cu)                           /* (project object): its saved slot */
+#define JOBQ     ((u32 (*)(void))0x4016ec18u)
+#define JOBPOST  ((void (*)(u32,const char *,fn_t *,fn_t *))0x400bdc48u)
 #define DRAW_MGR 0x40181508u            /* KIT DATA item's draw functor: manager and invoker */
 #define DRAW_INV 0x40180cf6u
 

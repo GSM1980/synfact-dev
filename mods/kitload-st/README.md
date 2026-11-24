@@ -1,9 +1,10 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft, 0.2.4.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
+**Draft, 0.2.5.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
 (the stock page while KIT BANK is off, the row confirmation and its repaint)
-was tried on a unit; 0.2.3 (a project named KITBANK) and 0.2.4 (the OS's
-confirmation box) have not. The same
+was tried on a unit; 0.2.3 (a project named KITBANK), 0.2.4 (the OS's
+confirmation box) and 0.2.5 (creating the bank, messages in the OS's text
+box) have not. The same
 feature has been used on OS 1.42 as a binary patch outside this project;
 this module is its rewrite on core events. Needs core 2.7 (host API
 18, SMZ events 16/17).
@@ -26,12 +27,16 @@ reads the header of each slot whose entry is not filled yet (512 bytes each,
 once).
 
 While it is off, RELOAD FROM PROJ is the stock page: the module's rows are
-built at boot but kept out of the menu until the bank is on. The bank must be
-a saved project: the module saves kits into it, it cannot create one. Until
-there is one, the page shows one row: `BANK P128 EMPTY` (nothing saved in
-that slot) or `BANK P128 FORMAT n` (a project whose status is not 13, the
-only one the OS loads). Save a project there (PROJECT > SAVE AS, P128), then
-YES on that row looks again and brings the list.
+built at boot but kept out of the menu until the bank is on. The bank is a
+saved project. If its slot is empty, the page shows one row, `CREATE KITBANK
+IN P128`: YES, then YES in the confirmation box, makes the bank from the
+current project as last saved, with PROJECT's own COPY, PASTE and RENAME
+(as one job, like PROJECT runs them), names it `KITBANK` (so it is found
+after every power-on) and shows the list. The current project stays current
+and is not changed; the project clipboard is replaced, as COPY PROJECT
+replaces it. It needs the current project to have been saved, and is never
+offered over an existing project: a slot holding a project the OS cannot
+load reads `BANK P128 FORMAT n`.
 
 With the bank on:
 
@@ -52,10 +57,13 @@ With the bank on:
 - **Shortcut.** A long press of **SETTINGS** opens the page from anywhere,
   instead of the LED INTENSITY quick view (LED intensity stays in the
   SETTINGS menu). The page stays open; NO closes it.
-- **No bank project.** If the bank slot holds no loadable project, row 0
-  reads `BANK P128 EMPTY` or `BANK P128 FORMAT n` (the slot status; 13 is
-  the one the OS loads); YES on row 0 rereads the slot header and tries
-  again. Nothing is read or written.
+- **No bank project.** An empty bank slot offers `CREATE KITBANK IN P128`
+  (above). A slot holding something the OS does not load reads
+  `BANK P128 FORMAT n` (the slot status; 13 is the one the OS loads); YES on
+  it rereads the slot header and tries again. Nothing is read or written.
+- **Messages** (`LOADED A06 NAME`, `SAVED A09 NAME`, `KITBANK CREATED IN
+  P128`, ...) appear in the OS's text box, the one PROJECT's COPY PROJECT
+  shows, drawn over the menu.
 
 **What LOAD restores.** Everything the Kit holds: the 12 audio tracks' and
 the FX track's sounds and settings, the kit's per-track blocks and name, and
@@ -89,6 +97,15 @@ Events only; the module owns no code site.
 | `ST_EV_SETTINGS` | the KIT BANK row (`additem`: label, YES, LEFT/RIGHT) |
 | `ST_EV_KEY`, global | a long press of SETTINGS (KeyEvent flags bit 5) pushes the page on the global view manager and holds SETTINGS until released |
 | `ST_EV_TICK` | page entry (the page's view on the global view stack, `std::list` at manager +20): names reread, rows shown; one redraw after a label changes |
+
+**Creating the bank** runs PROJECT's own routines in one job posted on the
+OS's job queue (`400bdc48(4016ec18(), name, work, done)`, as COPY/PASTE/RENAME
+PROJECT post theirs at `4005a4d8`/`4005a5ac`/`4005a430`): `400c1e54(store,
+current slot)` copies the saved project to the clipboard, `400c1ffa(store,
+bank slot, 0)` pastes it, and the header `400c1b64(store, slot)` gets the
+name `KITBANK` at +8 and is written by `400c1cbc(store, slot, empty
+function)`; `store` is `4016f15a()`, the current slot `40018c2c(project)`.
+The done function rereads the slot header (SREFR) and shows the result.
 
 **The confirmation box** is the OS's ConfirmWindow, built as CLEAR TRACK
 SOUND? (`400653ae`) builds it: `operator new(0x7c)`, the constructor
@@ -138,6 +155,13 @@ stubs of the OS routines, at their real addresses:
   the bank slot holds no loadable project (empty or another status) and all
   129 when it does, with the same items
   put back and the selection clamped when rows go;
+- an empty bank slot offers CREATE KITBANK; the box asks; its YES posts one
+  job that copies the current saved slot, pastes it into the bank slot and
+  renames it KITBANK (NUL-padded), then rereads the slot and reports; the
+  module writes nothing itself; no second job while one runs; a never-saved
+  current project, a failed copy (no rename), a slot holding a project (not
+  offered, and checked again at the answer) are refused;
+- messages go to the OS's text box (`400fdfc8`), over the menu;
 - YES on a kit row opens the confirmation box with `LOAD KIT A06?` /
   `SAVE TO A09?` and `CONFIRM Y/N`, its function carrying the row and mode,
   its shared_ptr and push as the OS's own; the box's NO does nothing, its YES

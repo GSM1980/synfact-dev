@@ -84,7 +84,7 @@ class Unit:
             self.slot[o + 4:o + 20] = ('KIT %02d' % j).encode().ljust(16, b'\0')
         self.calls = {}
         self.items, self.msgs, self.strings, self.pushes, self.copies = [], [], [], [], []
-        self.boxes = []
+        self.boxes, self.jobs, self.slot_status, self.cur_slot, self.copy_ok = [], [], {}, 2, 1
         self.writes, self.decoded = [], []
         self.selected, self.fail_reads, self.rows = 0, set(), []
         # the reload menu: vtable slot 9 (+36) = clamp and return the selected row;
@@ -111,7 +111,7 @@ class Unit:
             VFN: lambda a: BASE, VFN + 0x10: lambda a: 0,
             0x4010394c: self.new, 0x401bf31e: self.strctor, 0x400fa84c: self.itemctor,
             0x400fa082: self.add_row, 0x4016dc10: lambda a: 0,
-            0x4016f292: lambda a: self.log('mgr', MGR_V), 0x4011067e: lambda a: self.log('stat', 13 if self.bank else getattr(self, 'status', -1) & 0xffffffff),
+            0x4016f292: lambda a: self.log('mgr', MGR_V), 0x4011067e: lambda a: self.log('stat', self.slot_status.get(a[1], 13 if self.bank else getattr(self, 'status', -1)) & 0xffffffff),
             0x40110952: self.refr, 0x401101c4: lambda a: self.log('dev', 2),
             0x40110892: self.sread, 0x40111c0c: self.swrite, 0x400a78a0: self.kdec, 0x400a78f4: self.kenc,
             0x40172414: lambda a: self.log('note', 0), 0x4011613c: self.memcpy,
@@ -121,6 +121,11 @@ class Unit:
             0x4016e044: lambda a: UIROOT_V, 0x40100d86: self.push,
             SEL_FN: self.sel, 0x40001300: self.additem, 0x400ffe22: self.invalidate,
             0x400f6156: self.cwctor, 0x401bd86e: lambda a: self.log('strdtor', 0),
+            0x400fdfc8: self.tbctor, 0x40184b38: self.tbsp, 0x40008392: lambda a: UIROOT_V + 64,
+            0x40018c2c: lambda a: self.cur_slot, 0x4016ec18: lambda a: 0x48090000, 0x400bdc48: self.jobpost,
+            0x4016f15a: lambda a: 0x480a0000, 0x400c1e54: lambda a: self.pjob('copy', a[1]),
+            0x400c1ffa: lambda a: self.pjob('paste', a[1]), 0x400c1b64: self.phead,
+            0x400c1cbc: lambda a: self.pjob('headw', a[1]),
         }
         for at, fn in stubs.items():
             u.mem_write(at, b'\x4e\x75')
@@ -234,6 +239,35 @@ class Unit:
 
     def msg(self, a):
         self.msgs.append(self.cstr(a[1]))
+
+    def tbctor(self, a):                        # the OS's text box: its message
+        self.msgs.append(self.strings[-1])
+
+    def tbsp(self, a):                          # shared_ptr for it
+        self.u.mem_write(a[0], struct.pack('>2I', a[1], self.new([16])))
+
+    def jobpost(self, a):                       # (queue, name, work, done)
+        self.jobs.append(dict(name=self.cstr(a[1]), work=struct.unpack('>4I', self.u.mem_read(a[2], 16)),
+                              done=struct.unpack('>4I', self.u.mem_read(a[3], 16))))
+
+    def pjob(self, what, slot):
+        self.proj = getattr(self, 'proj', []) + [(what, slot)]
+        return self.copy_ok if what in ('copy', 'paste') else 1
+
+    def phead(self, a):
+        self.proj = getattr(self, 'proj', []) + [('head', a[1])]
+        self.head = self.new([64])
+        self.u.mem_write(self.head + 8, b'MY SONG'.ljust(16, b'\0'))
+        return self.head
+
+    def run_job(self):                          # the job task runs work, then done with its result
+        job = self.jobs[-1]
+        any_ = self.new([16])
+        self.u.mem_write(any_, struct.pack('>4I', *job['work']))
+        ok = self.call(job['work'][3], [any_])
+        self.u.mem_write(any_, struct.pack('>4I', *job['done']))
+        self.call(job['done'][3], [any_, ok & 0xff])
+        return ok & 0xff
 
     def cwctor(self, a):                        # ConfirmWindow(this, question, second line, function, 0)
         self.boxes.append(dict(box=a[0], q=self.strings[-2], sub=self.strings[-1], flag=a[4],
@@ -385,7 +419,7 @@ def check(image, sym):
     full = [(it, 0x4c000000 + i + 1) for i, it in enumerate(v.items)]
     v.selected = 50
     v.bank_select()                                                            # on, P128 not saved
-    assert v.shown() == (4, native + full[:1]) and v.label(0) == 'BANK P128 EMPTY'
+    assert v.shown() == (4, native + full[:1]) and v.label(0) == 'CREATE KITBANK IN P128'
     v.bank = True
     v.yes(0)                                                                   # YES looks again: found
     v.tick()                                                                   # (its redraw request: page not open)
@@ -425,7 +459,7 @@ def check(image, sym):
     mgr_, box, ctrl, flag = m.pushes[-1]
     assert (mgr_, box, flag) == (UIROOT_V + 64, b['box'], 0)                    # on the global view manager
     assert struct.unpack('>4I', m.u.mem_read(ctrl, 16)) == (0x401c88b0, 1, 1, b['box'])  # its shared_ptr
-    assert m.calls['sprel'] >= 1 and m.calls['strdtor'] == 2                    # our references dropped
+    assert m.calls['sprel'] >= 1 and m.calls['strdtor'] >= 2                    # our references dropped
     m.answer(0)
     assert 'note' not in m.calls                                               # NO: nothing
     m.yes(6)
@@ -516,13 +550,48 @@ def check(image, sym):
     # bank project not saved: nothing read or written
     z = Unit(image, sym, bank=False)
     z.menu()
-    assert z.label(0) == 'BANK P128 EMPTY' and z.label(1) == '-'
+    assert z.label(0) == 'CREATE KITBANK IN P128' and z.label(1) == '-'
     z.yes(3)
     assert 'read' not in z.calls and not z.writes and z.msgs[-1] == 'Bank P128 empty' and not z.boxes
     z.status = 12                                                              # another format: says which
     assert z.label(0) == 'BANK P128 FORMAT 12'
     z.yes(0)
     assert z.msgs[-1] == 'Bank P128 format 12' and 'refr' in z.calls
+
+    # creating the bank: offered while its slot is empty; PROJECT's copy, paste and rename as one job
+    c = Unit(image, sym, bank=False)
+    c.slot_status = {2: 13}                                                    # the current project is P3, saved
+    c.menu()
+    assert c.label(0) == 'CREATE KITBANK IN P128'
+    c.yes(0)
+    assert c.boxes[-1]['q'] == 'CREATE KITBANK P128?' and c.boxes[-1]['fn'][:2] == (0, 2)
+    c.answer(0)
+    assert not c.jobs                                                          # NO: nothing
+    c.yes(0); c.answer(1)
+    (job,) = c.jobs
+    assert job['name'] == 'Kit Bank Create' and c.label(0) == 'CREATING KITBANK...'
+    c.yes(0)
+    assert len(c.boxes) == 2                                                   # busy: no second box
+    assert c.run_job() == 1
+    assert c.proj == [('copy', 2), ('paste', 127), ('head', 127), ('headw', 127)]
+    assert bytes(c.u.mem_read(c.head + 8, 16)) == b'KITBANK'.ljust(16, b'\0')   # renamed, NUL-padded
+    assert c.refreshed[-1] == 127 and c.msgs[-1] == 'KITBANK CREATED IN P128' and c.var('kl_busy') == 0
+    assert not c.writes                                                        # the module wrote nothing itself
+    u_ = Unit(image, sym, bank=False)                                          # the current project never saved
+    u_.cur_slot = 0xffffffff; u_.menu(); u_.yes(0); u_.answer(1)
+    assert not u_.jobs and u_.msgs[-1] == 'SAVE THIS PROJECT FIRST'
+    f_ = Unit(image, sym, bank=False)                                          # the copy fails: no rename
+    f_.slot_status = {2: 13}; f_.copy_ok = 0; f_.menu(); f_.yes(0); f_.answer(1)
+    assert f_.run_job() == 0 and f_.proj == [('copy', 2)] and f_.msgs[-1] == 'KITBANK NOT CREATED IN P128'
+    x = Unit(image, sym, bank=False)                                           # not empty: never offered
+    x.status = 12; x.slot_status = {2: 13}; x.menu()
+    assert x.label(0) == 'BANK P128 FORMAT 12'
+    x.yes(0)
+    assert not x.boxes and x.msgs[-1] == 'Bank P128 format 12'
+    x.status = -1; x.yes(0); x.status = 12; x.answer(1)                       # filled before the answer
+    assert not x.jobs and x.msgs[-1] == 'Bank P128 format 12'
+    print('create: offered for an empty bank slot, the box asks, PROJECT copy/paste/rename as one job, '
+          'never over a project, needs a saved current project')
 
     # long press of SETTINGS
     k = Unit(image, sym)
