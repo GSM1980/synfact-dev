@@ -19,7 +19,7 @@
       "slug": "comp-st",
       "id": "comp-st",
       "title": "Compressor",
-      "latest": "1.0.0",
+      "latest": "1.1.0",
       "path": "mods/comp-st"
     },
     {
@@ -33,7 +33,7 @@
       "slug": "digimono-st",
       "id": "digimono-st",
       "title": "SY MnM",
-      "latest": "0.8.1",
+      "latest": "0.8.2",
       "path": "mods/digimono-st"
     },
     {
@@ -68,7 +68,7 @@
       "slug": "md-st",
       "id": "md-st",
       "title": "MD MACHINEDRUM",
-      "latest": "0.2",
+      "latest": "0.3",
       "path": "mods/md-st"
     },
     {
@@ -89,7 +89,7 @@
       "slug": "playhead-st",
       "id": "playhead-st",
       "title": "Playhead: reverse, pendulum, random, walk, anchor, stutter, fold, walk+",
-      "latest": "1.2.1",
+      "latest": "1.3.0",
       "path": "mods/playhead-st"
     },
     {
@@ -117,7 +117,7 @@
       "slug": "samplers-st",
       "id": "samplers-st",
       "title": "SP sample machines",
-      "latest": "1.6.1",
+      "latest": "1.6.2",
       "path": "mods/samplers-st"
     },
     {
