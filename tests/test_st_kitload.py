@@ -6,7 +6,8 @@ handlers. Every OS routine it calls is a Python stub at its real address.
 It checks: the bank is off until SETTINGS > KIT BANK picks a project, and
 the picker; the RELOAD FROM PROJ rows and that building them touches no
 storage; the menu shows only its own rows while the bank is off, one row
-while the bank project is not saved, all of them when it is; LOAD and SAVE need two YES on the same row, and another key, a
+while the bank slot is empty or another format (saying which), all of
+them when it holds a project; LOAD and SAVE need two YES on the same row, and another key, a
 selection change (encoder or arrows) or leaving the page cancels; names are
 reread on every page entry and a failed read is retried on the next one;
 SAVE writes the whole encoded record and LOAD hands the same bytes to the
@@ -108,7 +109,7 @@ class Unit:
             VFN: lambda a: BASE, VFN + 0x10: lambda a: 0,
             0x4010394c: self.new, 0x401bf31e: self.strctor, 0x400fa84c: self.itemctor,
             0x400fa082: self.add_row, 0x4016dc10: lambda a: 0,
-            0x4016f292: lambda a: self.log('mgr', MGR_V), 0x4011067e: lambda a: self.log('stat', 13 if self.bank else 0),
+            0x4016f292: lambda a: self.log('mgr', MGR_V), 0x4011067e: lambda a: self.log('stat', 13 if self.bank else getattr(self, 'status', -1) & 0xffffffff),
             0x40110952: self.refr, 0x401101c4: lambda a: self.log('dev', 2),
             0x40110892: self.sread, 0x40111c0c: self.swrite, 0x400a78a0: self.kdec, 0x400a78f4: self.kenc,
             0x40172414: lambda a: self.log('note', 0), 0x4011613c: self.memcpy,
@@ -376,7 +377,7 @@ def check(image, sym):
     full = [(it, 0x4c000000 + i + 1) for i, it in enumerate(v.items)]
     v.selected = 50
     v.bank_select()                                                            # on, P128 not saved
-    assert v.shown() == (4, native + full[:1]) and v.label(0) == 'BANK P128 NOT SAVED'
+    assert v.shown() == (4, native + full[:1]) and v.label(0) == 'BANK P128 EMPTY'
     v.bank = True
     v.yes(0)                                                                   # YES looks again: found
     v.tick()                                                                   # (its redraw request: page not open)
@@ -541,10 +542,14 @@ def check(image, sym):
     # bank project not saved: nothing read or written
     z = Unit(image, sym, bank=False)
     z.menu()
-    assert z.label(0) == 'BANK P128 NOT SAVED' and z.label(1) == '-'
+    assert z.label(0) == 'BANK P128 EMPTY' and z.label(1) == '-'
     z.yes(3)
     z.yes(3)
-    assert 'read' not in z.calls and not z.writes and z.msgs[-1] == 'Bank P128 not saved'
+    assert 'read' not in z.calls and not z.writes and z.msgs[-1] == 'Bank P128 empty'
+    z.status = 12                                                              # another format: says which
+    assert z.label(0) == 'BANK P128 FORMAT 12'
+    z.yes(0)
+    assert z.msgs[-1] == 'Bank P128 format 12' and 'refr' in z.calls
 
     # long press of SETTINGS
     k = Unit(image, sym)

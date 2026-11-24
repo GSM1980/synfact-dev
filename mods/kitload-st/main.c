@@ -11,7 +11,8 @@
  * SEQUENCE DATA rows, a MODE row and 128 rows "A01 NAME" ... "H16 NAME", the
  * kits of that project. With KIT BANK off the page is stock: the rows are
  * built at boot but kept out of the menu's item list until the bank is on
- * (one row, BANK Pn NOT SAVED, while that project is not saved). LOAD replaces the current pattern's kit with a bank
+ * (one row, BANK Pn EMPTY or BANK Pn FORMAT n, while that slot holds no
+ * loadable project). LOAD replaces the current pattern's kit with a bank
  * kit; SAVE writes the current pattern's kit into a bank position. Both ask
  * for a second YES: the row then reads the question ("SAVE A09 IN P128? YES")
  * until it is answered or cancelled. A long press of SETTINGS opens the page.
@@ -117,6 +118,20 @@ static const char *bank_text(char *d, const char *pre, const char *post)
     d[n++] = 'P';
     n += put_num(d + n, kl_bank);
     cpy(d + n, post, LBL + 8 - n);
+    return d;
+}
+
+/* Why the bank is not usable: "BANK P128 EMPTY" (no saved project there) or
+ * "BANK P128 FORMAT 12" (a header whose status is not 13, the only one the OS
+ * itself loads from: 40019db4, 4001e452). */
+static const char *bank_why(char *d, int upper)
+{
+    int st = SSTAT(MGR(), kl_bank - 1u);
+    u32 n;
+    if (st < 0) return bank_text(d, upper ? "BANK " : "Bank ", upper ? " EMPTY" : " empty");
+    bank_text(d, upper ? "BANK " : "Bank ", upper ? " FORMAT " : " format ");
+    for (n = 0; d[n]; n++) ;
+    put_num(d + n, (u32)st);
     return d;
 }
 
@@ -242,7 +257,7 @@ static void load(u32 src, u32 dst)
     if (src > 127u || dst > 127u || !kl_bank) return;
     obj = CUROBJ();
     mgr = MGR();
-    if (SSTAT(mgr, slot) != 13) { say(bank_text(msg_buf, "Bank ", " not saved")); return; }
+    if (SSTAT(mgr, slot) != 13) { say(bank_why(msg_buf, 0)); return; }
     if (SREAD(mgr, SCRATCH, slot, (KIT_STORED * src + KITS_AT) >> 9, KIT_STORED) != 0) { say(e_read); return; }
     if (!kl_restore(obj, dst, SCRATCH)) { say(e_dec); return; }
     cpy(msg_buf, "LOADED ", 8);
@@ -272,7 +287,7 @@ static void save(u32 src, u32 dst)
     if (src > 127u || dst > 127u || !kl_bank) return;
     obj = CUROBJ();
     mgr = MGR();
-    if (SSTAT(mgr, slot) != 13) { say(bank_text(msg_buf, "Bank ", " not saved")); return; }
+    if (SSTAT(mgr, slot) != 13) { say(bank_why(msg_buf, 0)); return; }
     if (KENC(SAVEBUF, (void *)live_kit(obj, src), 0) == 0) { say(e_enc); return; }
     pattern_name(obj, src, (char *)SAVEBUF + NAME_AT);
     r = SWRITE(mgr, SAVEBUF, slot, (KIT_STORED * dst + KITS_AT) >> 9, KIT_STORED);
@@ -304,7 +319,7 @@ u32 kl_label_c(void *ret, u32 j)
     if (!kl_bank)
         s = j == 0 ? s_off : s_dash;
     else if (!bank_ok())
-        s = j == 0 ? bank_text(lab_buf, "BANK ", " NOT SAVED") : s_dash;
+        s = j == 0 ? bank_why(lab_buf, 1) : s_dash;
     else if (j == 0)
         s = kl_mode ? s_msave : s_mload;
     else if (j == kl_armed)                             /* waiting for its second YES */
@@ -365,10 +380,10 @@ void kl_act_inv(u32 *any, void *item)
     if (!kl_bank) { kl_armed = 0; say(e_off); return; }
     if (j == 0) {
         kl_armed = 0;
-        if (!bank_ok()) {                       /* BANK Pn NOT SAVED: look again */
+        if (!bank_ok()) {                       /* BANK Pn EMPTY/FORMAT: look again */
             SREFR(MGR(), kl_bank - 1u);
             kl_valid = 0;
-            if (!bank_ok()) { say(bank_text(msg_buf, "Bank ", " not saved")); return; }
+            if (!bank_ok()) { say(bank_why(msg_buf, 0)); return; }
         } else if (!kl_managed || kl_rows == 129u) {
             kl_mode ^= 1u;
             say(kl_mode ? s_psave : s_pload);
@@ -380,7 +395,7 @@ void kl_act_inv(u32 *any, void *item)
         redraw();
         return;
     }
-    if (!bank_ok()) { kl_armed = 0; say(bank_text(msg_buf, "Bank ", " not saved")); return; }
+    if (!bank_ok()) { kl_armed = 0; say(bank_why(msg_buf, 0)); return; }
     if (kl_armed != j) {
         kl_armed = j;
         cpy(msg_buf, kl_mode ? "SAVE " : "LOAD ", 6);

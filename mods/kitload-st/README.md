@@ -25,9 +25,12 @@ reads the header of each slot whose entry is not filled yet (512 bytes each,
 once).
 
 While it is off, RELOAD FROM PROJ is the stock page: the module's rows are
-built at boot but kept out of the menu until the bank is on. While the bank
-project is not saved, the page shows one row, `BANK P128 NOT SAVED`; YES on
-it looks again (after you save that project) and brings the list.
+built at boot but kept out of the menu until the bank is on. The bank must be
+a saved project: the module saves kits into it, it cannot create one. Until
+there is one, the page shows one row: `BANK P128 EMPTY` (nothing saved in
+that slot) or `BANK P128 FORMAT n` (a project whose status is not 13, the
+only one the OS loads). Save a project there (PROJECT > SAVE AS, P128), then
+YES on that row looks again and brings the list.
 
 With the bank on:
 
@@ -55,10 +58,10 @@ With the bank on:
 - **Shortcut.** A long press of **SETTINGS** opens the page from anywhere,
   instead of the LED INTENSITY quick view (LED intensity stays in the
   SETTINGS menu). The page stays open; NO closes it.
-- **Not saved.** If the bank project is not a saved project in the current
-  format, row 0 reads `BANK P128 NOT SAVED`, rows 1 and 2 the slot status
-  (13 = ok) and the storage state (2 = ready); YES on row 0 tries again.
-  Nothing is read or written.
+- **No bank project.** If the bank slot holds no loadable project, row 0
+  reads `BANK P128 EMPTY` or `BANK P128 FORMAT n` (the slot status; 13 is
+  the one the OS loads); YES on row 0 rereads the slot header and tries
+  again. Nothing is read or written.
 
 **What LOAD restores.** Everything the Kit holds: the 12 audio tracks' and
 the FX track's sounds and settings, the kit's per-track blocks and name, and
@@ -130,7 +133,8 @@ stubs of the OS routines, at their real addresses:
   completed once, only for entries not filled, with no kit reads;
 - the 129 rows are built with no storage access, and the labels read the bank;
 - the menu shows only its own three rows while KIT BANK is off, one row while
-  the bank project is not saved and all 129 when it is, with the same items
+  the bank slot holds no loadable project (empty or another status) and all
+  129 when it does, with the same items
   put back and the selection clamped when rows go;
 - LOAD and SAVE need two YES on the same row, and the row shows the question
   while it waits; arming, answering, cancelling and MODE invalidate the view
