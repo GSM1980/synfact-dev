@@ -1,7 +1,8 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft, 0.2.2.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
-(the stock RELOAD FROM PROJ page while KIT BANK is off) has not. The same
+**Draft, 0.2.3.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
+(the stock page while KIT BANK is off, the row confirmation and its repaint)
+was tried on a unit; 0.2.3 (a project named KITBANK) has not. The same
 feature has been used on OS 1.42 as a binary patch outside this project;
 this module is its rewrite on core events. Needs core 2.7 (host API
 18, SMZ events 16/17).
@@ -11,8 +12,17 @@ this module is its rewrite on core events. Needs core 2.7 (host API
 **Off until you turn it on.** SETTINGS > **KIT BANK** reads `OFF`. YES turns
 it on with **P128** offered; LEFT/RIGHT pick any project, P1..P128 (and turn
 it on); YES again turns it off. Installing the module never makes an
-existing project a bank. The choice lasts until power-off: a module has no
-place to keep it yet (see Open questions).
+existing project a bank. A choice made here lasts until power-off.
+
+**Kept across power-off: name the bank project `KITBANK`** (or `KIT BANK`, any
+case). After power-on, while KIT BANK has not been changed by hand, the
+lowest saved project with that name is the bank, and KIT BANK reads its
+number. Nothing is written anywhere: the name is the setting. Rename or
+delete the project and the bank is off again. Changing KIT BANK by hand
+(YES or LEFT/RIGHT) takes over until the next power-on. The name is read
+from the OS project manager's slot cache; the first lookup after power-on
+reads the header of each slot whose entry is not filled yet (512 bytes each,
+once).
 
 While it is off, RELOAD FROM PROJ is the stock page: the module's rows are
 built at boot but kept out of the menu until the bank is on. While the bank
@@ -96,9 +106,12 @@ is drawn after it opens (128 reads of 512 bytes).
 
 ## Open questions
 
-- **Where KIT BANK is kept.** It resets to OFF at power-off. A module has no
-  settings store of its own; a core place for small module settings would
-  let it persist.
+- **Where KIT BANK is kept.** A module has no settings store of its own, so
+  0.2.3 uses the project's name (`KITBANK`) instead of a stored setting. A
+  core place for small module settings would let a chosen number persist too.
+- **The slot cache at power-on.** Whether the OS fills the project
+  manager's slot cache for every slot at boot was not established statically;
+  the module completes it once, so either way works.
 - **View-stack reading.** Page entry and exit read the global view manager's
   `std::list` (layout from `40100d86`), a static reading not yet observed on
   a unit.
@@ -111,6 +124,10 @@ stubs of the OS routines, at their real addresses:
 
 - KIT BANK: off by default, YES toggles, LEFT/RIGHT pick P1..P128; off reads
   and writes nothing;
+- a saved project named `KITBANK` / `kit bank  ` is the bank (the lowest),
+  `KITBANKS`, `KIT BANK 2`, a status other than 13 or an empty entry are not;
+  renaming turns it off; a change by hand takes over; the slot cache is
+  completed once, only for entries not filled, with no kit reads;
 - the 129 rows are built with no storage access, and the labels read the bank;
 - the menu shows only its own three rows while KIT BANK is off, one row while
   the bank project is not saved and all 129 when it is, with the same items

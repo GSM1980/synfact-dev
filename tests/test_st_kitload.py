@@ -109,7 +109,7 @@ class Unit:
             0x4010394c: self.new, 0x401bf31e: self.strctor, 0x400fa84c: self.itemctor,
             0x400fa082: self.add_row, 0x4016dc10: lambda a: 0,
             0x4016f292: lambda a: self.log('mgr', MGR_V), 0x4011067e: lambda a: self.log('stat', 13 if self.bank else 0),
-            0x40110952: lambda a: self.log('refr', 0), 0x401101c4: lambda a: self.log('dev', 2),
+            0x40110952: self.refr, 0x401101c4: lambda a: self.log('dev', 2),
             0x40110892: self.sread, 0x40111c0c: self.swrite, 0x400a78a0: self.kdec, 0x400a78f4: self.kenc,
             0x40172414: lambda a: self.log('note', 0), 0x4011613c: self.memcpy,
             0x4016dfac: lambda a: self.log('sprel', 0), 0x4016eec2: self.spcopy,
@@ -194,6 +194,16 @@ class Unit:
         self.u.mem_write(out, struct.pack('>2I', kit, 0x48300000))
         self.tmp = kit
         return out
+
+    def refr(self, a):                         # SREFR: fills a slot cache entry from its header
+        self.refreshed = getattr(self, 'refreshed', []) + [a[1]]
+        if a[1] in getattr(self, 'headers', {}):
+            self.name(a[1], self.headers[a[1]])
+        return self.log('refr', 0)
+
+    def name(self, slot, text, status=13, valid=1):  # the project manager's slot cache entry
+        at = MGR_V + 12 + 28 * slot
+        self.u.mem_write(at, bytes([valid, 0, 0, 0]) + struct.pack('>I', status) + text.encode().ljust(16, b'\0')[:16])
 
     def invalidate(self, a):
         self.invalidated = getattr(self, 'invalidated', []) + [a[0]]
@@ -325,6 +335,38 @@ def check(image, sym):
     o.bank_select()
     assert o.bank_label() == 'KIT BANK: P128'                                  # the last pick again
     print('settings: off by default, YES toggles, LEFT/RIGHT pick P1..P128')
+
+    # a saved project named KITBANK is the bank until KIT BANK is changed by hand
+    a = Unit(image, sym)
+    a.menu(bank=0)
+    assert a.bank_label() == 'KIT BANK: OFF'
+    assert sorted(a.refreshed) == list(range(128))                             # the first lookup completes the cache
+    a.name(11, 'KITBANK')
+    assert a.bank_label() == 'KIT BANK: P12' and a.shown()[0] == 132         # read from the slot cache
+    assert 'read' not in a.calls and len(a.refreshed) == 128                   # once per power-on, no kit reads
+    c = Unit(image, sym)                                                       # a cache not filled at power-on
+    c.headers = {30: 'KITBANK'}
+    c.name(2, 'SONG'); c.menu(bank=0)
+    assert c.bank_label() == 'KIT BANK: P31' and 2 not in c.refreshed         # only entries not valid are read
+    a.name(4, 'kit bank  ')
+    assert a.bank_label() == 'KIT BANK: P5'                                    # the lowest, any case, trailing spaces
+    for bad in (('KITBANKS', 13, 1), ('KIT BANK 2', 13, 1), ('KITBANK', 12, 1), ('KITBANK', 13, 0)):
+        b = Unit(image, sym); b.menu(bank=0); b.name(20, *bad)
+        assert b.bank_label() == 'KIT BANK: OFF', bad
+    a.name(4, 'SONG'); a.name(11, 'SONG')
+    assert a.bank_label() == 'KIT BANK: OFF'                                   # renamed: off again
+    a.name(11, 'KITBANK')
+    a.stack(RM); a.tick()
+    assert a.var('kl_bank') == 12 and a.shown()[0] == 132                      # page entry finds it too
+    a.stack(); a.tick()
+    a.bank_select()                                                            # by hand: OFF, and it stays
+    assert a.bank_label() == 'KIT BANK: OFF' and a.var('kl_user') == 1
+    a.stack(RM); a.tick()
+    assert a.var('kl_bank') == 0 and a.shown()[0] == 3
+    a.bank_change(-3)
+    assert a.bank_label() == 'KIT BANK: P9'                                    # from the named one: picked by hand
+    print('naming: a project named KITBANK is the bank after power-on, from the slot cache, '
+          'until KIT BANK is changed by hand')
 
     # the rows the menu shows: none of ours while off, one while not saved, all when saved
     v = Unit(image, sym, bank=False)

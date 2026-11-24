@@ -25,6 +25,14 @@ typedef struct { u32 d0, d1, mgr, inv; } fn_t;                         /* std::f
 #define SREFR    ((void (*)(u32,u32))0x40110952u)                      /* (mgr, slot): reread the slot's header */
 #define SDEV     ((u32 (*)(u32))0x401101c4u)                           /* storage state: 2 = ready */
 #define SREAD    ((int (*)(u32,void *,u32,u32,u32))0x40110892u)        /* (mgr, dst, slot, 512-byte block, bytes) */
+/* The manager's slot cache, as SREFR (40110952) fills it from each slot's
+ * 512-byte header (BEEFBACE, status, 16-byte name): at mgr + 12 + 28 * slot,
+ * valid byte +0 (set when the header has a name), status +4 (what SSTAT
+ * returns), name +8, NUL-padded. */
+#define SLOT_CACHE 12u
+#define SLOT_STRIDE 28u
+#define SLOT_STATUS 4u
+#define SLOT_NAME 8u
 #define SWRITE   ((int (*)(u32,void *,u32,u32,u32))0x40111c0cu)        /* (mgr, src, slot, block, bytes): 0 = ok */
 
 /* Kit codec: the entries the core hooks (core_meta_kit_decode/encode), so

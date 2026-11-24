@@ -3,7 +3,11 @@
  * RELOAD FROM PROJ. See README.md.
  *
  * Off until SETTINGS > KIT BANK names a project (P1..P128, P128 offered
- * first). Then the menu gets, after the OS's WHOLE PATTERN / KIT DATA /
+ * first), or a saved project is named KITBANK (or KIT BANK): until KIT BANK is
+ * changed by hand, that project is the bank, so the choice survives power-off
+ * with nothing written. The name is read from the project manager's slot
+ * cache; the first lookup after power-on refreshes (SREFR) the entries that
+ * are not valid, once, and the OS refreshes an entry after each save. Then the menu gets, after the OS's WHOLE PATTERN / KIT DATA /
  * SEQUENCE DATA rows, a MODE row and 128 rows "A01 NAME" ... "H16 NAME", the
  * kits of that project. With KIT BANK off the page is stock: the rows are
  * built at boot but kept out of the menu's item list until the bank is on
@@ -39,6 +43,8 @@ static char lab_buf[LBL + 8] DATA = {0};
 static char ask_buf[LBL + 8] DATA = {0};  /* the armed row's question, shown in place of its label */
 u32 kl_bank DATA = 0;                   /* 0 off, else the bank project 1..128 */
 u32 kl_pick DATA = KL_DEFAULT;          /* the project KIT BANK offers */
+u32 kl_scanned DATA = 0;                /* the slot cache was completed once since power-on */
+u32 kl_user DATA = 0;                   /* KIT BANK changed by hand since power-on: no naming */
 u32 kl_valid DATA = 0;                  /* names: 0 to read, 1 read, 2 a read failed (retry on entry) */
 u32 kl_mode DATA = 0;                   /* 0 LOAD, 1 SAVE */
 u32 kl_armed DATA = 0;                  /* row (1..128) waiting for its second YES */
@@ -162,6 +168,38 @@ static int bank_ok(void)
         kl_valid = ok ? 1u : 2u;
     }
     return 1;
+}
+
+/* The lowest saved project named KITBANK or KIT BANK (any case, trailing
+ * spaces ignored), 1..128, or 0. */
+static int named(const char *n)
+{
+    static const char a[] = "KITBANK", b[] = "KIT BANK";
+    char t[17];
+    u32 k, len;
+    for (k = 0; k < 16u && n[k]; k++) t[k] = (char)(n[k] >= 'a' && n[k] <= 'z' ? n[k] - 32 : n[k]);
+    while (k && t[k - 1] == ' ') k--;
+    t[k] = 0;
+    len = k;
+    for (k = 0; k <= len; k++) if (t[k] != a[k]) break;
+    if (k > len) return 1;
+    for (k = 0; k <= len; k++) if (t[k] != b[k]) break;
+    return k > len;
+}
+
+u32 kl_named_bank(void)
+{
+    u32 mgr = MGR(), s;
+    if (!kl_scanned && SDEV(mgr) == 2u) {     /* a slot not read yet looks like an empty one */
+        kl_scanned = 1;
+        for (s = 0; s < 128u; s++)
+            if (!*(const unsigned char *)(mgr + SLOT_CACHE + SLOT_STRIDE * s)) SREFR(mgr, s);
+    }
+    for (s = 0; s < 128u; s++) {
+        const unsigned char *e = (const unsigned char *)(mgr + SLOT_CACHE + SLOT_STRIDE * s);
+        if (e[0] && *(const u32 *)(e + SLOT_STATUS) == 13u && named((const char *)e + SLOT_NAME)) return s + 1u;
+    }
+    return 0;
 }
 
 static u32 live_kit(u32 obj, u32 idx)
@@ -399,8 +437,10 @@ void kl_pattern_menu(void *menu) { kl_pm = (u32)menu; }
 /* ---- SETTINGS > KIT BANK: OFF, or the bank project. YES turns it on (with
  * the last project offered, P128 at first) or off; LEFT/RIGHT pick the
  * project and turn it on. Kept until power-off. */
+static void auto_bank(void);
 const char *kl_bank_text(void)
 {
+    auto_bank();
     return kl_bank ? bank_text(lab_buf, "KIT BANK: ", "") : "KIT BANK: OFF";
 }
 __asm__(".text\n.globl kl_bank_label\nkl_bank_label:\n"
@@ -422,14 +462,26 @@ static void bank_changed(u32 bank)
     kl_valid = 0; kl_armed = 0; kl_mode = 0;
     set_rows(rows_wanted());
 }
+
+/* Until KIT BANK is changed by hand, the bank is the project named KITBANK. */
+static void auto_bank(void)
+{
+    u32 b;
+    if (kl_user) return;
+    b = kl_named_bank();
+    if (b != kl_bank) bank_changed(b);
+}
 void kl_bank_select(const u32 *fn)
 {
+    kl_user = 1;
     bank_changed(kl_bank ? 0u : kl_pick);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
 void kl_bank_change(const u32 *fn, int amount)
 {
-    int p = (int)(kl_bank ? kl_bank : kl_pick) + amount;
+    int p;
+    kl_user = 1;
+    p = (int)(kl_bank ? kl_bank : kl_pick) + amount;
     if (p < 1) p = 1;
     if (p > 128) p = 128;
     bank_changed((u32)p);
@@ -473,8 +525,10 @@ void kl_tick(void *ctrl)
     if (!kl_rm) return;
     open = (u32)page_on_stack();
     if (open && !kl_open) {
+        u32 want;
         kl_valid = 0; kl_armed = 0;
-        u32 want = rows_wanted();
+        auto_bank();
+        want = rows_wanted();
         if (kl_rows != want) {
             set_rows(want);
             if (ctrl) *((unsigned char *)ctrl + 0x20) = 1;                /* redraw */
@@ -499,6 +553,7 @@ static void open_page(void)
     u32 sp[2];
     const u32 *pm = (const u32 *)kl_pm;
     kl_armed = 0; kl_valid = 0;
+    auto_bank();
     set_rows(rows_wanted());
     sp[0] = pm[PM_KITVIEW / 4];
     SPCOPY(&sp[1], (u32 *)&pm[(PM_KITVIEW + 4) / 4]);
