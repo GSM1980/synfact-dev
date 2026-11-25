@@ -1,0 +1,39 @@
+{
+  "id": "wavetable-st",
+  "title": "SP WAVETBL",
+  "latest": "0.1.0",
+  "entries": [
+    {
+      "version": "0.1.0",
+      "date": "2026-11-25",
+      "commits": [
+        {
+          "sha": "9692d6f",
+          "date": "2026-11-25",
+          "subject": "SY WAVETABLE 0.1.0 and core 2.8.0: wavetables, tempo, displays"
+        },
+        {
+          "sha": "8a039bb",
+          "date": "2026-11-25",
+          "subject": "SY WAVETABLE: unit-test fixes (dials, ANIM default, names, FUNC stick, page cost)"
+        },
+        {
+          "sha": "dda3415",
+          "date": "2026-11-25",
+          "subject": "SP WAVETBL: the machine's name and menu place"
+        },
+        {
+          "sha": "fe7ebb9",
+          "date": "2026-11-25",
+          "subject": "SP WAVETBL: SLOT out of page randomize and reload"
+        },
+        {
+          "sha": "dc51254",
+          "date": "2026-11-25",
+          "subject": "SP WAVETBL: SYN+NO sets the page's defaults, SLOT kept"
+        }
+      ]
+    }
+  ],
+  "slug": "wavetable-st"
+}

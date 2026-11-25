@@ -1,12 +1,28 @@
 {
   "id": "sample-manager-st",
   "title": "Sample Manager",
-  "latest": "1.3.0",
+  "latest": "1.3.1",
   "entries": [
+    {
+      "version": "1.3.1",
+      "date": "2026-11-25",
+      "commits": [
+        {
+          "sha": "9692d6f",
+          "date": "2026-11-25",
+          "subject": "SY WAVETABLE 0.1.0 and core 2.8.0: wavetables, tempo, displays"
+        }
+      ]
+    },
     {
       "version": "1.3.0",
       "date": "2026-11-19",
       "commits": [
+        {
+          "sha": "debf769",
+          "date": "2026-11-24",
+          "subject": "Changelogs: SP 1.6.2, Playhead 1.3.0, MD KIT 0.3, SY MnM 0.8.2, COMP 1.1.0"
+        },
         {
           "sha": "ebab6b4",
           "date": "2026-11-23",

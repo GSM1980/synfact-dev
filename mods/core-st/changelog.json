@@ -1,8 +1,35 @@
 {
   "id": "core",
   "title": "core",
-  "latest": "2.6.1",
+  "latest": "2.8.0",
   "entries": [
+    {
+      "version": "2.8.0",
+      "date": "2026-11-25",
+      "commits": [
+        {
+          "sha": "9692d6f",
+          "date": "2026-11-25",
+          "subject": "SY WAVETABLE 0.1.0 and core 2.8.0: wavetables, tempo, displays"
+        },
+        {
+          "sha": "dda3415",
+          "date": "2026-11-25",
+          "subject": "SP WAVETBL: the machine's name and menu place"
+        }
+      ]
+    },
+    {
+      "version": "2.7.0",
+      "date": "2026-11-23",
+      "commits": [
+        {
+          "sha": "ad362c1",
+          "date": "2026-11-23",
+          "subject": "Core 2.7.0: PATTERN menu build events (SMZ events 16/17, host API 18)"
+        }
+      ]
+    },
     {
       "version": "2.6.1",
       "date": "2026-11-23",
@@ -11,6 +38,11 @@
           "sha": "70f4868",
           "date": "2026-11-24",
           "subject": "SP playhead, Playhead keys, MD/MnM limits, MD voice knobs, COMP 1.1.0"
+        },
+        {
+          "sha": "debf769",
+          "date": "2026-11-24",
+          "subject": "Changelogs: SP 1.6.2, Playhead 1.3.0, MD KIT 0.3, SY MnM 0.8.2, COMP 1.1.0"
         },
         {
           "sha": "a7a19a5",

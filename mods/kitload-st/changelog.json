@@ -1,0 +1,105 @@
+{
+  "id": "kitload-st",
+  "title": "Kit bank",
+  "latest": "0.2.5",
+  "entries": [
+    {
+      "version": "0.2.5",
+      "date": "2026-11-24",
+      "commits": [
+        {
+          "sha": "bfb6ed7",
+          "date": "2026-11-25",
+          "subject": "docs(kitload): clarify bank activation and write confirmations"
+        },
+        {
+          "sha": "65d58da",
+          "date": "2026-11-24",
+          "subject": "kitload-st 0.2.5: create the bank with PROJECT's own copy/paste/rename"
+        }
+      ]
+    },
+    {
+      "version": "0.2.4",
+      "date": "2026-11-24",
+      "commits": [
+        {
+          "sha": "074d36b",
+          "date": "2026-11-24",
+          "subject": "kitload-st 0.2.4: confirm LOAD/SAVE in the OS's own confirmation box"
+        }
+      ]
+    },
+    {
+      "version": "0.2.3",
+      "date": "2026-11-24",
+      "commits": [
+        {
+          "sha": "1e8aa47",
+          "date": "2026-11-24",
+          "subject": "kitload-st 0.2.3: a project named KITBANK is the bank across power-off"
+        },
+        {
+          "sha": "7544a76",
+          "date": "2026-11-24",
+          "subject": "kitload-st 0.2.3: say why the bank is not usable (EMPTY or FORMAT n)"
+        }
+      ]
+    },
+    {
+      "version": "0.2.2",
+      "date": "2026-11-24",
+      "commits": [
+        {
+          "sha": "1f9f065",
+          "date": "2026-11-24",
+          "subject": "kitload-st 0.2.2: stock RELOAD FROM PROJ page while KIT BANK is off"
+        },
+        {
+          "sha": "05a56f1",
+          "date": "2026-11-24",
+          "subject": "kitload-st 0.2.2: the armed row shows its question until answered"
+        },
+        {
+          "sha": "850f5a3",
+          "date": "2026-11-24",
+          "subject": "kitload-st 0.2.2: repaint the menu when a row is armed, answered or cancelled"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1",
+      "date": "2026-11-23",
+      "commits": [
+        {
+          "sha": "8ef3c33",
+          "date": "2026-11-23",
+          "subject": "kitload-st 0.2.1: cancel a pending confirmation on every navigation event"
+        }
+      ]
+    },
+    {
+      "version": "0.2.0",
+      "date": "2026-11-23",
+      "commits": [
+        {
+          "sha": "e1fc520",
+          "date": "2026-11-23",
+          "subject": "kitload-st 0.2.0: whole-kit LOAD, KIT BANK setting, fresh names, cancel on navigation"
+        }
+      ]
+    },
+    {
+      "version": "0.1.0",
+      "date": "2026-11-23",
+      "commits": [
+        {
+          "sha": "8d0915e",
+          "date": "2026-11-23",
+          "subject": "kitload-st 0.1.0 (draft): a kit bank in P128 on core 2.7 events"
+        }
+      ]
+    }
+  ],
+  "slug": "kitload-st"
+}

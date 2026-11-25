@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.1.0.
 ## 1.1.0 (2026-11-24)
 
 - SP playhead, Playhead keys, MD/MnM limits, MD voice knobs, COMP 1.1.0 (`70f4868`, 2026-11-24)
+- Changelogs: SP 1.6.2, Playhead 1.3.0, MD KIT 0.3, SY MnM 0.8.2, COMP 1.1.0 (`debf769`, 2026-11-24)
 
 ## 1.0.0 (2026-11-20)
 
