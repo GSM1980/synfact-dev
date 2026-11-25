@@ -1,7 +1,8 @@
 # kitload-st: a kit bank in a saved project
 
 **Draft, 0.3.0.** 0.2.0 to 0.2.5 were tried in review and on a unit; 0.3.0
-(the naming box on SAVE, the SETTINGS icon) has not.
+(the naming box on SAVE, LOAD without confirmation, the SETTINGS icon) has
+not.
 
 ## What it does
 
@@ -41,10 +42,10 @@ With the bank on:
   one per kit of the bank project. The names are read again each time the
   page opens; a name that cannot be read shows `A01 ?` and is retried on the
   next opening.
-- **Load.** In `MODE: LOAD KIT`, YES on a row opens the Syntakt's own
-  confirmation box, `LOAD KIT A06?` / `CONFIRM Y/N` (the box CLEAR TRACK
-  SOUND? uses). YES in the box replaces the current pattern's kit with that
-  bank kit, whole; NO closes it. The bank is only read.
+- **Load.** In `MODE: LOAD KIT`, YES on a row replaces the current
+  pattern's kit with that bank kit, whole, at once: no confirmation, so
+  unsaved changes to the current kit are replaced (the project's own saved
+  kit is untouched: RELOAD KIT brings it back). The bank is only read.
 - **Save.** YES on the MODE row switches to `MODE: SAVE KIT` (every row then
   reads `SAVE A01 ...`). YES on a row opens the OS's naming box, `SAVE TO
   A09`, offering the current pattern's name (or the slot's own name when the
@@ -123,7 +124,7 @@ row) with its mask, a non-owning descriptor (`400f72be`) blitted by
 `400f8f70` at the row's x/y from the row's draw callback, as Sample
 Manager's.
 
-**The confirmation box** is the OS's ConfirmWindow, built as CLEAR TRACK
+**The confirmation box** (CREATE KITBANK) is the OS's ConfirmWindow, built as CLEAR TRACK
 SOUND? (`400653ae`) builds it: `operator new(0x7c)`, the constructor
 `400f6156(this, question, "CONFIRM Y/N", std::function<void(bool)>, 0)`, a
 shared_ptr control block `{401c88b0, 1, 1, box}`, pushed on the global view
@@ -178,11 +179,10 @@ stubs of the OS routines, at their real addresses:
   current project, a failed copy (no rename), a slot holding a project (not
   offered, and checked again at the answer) are refused;
 - messages go to the OS's text box (`400fdfc8`), over the menu;
-- YES on a kit row in LOAD mode opens the confirmation box with `LOAD KIT
-  A06?` and `CONFIRM Y/N`, its function carrying the row and mode, its
-  shared_ptr and push as the OS's own; the box's NO does nothing, its YES
-  loads; a box answered after KIT BANK went off does nothing; an answered
-  box and MODE invalidate the view and ask the tick for one redraw;
+- YES on a kit row in LOAD mode loads at once (no box); nothing loads while
+  KIT BANK is off; a LOAD, a named SAVE and MODE invalidate the view and ask
+  the tick for one redraw; the CREATE question's box carries its function,
+  shared_ptr and push as the OS's own;
 - in SAVE mode YES opens the naming box (`SAVE TO A09`, the slot's own name
   offered when the pattern has none, arguments 0/16/0, make_shared control
   block with the box at +16); its YES saves under the typed name (written at

@@ -14,10 +14,11 @@
  * (one row while that slot holds no loadable project: CREATE KITBANK IN Pn
  * for an empty slot, which makes the bank with PROJECT's own copy, paste and
  * rename, or BANK Pn FORMAT n). LOAD replaces the current pattern's kit with a bank
- * kit; SAVE writes the current pattern's kit into a bank position. Both ask
- * first in the OS's own confirmation box ("LOAD KIT A06?" / "SAVE TO A09?",
- * CONFIRM Y/N), the one CLEAR TRACK SOUND? uses: YES there does it, NO
- * closes it. A long press of SETTINGS opens the page.
+ * kit at once, on YES; SAVE writes the current pattern's kit into a bank
+ * position under a name typed in the OS's own naming box (the one PROJECT
+ * NAME opens): its YES saves, NO closes it. Creating the bank asks in the
+ * OS's confirmation box (the one CLEAR TRACK SOUND? uses). A long press of
+ * SETTINGS opens the page.
  *
  * Events only, no code site of its own:
  *   ST_EV_RELOAD_MENU  appends the rows (core 2.7);
@@ -403,8 +404,6 @@ static void set_rows(u32 n)
     ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);                    /* clamp the selection */
 }
 
-/* Ask in the OS's confirmation box: "LOAD KIT A06?" or "SAVE TO A09?" over
- * CONFIRM Y/N. 0 if it could not be opened. */
 /* Create the bank: PROJECT's own COPY of the current project's saved slot,
  * PASTE into the empty bank slot, and RENAME to KITBANK, as one job on the
  * OS's job queue. The current project stays current and is not touched; the
@@ -502,14 +501,7 @@ static int confirm(u32 j, u32 mode)
     u32 q[1], sub[1], box, *cb, sp[2];
     char alloc;
     fn_t fn = {j, mode, (u32)kl_mgr, (u32)kl_confirm_inv};
-    if (mode == 2)
-        bank_text(msg_buf, "CREATE KITBANK ", "?");    /* "CREATE KITBANK P128?" */
-    else {
-        char *d;
-        cpy(msg_buf, mode ? "SAVE TO " : "LOAD KIT ", 10);
-        d = msg_buf + (mode ? 8 : 9);
-        d[0] = kl_lbl[j][0]; d[1] = kl_lbl[j][1]; d[2] = kl_lbl[j][2]; d[3] = '?'; d[4] = 0;
-    }
+    bank_text(msg_buf, "CREATE KITBANK ", "?");        /* "CREATE KITBANK P128?" */
     box = NEW(CW_SIZE);
     if (!box) return 0;
     STRCTOR(q, msg_buf, &alloc);
@@ -557,20 +549,20 @@ void kl_act_inv(u32 *any, void *item)
         return;
     }
     if (!bank_ok()) { say(bank_why(msg_buf, 0)); return; }
-    if (!(kl_mode ? name_box(j) : confirm(j, 0))) say(e_box);
+    if (!kl_mode) {                                     /* LOAD: at once, no confirmation */
+        load(j - 1u, CURIDX(CURSRC()));
+        redraw();
+        return;
+    }
+    if (!name_box(j)) say(e_box);
 }
 
 /* The box's answer: invoker(any, answer), any = {row, mode} as confirm() set
  * it. Runs after the box has closed itself. */
 void kl_confirm_inv(const u32 *any, u32 yes)
 {
-    u32 j = any[0];
     if (!(yes & 0xffu) || !kl_bank) return;
-    if (any[1] == 2u) { create(); return; }
-    if (j < 1u || j > 128u || !bank_ok()) return;
-    if (!any[1]) load(j - 1u, CURIDX(CURSRC()));
-    else save(CURIDX(CURSRC()), j - 1u);
-    redraw();
+    if (any[1] == 2u) create();                         /* the only question asked in this box */
 }
 
 static void add_item(void *menu, u32 j)

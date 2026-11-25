@@ -477,21 +477,12 @@ def check(image, sym):
     assert m.label(0) == 'MODE: LOAD KIT' and m.label(1) == 'A01 KIT 00' and m.label(128) == 'H16 KIT 127'
     print('rows: 129 built without storage access; labels read the bank on draw')
 
-    # LOAD: YES opens the OS's confirmation box; its NO does nothing, its YES loads
+    # LOAD: YES loads at once, no box
+    pushes = len(m.pushes)
     m.yes(6)
-    (b,) = m.boxes
-    assert (b['q'], b['sub'], b['flag']) == ('LOAD KIT A06?', 'CONFIRM Y/N', 0) and 'note' not in m.calls
-    assert b['fn'][:2] == (6, 0) and b['fn'][2] == m.sym['kl_mgr'] and b['fn'][3] == m.sym['kl_confirm_inv']
-    mgr_, box, ctrl, flag = m.pushes[-1]
-    assert (mgr_, box, flag) == (UIROOT_V + 64, b['box'], 0)                    # on the global view manager
-    assert struct.unpack('>4I', m.u.mem_read(ctrl, 16)) == (0x401c88b0, 1, 1, b['box'])  # its shared_ptr
-    assert m.calls['sprel'] >= 1 and m.calls['strdtor'] >= 2                    # our references dropped
-    m.answer(0)
-    assert 'note' not in m.calls                                               # NO: nothing
-    m.yes(6)
-    m.answer(1)
+    assert not m.boxes and len(m.pushes) == pushes + 1                         # only the LOADED text box
     assert m.calls['note'] == 1 and m.msgs[-1] == 'LOADED A06 KIT 05'
-    print('confirmation: the OS box asks, its NO does nothing, its YES loads')
+    print('load: YES loads at once, no confirmation')
     live = BASE + KITS_RAM_OFS + KIT_RAM * m.cur
     assert [(d, s_, n) for d, s_, n in m.copies] == [(live, m.tmp, KIT_RAM)]     # the whole Kit, one COPY
     got = bytes(m.u.mem_read(live, KIT_RAM))
@@ -530,7 +521,7 @@ def check(image, sym):
           'under the typed name, an empty name is KIT, nothing after KIT BANK went off')
     m.yes(0)
     m.decoded.clear()
-    m.yes(9); m.answer(1)
+    m.yes(9)
     (src,) = m.decoded
     assert src == data and src[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]   # ... and handed back to the decoder
     print('save/load: the whole record, Kit tail [14e0,15f8) included, round-trips through the bank')
@@ -545,7 +536,7 @@ def check(image, sym):
     # another bank project
     p = Unit(image, sym)
     p.menu(bank=7)
-    p.yes(2); p.answer(1)
+    p.yes(2)
     assert p.msgs[-1].startswith('LOADED A02') and p.calls['read'] == 128 + 1 and p.slots == {6}
 
     # entering the page rereads the names; a box answered after the bank went off does nothing
@@ -553,10 +544,9 @@ def check(image, sym):
     n.menu()
     n.stack(0x48070000, RM)                                                    # the page is open
     n.tick()
+    n.bank_select()                                                            # KIT BANK off
     n.yes(9)
-    n.bank_select()                                                            # KIT BANK off meanwhile
-    n.answer(1)
-    assert 'note' not in n.calls
+    assert 'note' not in n.calls and n.msgs[-1] == 'Turn on KIT BANK'           # nothing loads
     n.bank_select()
     n.stack(0x48070000)                                                        # NO: the page leaves the stack
     n.tick()
@@ -574,17 +564,19 @@ def check(image, sym):
     n.u.mem_write(k, struct.pack('>5I', KEYEV_VT, 0, 0, SETTINGS, 0x20))
     assert n.call(n.sym['kl_key'], [0, k]) == 1                                 # entry by the shortcut
     assert n.label(1) == 'A01 AGAIN'
-    # the menu does not repaint after an action: an answered SAVE and MODE invalidate it
+    # the menu does not repaint after an action: a LOAD, a named SAVE and MODE invalidate it
     r = Unit(image, sym)
     r.menu(); r.stack(RM); r.tick(); r.invalidated = []
     r.yes(9)
-    assert not r.invalidated and r.tick() == 0                                 # the box is the OS's to draw
-    r.answer(1)
-    assert r.invalidated == [RM + 0x38] and r.tick() == 1 and r.tick() == 0    # once
+    assert r.invalidated == [RM + 0x38] and r.tick() == 1 and r.tick() == 0    # LOAD: once
     r.yes(0)
     assert r.invalidated == [RM + 0x38] * 2 and r.tick() == 1                 # MODE: every label changes
-    print('redraw: an answered box and MODE invalidate the view and ask the tick once')
-    print('page: names reread on each entry; a box answered after KIT BANK went off does nothing')
+    r.yes(9)
+    assert len(r.invalidated) == 2 and r.tick() == 0                           # the naming box is the OS's to draw
+    r.type_name('NEW')
+    assert r.invalidated == [RM + 0x38] * 3 and r.tick() == 1                 # saved: the row's name changed
+    print('redraw: a LOAD, a named SAVE and MODE invalidate the view and ask the tick once')
+    print('page: names reread on each entry; nothing loads while KIT BANK is off')
 
     # a failed read is not cached as done
     f = Unit(image, sym)
