@@ -45,7 +45,7 @@ With the bank on:
 - **Load.** In `MODE: LOAD KIT`, YES on a row replaces the current
   pattern's kit with that bank kit, whole, at once: no confirmation, so
   unsaved changes to the current kit are replaced (the project's own saved
-  kit is untouched: RELOAD KIT brings it back). The bank is only read.
+  kit is untouched: RELOAD FROM PROJ > KIT DATA brings it back). The bank is only read.
 - **Save.** YES on the MODE row switches to `MODE: SAVE KIT` (every row then
   reads `SAVE A01 ...`). YES on a row opens the OS's naming box, `SAVE TO
   A09`, offering the current pattern's name (or the slot's own name when the
