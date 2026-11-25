@@ -2,7 +2,9 @@
  * playhead-st: the order the active track plays its steps in. TRK + UP / DOWN
  * opens a centered selector for FORWARD (stock), REVERSE, PENDULUM,
  * RANDOM, WALK, ANCHOR, STUTTER, FOLD, WALK+. TRK + LEFT /
- * RIGHT stay native. Modes belong to the pattern: each pattern's kit keeps
+ * RIGHT stay native. In the selector UP / DOWN move down the list, LEFT /
+ * RIGHT to the other column, and TRK + TRIG changes track natively (the
+ * selector then shows that track's mode). Modes belong to the pattern: each pattern's kit keeps
  * its tracks' modes, saved and loaded with it (persist.c).
  *
  * The keys: the native KeyEvent IDs TRK 2 (MainScreen's key switch 40033f0a:
@@ -45,6 +47,11 @@ typedef unsigned int u32;typedef unsigned char u8;
 #define KEY_NO 13u
 #define KEY_UP 14u
 #define KEY_DOWN 15u
+#define KEY_LEFT 16u
+#define KEY_RIGHT 17u
+#define KEY_TRIG_FIRST 24u                /* the sixteen trig keys: 24..39 */
+#define KEY_TRIG_LAST 39u
+#define COLUMN 5u                         /* the list's left column: modes 0..4; right: 5.. */
 #define HELD ((u32 (*)(u32))0x40102f40u)
 #define APP ((u8 *(*)(void))0x4016e9c8u)
 #define TRACK_INDEX ((u32 (*)(void *))0x4001ff74u)
@@ -74,11 +81,19 @@ static u8 *main_screen(void)
     if(!n || n==m+0x14 || !(main=*(u8 **)(n+8)) || word(main,0)!=MAIN_SCREEN)return 0;
     return main;
 }
+/* The selector belongs to its MainScreen and pattern (kit). TRK + TRIG, the
+ * stock track change, stays native while it is open: on another track of the
+ * same pattern it shows that track's mode (1.3), on a track without modes it
+ * closes. Returns 0 when the selector must close. */
 static u32 selector_context(void)
 {
-    u8 *app;
-    return main_screen()==playhead_selector.view && playhead_active_kit()==playhead_selector.kit &&
-        (app=APP()) && TRACK_INDEX(app+0x30)==playhead_selector.track;
+    u8 *app;u32 t;
+    if(main_screen()!=playhead_selector.view || playhead_active_kit()!=playhead_selector.kit || !(app=APP()))return 0;
+    if((t=TRACK_INDEX(app+0x30))==playhead_selector.track)return 1;
+    if(t>=PLAYHEAD_TRACKS)return 0;
+    playhead_selector.track=t;playhead_selector.cursor=playhead_modes[playhead_selector.kit][t];
+    playhead_selector.error=0;playhead_selector.dirty=1;
+    return 1;
 }
 static void selector_redraw(void)
 {
@@ -98,9 +113,19 @@ static int playhead_key(void *brain,void *event)
     }
     if(flags&8u && !(taken[key>>5]&bit))return 0;
     if(playhead_selector.open){
+        /* TRK, and a trig key while TRK is held, stay native: the stock track
+         * change (selector_context follows it). Lone trig keys stay modal. */
+        if(key==KEY_TRK || (key>=KEY_TRIG_FIRST && key<=KEY_TRIG_LAST && HELD(KEY_TRK)))return 0;
         taken[key>>5]|=bit;
         if(!selector_context()){
             playhead_selector.open=0;
+        }else if(key==KEY_LEFT || key==KEY_RIGHT){
+            /* the other column, same row; the right column's shorter end goes to its last mode */
+            if(key==KEY_LEFT && playhead_selector.cursor>=COLUMN)playhead_selector.cursor-=COLUMN;
+            else if(key==KEY_RIGHT && playhead_selector.cursor<COLUMN)
+                playhead_selector.cursor=playhead_selector.cursor+COLUMN<PLAYHEAD_MODES?
+                    playhead_selector.cursor+COLUMN:PLAYHEAD_MODES-1u;
+            playhead_selector.error=0;playhead_selector.dirty=1;
         }else if(key==KEY_UP || key==KEY_DOWN){
             if(key==playhead_selector.opening_key)return 1; /* held opener: no accidental movement */
             playhead_selector.cursor=key==KEY_UP?

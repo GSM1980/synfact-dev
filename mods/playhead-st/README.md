@@ -1,6 +1,6 @@
 # Playhead: step order per track (playhead-st)
 
-Desktop OS 1.42 release: **1.2.1**.
+Desktop OS 1.42 release: **1.3.0**.
 Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 **TRK + UP** / **TRK + DOWN** opens a centered mode selector for the active
@@ -12,12 +12,18 @@ selector. **NO** closes it without changing anything. Browsing does not change
 playback or save a kit edit; confirming the current mode also avoids an edit.
 
 The left column contains FORWARD through WALK, the right ANCHOR through
-WALK+. The header names the captured track (`TRK 1`..`TRK 12`, or `FX TRK`).
-Changing the active track, playing kit or opaque native view dismisses the
-selector without applying it. While open, keys and encoders are captured so
-the underlying page cannot be edited. Releases of consumed presses are also
-consumed after closing; a TRK press begun before opening keeps its native
-release.
+WALK+. **LEFT / RIGHT** (1.3) move to the other column on the same row; RIGHT
+from WALK, which has no neighbour, goes to WALK+. The header names the track
+(`TRK 1`..`TRK 12`, or `FX TRK`).
+
+**TRK + TRIG** (1.3) changes the active track as stock does while the selector
+is open: the selector stays, now for that track, with the highlight on its
+mode and nothing applied. Changing the playing kit (pattern) or the opaque
+native view dismisses the selector without applying it. Apart from TRK and
+TRK + TRIG, keys and encoders are captured while it is open, so the
+underlying page cannot be edited (a trig key without TRK does nothing).
+Releases of consumed presses are also consumed after closing; a TRK press
+begun before opening keeps its native release.
 
 | mode | a 8-step track plays | in phase with the pattern |
 |---|---|---|

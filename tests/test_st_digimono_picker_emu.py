@@ -72,7 +72,8 @@ def verify(folder,out):
     m.w(view+0x7c,pages);m.w(pages,6)
     u.mem_write(ui,bytes(u.mem_read(m.sym['core:core_machine_ui_api'],48)))
     m.w(ui+24,edit);m.w(s['stp_api'],ui)
-    # SRAM the list's one-track rule reads (picker.c dm_fits): no other SY MnM track yet
+    # SRAM for the sender below. The list's one-track rule (picker.c dm_fits) reads the
+    # playing Kit (syntakt/kit.h): its pointer is 0 here, so no other SY MnM track yet.
     u.mem_map(0x80000000,0x10000)
     u.mem_write(mask,b'\xff'*1024)
     m.invoke(0x400f72be,bitmap,128,64,pixels,mask)

@@ -1,8 +1,17 @@
 # SP sample machines 1.6
 
-Desktop OS 1.42 release: **1.6.1**.
+Desktop OS 1.42 release: **1.6.2**.
 Use core 2.5 or later and the matching bank (SMZ4 contract `0x53594606`).
 On an older core (chain directory version 1) every track stays mono.
+
+## The playhead shows again (1.6.2)
+
+From core 2.2.0 the line that follows playback over the waveform did not
+show: AUDIO's publish call (`st_machine_cursor_publish`, `machines.h`) looked
+for the core's cursor record at `42100770`, where the pool service was before
+core 2.2. It now finds the record through the AUDIO ABI directory, wherever
+the service is. No sampler source changed: the header did, so the bank must be
+rebuilt. Any core from 1.8 works, core 2.6.1 included.
 
 ## The sample list during a p-lock (1.6.1)
 

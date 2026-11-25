@@ -453,6 +453,16 @@ and the AMP envelope (about 380 a track). Not yet measured on the unit.
 
 - `st_machine_sample(slot)` returns a borrowed `{frames, pcm}` for a project pool
   slot, or null. Check it on every update, because the sample can be replaced.
+- `<syntakt/kit.h>` (MAIN): `st_kit_track_machine(t)` and `st_kit_track_value(t, slot)`
+  read track t's machine type and stored Sound values from the playing Kit (`*43bd843c`;
+  Sound t at `+2a + t * 123`, values at `+14 + 2 * slot`, machine at `+a2`, as the native
+  publish `400a2e1a`/`400a2d3c` copies them to `800021cc` and `80002f50`). Use it for
+  another track's state in a UI: the SRAM copies change only when that track plays.
+- `st_machine_cursor_publish(track, pcm, frames, position, active)` (AUDIO) gives
+  MAIN's display a playhead; `api->cursor(track, slot)` lends it while the
+  slot's PCM matches. It finds the core's record through the ABI directory;
+  before samplers 1.6.2 it looked at a stale address (from core 2.2.0 to 2.6.x
+  no playhead arrived).
 - `st_machine_extended(params)` returns the extended words for controls 8 to 27,
   or null. Null means the value has not arrived yet for this machine type. Keep
   your own default. Never read the null case as zero.

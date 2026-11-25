@@ -73,26 +73,43 @@ box uses the machine's own SYN layer so later overlays cover it.
 
 Include the implementation once in a machine's MAIN translation unit. Define
 `STP_MACHINE`, `STP_CONTROL_ID`, `STP_CONTROL_INDEX`, `STP_COUNT`, `STP_NAMES`,
-`STP_DEFAULT`, `STP_MODULE`, `STP_MODULE_NAME` and `STP_CONFIG_INIT(api)` first.
+`STP_DEFAULT`, `STP_ON_LOAD` and `STP_CONFIG_INIT(api)` first, and list
+`st_subtype_module` in the machine's `mod.json` `"modules"`.
 Use `stp_idle(view)` and `stp_draw(view, bitmap)` from the machine UI. The module
 uses TICK, global KEY/ENC, view DRAW and global DRAW in the existing event bus;
 it requires module service API 2 and UI API 7 with `edit`. Digi Mono's config
-requires host API 17 for the non-modulated TYPE. Its existing
-module symbol remains `dm_destination_module`, now named **MONO TYPE SELECTOR**.
-There is no second registry, core event site or additional module slot.
+requires host API 17 for the non-modulated TYPE.
 
-Two optional definitions extend it without changing a machine that leaves them out:
+Every machine with a picker shares one module, **SUBTYPE SELECTOR**
+(`st_subtype_module`): each machine's `on_load` (`STP_ON_LOAD`) adds its picker
+to the registry `st_subtype_instances` (up to four), and the module passes each
+event to them in bank order. Every copy of the header defines the module and the
+registry weakly, so the bank must keep one definition of each **and send every
+reference to it**, as GNU ld does. The browser's linker (`js/src/smz-link.ts`)
+used to send an object's references to its own weak copy: each machine then
+registered in a registry of its own, only the first machine in the bank (SY MnM
+in the web config) opened its list, and YES on the others loaded their first
+subtype. `js/test/smz-link.test.ts` covers it.
+
+Optional definitions extend it without changing a machine that leaves them out:
 
 - `STP_ENABLED(track, index)`: 0 for a subtype that cannot be chosen on that track now.
   The list draws its name struck through (a line across its middle row), the cursor passes it
   (encoders, UP/DOWN, FUNC+UP/DOWN stop on the next one that can be chosen, or stay), YES
   takes nothing, and the list opens on the stored subtype or the nearest one that can be
-  chosen. MD KIT uses it for its CPU budget (`mods/md-st/main.c`).
+  chosen. MD KIT uses it for its CPU budget (`mods/md-st/main.c`) and SY MnM for its
+  one-track rule. Both read the other tracks' machine and stored TYPE from the playing Kit
+  (`<syntakt/kit.h>`) since MD KIT 0.3 and SY MnM 0.8.2: the SRAM copies AUDIO was last
+  sent (`80002f50`, `800021cc`) change only when a track plays, so after a pattern change
+  or a cleared track the list was wrong until every digital track had played.
 - `STP_VIEW_ENCODER`: a function `(view, event, id)` added as an `ENC | VIEW` subscription,
   for a machine's own handling of its knobs (MD's knobs past a voice's last control).
+- `STP_LOAD(view, type)`: the machine's own values for the subtype just chosen, set with
+  `stp_api->edit` when the choice is first applied and again whenever late native defaults
+  made the retry set the subtype again. MD KIT 0.3 loads each voice's knobs (`md-load.h`).
 
 MD KIT (type 70) uses the helper for its thirty voices since its branch merged this
-one: `md_picker_module`, **MD TYPE SELECTOR**, six subscriptions. Its TYPE is a configuration
+one, through the same **SUBTYPE SELECTOR** module. Its TYPE is a configuration
 control as SY MnM's; an older Sound's out-of-range TYPE shows and plays as the first voice.
 
 The separate user requirement that TYPE cannot be modulated needs core 2.3.1:

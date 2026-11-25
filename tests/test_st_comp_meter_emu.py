@@ -85,26 +85,65 @@ def verify(core,bank,digitakt,out,sram=False):
     m,view,bitmap,pixels=fixture(core,bank,sram)
     meter=m.word(m.sym['comp_hot'])+56   # comp_runtime.meter (comp.h)
     area={(x,y) for x in (122,123) for y in range(1,51)}
+    # 1.1.0: F reads the peak reduction since the last repaint: a box (x 48..70,
+    # y 11..19, rounded corners) with "-6.5" inside and the label GR, in the
+    # page's label font. Native text is a boundary here (the font objects are
+    # filled by boot constructors this fixture does not run): COMP's calls to the
+    # printf-style text (400f8bd0) are recorded with their font, position,
+    # alignment and text, formatted here; the box is compared pixel by pixel.
+    fbox={(x,y) for x in range(44,75) for y in range(0,21)}
+    def gr_text(h):return ('-' if h else '')+'%d.%d'%(h//2,5*(h&1))
+    assert [gr_text(h) for h in (0,1,13,63)]==['0.0','-0.5','-6.5','-31.5']
+    texts=m.texts                 # recorded by NativeDraw (test_st_comp_emu.py)
+    def f_render():
+        bmp,pix=W+0xe000,W+0xe400
+        m.u.mem_write(pix,bytes(1024));m.call(0x400f72be,bmp,128,64,pix,0)
+        for box in ((49,19,69,19),(49,11,69,11),(48,12,48,18),(70,12,70,18)):m.call(0x400f7fb6,bmp,*box,1)
+        return screen(m,pix)&fbox
+    box=f_render();assert len(box)==2*21+2*7
+    def check_f():
+        h=m.word(m.sym['gr_shown'])
+        assert screen(m,pixels)&fbox==box,'F box'
+        assert texts[-2:]==[(13,2,gr_text(h)),(0,2,'GR')],('F texts',texts[-2:],gr_text(h))
+        texts.clear();return h
+    xored=set()
+    def with_bar(base,height):
+        return ((base-xored)|{(x,y) for x in (122,123) for y in range(51-height,51)})^xored
+    # The firmware's empty-control placeholder in F (a dotted box on the unit):
+    # COMP clears the slot before its box, so nothing of it is left.
+    set_values(m,DEFAULT[:5]+[0x7f00]);m.w(meter,0)
+    m.u.mem_write(pixels,bytes(1024));m.call(0x40030b84,view,bitmap)
+    for x in range(46,73,2):
+        for y in (2,23):m.call(0x400f7fb6,bitmap,x,y,x,y,1)
+    for y in range(2,24,2):
+        for x in (46,72):m.call(0x400f7fb6,bitmap,x,y,x,y,1)
+    m.call('comp_draw',view,bitmap,0);check_f()
+    assert not {(x,y) for x in range(45,74) for y in range(0,26)}&screen(m,pixels)-box,'F placeholder left'
     for values in ([0,0,0,0,0,0x7f00],DEFAULT[:5]+[0x7f00],
                    [0x7f00]*4+[0x700,0x7f00]):
         set_values(m,values);m.w(meter,0)
         m.u.mem_write(pixels,bytes(1024));draw_frame(m,view,bitmap)
-        base=screen(m,pixels)
+        assert check_f()==0
+        base=screen(m,pixels)-fbox
         assert not base&area
         assert {(125,22),(126,30),(127,24)}<=base,'native page indicators not drawn'
         assert not {(x,y) for x in (120,121,124) for y in range(64)}&base,'control enters a gutter'
         for half_db,height in reference.items():
             m.w(meter,half_db<<22)
-            draw_frame(m,view,bitmap);actual=screen(m,pixels)
-            expected=base|{(x,y) for x in (122,123) for y in range(51-height,51)}
+            draw_frame(m,view,bitmap);actual=screen(m,pixels)-fbox
+            expected=with_bar(base,height)
+            assert check_f()==min(half_db,63),'ascending: the peak is the current reduction'
             assert actual==expected,(values,half_db,actual^expected)
             if out and values[:5]==DEFAULT[:5] and half_db in (0,12,36,63):
-                capture(actual,out/('comp-gr-%s.png'%{0:'0db',12:'6db',36:'18db',63:'full'}[half_db]))
+                capture(screen(m,pixels),out/('comp-gr-%s.png'%{0:'0db',12:'6db',36:'18db',63:'full'}[half_db]))
         # Falls without a fresh framebuffer: the whole old bar is erased.
         m.w(meter,0);draw_frame(m,view,bitmap)
-        assert screen(m,pixels)==base
+        assert screen(m,pixels)-fbox==base
+        assert check_f()==63,'a fall shows the window peak once'
+        draw_frame(m,view,bitmap);assert check_f()==0
     set_values(m,DEFAULT);m.w(meter,63<<22)
-    draw_frame(m,view,bitmap);assert not screen(m,pixels)&area,'MIX 0 must show no attenuation'
+    draw_frame(m,view,bitmap);assert screen(m,pixels)&area==xored,'MIX 0 must show no attenuation'
+    assert check_f()==0,'MIX 0 reads 0.0'
     # The real IRQ publishes GR; the UI tick invalidates the visible view.
     # Silence releases it. No hand-seeded meter for this part.
     set_values(m,[0x4000,0,0,0,0x700,0x7f00]);m.w(meter,0)
@@ -118,7 +157,7 @@ def verify(core,bank,digitakt,out,sram=False):
     assert m.invalidations==[view],'visible COMP must invalidate when the pixel height changes'
     draw_frame(m,view,bitmap);height=min(50,(peak>>22)*50//63)
     m.invalidations.clear();m.call('comp_tick',ctrl);assert not m.invalidations,'same height must not repaint'
-    assert screen(m,pixels)&area=={(x,y) for x in (122,123) for y in range(51-height,51)}
+    assert screen(m,pixels)&area=={(x,y) for x in (122,123) for y in range(51-height,51)}^xored
     if out:capture(screen(m,pixels),out/'comp-gr-audio.png')
     m.u.mem_write(root+96,b'\0')
     for _ in range(400):block(m,[0]*32,[0]*32)
@@ -149,7 +188,14 @@ def verify(core,bank,digitakt,out,sram=False):
     assert ticks(1)==[True]
     m.w(meter,0)                                            # 1 -> 0 px: allowed, still 10 Hz
     assert ticks(3)==[False,False,True],'1 -> 0 px clears'
-    assert not screen(m,pixels)&area
+    assert screen(m,pixels)&area==xored
+    # F's window: a short peak between two repaints is what F shows; the next
+    # repaint starts from the reduction at that moment.
+    draw_frame(m,view,bitmap)
+    m.w(meter,40<<22);m.call('comp_tick',ctrl);m.w(meter,10<<22);m.call('comp_tick',ctrl)
+    draw_frame(m,view,bitmap);assert check_f()==40,'the window peak'
+    draw_frame(m,view,bitmap);assert check_f()==10,'then the current reduction'
+    if out:capture(screen(m,pixels),out/'comp-gr-readout.png')
     # Returning to DRIVE does not draw or clear any part of the meter strip.
     m.w(view+0x90,0);before=m.read(pixels,1024);m.call('comp_draw',view,bitmap,0)
     assert m.read(pixels,1024)==before
@@ -162,7 +208,7 @@ def verify(core,bank,digitakt,out,sram=False):
             pixel_exact_screens=36,other_pixels_unchanged=True,
             audio_rise_release_redraw=True,erase_and_bypass=True,sram=sram,
             device_access=False,limits='Native application/model selection, heap and some UI state are fixture boundaries; no hardware timing.'),indent=2)+'\n')
-    print('PASS GR: native reference, 2x50 strip, 36 pixel-exact screens, no MUP/MIX/page-dot overlap, erase/bypass/audio/redraw/release/DRIVE, 10 Hz / 2-pixel repaint limit')
+    print('PASS GR: native reference, 2x50 strip, F peak readout, 36 pixel-exact screens, no MUP/MIX/page-dot overlap, erase/bypass/audio/redraw/release/DRIVE, 10 Hz / 2-pixel repaint limit')
 
 
 if __name__=='__main__':

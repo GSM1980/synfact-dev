@@ -5,6 +5,7 @@ Generated from git history by `tools/changelog.py`. Latest version: 1.1.3.
 ## 1.1.3 (2026-11-23)
 
 - Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes (`a7a19a5`, 2026-11-23)
+- Changelogs: core 2.6.1, ARP 1.10.8, LFO3 1.3.4, SP 1.6.1, MD KIT 0.2, SY MnM 0.8.1, System info 1.1.3 (`ebab6b4`, 2026-11-23)
 
 ## 1.1.2 (2026-11-17)
 

@@ -8,9 +8,19 @@
       "date": "2026-11-23",
       "commits": [
         {
+          "sha": "70f4868",
+          "date": "2026-11-24",
+          "subject": "SP playhead, Playhead keys, MD/MnM limits, MD voice knobs, COMP 1.1.0"
+        },
+        {
           "sha": "a7a19a5",
           "date": "2026-11-23",
           "subject": "Core 2.6.1: 32 modules; LFO3 provider, quick save, SP p-lock list, ARP fixes"
+        },
+        {
+          "sha": "ebab6b4",
+          "date": "2026-11-23",
+          "subject": "Changelogs: core 2.6.1, ARP 1.10.8, LFO3 1.3.4, SP 1.6.1, MD KIT 0.2, SY MnM 0.8.1, System info 1.1.3"
         }
       ]
     },

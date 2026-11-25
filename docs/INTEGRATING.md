@@ -301,7 +301,9 @@ toolchain setup, source compilation, regressions and manual review.
 `smz_cached_reference.py` reuses only audited objects whose inputs and original
 compiler commands match, and uses the original SDK linker/auditor. Every result
 is checked by native C and wasm parsers; AUDIO must match exactly. MAIN accepts
-alternative relocation targets only for identical printable strings. The
+alternative relocation targets only for identical printable strings; an empty
+one only where string merging puts it, on a printable string's terminator, so
+zero-filled data (two copies of a weak `.bss` object) never passes. The
 parser corruption corpus repairs checksums to exercise deeper structural checks.
 
 `--validation exhaustive` retains the old matrix and optional `--previous`

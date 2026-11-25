@@ -41,3 +41,21 @@ test('AUDIO empty labels use GNU suffix order instead of source order',()=>{
  assert.equal(new DataView(linked.image.buffer).getUint32(0),base+13)
  assert.deepEqual([...linked.image.subarray(4,14)],[...strings.subarray(0,10)])
 })
+
+// Two machines that include <syntakt/subtype-picker.h> each define the shared registry
+// st_subtype_instances weakly in their own .bss and refer to it through that symbol.
+// GNU ld keeps one definition for every reference; each object's own copy would give
+// each picker a registry the one SUBTYPE SELECTOR module never reads.
+test('SMZ resolves every reference to a weak symbol to the definition the link keeps',()=>{
+ const weak=(bind:number):SmzObject=>({sections:[{name:'',align:1,size:0,data:new Uint8Array()},
+   {name:'.text',align:4,size:4,data:new Uint8Array(4)},{name:'.bss',align:4,size:16,data:new Uint8Array()}],
+   symbols:[{name:'registry',value:0,size:16,bind,section:2}],
+   relocations:[{section:1,offset:0,type:1,symbol:0,addend:4}]})
+ const two=linkSmzImage([weak(2),weak(2)],0,0), v=new DataView(two.image.buffer), kept=two.symbols.get('registry')!
+ assert.equal(kept,12)                                       // the first object's .bss
+ assert.equal(v.getUint32(0),kept+4);assert.equal(v.getUint32(4),kept+4)
+ assert.deepEqual(two.relocations,[0,4])
+ const strong=linkSmzImage([weak(2),weak(1)],0,0), w=new DataView(strong.image.buffer)
+ assert.equal(strong.symbols.get('registry'),28)             // the strong one, in the second .bss
+ assert.equal(w.getUint32(0),32);assert.equal(w.getUint32(4),32)
+})

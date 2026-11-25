@@ -9,7 +9,9 @@
  * "modules". No core hooks or AUDIO work.
  * Optional: STP_ENABLED(track, index), 0 for a subtype that cannot be chosen on that
  * track now (struck through, the cursor passes it, YES takes nothing); STP_VIEW_ENCODER,
- * a view's ENC subscription of the machine's own (event view, event, id); STP_LIST_ART(bitmap),
+ * a view's ENC subscription of the machine's own (event view, event, id); STP_LOAD(view, type),
+ * the machine's own values for the subtype just chosen, set with stp_api->edit (stp_pend_apply);
+ * STP_LIST_ART(bitmap),
  * a drawing of the machine's own right of the names, with STP_LIST_RIGHT the cursor bar's right
  * edge (x, default 123) so that it leaves the drawing alone.
  */
@@ -363,11 +365,15 @@ static int stp_tag_idle(void *view, stp_u32 type)
 
 /* Apply through the native edit service after the selector closes. A bounded
  * retry covers late native defaults; subsequent user input, a different model
- * or a non-default value cancels it. Trig holds/recording never create a lock. */
+ * or a non-default value cancels it. Trig holds/recording never create a lock.
+ * With STP_LOAD(view, type) the machine loads the chosen subtype's own values
+ * too (MD KIT 0.3: its knobs), through the same service: when the choice is
+ * first applied, and again whenever late native defaults made the retry set
+ * the subtype again. */
 static int stp_pend_apply(void *view)
 {
     stp_u8 *v = view;
-    int delta;
+    int delta, first;
     if (!stp_api || STP_VIEW_TYPE(view) != STP_MACHINE || !stp_pending(stp_track(view))) return 0;
     if (stp_model(view)!=stp_pend.model) {stp_pend.track=0;return 0;}
     if ((stp_u8)STP_TRIG(*(void **)(v + 0x6c)) || (stp_u8)STP_RECORD(*(void **)(v + 0x6c))) return 0;
@@ -376,10 +382,15 @@ static int stp_pend_apply(void *view)
         stp_pend.track = 0; return 0;
     }
     delta = (int)(stp_pend.type << 8) - (int)value;
+    first = !stp_pend.applied;
     stp_pend.applied=1;
-    if (!delta) return 0;
-    stp_api->edit(view, STP_CONTROL_ID, delta, STP_CONTROL_INDEX);
-    return 1;
+    if (delta) stp_api->edit(view, STP_CONTROL_ID, delta, STP_CONTROL_INDEX);
+#ifdef STP_LOAD
+    if (first || delta) { STP_LOAD(view, stp_pend.type); return 1; }
+#else
+    (void)first;
+#endif
+    return delta != 0;
 }
 
 /* ---- the machine's UI ---- */

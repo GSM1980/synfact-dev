@@ -87,7 +87,7 @@ export function linkSmzImage(objects:SmzObject[], base:number, directoryBytes=0,
   if(base+size>U32)throw Error('SMZ address overflow')
   const image=new Uint8Array(size)
   for(let oi=0;oi<objects.length;oi++)for(const [si,at] of placements[oi])image.set(compacted[oi].get(si)??objects[oi].sections[si].data,at)
-  const globals=new Map<string,number>(), owners=new Map<string,number>(),symbolSizes=new Map<string,number>()
+  const globals=new Map<string,number>(), owners=new Map<string,number>(),symbolSizes=new Map<string,number>(),absolutes=new Set<string>()
   const address=(oi:number,sym:SmzSymbol):number|undefined=>{
     if(sym.section===0)return undefined
     if(sym.section===0xfff1)return sym.value
@@ -106,6 +106,7 @@ export function linkSmzImage(objects:SmzObject[], base:number, directoryBytes=0,
       if(owners.get(sym.name)!==2)throw Error('Duplicate SMZ symbol '+sym.name)
     }
     globals.set(sym.name,value);owners.set(sym.name,sym.bind);symbolSizes.set(sym.name,sym.size)
+    if(sym.section===0xfff1)absolutes.add(sym.name);else absolutes.delete(sym.name)
   }
   const runtime:number[]=[],used=new Set<number>(),view=new DataView(image.buffer)
   for(let oi=0;oi<objects.length;oi++)for(const r of objects[oi].relocations){
@@ -119,6 +120,11 @@ export function linkSmzImage(objects:SmzObject[], base:number, directoryBytes=0,
     const at=sectionAt+r.offset
     for(let i=0;i<width;i++){if(used.has(at+i))throw Error('Overlapping SMZ relocations');used.add(at+i)}
     let target=address(oi,sym), local=sym.section!==0 && sym.section!==0xfff1
+    // A weak definition is a candidate, not the object's own copy: like GNU ld, every
+    // reference goes to the one the link kept (the first weak, or a strong one).
+    if(sym.bind===2 && sym.name && globals.has(sym.name)){
+      target=globals.get(sym.name);local=!absolutes.has(sym.name)
+    }
     if(target===undefined && sym.name){target=globals.get(sym.name);local=target!==undefined && target>=base && target<base+size}
     if(target===undefined){if(sym.bind===2){target=0;local=false}else throw Error('Unresolved SMZ symbol '+sym.name)}
     let value=target+r.addend

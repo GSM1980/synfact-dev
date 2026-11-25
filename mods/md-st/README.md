@@ -1,5 +1,23 @@
 # MD MACHINEDRUM for Syntakt (prototype)
 
+## A voice loads its own knobs; the list counts the tracks as they are (0.3)
+
+**A chosen voice's knobs.** YES in the voice list now also sets the voice's
+eight knobs to the values a Machinedrum gives that machine in a new kit
+(`md-load.h`, read from photographs of a Machinedrum SPS-1UW+), through the
+same native edit as a turned knob. A knob turned afterwards stays. The PTCH
+of PI-BD, PI-SD, PI-MT, PI-ML and PI-RS now shows centred, -64..63, as on the
+Machinedrum (PI-MT loads at -42); the Sound still stores 0..127 (64 more), which
+is what the voice reads. TRX-XC and TRX-B2 come from values given by hand; TRX-MA and
+TRX-CL keep mdkit's defaults until theirs are known.
+
+**The budget follows the tracks.** The list read each track's machine and
+voice from the copies AUDIO was last sent (`80002f50`, `800021cc`), which the
+firmware writes only when a track plays. After a pattern change, or with a
+track cleared or given another machine, the struck-through voices were wrong
+until every digital track had played. The list now reads the playing Kit
+(`<syntakt/kit.h>`), so it is right at once. AUDIO's own check is unchanged.
+
 ## Subtype list during a held trig or live REC (0.2)
 
 The subtype list's confirmation and its deferred TYPE edit refuse while a
