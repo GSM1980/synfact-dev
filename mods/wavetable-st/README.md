@@ -19,7 +19,7 @@ does; the design, the decisions and the open points are in
 | SPD | SPD | 0..127 (64) | ANIM's time: one-shot shapes 2 ms..30 s; looping shapes 1/16 beat..64 beats of the tempo |
 | A.LEV | A.LEV | -64..+63 (0) | ANIM's depth on LEV |
 | A.POS | A.POS | -64..+63 (0) | ANIM's depth on POS; +-63 covers the whole table |
-| ANIM | ANIM | 12 shapes (LOOP TRI) | Exp Down, Ramp Down, Tri, Ramp Up, Exp Up (one shot); Loop Ramp Down, Loop Tri, Loop Square, Loop Ramp Up; Random (smooth), Sample+Hold, Wavetable (the oscillator's own wave) |
+| ANIM | ANIM | 12 shapes (EXP D) | Exp Down, Ramp Down, Tri, Ramp Up, Exp Up (one shot); Loop Ramp Down, Loop Tri, Loop Square, Loop Ramp Up; Random (smooth), Sample+Hold, Wavetable (the oscillator's own wave) |
 
 Control 16 (`TMPO`) is hidden: its alias `ST_MACHINE_TEMPO_PARAMETER` makes
 the core send AUDIO the tempo in it (mods/core-st/README.md, 2.8.0).
@@ -54,6 +54,24 @@ with ANIM while the track plays; the position's track under it; SPD's
 scale, A.LEV and A.POS bipolar bars and ANIM's shape at the bottom. Locked
 controls are inverted. The wave is read from the card once per slot (core
 2.8, UI API 9); the moving position comes from AUDIO's cursor records.
+The page takes every knob's dial (none is painted natively: the firmware's
+dial reached past the page's clearing and stayed as a mark). Pixels go
+straight into the bitmap, and a moving position redraws at most every other
+idle call, for a 32nd of a wave or more: about 12,900 instructions a draw
+in the emulator (27,600 before 0.1.0's unit test), the native text and the
+LCD transfer not counted.
+
+## FUNC + a knob: stick to values
+
+Holding FUNC, a knob moves from its value to the next stop in the turning
+direction, one stop per detent of travel (`input.c`): TUNE by octaves
+(-48..+48), POS on each whole wave of the slot's table or sample, SPD on each
+of the 17 tempo divisions, LEV on 0/32/64/96/127, DTUN, A.LEV and A.POS on
+-64/-32/0/+32/+63. SLOT and ANIM keep their own steps. The edit goes
+through the core (Sound, lock, undo); with a trig held it makes a lock.
+
+The value pop-up reads "name=value" on one row: the long names are short
+(ANIM SH OSC 1, ANIM POS OSC 1...) and so are the shapes' (EXP D, L SQUARE...).
 
 ## The SLOT list
 

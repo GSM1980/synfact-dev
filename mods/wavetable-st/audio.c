@@ -27,7 +27,7 @@
 /* Extended controls 8..16, in this order (main.c): DTUN, then osc 2's LEV,
  * POS, SLOT, SPD, A.LEV, A.POS, ANIM, then the hidden tempo. */
 #define WT_EXT 9u
-static const unsigned short wt_ext_default[WT_EXT]={0x4000,0,0,0x4000,0x4000,0x4000,0x4000,0x0600,WT_TEMPO_DEFAULT};
+static const unsigned short wt_ext_default[WT_EXT]={0x4000,0,0,0x4000,0x4000,0x4000,0x4000,0,WT_TEMPO_DEFAULT};
 /* A plain sample's wave starts, kept while the slot holds the same PCM. */
 struct wt_source {const short *pcm;unsigned frames,channels,waves,starts[64];};
 struct wt_track {

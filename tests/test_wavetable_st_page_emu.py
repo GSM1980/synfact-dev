@@ -69,8 +69,10 @@ def run(stock, bank, out):
         return struct.unpack('>%dI' % k, u.mem_read(u.reg_read(UC_M68K_REG_A7) + 4, 4 * k))
 
     def ret(value=0):
-        sp = u.reg_read(UC_M68K_REG_A7)
         u.reg_write(UC_M68K_REG_D0, value & 0xffffffff)
+        if state.get('stub'):
+            return                      # the fixture's own API stubs are a real rts
+        sp = u.reg_read(UC_M68K_REG_A7)
         u.reg_write(UC_M68K_REG_A7, sp + 4)
         u.reg_write(UC_M68K_REG_PC, read(sp))
 
@@ -81,6 +83,11 @@ def run(stock, bank, out):
     texts = []
 
     def hook(uc, at, size, _):
+        state['steps'] = state.get('steps', 0) + 1
+        # The UI API stubs (HOOKS..) are each an rts: the hook only sets D0 and
+        # the rts returns. Moving PC from a hook, the stub's own instruction
+        # could still run and pop twice (seen as a repeated call).
+        state['stub'] = HOOKS <= at < HOOKS + 64
         if at in (0x4010394c, 0x40103952, 0x401036d0):          # native allocation (strings)
             k, = args(1)
             result = heap[0]
@@ -153,7 +160,12 @@ def run(stock, bank, out):
             state['invalidated'] += 1
             ret()
         elif at == 0x400f6866:                                     # an encoder event's delta
-            ret(1)
+            ret(state.get('delta', 1))
+        elif at == 0x40102f40:                                     # a key held (1: FUNC)
+            key, = args(1)
+            ret(1 if key == 1 and state.get('func') else 0)
+        elif at == 0x400c2dd6:                                     # a lock edited during this trig hold
+            ret(0)
         elif at == HOOKS + 12:                                     # sample_name(slot, out)
             slot, dst = args(2)
             name = state['names'].get(slot)
@@ -267,7 +279,9 @@ def run(stock, bank, out):
         texts.clear()
         u.mem_write(pixels, bytes(1024))
         call(0x400f72be, bitmap, 128, 64, pixels, 0)
+        before = state.get('steps', 0)
         call('wt_draw', API, machine, view, bitmap, page)
+        state.setdefault('draw_steps', {})[name] = state.get('steps', 0) - before
         words = struct.unpack('>256I', u.mem_read(pixels, 1024))
         on = {(x, y) for x in range(128) for y in range(64) if words[2 * x + y // 32] & (1 << (31 - y % 32))}
         if listing:     # the list takes x 20..127 and the header row, as the SP list
@@ -383,6 +397,48 @@ def run(stock, bank, out):
     w(event, 0, 0, 0, 13, 1)
     assert call('wt_input_key_pre', view, event, 1) == 1
     assert state['clears'][-1] == (11, 0, 3), state['clears']
+    w(event, 0, 0, 0, 13, 0)
+    call('wt_input_key_pre', view, event, 1)                          # its release
+    state['trig'] = 0
+    state['locked'] = set()
+    # No native dial: the machine takes every knob's dial and draws nothing
+    # (the firmware's dial reached past x 124 and stayed as a stray mark).
+    dial = 0x49004200
+    w(dial, 0, 0, 0, 0, 0, bitmap, 104, 0)
+    u.mem_write(pixels, bytes(1024))
+    for index in range(16):
+        assert call(symbols['wt_ui'] and read(symbols['wt_ui'] + 20), API, machine, index, dial) == 1
+    assert bytes(u.mem_read(pixels, 1024)) == bytes(1024)
+    # FUNC + a knob sticks: one stop per 16 units of travel, from the value
+    # to the next stop in the turning direction; the core's edit does it.
+    w(view + 0x90, 0)
+    state['values'] = {0: 0x4000 + 5 * 256, 1: 0x6400, 2: 0x1000, 3: 64 << 8, 4: 64 << 8, 5: 0x4000, 6: 0x4000, 7: 0}
+    state['func'] = 1
+    state['delta'] = 16
+    edits = len(state['edits'])
+    for index, delta, expected in ((0, 16, (12 - 5) * 256),          # TUNE: up to the octave
+                                   (0, -16, -5 * 256),               # down to 0
+                                   (2, 16, 4129 - 0x1000),           # POS: the first value on wave 8 of 64
+                                   (4, 16, (68 << 8) - (64 << 8)),   # SPD: the next tempo division
+                                   (1, 16, (127 << 8) - 0x6400)):    # LEV: 100 -> 127
+        state['delta'] = delta
+        assert call('wt_input_encoder', view, 0x49004000, BASE_ID + index) == 1
+        assert state['edits'][-1] == (index, expected, index), (index, state['edits'][-1])
+    state['delta'] = 5
+    assert call('wt_input_encoder', view, 0x49004000, BASE_ID + 0) == 1 and len(state['edits']) == edits + 5  # under a stop's travel
+    state['func'] = 0
+    assert call('wt_input_encoder', view, 0x49004000, BASE_ID + 0) == 0 and len(state['edits']) == edits + 5  # native without FUNC
+    state['delta'] = 1
+    # A moving position redraws at most every other idle call.
+    state['values'] = {0: 0x4000, 1: 0x6400, 2: 0, 3: 64 << 8, 4: 0x4000, 5: 0x4000, 6: 0x4000, 7: 0}
+    state['cursor'] = (2, 64, 0)
+    call('wt_idle', API, machine, view, 0)
+    answers = []
+    for k in range(1, 7):
+        state['cursor'] = (2, 64, k * 2048)                           # a whole wave per call
+        answers.append(call('wt_idle', API, machine, view, 0))
+    assert answers in ([1, 0, 1, 0, 1, 0], [0, 1, 0, 1, 0, 1]), answers     # every other call, whatever the phase
+    print('instructions per page draw (bank + native routines):', state['draw_steps'])
     print('PASS: SY WAVETABLE pages drawn by the bank on native OS 1.42 routines: Tonverk layout, '
           'labels and values, the wave over its width, one card read per slot, the moving position '
           'from each oscillator\'s cursor record, locks, an empty slot, nothing outside x 19..124 / y 0..51; '

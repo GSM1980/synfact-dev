@@ -78,7 +78,7 @@ core sends the tempo in it (section 5).
 | 4 | SPD | 0 to 127 | 64 | ANIM 1 time (below) |
 | 5 | A.LEV | -64 to +63 | 0 | ANIM 1 depth on LEV |
 | 6 | A.POS | -64 to +63 | 0 | ANIM 1 depth on POS |
-| 7 | ANIM | 12 names | Tri loop | ANIM 1 shape |
+| 7 | ANIM | 12 names | EXP D | ANIM 1 shape (pop-up names: EXP D, RAMP D, TRI, RAMP U, EXP U, L RAMP D, L TRI, L SQUARE, L RAMP U, RANDOM, S&H, WAVE) |
 | 8 | DTUN | -64 to +63 | 0 | osc 2 against osc 1; ±64 = ±1 semitone |
 | 9 to 15 | LEV … ANIM | as 1 to 7 | LEV 0 | the same for osc 2 |
 | 16 | TMPO | hidden | 14400 | the tempo, BPM x 120, filled in by the core |

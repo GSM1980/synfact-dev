@@ -124,7 +124,7 @@ def check_descriptor():
     assert labels[:7] == ['LEV', 'POS', 'SLOT', 'SPD', 'A.LEV', 'A.POS', 'ANIM'], labels
     # audio.c's default extended words follow the descriptor's initial values.
     audio = (ROOT / 'mods/wavetable-st/audio.c').read_text(encoding='utf-8')
-    assert '{0x4000,0,0,0x4000,0x4000,0x4000,0x4000,0x0600,WT_TEMPO_DEFAULT}' in audio
+    assert '{0x4000,0,0,0x4000,0x4000,0x4000,0x4000,0,WT_TEMPO_DEFAULT}' in audio
 
 
 def check_sound():

@@ -21,7 +21,6 @@
 typedef st_u32 u32;typedef int s32;typedef unsigned char u8;
 #ifndef WT_UI_PRIMITIVES
 #define FILL ((void (*)(void *,s32,s32,s32,s32,u32))0x400f7fb6u)
-#define PIX ((void (*)(void *,s32,s32,u32))0x400f7304u)
 #define TEXT ((void (*)(void *,void *,s32,s32,u32,const char *,const char *))0x400f8bd0u)
 #define SMALL ((void *)0x443db230u)
 #define GET ((u32 (*)(void *,u32,u8 *))0x40039160u)
@@ -43,16 +42,46 @@ typedef st_u32 u32;typedef int s32;typedef unsigned char u8;
 
 static short view_pcm[64*SIZE],view_read[2048];
 static u32 view_slot=0xffffffffu,view_frames,view_waves,view_tries;
-static u32 shown[8];
+static u32 shown[8],idle_calls,moved_at;
+/* A moving position (ANIM while the track plays) redraws at most every
+ * WT_MOVING_CALLS idle calls, and only for a 32nd of a wave or more. */
+#define WT_MOVING_CALLS 2u
 
 static u32 get(void *view,u32 index,u8 *locked){u8 l=0;u32 v=GET(view,ID(index),&l)&65535u;if(locked)*locked=l;return v;}
-static void dot_line(void *ctx,s32 x0,s32 x1,s32 y){s32 x;for(x=x0;x<=x1;x+=2)PIX(ctx,x,y,1);}
-static void line(void *ctx,s32 x0,s32 y0,s32 x1,s32 y1)
+/* Pixels written straight into the native bitmap, as FM TONE does: +4 width,
+ * +8 height, +12 words per column, +16 the 1-bit plane, column-major, row y
+ * in bit 31 - (y & 31) of word y >> 5. The native PIX call per pixel made a
+ * moving wave cost most of a redraw. The bitmap's fields are read once per
+ * draw (canvas()); colour 1 only; clipped. The LCD is 64 rows: 2 words. */
+static struct {u32 *plane;s32 stride,width,height;} cv;
+static void canvas(void *ctx)
+{const s32 *c=ctx;cv.plane=*(u32 *const *)((const u8 *)ctx+16);cv.stride=c[3];cv.width=c[1];cv.height=c[2]>64?64:c[2];}
+static __inline__ void dot(void *ctx,s32 x,s32 y)
 {
-    s32 dx=x1-x0,dy=y1-y0,n=dx<0?-dx:dx,a=dy<0?-dy:dy,j;
-    if(a>n)n=a;
-    if(!n){PIX(ctx,x0,y0,1);return;}
-    for(j=0;j<=n;j++)PIX(ctx,x0+dx*j/n,y0+dy*j/n,1);
+    (void)ctx;
+    if((u32)x>=(u32)cv.width || (u32)y>=(u32)cv.height)return;
+    cv.plane[x*cv.stride+(y>>5)]|=0x80000000u>>(y&31);
+}
+/* Rows y0..y1 of column x. */
+static __inline__ void span(void *ctx,s32 x,s32 y0,s32 y1)
+{
+    u32 *col;s32 t;(void)ctx;
+    if(y0>y1){t=y0;y0=y1;y1=t;}
+    if((u32)x>=(u32)cv.width || y1<0 || y0>=cv.height)return;
+    if(y0<0)y0=0;if(y1>=cv.height)y1=cv.height-1;
+    col=cv.plane+x*cv.stride;
+    if(y1<32)col[0]|=(0xffffffffu>>y0)&(0xffffffffu<<(31-y1));
+    else if(y0>=32)col[1]|=(0xffffffffu>>(y0-32))&(0xffffffffu<<(63-y1));
+    else{col[0]|=0xffffffffu>>y0;col[1]|=0xffffffffu<<(63-y1);}
+}
+/* Every other pixel of row y from x0 to x1: one mask, one word per dot. */
+static void dot_line(void *ctx,s32 x0,s32 x1,s32 y)
+{
+    u32 m,*p;s32 x;(void)ctx;
+    if((u32)y>=(u32)cv.height)return;
+    if(x0<0)x0=0;if(x1>=cv.width)x1=cv.width-1;
+    m=0x80000000u>>(y&31);p=cv.plane+(y>>5);
+    for(x=x0;x<=x1;x+=2)p[x*cv.stride]|=m;
 }
 static char *number(char *p,u32 n)
 {if(n>=100)*p++='0'+n/100;if(n>=10)*p++='0'+n/10%10;*p++='0'+n%10;*p=0;return p;}
@@ -88,20 +117,22 @@ static u32 position(const struct st_machine_ui_api *api,void *view,u32 page,u32 
     if(p>(view_waves-1u)<<8)p=(view_waves-1u)<<8;
     return p;
 }
-static s32 sample(u32 wave,u32 at)
-{
-    u32 i=at>>8,f=at&255u;s32 a=view_pcm[wave*SIZE+i],b=view_pcm[wave*SIZE+((i+1u)&(SIZE-1u))];
-    return a+(((b-a)*(s32)f)>>8);
-}
 static void wave(void *ctx,u32 p)
 {
-    u32 w0=p>>8,xf=p&255u,x;s32 y,last=0;
+    /* The two neighbours mixed once (64 points), then one interpolation a
+     * column: the crossfade per column cost most of a redraw. */
+    static s32 mixed[SIZE+1];
+    u32 w0=p>>8,xf=p&255u,x,j;s32 y,last=0;const short *a,*b;
     if(w0+1u>=view_waves){w0=view_waves-1u;xf=0;}
+    a=view_pcm+w0*SIZE;b=a+SIZE;
+    for(j=0;j<SIZE;j++)mixed[j]=xf?a[j]+((((s32)b[j]-a[j])*(s32)xf)>>8):a[j];
+    mixed[SIZE]=mixed[0];                            /* the wave is a cycle */
     for(x=0;x<WAVE_W;x++){
-        u32 at=x*SIZE*256u/WAVE_W;s32 s=sample(w0,at);
-        if(xf)s+=((sample(w0+1u,at)-s)*(s32)xf)>>8;
-        y=WAVE_Y+s*WAVE_H/32767;
-        if(x)line(ctx,WAVE_X+(s32)x-1,last,WAVE_X+(s32)x,y);
+        u32 at=x*SIZE*256u/WAVE_W,i=at>>8;
+        s32 s=mixed[i]+(((mixed[i+1u]-mixed[i])*(s32)(at&255u))>>8);
+        y=WAVE_Y+((s*WAVE_H)>>15);
+        /* A column's span from the last point to this one keeps the line whole. */
+        span(ctx,WAVE_X+(s32)x,x?last:y,y);
         last=y;
     }
 }
@@ -127,9 +158,7 @@ static void shape(void *ctx,u32 n,s32 x0,s32 y0)
     u32 x;s32 last=0,y;
     for(x=0;x<20u;x++){
         y=y0+shape_value(n,x)*5/32767;
-        if(x && (n==7 || n==10) && y!=last)line(ctx,x0+(s32)x,last,x0+(s32)x,y);
-        else if(x)line(ctx,x0+(s32)x-1,last,x0+(s32)x,y);
-        else PIX(ctx,x0,y,1);
+        span(ctx,x0+(s32)x,x?last:y,y);
         last=y;
     }
 }
@@ -137,7 +166,7 @@ static void shape(void *ctx,u32 n,s32 x0,s32 y0)
 static void bipolar(void *ctx,s32 x0,u32 raw)
 {
     s32 mid=x0+CW/2,v=((s32)raw-0x4000)*10/0x4000;
-    dot_line(ctx,x0,x0+CW-1,9);PIX(ctx,mid,10,1);PIX(ctx,mid,8,1);
+    dot_line(ctx,x0,x0+CW-1,9);dot(ctx,mid,10);dot(ctx,mid,8);
     if(v>0)FILL(ctx,mid,8,mid+v,10,1);else if(v<0)FILL(ctx,mid+v,8,mid,10,1);
 }
 void wt_draw(const struct st_machine_ui_api *api,const struct core_machine_def *m,void *view,void *ctx,u32 page)
@@ -148,6 +177,7 @@ void wt_draw(const struct st_machine_ui_api *api,const struct core_machine_def *
     for(i=0;i<8;i++)raw[i]=get(view,8u*page+i,locked+i);
     slot=raw[3]>>8;if(slot>127u)slot=127u;
     load(api,slot);
+    canvas(ctx);
     FILL(ctx,19,0,124,51,0);
     /* Top row. TUNE/DTUN: its value between dots, in a box. */
     x=CX(0);FILL(ctx,x+1,43,x+CW-1,43,1);FILL(ctx,x+1,51,x+CW-1,51,1);
@@ -203,8 +233,14 @@ int wt_idle(const struct st_machine_ui_api *api,const struct core_machine_def *m
     load(api,slot);
     c=api->cursor(TRACK(view)+8u*page,slot);
     now[0]=(u32)view;now[1]=page;now[2]=slot;now[3]=view_waves;
-    now[4]=c && c->active?c->position>>5:0xffffffffu;             /* a 64th of a wave */
+    now[4]=c && c->active?c->position>>6:0xffffffffu;             /* a 32nd of a wave */
     now[5]=c?c->active:0;now[6]=view_tries;now[7]=0;
-    for(i=0;i<8;i++){if(shown[i]!=now[i])changed=1;shown[i]=now[i];}
+    idle_calls++;
+    for(i=0;i<8;i++)if(i!=4 && shown[i]!=now[i])changed=1;
+    if(shown[4]!=now[4]){
+        if(!changed && idle_calls-moved_at<WT_MOVING_CALLS)return 0;   /* keep it for later */
+        moved_at=idle_calls;changed=1;
+    }
+    for(i=0;i<8;i++)shown[i]=now[i];
     return changed;
 }

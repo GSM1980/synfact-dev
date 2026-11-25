@@ -7,21 +7,14 @@
  */
 #include <syntakt/machines.h>
 typedef st_u32 u32;
-#ifndef ST_UI_PRIMITIVES
-#define FILL ((void (*)(void *,int,int,int,int,u32))0x400f7fb6u)
-#define FRAME ((void (*)(void *,int,int,int,int,u32))0x400f7d9au)
-#define TEXT ((void (*)(void *,void *,int,int,u32,const char *,...))0x400f8bd0u)
-#define FONT ((void *)0x443db210u)
-#endif
-#ifndef ST_UI_NATIVE_DIAL
-#define ST_UI_NATIVE_DIAL ((void (*)(void *,u32,u32,u32,u32,void *,int,int))0x40011e74u)
-#endif
 #define P(label,name,hi,init) {label,name,0,hi,init,0x13}
 #define OSC(n,lev) \
     P("LEV","LEVEL OSC " n,0x7f00,lev),P("POS","POSITION OSC " n,0x7f00,0), \
     P("SLOT","WAVETABLE OSC " n,0x7f00,0x4000),P("SPD","ANIM SPEED OSC " n,0x7f00,0x4000), \
-    P("A.LEV","ANIM LEVEL OSC " n,0x7f00,0x4000),P("A.POS","ANIM POSITION OSC " n,0x7f00,0x4000), \
-    P("ANIM","ANIM SHAPE OSC " n,0x0b00,0x0600)
+    P("A.LEV","ANIM LEV OSC " n,0x7f00,0x4000),P("A.POS","ANIM POS OSC " n,0x7f00,0x4000), \
+    P("ANIM","ANIM SH OSC " n,0x0b00,0)
+/* The long names title the value pop-up as "name=value" on one row: short,
+ * so that the value fits. ANIM starts on EXP D, as on the Tonverk. */
 static const struct core_machine_param wt_controls[17]={
     {"TUNE","TUNE",0x1000,0x7000,0x4000,0x13},OSC("1",0x6400),
     P("DTUN","DETUNE OSC 2",0x7f00,0x4000),OSC("2",0),
@@ -37,9 +30,8 @@ static u32 kind(const struct core_machine_def *m,u32 index)
     if(index==8)return DETUNE;
     return wt_kinds[index&7u];
 }
-static const char *const wt_shapes[12]={"EXP DOWN","RAMP DOWN","TRI","RAMP UP","EXP UP","LOOP RAMP DOWN",
-    "LOOP TRI","LOOP SQUARE","LOOP RAMP UP","RANDOM","SAMPLE+HOLD","WAVETABLE"};
-static const char wt_short[12][4]={"EXD","RDN","TRI","RUP","EXU","LRD","LTR","LSQ","LRU","RND","S&H","WAV"};
+static const char *const wt_shapes[12]={"EXP D","RAMP D","TRI","RAMP U","EXP U","L RAMP D",
+    "L TRI","L SQUARE","L RAMP U","RANDOM","S&H","WAVE"};
 static char text[24];
 static char *number(char *p,u32 n)
 {if(n>=100)*p++='0'+n/100;if(n>=10)*p++='0'+n/10%10;*p++='0'+n%10;*p=0;return p;}
@@ -63,24 +55,11 @@ static const char *format(const struct st_machine_ui_api *api,const struct core_
     if(v)*p++=v<0?'-':'+';
     number(p,(u32)(v<0?-v:v));return text;
 }
+/* No native dials: page.c draws every control. A dial the firmware paints
+ * when a knob turns reaches x 125..127, past the page's own clearing (the
+ * page indicator's column), and stayed there as a stray mark. */
 static int dial(const struct st_machine_ui_api *api,const struct core_machine_def *m,u32 index,const struct st_machine_dial *d)
-{
-    u32 k=kind(m,index),raw=d->raw,n=raw>>8,i;char value[8];const char *s;
-    const struct core_machine_param *p=m->parameter+index;
-    if(k==TUNE || k==DECIMAL){
-        u32 lo=p->min,hi=p->max,v=raw<lo?lo:raw>hi?hi:raw;
-        u32 normalized=k==TUNE?(v<=0x4000u?(v-lo)*0x4000u/(0x4000u-lo):0x4000u+(v-0x4000u)*0x3f00u/(hi-0x4000u))
-                              :(v-lo)*0x7f00u/(hi-lo);
-        ST_UI_NATIVE_DIAL(d->model,0x13,normalized,d->a,d->b,d->ctx,d->x,d->y);return 1;
-    }
-    if(k==SAMPLE)number(value,(n<128?n:127)+1);
-    else if(k==SHAPE){s=wt_short[n<12?n:11];for(i=0;s[i];i++)value[i]=s[i];value[i]=0;}
-    else return 0;                                   /* the native dial */
-    (void)api;
-    FILL(d->ctx,d->x,d->y,d->x+18,d->y+16,0);
-    TEXT(d->ctx,FONT,d->x+9,d->y+6,0x12,"%s",value);
-    FRAME(d->ctx,d->x+1,d->y,d->x+17,d->y+16,1);return 1;
-}
+{(void)api;(void)d;return m->type==72 && index<16;}
 /* TUNE and POS keep the native fine encoder (Q8 fractions); the rest is coarse. */
 static u32 policy(u32 i){return i==0 || i==2 || i==10?0x1f1:0xffffffffu;}
 static const u32 wt_layout[16] __attribute__((aligned(4)))={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
