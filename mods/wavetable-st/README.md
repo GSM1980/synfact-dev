@@ -15,7 +15,7 @@ does; the design, the decisions and the open points are in
 | TUNE | DTUN | -48.00..+48.00 / -64..+63 | semitones on both oscillators / osc 2 against osc 1, +-64 = +-1 semitone |
 | LEV | LEV | 0..127 (100 / 0) | the oscillator's level; 127 alone is about -6 dB |
 | POS | POS | 0..127, fine steps | the wave played, 0 the first, 127 the last; crossfades between neighbours |
-| SLOT | SLOT | pool position 1..128 (65) | the wavetable or sample, by its pool position; p-lockable; never randomized (SYN+YES) or reloaded (SYN+NO): its alias is the pool sample slot's (0x1f2) |
+| SLOT | SLOT | pool position 1..128 (65) | the wavetable or sample, by its pool position; p-lockable; never randomized (SYN+YES) or reset (SYN+NO): its alias is the pool sample slot's (0x1f2) |
 | SPD | SPD | 0..127 (64) | ANIM's time: one-shot shapes 2 ms..30 s; looping shapes 1/16 beat..64 beats of the tempo |
 | A.LEV | A.LEV | -64..+63 (0) | ANIM's depth on LEV |
 | A.POS | A.POS | -64..+63 (0) | ANIM's depth on POS; +-63 covers the whole table |
@@ -73,6 +73,16 @@ through the core (Sound, lock, undo); with a trig held it makes a lock.
 The value pop-up reads "name=value" on one row: the long names are short
 (ANIM SH OSC 1, ANIM POS OSC 1...) and so are the shapes' (EXP D, L SQUARE...).
 
+## SYN + YES and SYN + NO
+
+SYN + YES randomizes the page shown, as on every bank machine, except SLOT.
+SYN + NO sets the page shown to SP WAVETBL's defaults (TUNE 0, LEV 100 on
+osc 1 and 0 on osc 2, POS 0, SPD, A.LEV, A.POS and DTUN in the middle, ANIM
+EXP D), SLOT kept. The firmware's reload runs first (on the press; it
+restores the page's saved values); then `input.c` edits each control that is
+not at its default through the core and shows "Reload Page SYN" again over
+the edits' value pop-ups. With a trig held the reload stays the firmware's.
+
 ## The SLOT list
 
 Turning SLOT (knob D, either page) opens the pool's list over the page, as
@@ -91,7 +101,7 @@ that opens it.
 | `main.c` | descriptor, value formats and dials (MAIN) |
 | `page.c` | the SYN pages, drawn as the Tonverk's (MAIN) |
 | `slot-list.c`, `slot-list.h` | the pool list for a slot control, machine-neutral (MAIN) |
-| `input.c` | the `WT SLOT LIST` module: SLOT's encoder opens the list, NO/YES (MAIN) |
+| `input.c` | the `WT SLOT LIST` module: SLOT's encoder opens the list, NO/YES, FUNC + a knob, SYN + NO (MAIN) |
 | `audio.c` | the AUDIO glue: controls, pool, native declick/gain (as SY MnM) |
 | `engine.c`, `engine.h` | the oscillator and ANIM, portable integer C |
 | `tables.h`, `tools/gen_tables.py` | pitch, ANIM times, tempo divisions, level limits |

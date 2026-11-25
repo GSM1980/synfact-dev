@@ -7,6 +7,10 @@
  *   POS on each whole wave of the slot's table or sample, SPD on each tempo
  *   division (engine.c), LEV on 0/32/64/96/127, DTUN, A.LEV and A.POS on
  *   -64/-32/0/+32/+63. The edit goes through the core (Sound, lock, undo).
+ * - SYN + NO: the native reload restores the page's saved values first
+ *   (40038642, on the press); then every control on the page except SLOT
+ *   gets SP WAVETBL's default, and "Reload Page %s" shows again over the
+ *   edits' own value pop-ups. Not with a trig held (lock mode stays native).
  */
 #include <syntakt/modules.h>
 #include "slot-list.h"
@@ -17,11 +21,16 @@ typedef st_u32 u32;typedef unsigned char u8;
 #define WT_INPUT_GET ((u32 (*)(void *,u32,u8 *))0x40039160u)
 #define WT_INPUT_HELD ((u32 (*)(u32))0x40102f40u)
 #define WT_INPUT_TRIG ((u32 (*)(void *))0x400c2dd6u)
+#define WT_INPUT_HELD_TRIGS ((u32 (*)(void *))0x400c3582u)   /* trigs held (slot-list.c) */
+#define WT_INPUT_LAYOUT ((const char *const *(*)(u32))0x4007ba48u)  /* page -> layout, name first */
+#define WT_INPUT_MESSAGE ((void (*)(void *,const char *,...))0x400c347cu)
 #endif
 #define WT_TYPE 72u
 #define WT_BASE (0x1f9u+(WT_TYPE-64u)*32u)
 #define WT_SLOT(page) (WT_BASE+3u+8u*(page))
 #define WT_KEY_FUNC 1u
+#define WT_KEY_NO 13u
+extern const struct core_machine_def wt_machine;
 #define WT_TRAVEL 16                    /* unaccelerated travel per stop, as the SP discrete steps */
 static const struct st_machine_ui_api *wt_input_api;
 static struct {u32 view,id;int pending;} wt_stick;
@@ -85,10 +94,34 @@ static int wt_input_encoder(void *view,void *event,u32 id)
     if(page<2 && index<16 && index>>3==page && WT_INPUT_HELD(WT_KEY_FUNC))return wt_input_stick(view,event,id,index);
     wt_stick.pending=0;return 0;
 }
+/* SYN + NO after the native reload: the page's defaults, SLOT kept. */
+static void wt_input_defaults(void *view)
+{
+    u8 *v=view,locked;u32 page=*(u32 *)(v+0x90),k,index,id,raw,changed=0;
+    void *ui=*(void **)(v+0x6c);
+    if(page>=2 || (u8)WT_INPUT_HELD_TRIGS(ui))return;
+    for(k=0;k<8;k++){
+        index=page*8u+k;id=WT_BASE+index;
+        if(wt_machine.parameter[index].alias==0x1f2u)continue;           /* SLOT */
+        locked=0;raw=WT_INPUT_GET(view,id,&locked)&65535u;
+        if(raw==wt_machine.parameter[index].initial)continue;
+        wt_input_api->edit(view,id,(int)wt_machine.parameter[index].initial-(int)raw,k);changed=1;
+    }
+    if(changed){
+        u32 shown=((u32 (*)(void *))(*(u32 **)view)[0x88/4])(view);
+        WT_INPUT_MESSAGE(ui,"Reload Page %s",WT_INPUT_LAYOUT(shown)[0]);
+    }
+}
 static int wt_input_key_pre(void *view,void *event,u32 phase)
 {return slot_list_pre_key(view,event,phase);}
 static void wt_input_key_post(void *view,void *event,u32 phase)
-{wt_stick.pending=0;slot_list_post_key(view,event,phase);}
+{
+    const u32 *words=event;u8 *v=view;
+    wt_stick.pending=0;slot_list_post_key(view,event,phase);
+    if(!wt_input_api || !words || words[3]!=WT_KEY_NO || (words[4]&9u)!=1u)return;
+    if(*(u32 *)(v+0x88)!=0x14 || WT_INPUT_TYPE(view)!=WT_TYPE || !WT_INPUT_HELD(0x14))return;
+    wt_input_defaults(view);
+}
 static int wt_input_init(const struct st_smz_api *api)
 {
     if(!api || api->version<3 || !api->ui || api->ui->version<7 || !api->ui->edit)return 1;

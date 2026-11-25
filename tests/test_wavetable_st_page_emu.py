@@ -163,7 +163,18 @@ def run(stock, bank, out):
             ret(state.get('delta', 1))
         elif at == 0x40102f40:                                     # a key held (1: FUNC)
             key, = args(1)
-            ret(1 if key == 1 and state.get('func') else 0)
+            ret(1 if (key == 1 and state.get('func')) or (key == 0x14 and state.get('syn')) else 0)
+        elif at == state.get('page_getter'):                       # the view's page (vtable +88h)
+            ret(6)
+        elif at == 0x4007ba48:                                     # page -> layout, name first
+            page, = args(1)
+            assert page == 6
+            ret(LAYOUT)
+        elif at == 0x400c347c:                                     # the one-line message
+            ui, fmt, name = args(3)
+            text = lambda a: bytes(u.mem_read(a, 16)).split(b'\x00')[0].decode()
+            state['messages'].append((ui, text(fmt), text(name)))
+            ret()
         elif at == 0x400c2dd6:                                     # a lock edited during this trig hold
             ret(0)
         elif at == HOOKS + 12:                                     # sample_name(slot, out)
@@ -219,7 +230,11 @@ def run(stock, bank, out):
     w(API, 9, 0, HOOKS, HOOKS + 12, HOOKS + 4, 0, HOOKS + 16, HOOKS + 20, 0, 0, 0, HOOKS + 24, HOOKS + 8, HOOKS + 28, HOOKS + 32)
     for k in range(9):
         u.mem_write(HOOKS + 4 * k, b'\x4e\x71\x4e\x75')
-    state.update(trig=0, invalidated=0, edits=[], clears=[], sample_reads=0,
+    LAYOUT = HOOKS + 0x80
+    w(LAYOUT, LAYOUT + 8)
+    u.mem_write(LAYOUT + 8, b'SYN\x00')
+    state['page_getter'] = read(0x401ca37c + 0x88)
+    state.update(trig=0, invalidated=0, edits=[], clears=[], sample_reads=0, messages=[],
                  names={64: 'SINE SAW SQUARE', 65: 'KICK', 66: 'PAD', 67: 'HARMONICS'})
     w(0x443db21c, 0x402aa114)
     w(0x443db230, 0x402aa114)
@@ -436,6 +451,39 @@ def run(stock, bank, out):
     state['func'] = 0
     assert call('wt_input_encoder', view, 0x49004000, BASE_ID + 0) == 0 and len(state['edits']) == edits + 5  # native without FUNC
     state['delta'] = 1
+    # SYN + NO: after the native reload (which restores the saved values),
+    # every control on the page but SLOT goes to its default, and the reload
+    # message shows again over the edits' value pop-ups.
+    defaults = [read(params + 24 * i + 16) for i in range(16)]
+    assert defaults == [0x4000, 0x6400, 0, 0x4000, 0x4000, 0x4000, 0x4000, 0,
+                        0x4000, 0, 0, 0x4000, 0x4000, 0x4000, 0x4000, 0], defaults
+    for page in (0, 1):
+        w(view + 0x90, page)
+        state['values'] = {page * 8 + k: 0x2100 + k * 0x300 for k in range(8)}
+        state['syn'] = 1
+        edits, messages = len(state['edits']), len(state['messages'])
+        w(event, 0, 0, 0, 13, 1)
+        call('wt_input_key_post', view, event, 0)
+        got = state['edits'][edits:]
+        want = [(page * 8 + k, defaults[page * 8 + k] - state['values'][page * 8 + k], k) for k in range(8) if k != 3]
+        assert got == want, (page, got)
+        assert state['messages'][messages:] == [(0x49003900, 'Reload Page %s', 'SYN')], state['messages']
+    edits, messages = len(state['edits']), len(state['messages'])
+    w(event, 0, 0, 0, 13, 9)                                          # a repeat
+    call('wt_input_key_post', view, event, 0)
+    w(event, 0, 0, 0, 13, 0)                                          # the release
+    call('wt_input_key_post', view, event, 0)
+    w(event, 0, 0, 0, 13, 1)
+    state['syn'] = 0                                                  # NO alone
+    call('wt_input_key_post', view, event, 0)
+    state['syn'] = 1
+    state['trig'] = 1                                                 # a trig held: lock mode stays native
+    call('wt_input_key_post', view, event, 0)
+    state['trig'] = 0
+    state['values'] = {8 + k: defaults[8 + k] for k in range(8)}      # already at the defaults
+    call('wt_input_key_post', view, event, 0)
+    assert len(state['edits']) == edits and len(state['messages']) == messages, state['edits'][edits:]
+    state['syn'] = 0
     # A moving position redraws at most every other idle call.
     state['values'] = {0: 0x4000, 1: 0x6400, 2: 0, 3: 64 << 8, 4: 0x4000, 5: 0x4000, 6: 0x4000, 7: 0}
     state['cursor'] = (2, 64, 0)
@@ -449,7 +497,8 @@ def run(stock, bank, out):
     print('PASS: SP WAVETBL pages drawn by the bank on native OS 1.42 routines: Tonverk layout, '
           'labels and values, the wave over its width, one card read per slot, the moving position '
           'from each oscillator\'s cursor record, locks, an empty slot, nothing outside x 19..124 / y 0..51; '
-          'the SLOT list on either page (names, WT/ST tags), NO reverting a value and a new p-lock')
+          'the SLOT list on either page (names, WT/ST tags), NO reverting a value and a new p-lock, '
+          'SYN + NO setting the page defaults with SLOT kept')
 
 
 if __name__ == '__main__':

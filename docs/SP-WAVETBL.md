@@ -74,7 +74,7 @@ core sends the tempo in it (section 5).
 | 0 | TUNE | -48.00 to +48.00 | 0 | semitones on both oscillators, fine steps |
 | 1 | LEV | 0 to 127 | 100 | osc 1 level |
 | 2 | POS | 0 to 127 | 0 | osc 1 wave, 0 = first, 127 = last, fine steps between |
-| 3 | SLOT | 1 to 128 | 65 | osc 1 pool position; shows the sample name; alias `0x1f2` (the pool sample slot): page randomize and reload leave it |
+| 3 | SLOT | 1 to 128 | 65 | osc 1 pool position; shows the sample name; alias `0x1f2` (the pool sample slot): page randomize (SYN + YES) and reset (SYN + NO) leave it |
 | 4 | SPD | 0 to 127 | 64 | ANIM 1 time (below) |
 | 5 | A.LEV | -64 to +63 | 0 | ANIM 1 depth on LEV |
 | 6 | A.POS | -64 to +63 | 0 | ANIM 1 depth on POS |
@@ -119,6 +119,11 @@ Cost, measured on analog-emu's cfbench (instructions, not cycles): about
 3,100 a block per track with both oscillators crossfading at a fixed position
 (a table or a plain sample), about 3,800 with ANIM on position, against 9k to 13k for MD KIT voices.
 Cache misses on the tables are not counted; the unit's CPU reading is to come.
+
+SYN + NO sets the page shown to the defaults above, SLOT kept, rather than
+the firmware's reload to the saved values: the bank module (`input.c`) edits
+each control after the native reload, on the same press, and shows the reload
+message again. With a trig held it stays native.
 
 ## 3b. The screen
 

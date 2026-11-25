@@ -229,6 +229,11 @@ frames read back, a stereo sample's L, the cut at the end, errors).
 `tests/test_wavetable_st.py` also runs 8 plain-sample scenarios (mono and
 stereo, more than 64 waves, a few, less than one), and the page test a plain
 sample drawn from 64 card reads, EMPTY SLOT and SAMPLE TOO SHORT.
+The page test also drives the module's input: the SLOT list, NO reverting
+and clearing a new lock, FUNC + a knob's stops, and SYN + NO (each control
+of either page but SLOT edited to its default, the reload message shown
+again; nothing on a repeat, a release, NO alone, a trig held or a page
+already at its defaults).
 Disk, heap, semaphore, notification and mailbox delivery are boundaries, not a full
 RTOS boot or hardware validation. The host project-pool fixture additionally
 covers empty/oversized headers, missing disk, read/allocation failures, exact
