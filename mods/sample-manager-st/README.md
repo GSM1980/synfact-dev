@@ -1,6 +1,6 @@
 # Sample Manager (Syntakt)
 
-Desktop OS 1.42 release: **1.3.1**.
+Desktop OS 1.42 version: **1.3.2**.
 Requires core 2.3 or later (sample-pool API 2) and a matching bank
 (SMZ4 contract `0x53594606`).
 
@@ -29,6 +29,10 @@ Sound-menu hook calls its registered menu builder. The core retains HZFS,
 CRC, block IO, pool references, AUDIO sync/rollback, preview streaming and
 mixing. Menu/progress callbacks bind through host->pool and are cleared by the
 core on bank initialization/failure. Nothing survives a failed bank bind.
+
+The library lists folders first, then samples. Each group is sorted by name,
+ignoring ASCII case and display prefixes such as `ST` and `WT`. The `..` row
+stays at the top in subfolders. The project pool stays in slot order.
 
 YES enters [folders]; the `..` row returns to the parent. Normal sample rows
 keep their selection behavior; FUNC+YES previews through the core service.

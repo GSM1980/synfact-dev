@@ -127,21 +127,65 @@ static u16 *ui_codes DATA = 0;
 static u32 ui_folder DATA=0;
 #define UI_PARENT_FOLDER 0x7fffu
 static u32 library_folder(u32 code){return code && !(code&HZ_FLAG);}
+
+static int library_name_before(const u8 *names,u32 stride,u16 a,u16 b)
+{
+    const u8 *left=names+stride*a,*right=names+stride*b;
+    for(u32 i=0;i<32;i++) {
+        u32 x=left[i],y=right[i];
+        if(x>='A' && x<='Z')x+='a'-'A';
+        if(y>='A' && y<='Z')y+='a'-'A';
+        if(x!=y)return x<y;
+        if(!x)break;
+    }
+    return a<b;  /* retain catalogue order for equivalent names */
+}
+
+static void library_sift(u16 *rows,u32 root,u32 count,const u8 *names,u32 stride)
+{
+    u32 child;
+    while((child=2*root+1)<count) {
+        if(child+1<count && library_name_before(names,stride,rows[child],rows[child+1]))child++;
+        if(!library_name_before(names,stride,rows[root],rows[child]))break;
+        u16 row=rows[root];rows[root]=rows[child];rows[child]=row;
+        root=child;
+    }
+}
+
+/* Sort catalogue indices in place so each comparison reads names directly.
+ * Restore the real folder/sample IDs before the list builds its actions. */
+static void library_sort(u16 *rows,u32 count,const u8 *entries,u32 stride,u32 name_offset,u32 flag)
+{
+    const u8 *names=entries+name_offset;
+    for(u32 i=count/2;i;i--)library_sift(rows,i-1,count,names,stride);
+    for(u32 i=count;i>1;i--) {
+        u16 row=rows[0];rows[0]=rows[i-1];rows[i-1]=row;
+        library_sift(rows,0,i-1,names,stride);
+    }
+    for(u32 i=0;i<count;i++)rows[i]=(u16)(flag|be32(entries+stride*rows[i]));
+}
+
 static void library_list(void)
 {
-    u32 i,n=ui_index?be32(ui_index+12):0,f=ui_index?st_hz_folder_count(ui_index):0;
+    u32 i,first,n=ui_index?be32(ui_index+12):0,f=ui_index?st_hz_folder_count(ui_index):0;
     const u8 *e;ui_count=0;
     if(!ui_codes)return;
     if(ui_folder)ui_codes[ui_count++]=UI_PARENT_FOLDER;
+    first=ui_count;
     for(i=0;i<f;i++){
         e=st_hz_folder_record(ui_index,i);
-        if(be32(e+4)==ui_folder)ui_codes[ui_count++]=(u16)be32(e);
+        if(be32(e+4)==ui_folder)ui_codes[ui_count++]=(u16)i;
     }
+    if(ui_count>first)
+        library_sort(ui_codes+first,ui_count-first,st_hz_folder_record(ui_index,0),ST_HZ_FOLDER_BYTES,8,0);
+    first=ui_count;
     for(i=0;i<n;i++){
-        e=ui_index+HZ_ENTRIES+64*i;
+        e=ui_index+ST_HZ_ENTRIES+ST_HZ_ENTRY*i;
         if(st_hz_member(ui_index,i)==ui_folder && be32(e) && be32(e)<32768 && be32(e+16))
-            ui_codes[ui_count++]=(u16)(HZ_FLAG|be32(e));
+            ui_codes[ui_count++]=(u16)i;
     }
+    if(ui_count>first)
+        library_sort(ui_codes+first,ui_count-first,ui_index+ST_HZ_ENTRIES,ST_HZ_ENTRY,32,HZ_FLAG);
 }
 static u8 *ui_selected DATA = 0;
 static u8 ui_pool_selected[SLOTS] DATA = {0};

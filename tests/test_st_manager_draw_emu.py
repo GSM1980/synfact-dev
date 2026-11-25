@@ -145,19 +145,21 @@ def verify(stock, bank, out):
         png += chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
         (out / name).write_bytes(png)
     capture('manager-pool.png')
-    # Real library labels/callbacks: a directory stays intact while both mono
-    # and stereo names reserve exactly the same right-hand size column.
+    # Build the real library list from samples stored in reverse name order.
+    # Mono and stereo names reserve exactly the same right-hand size column.
     index, codes, selected = 0x49004000, 0x49004400, 0x49004500
     w(index + 4, 2); w(index + 12, 2); w(index + 40, 1)
-    for i, (code, name, size) in enumerate(((1, names[0x8001], 41944), (2, names[0x8002][3:], 1488978))):
+    for i, (code, name, size) in enumerate(((2, names[0x8002][3:], 1488978), (1, names[0x8001], 41944))):
         entry = index + 0x140 + 64 * i
-        w(entry, code); w(entry + 16, size // 2); w(entry + 28, i)
+        w(entry, code); w(entry + 16, size // 2); w(entry + 28, int(code == 2))
         u.mem_write(entry + 32, name.encode() + b'\0')
     w(index + 0x1c8, 1); u.mem_write(index + 0x1d0, b'Drums\0')
-    u.mem_write(codes, struct.pack('>3H', 1, 0x8001, 0x8002))
     w(symbols['ui_index'], index); w(symbols['ui_index_len'], 512)
     w(symbols['ui_codes'], codes); w(symbols['ui_selected'], selected)
-    w(symbols['ui_mode'], 1); w(symbols['ui_count'], 3)
+    w(symbols['ui_mode'], 1)
+    call('library_list')
+    assert read(symbols['ui_count']) == 3
+    assert tuple(struct.unpack('>3H', u.mem_read(codes, 6))) == (1, 0x8001, 0x8002)
     call('rebuild_list'); text_calls.clear()
     u.mem_write(pixels, bytes(1024)); call('st_pool_ui_draw', view + 0x38, bitmap)
     assert (8, 42, '[Drums]') in text_calls

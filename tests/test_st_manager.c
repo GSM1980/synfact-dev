@@ -43,7 +43,7 @@ static int bus[64];
 #include "../mods/core-st/sample-manager.c"
 void st_pool_label_invoker(void){}
 
-static u16 record[128];static u8 index_data[512],pcm_file[64+200000];
+static u16 record[128];static u8 index_data[1024],pcm_file[64+200000];
 static void *allocations[1024];static u32 allocated,freed,rows[3],last_kind[3],syncs,io_reads;
 static u32 empty_index,io_failure,ready=1,in_irq,sync_failure;
 static u8 *fake_view,*manager,*node,*menu;
@@ -75,7 +75,7 @@ void core_pool_memory(struct st_pool_memory *out)
 const struct core_machine_def *core_machine_find(u32 type){(void)type;return 0;}
 const struct st_storage_io core_hzfs_native_io={0};
 int core_hzfs_open(struct st_hzfs *fs,const struct st_storage_io *io)
-{(void)io;memset(fs,0,sizeof(*fs));fs->copy[0]=fw_malloc(512);memcpy(fs->copy[0],index_data,512);if(empty_index)put32(fs->copy[0]+12,0);fs->length[0]=512;return 1;}
+{(void)io;memset(fs,0,sizeof(*fs));fs->copy[0]=fw_malloc(sizeof index_data);memcpy(fs->copy[0],index_data,sizeof index_data);if(empty_index)put32(fs->copy[0]+12,0);fs->length[0]=sizeof index_data;return 1;}
 void core_hzfs_close(struct st_hzfs *fs){u32 i;for(i=0;i<2;i++)if(fs->copy[i])fw_free(fs->copy[i]);}
 int fw_mmc_read(u32 lba,u32 bytes,void *out)
 {u32 at=(lba-(0x602u<<10))*512,n;assert(!in_irq && lba>=(0x602u<<10));io_reads++;if(io_failure)return -1;memset(out,0,bytes);n=at<sizeof(pcm_file)?sizeof(pcm_file)-at:0;if(n>bytes)n=bytes;memcpy(out,pcm_file+at,n);return 0;}
@@ -98,6 +98,45 @@ static u32 fake_push(void *m,void *pair,u32 flags)
 static void key(u32 id,u32 flags){u8 ev[20]={0};put32(ev+12,id);put32(ev+16,flags);st_pool_ui_event(ev);}
 static void pre(u32 id,u32 flags){u8 ev[20]={0};put32(ev+12,id);put32(ev+16,flags);assert(!st_pool_ui_pre_event(0,ev));}
 static void close_view(void){u8 *v=ui_view;st_pool_ui_dispose(v);fake_view=0;assert(!ui_view && !preview_length && !ui_codes && !ui_selected && !ui_index);}
+
+static void test_library_order(void)
+{
+    static const char *const samples[]={"Zebra","Beta","alpha","AlPhA","Zulu","acorn"};
+    static const char *const folders[]={"zoo","Beats","Sub","amber"};
+    static const u16 root[]={304,302,301,HZ_FLAG|103,HZ_FLAG|104,HZ_FLAG|102,HZ_FLAG|101};
+    static const u16 nested[]={UI_PARENT_FOLDER,303,HZ_FLAG|106,HZ_FLAG|105};
+    const u32 count=sizeof samples/sizeof *samples,folder_count=sizeof folders/sizeof *folders;
+    u8 *members=index_data+ST_HZ_ENTRIES+ST_HZ_ENTRY*count;
+    struct row_capture row={ROW_FILE,1,0};struct fn_capture fn={&row};
+    char label[48];
+
+    memset(index_data,0,sizeof index_data);
+    put32(index_data+4,2);put32(index_data+12,count);
+    put32(index_data+40,folder_count);put32(index_data+44,305);
+    for(u32 i=0;i<count;i++) {
+        u8 *entry=index_data+ST_HZ_ENTRIES+ST_HZ_ENTRY*i;
+        put32(entry,101+i);put32(entry+16,i==2?ST_WT_FRAMES:1000);
+        put32(entry+28,i==2?ST_HZ_WAVETABLE:i==1?ST_HZ_STEREO:0);
+        strcpy((char *)entry+32,samples[i]);
+        put32(members+4*i,i>=4?302:0);
+    }
+    for(u32 i=0;i<folder_count;i++) {
+        u8 *entry=members+4*count+ST_HZ_FOLDER_BYTES*i;
+        put32(entry,301+i);put32(entry+4,i==2?302:0);
+        strcpy((char *)entry+8,folders[i]);
+    }
+    st_pool_ui_open(menu);
+    assert(ui_count==sizeof root/sizeof *root && !memcmp(ui_codes,root,sizeof root));
+    st_pool_item_label(label,&fn);assert(!strcmp(label,"[Beats]"));
+    row_action(&fn);
+    assert(ui_folder==302 && ui_count==sizeof nested/sizeof *nested && !memcmp(ui_codes,nested,sizeof nested));
+    row.code=2;row_action(&fn);assert(ui_selected[2] && ui_codes[2]==(HZ_FLAG|106));
+    row.code=0;row_action(&fn);
+    assert(!ui_folder && ui_count==sizeof root/sizeof *root && !memcmp(ui_codes,root,sizeof root));
+    for(u32 i=0;i<ui_count;i++)assert(!ui_selected[i]);
+    close_view();
+}
+
 int main(void)
 {
     u32 i,reads_before,allocs_before;struct row_capture capture={ROW_FILE,3,0};struct fn_capture src={&capture,0,row_manager,0},dst={0};
@@ -219,7 +258,7 @@ int main(void)
      ui_folder=2;library_list();ui_selected[1]=1;sync_failure=1;apply_selection();
      assert(!strcmp(ui_status,"AUDIO FULL") && !memcmp(before,record,sizeof before));
      assert(!ui_memory.used && st_pool_ui_report[1]==added && syncs==calls+1);}
-    close_view();manager_tick(manager);for(i=0;i<allocated;i++)if(allocations[i])fw_free(allocations[i]);
+    close_view();test_library_order();manager_tick(manager);for(i=0;i<allocated;i++)if(allocations[i])fw_free(allocations[i]);
     assert(freed==allocated);assert(VirtualFree((void *)0x40240000u,0,MEM_RELEASE));
-    puts("PASS: native-manager C empty row, pane navigation, owned captures, batch pool edits, audition streaming and bounded IRQ mixing");return 0;
+    puts("PASS: native-manager C alphabetical library, pane navigation, owned captures, batch pool edits, audition streaming and bounded IRQ mixing");return 0;
 }
