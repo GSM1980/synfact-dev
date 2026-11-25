@@ -1,4 +1,13 @@
-# Syntakt core 2.6.1
+# Syntakt core 2.7.0
+
+**PATTERN menu build events.** Two new collections, SMZ events **16**
+(`ev_pattern_menu`, end of PatternMenuView's constructor, `4004ae0c`) and
+**17** (`ev_reload_menu`, end of PatternReloadMenuView's constructor,
+`40182212`): `void f(void *menu)` once the menu is built, so a module can
+append items. **Host API 18** adds no field; older parsers reject events
+16/17. See ADAPTING.md and HOOK-AUDIT.md.
+
+## Core 2.6.1
 
 **Up to 32 modules** in a bank (16 until 2.6.0), each with its own slot in
 every per-module table. Machines stay at 16: their types 64..79 own the
@@ -424,6 +433,7 @@ See [the implementation and validation](../../docs/RECORDER-AUDIO-PAUSE.md).
 | `ev_draw` | `void f(void *bmp, void *ctrl)` | After the native frame |
 | `ev_key`, `ev_enc` | `int f(void *brain, void *event)` | Nonzero consumes the event |
 | `ev_settings` | `void f(void *menu)` | Add rows with `core_additem` |
+| `ev_pattern_menu`, `ev_reload_menu` | `void f(void *menu)` | 2.7: end of PatternMenuView's / PatternReloadMenuView's constructor; append items, keep the menu |
 | `ev_render_in`, `ev_render_out` | `void f(void)` | MAIN audio IRQ, no allocation or IO |
 | `ev_fs_route`, `ev_fs_write`, `ev_fs_written` | See STORAGE.md | Native Data RPC tasks |
 

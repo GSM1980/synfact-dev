@@ -142,5 +142,7 @@ struct st_machine_host_api {
     /* Host API 17 adds no field: UI-only destination query 36, and extended
      * configuration controls with alias ST_MACHINE_CONFIG_PARAMETER, which
      * are unmodulated and not destinations. */
+    /* Host API 18 (core 2.7) adds no field: SMZ events 16/17 (modules.h),
+     * the PATTERN and RELOAD FROM PROJ menus' build events. */
 };
 #endif

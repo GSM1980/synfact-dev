@@ -1,5 +1,10 @@
 # The .elemod format
 
+Core 2.7 / host API 18 adds SMZ module events **16, PATTERN_MENU** and **17,
+RELOAD_MENU**, with the same subscription record geometry; older core parsers
+reject them. Bank contract, envelope and feature bits are unchanged. See
+[ADAPTING.md](ADAPTING.md#syntakt-core-27-pattern-menu-build-events).
+
 Core 2.4 / host API 16 adds SMZ module event **15, FX_CV**. It has the same
 subscription record geometry; older core parsers reject event 15. The bank
 contract remains `53594606`, with no envelope or feature-bit change. The host

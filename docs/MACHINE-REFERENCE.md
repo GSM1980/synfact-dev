@@ -612,7 +612,19 @@ callbacks may use them and must preserve ACC2/3. This is not the MAIN mix.
 
 Key IDs used here beyond `mods/core-st/README.md`'s: TRK = 2 (MainScreen's key
 switch at `0x40033f0a`, case 2, pushes the TrackSelectionView), UP = 14,
-DOWN = 15, LEFT = 16, RIGHT = 17. The MainScreen's header (`0x40032b0e..0x40032b72`) draws the tempo
+DOWN = 15, LEFT = 16, RIGHT = 17. SONG MODE = 5, SETTINGS = 6, FX = 7, YES = 12, NO = 13
+(the full list, 1 FUNC to 24..39 TRIG 1..16, follows the key/LED table at
+`0x401d7400`). The main loop builds each KeyEvent (`0x400f970c`, vtable
+`0x401c23f4`; code at +12, flags at +16) at `0x4000b416` from the queued
+message's words, then calls `ev_key` at `0x4000b420`; nothing before the
+views rewrites +16. Flags (tested by `0x400f97b4..0x400f9800`): bit 0
+pressed (clear: released), bit 3 auto-repeat, bit 5 long press; bits 4
+and 6 are tested too (meaning not recorded). MainScreen's switch
+(`0x40033f0a`, case 6) takes one path with bit 4 set; otherwise it tests
+bit 5 with `0x400f97c4` and builds the LED INTENSITY quick view
+(QuickLedIntensityView, constructor `0x400c6b20`) at `0x400348e2`. A global
+`ev_key` subscriber therefore sees the long press of SETTINGS and can
+consume it; this is a static reading, not yet observed on a unit. The MainScreen's header (`0x40032b0e..0x40032b72`) draws the tempo
 (`0x402d7010`, BPM × 120; `0x4013273e(tempo, 120, 1, 1)` splits it) as `%d.%d`
 right-aligned to x 125 in the font `0x443da1f0`, and the metronome at x 117 −
 the tempo's width, rows 55..62 (`0x400f8dac`, y 55 or 56). The active track is `0x4001ff74(app + 0x30)`, app = `0x4016e804()`.

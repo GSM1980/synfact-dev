@@ -117,7 +117,10 @@ def verify(folder):
                          (0x400a78a0,'core_meta_kit_decode',8),
                          (0x400905b6,'core_fx_cv',6)):
         assert read(at,size)==jump(name,0x4eb9 if name=='core_fx_cv' else 0x4ef9)+bytes.fromhex('4e71')*((size-6)//2),name
-    assert len(manifest['sites'])==127 and len(manifest['collections'])==17
+    # 2.5: the PATTERN and RELOAD FROM PROJ menus' build events, at their constructors' epilogues.
+    for at,name in ((0x4004ae0c,'core_pattern_menu'),(0x40182212,'core_reload_menu')):
+        assert read(at,6)==jump(name),name
+    assert len(manifest['sites'])==129 and len(manifest['collections'])==19
     assert read(0x40083026,8)==jump('core_pool_sender_done',0x4eb9)+bytes.fromhex('4e71')
     # 2.1.1: the sender's end also returns the bank's file (its AUDIO section) to the heap.
     assert read(address('core_pool_sender_done'),22)==(
@@ -125,7 +128,7 @@ def verify(folder):
         bytes.fromhex('700423c041bb32b04e75'))
     assert read(address('core_pool_blob'),12)==(
         jump('core_pool_prepare',0x4eb9)+bytes.fromhex('4ef940082e9c'))
-    assert len({s['addr'] for s in manifest['sites']})==127
+    assert len({s['addr'] for s in manifest['sites']})==129
     assert read(0x400a5046,6)==jump('core_audio_idle_mix',0x4eb9)
     # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
     # `storage`, files.c `io`) has read, write and sectors, each a code address.

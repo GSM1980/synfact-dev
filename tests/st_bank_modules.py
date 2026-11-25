@@ -80,10 +80,12 @@ def check_bank_modules(report, raw, allowed):
     expected += [names[:names.index('fm_tone_module')+1]+['st_subtype_module']+
                  names[names.index('fm_tone_module')+1:] for names in list(expected) if 'fm_tone_module' in names]
     expected += [names+['sample_manager_module'] for names in list(expected)]
-    # Optional modules in bank order: Chorus, Playhead, then Modulation Skip.
+    # Optional modules in bank order: Chorus, COMP, KITLOAD, Playhead, then Modulation Skip.
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
     expected += [names+['chorus_module'] for names in list(expected)]
     expected += [names+['comp_module'] for names in list(expected)]
+    # kitload-st (core 2.7): after COMP, before Playhead.
+    expected += [names+['kitload_module'] for names in list(expected)]
     expected += [names+['playhead_module'] for names in list(expected)]
     # mix-fast-st and icache-lock-st (experimental, no UI): before modulation skip.
     expected += [names+['mix_fast_module'] for names in list(expected)]

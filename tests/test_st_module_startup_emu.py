@@ -35,7 +35,8 @@ class Startup(Core):
         start=report['link']['boot'][0]
         self.u.mem_write(start,bytes(len(raw)-(start-BASE)))
         self.u.ctl_remove_cache(start,start+len(raw)-(start-BASE))
-        self.event_count=16 if 'core:core_fx_cv' in self.sym else 15
+        self.event_count=(18 if 'core:core_reload_menu' in self.sym else
+                          16 if 'core:core_fx_cv' in self.sym else 15)
         self.original=[self.event_list(i) for i in range(self.event_count)]
         self.expected=[list(x) for x in self.original]
         self.modules=[];self.count=0

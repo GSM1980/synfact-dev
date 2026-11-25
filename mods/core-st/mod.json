@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "2.6.1",
+  "version": "2.7.0",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -57,7 +57,8 @@
     "project-operations.s",
     "global-fx.s",
     "kit-meta.c",
-    "kit-meta.s"
+    "kit-meta.s",
+    "menu-events.s"
   ],
   "defsym": {
     "DRAWALL": "0x40100992",
@@ -79,6 +80,8 @@
     {"addr":"0x4000d94a","stock":"2f02222f0008202f000c","op":"jmp","target":"core_global_get"},
     {"addr":"0x4000da32","stock":"2f032f02222f000c","op":"jmp","target":"core_global_set"},
     {"addr":"0x400905b6","stock":"0c810000ffff","op":"jsr","target":"core_fx_cv"},
+    {"addr":"0x4004ae0c","stock":"4cef7c7c0010","op":"jmp","target":"core_pattern_menu"},
+    {"addr":"0x40182212","stock":"4cef7c7c0018","op":"jmp","target":"core_reload_menu"},
     {"addr":"0x4011613c","stock":"226f0004206f0008","op":"jmp","target":"core_meta_copy"},
     {"addr":"0x400b3384","stock":"4fefffdc428048d77c3c","op":"jmp","target":"core_meta_kit_new"},
     {"addr":"0x400a78f4","stock":"4fefffe448d73c1c","op":"jmp","target":"core_meta_kit_encode"},
@@ -815,7 +818,9 @@
     "ev_track_send": 4,
     "ev_delay_in": 4,
     "ev_reverb_in": 4,
-    "ev_fx_cv": 4
+    "ev_fx_cv": 4,
+    "ev_pattern_menu": 4,
+    "ev_reload_menu": 4
   },
   "subscribe": [
     {
