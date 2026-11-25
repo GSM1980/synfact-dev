@@ -8,9 +8,12 @@
 #include <syntakt/machines.h>
 typedef st_u32 u32;
 #define P(label,name,hi,init) {label,name,0,hi,init,0x13}
+/* SLOT has the pool sample slot's alias (0x1f2): the core's page randomize
+ * (SYN+YES) and reload (SYN+NO) leave it alone (machine-randomize.c), and
+ * its value reads as the pool's name, as the SP machines' samples do. */
 #define OSC(n,lev) \
     P("LEV","LEVEL OSC " n,0x7f00,lev),P("POS","POSITION OSC " n,0x7f00,0), \
-    P("SLOT","WAVETABLE OSC " n,0x7f00,0x4000),P("SPD","ANIM SPEED OSC " n,0x7f00,0x4000), \
+    {"SLOT","WAVETABLE OSC " n,0,0x7f00,0x4000,0x1f2},P("SPD","ANIM SPEED OSC " n,0x7f00,0x4000), \
     P("A.LEV","ANIM LEV OSC " n,0x7f00,0x4000),P("A.POS","ANIM POS OSC " n,0x7f00,0x4000), \
     P("ANIM","ANIM SH OSC " n,0x0b00,0)
 /* The long names title the value pop-up as "name=value" on one row: short,

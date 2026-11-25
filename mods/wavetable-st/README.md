@@ -15,7 +15,7 @@ does; the design, the decisions and the open points are in
 | TUNE | DTUN | -48.00..+48.00 / -64..+63 | semitones on both oscillators / osc 2 against osc 1, +-64 = +-1 semitone |
 | LEV | LEV | 0..127 (100 / 0) | the oscillator's level; 127 alone is about -6 dB |
 | POS | POS | 0..127, fine steps | the wave played, 0 the first, 127 the last; crossfades between neighbours |
-| SLOT | SLOT | pool position 1..128 (65) | the wavetable, by its pool position; p-lockable |
+| SLOT | SLOT | pool position 1..128 (65) | the wavetable or sample, by its pool position; p-lockable; never randomized (SYN+YES) or reloaded (SYN+NO): its alias is the pool sample slot's (0x1f2) |
 | SPD | SPD | 0..127 (64) | ANIM's time: one-shot shapes 2 ms..30 s; looping shapes 1/16 beat..64 beats of the tempo |
 | A.LEV | A.LEV | -64..+63 (0) | ANIM's depth on LEV |
 | A.POS | A.POS | -64..+63 (0) | ANIM's depth on POS; +-63 covers the whole table |

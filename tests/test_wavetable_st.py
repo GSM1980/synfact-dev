@@ -121,7 +121,9 @@ def check_descriptor():
     assert re.search(r'wt_machine=\{72,17,"SP WAVETBL","WTBL","SYN"', src)
     assert 'ST_MACHINE_TEMPO_PARAMETER' in src
     labels = re.findall(r'P\("([^"]+)"', src)
-    assert labels[:7] == ['LEV', 'POS', 'SLOT', 'SPD', 'A.LEV', 'A.POS', 'ANIM'], labels
+    assert labels[:6] == ['LEV', 'POS', 'SPD', 'A.LEV', 'A.POS', 'ANIM'], labels
+    # SLOT: the pool sample slot's alias, which page randomize and reload skip.
+    assert '{"SLOT","WAVETABLE OSC " n,0,0x7f00,0x4000,0x1f2}' in src
     # audio.c's default extended words follow the descriptor's initial values.
     audio = (ROOT / 'mods/wavetable-st/audio.c').read_text(encoding='utf-8')
     assert '{0x4000,0,0,0x4000,0x4000,0x4000,0x4000,0,WT_TEMPO_DEFAULT}' in audio

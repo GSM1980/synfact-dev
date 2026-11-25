@@ -226,6 +226,13 @@ def run(stock, bank, out):
     w(0x443db23c, 0x402aa114)
     bitmap, pixels, view = 0x49001000, 0x49002000, 0x49003000
     machine = symbols['wt_machine']
+    # The core randomizes (SYN+YES) and reloads (SYN+NO) every control but
+    # those with the sample slot alias 0x1f2 or a hidden one (machine-
+    # randomize.c's drawn): here both SLOTs and the tempo, nothing else.
+    params = read(machine + 20)
+    aliases = [read(params + 24 * i + 20) for i in range(17)]
+    assert [i for i, a in enumerate(aliases) if a == 0x1f2] == [3, 11], aliases
+    assert aliases[16] == 0xfffffffd and all(a == 0x13 for i, a in enumerate(aliases) if i not in (3, 11, 16)), aliases
     # The SYN view the slot list checks: vtable, SYN class 14h, model, page, trig owner.
     w(view, 0x401ca37c)
     w(view + 0x88, 0x14)
