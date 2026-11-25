@@ -1,12 +1,6 @@
 {
   "modules": [
     {
-      "id": "state-st",
-      "path": "mods/state-st",
-      "kind": "module",
-      "always": true
-    },
-    {
       "id": "samplers-st",
       "path": "mods/samplers-st",
       "kind": "machine"
@@ -25,6 +19,17 @@
       "id": "md-st",
       "path": "mods/md-st",
       "kind": "machine"
+    },
+    {
+      "id": "wavetable-st",
+      "path": "mods/wavetable-st",
+      "kind": "machine"
+    },
+    {
+      "id": "state-st",
+      "path": "mods/state-st",
+      "kind": "module",
+      "always": true
     },
     {
       "id": "playhead-st",
@@ -78,6 +83,11 @@
     {
       "id": "comp-st",
       "path": "mods/comp-st",
+      "kind": "module"
+    },
+    {
+      "id": "kitload-st",
+      "path": "mods/kitload-st",
       "kind": "module"
     },
     {

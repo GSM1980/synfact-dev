@@ -5,11 +5,12 @@
 // A call is { id, call, args, data }. `call` is one of the bridge's calls (web/bridge.py's names: set_stock, add_mod,
 // remove_mod, mods, tick, check, version, build, info) or one of the kit's own: init, which loads the site's catalog
 // and its cores, add_catalog_mod, build_syntakt for an explicitly pinned core build, and build_smz for a pinned SMZ
-// selection (its data, when given, is the owner's OS file a selected module takes bytes from). The worker answers
+// selection (its data, when given, is the owner's OS file a selected module takes bytes from). convert_wavetable
+// accepts original-rate Float64 channel buffers without init and returns canonical PCM16BE. The worker answers
 // { id, log } for each line while a build runs, then { id, ok: true, result } or { id, ok: false, error }.
 //
 // PROTOCOL changes when a call or a reply changes shape; init's reply carries it, so a page knows what it talks to.
-export const PROTOCOL = 5
+export const PROTOCOL = 6
 
 export type Call = { id: number; call: string; args?: Record<string, unknown>; data?: ArrayBuffer }
 export type Answer = { id: number; log: string } | { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string }

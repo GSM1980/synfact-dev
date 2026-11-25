@@ -8,6 +8,7 @@ import { VERSION } from '../version.ts'
 import { buildSyntakt } from '../syntakt-build.ts'
 import { buildSmzSelection } from '../smz-catalog.ts'
 import { inspectDonor } from '../smz-donor.ts'
+import { convert as convertWavetable, FRAMES } from '../wavetable.ts'
 import { parseCatalog, type Catalog } from './catalog.ts'
 import { PROTOCOL, type Built, type Call, type Ready } from './protocol.ts'
 
@@ -60,6 +61,17 @@ export function createService(get: Fetcher) {
   return async function handle(call: Pick<Call, 'call' | 'args' | 'data'>, progress?: (line: string) => void): Promise<unknown> {
     const args = call.args ?? {}
     if (call.call === 'init') return init(args)
+    if (call.call === 'convert_wavetable') {
+      if (typeof args.stem !== 'string' || !args.stem || !Array.isArray(args.channels) ||
+          !args.channels.length || args.channels.length > 32 || args.channels.some(channel =>
+            !(channel instanceof ArrayBuffer) || !channel.byteLength || channel.byteLength % 8))
+        throw new Error('Wavetable conversion needs a file name and Float64 channel buffers')
+      const channels = (args.channels as ArrayBuffer[]).map(buffer => new Float64Array(buffer))
+      if (channels.some(channel => channel.length !== channels[0].length || channel.some(value => !Number.isFinite(value))))
+        throw new Error('Invalid wavetable audio channels')
+      const result = convertWavetable(channels, args.stem)
+      return { name: result.name, notes: result.notes, waves: result.pcm.length / (2 * FRAMES), data: result.pcm.buffer }
+    }
     if (!bridge) throw new Error('the builder is not loaded: call init first')
     if (call.call === 'add_catalog_mod') return addCatalogMod(args)
     if (call.call === 'inspect_donor') {

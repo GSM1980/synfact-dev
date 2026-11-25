@@ -231,6 +231,17 @@ Protocol 2 adds `builder.buildSyntakt(stockBlob, manifestFile, manifestSha256, l
 
 Create the private artifact package from an independently verified Syntakt build using `python js/tools/syntakt_package.py --reference <build-dir> --core <core.elemod> --machines <machines.elemod> --meter --out <new-dir>`. Omit `--meter` for a build without `--system-info`. The command prints the manifest pin. The tool does not certify that the supplied artifacts can be redistributed: review the origin, licenses and build audit before publishing. Never commit stock firmware, derived firmware or built artifacts. This route is experimental, and tests against physical hardware and across browsers remain necessary.
 
+## Wavetable conversion (protocol 6)
+
+`convert_wavetable` converts decoded WAV channels locally in the kit worker,
+without loading a catalog or supplying an OS file. Send `args.stem` (the file
+name without its extension) and `args.channels` (one ArrayBuffer of Float64
+samples per channel, at the original sample rate, without resampling).
+The reply is `{name, data, waves, notes}`: `data` is the canonical PCM16BE
+ArrayBuffer, ready for a SAMP body with HZFS flag 2. The converter handles
+`_wt<size>` and `_wt<size>r`, mixes channels and builds all nine levels.
+Transfer tools keep this conversion inside the separate engine worker.
+
 ## SMZ4 selection and donor files (protocol 5)
 
 `builder.buildSmz(catalogFile, catalogSha256, selectedIds, donors)` links audited,
