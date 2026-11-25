@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * SY WAVETABLE's oscillator (engine.h). Every step has its twin in
+ * SP WAVETBL's oscillator (engine.h). Every step has its twin in
  * tests/wavetable_st_reference.py; keep them equal, operation for operation.
  */
 #include "engine.h"

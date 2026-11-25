@@ -208,7 +208,7 @@ example main's normal bank), use `--digimono-added`: machine 71 is appended,
 `dm_destination_module` follows `fm_tone_module`, SY MnM's AUDIO objects are one
 new folder, and every other AUDIO object is identical.
 
-To compare a bank with SY WAVETABLE (`mods/wavetable-st`, listed after the
+To compare a bank with SP WAVETBL (`mods/wavetable-st`, listed after the
 other machine folders; core 2.8) against a previous bank without it, use
 `--wavetable-added`: machine 72 is appended, no module changes, its AUDIO
 objects are one new folder, and every other AUDIO object is identical.

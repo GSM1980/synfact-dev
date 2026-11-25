@@ -211,7 +211,7 @@ bits keep no meaning and are preserved.
 
 Entry flag bit 1 (`ST_HZ_WAVETABLE`, `wavetable.WAVETABLE`) marks a mono
 wavetable in the canonical layout of `elekloader/sdk/include/syntakt/wavetable.h`
-([docs/SY-WAVETABLE.md](../../docs/SY-WAVETABLE.md), section 4): W waves
+([docs/SP-WAVETBL.md](../../docs/SP-WAVETBL.md), section 4): W waves
 (1 to 64) at nine band-limited levels, level k holding waves of 2048 >> k
 samples, the levels one after the other. A wave uses 4088 samples over all
 levels, so `frames = W * 4088`; the body and every size check are a mono

@@ -84,7 +84,7 @@ def check_digimono_added(current,baseline):
 
 
 def check_wavetable_added(current,baseline,samplers_changed=False):
-    """SY WAVETABLE (core 2.8) added to a bank without it: machine 72 last, no
+    """SP WAVETBL (core 2.8) added to a bank without it: machine 72 last, no
     module change, its own AUDIO folder only; every other object identical,
     except, with samplers_changed, the samplers' own objects (audio0-*: core
     samplers 1.6.2's machines.h moves their playhead call)."""
@@ -107,7 +107,7 @@ def check_wavetable_added(current,baseline,samplers_changed=False):
 
 
 def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False,digimono_fm_changed=False,digimono_dpro_changed=False,digimono_added=False,wavetable_added=False):
-    # SY WAVETABLE's addition may come with the samplers' change (samplers 1.6.2's playhead fix).
+    # SP WAVETBL's addition may come with the samplers' change (samplers 1.6.2's playhead fix).
     assert sum((sampler_audio_changed and not wavetable_added,digimono_audio_changed,digimono_ens_changed,digimono_fm_changed,digimono_dpro_changed,digimono_added,wavetable_added))<=1
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
@@ -196,7 +196,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         run('modulation skip host logic',[sys.executable,'tests/test_st_modulation_skip.py','--cc',cc,'--work',out/'modulation-skip-tests'])
     if 71 in json.loads((out/'synfact-machines.smz4.json').read_text())['machines']:
         run('Digi Mono adapter/DSP',[sys.executable,'tests/test_st_digimono.py','--cc',cc,'--out',out/'digimono-tests'])
-    run('SY WAVETABLE engine/reference',[sys.executable,'tests/test_wavetable_st.py','--cc',cc,'--out',out/'wavetable-st-tests'])
+    run('SP WAVETBL engine/reference',[sys.executable,'tests/test_wavetable_st.py','--cc',cc,'--out',out/'wavetable-st-tests'])
     run('folder catalogue',[sys.executable,'tests/test_st_sample_folders.py'])
     run('wavetable converter and transfer',[sys.executable,'tests/test_st_wavetable.py'])
     run('folder C/Python round trip',[sys.executable,'tests/test_st_sample_folders.py','--cc',cc,'--out',out/'folder-tests'])
@@ -254,7 +254,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 assert new_section!=old_section
                 check_wavetable_added(json.loads((out/'synfact-machines.smz4.json').read_text()),
                                       json.loads((previous/'synfact-machines.smz4.json').read_text()),sampler_audio_changed)
-                checks.append({'name':'SY WAVETABLE added'+(' and sampler AUDIO changed' if sampler_audio_changed else '')+
+                checks.append({'name':'SP WAVETBL added'+(' and sampler AUDIO changed' if sampler_audio_changed else '')+
                                '; every other AUDIO object identical to the previous build','ok':True})
             elif digimono_added:
                 assert new_section!=old_section
@@ -331,9 +331,9 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
         if 72 in json.loads((out/'synfact-machines.smz4.json').read_text())['machines']:
             if os.environ.get('SYNTAKT_STOCK'):
-                run('SY WAVETABLE SYN pages (Unicorn)',[unicorn_python,'-B','tests/test_wavetable_st_page_emu.py',
+                run('SP WAVETBL SYN pages (Unicorn)',[unicorn_python,'-B','tests/test_wavetable_st_page_emu.py',
                     '--stock',os.environ['SYNTAKT_STOCK'],'--bank',out/'synfact-machines.smz4','--out',out/'wavetable-pages'])
-            else:skipped.append('SY WAVETABLE SYN pages: set SYNTAKT_STOCK')
+            else:skipped.append('SP WAVETBL SYN pages: set SYNTAKT_STOCK')
         run('module startup after native clearing (Unicorn)',[unicorn_python,'-B','tests/test_st_module_startup_emu.py',
             '--core',out,'--bank',out/'synfact-machines.smz4','--out',out/'module-startup.json'])
         if 'core:core_native_route_fill' in json.loads((out/'verification.json').read_text())['symbols']:
@@ -403,7 +403,7 @@ if __name__=='__main__':
     p.add_argument('--digimono-fm-changed',action='store_true',
         help='Digi Mono 0.6 replaces FM+: only its adapter/dispatch change and one FM+ object is added')
     p.add_argument('--wavetable-added',action='store_true',
-                   help='the bank adds SY WAVETABLE (type 72) to the previous build; nothing else may change')
+                   help='the bank adds SP WAVETBL (type 72) to the previous build; nothing else may change')
     p.add_argument('--digimono-added',action='store_true',
         help='the bank adds SY MnM to a previous bank without it: only its machine, module and AUDIO folder are new')
     p.add_argument('--digimono-dpro-changed',action='store_true',

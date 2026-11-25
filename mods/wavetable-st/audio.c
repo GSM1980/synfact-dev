@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * SY WAVETABLE on the AUDIO CPU: eight independent voices, 48 kHz, 32 frames.
+ * SP WAVETBL on the AUDIO CPU: eight independent voices, 48 kHz, 32 frames.
  * The native update prepares declick and gains (as SY MnM does), then two
  * wavetable oscillators (engine.c) replace the PCM. The stock render filter
  * is left out: this is a 48 kHz synth, not a resampled PCM reader. FLTR, AMP

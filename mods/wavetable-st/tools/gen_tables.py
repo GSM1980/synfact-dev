@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""SY WAVETABLE's constant tables, from formulas only (no firmware input).
+"""SP WAVETBL's constant tables, from formulas only (no firmware input).
 
     python mods/wavetable-st/tools/gen_tables.py          # writes mods/wavetable-st/tables.h
 

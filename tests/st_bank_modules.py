@@ -23,7 +23,7 @@ def check_bank_machines(report, raw, baseline=(66,67,68,69,65)):
         assert len(md)==1
         assert hashlib.sha256(md[0].read_bytes()).hexdigest()==report['source_sha256'][str(md[0])]
         expected.append(70)
-    # SY WAVETABLE (core 2.8), after the other optional machines.
+    # SP WAVETBL (core 2.8), after the other optional machines.
     wt=[Path(p) for p in report['source_sha256'] if Path(p).as_posix().endswith('/mods/wavetable-st/mod.json')]
     if wt:
         assert len(wt)==1
@@ -85,7 +85,7 @@ def check_bank_modules(report, raw, allowed):
     # SY MnM and MD KIT: the one SUBTYPE SELECTOR follows FM's module.
     expected += [names[:names.index('fm_tone_module')+1]+['st_subtype_module']+
                  names[names.index('fm_tone_module')+1:] for names in list(expected) if 'fm_tone_module' in names]
-    # SY WAVETABLE (core 2.8): its SLOT list module follows the machines' own
+    # SP WAVETBL (core 2.8): its SLOT list module follows the machines' own
     # modules (FM's, or the SUBTYPE SELECTOR when MnM or MD KIT is there).
     def after_machines(names):
         at=max(names.index(n) for n in ('fm_tone_module','st_subtype_module') if n in names)+1

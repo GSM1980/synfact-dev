@@ -1,12 +1,12 @@
-[Synfact docs](README.md) › SY WAVETABLE (design)
+[Synfact docs](README.md) › SP WAVETBL (design)
 
-# SY WAVETABLE: a dual wavetable machine (design)
+# SP WAVETBL: a dual wavetable machine (design)
 
 Status: **design agreed 2026-11-23; core 2.8.0 (section 5), the import tools
 (section 6) and the machine 0.1.0 (section 3, `mods/wavetable-st`) are
 written.** Nothing here has run on a unit.
 
-SY WAVETABLE is a Syntakt machine that does what the Tonverk's Wavefinder SRC
+SP WAVETBL is a Syntakt machine that does what the Tonverk's Wavefinder SRC
 machine (Tonverk OS 1.3.0 and later) does: two independent wavetable
 oscillators, each with its own internal modulator (ANIM), mixed into one track.
 It reads the Tonverk's wavetable files without conversion by the user.
@@ -58,11 +58,11 @@ Wavetable files (section 5.2.5):
 | 7 | Pages 3 and 4 | **None in 1.0** (faithful). Later candidates: phase reset on trig, ANIM retrig mode, osc 1 / osc 2 pan on stereo tracks |
 | 8 | Wavetables on SP machines | Not refused. The slot is marked; an SP machine plays its PCM as a mono sample |
 | 10 | Plain samples on SLOT (as the Tonverk) | **Yes, as they are** (owner, 2026-11-25): any pool sample plays as a wavetable, 2048-frame waves, at most 64 evenly spaced, a stereo sample's L; no conversion on the PC or the web, so no band-limited levels (high notes alias) |
-| 9 | Name, type | **SY WAVETABLE**, short name `WTBL`, type **72**, mod `mods/wavetable-st` |
+| 9 | Name, type, menu | **SP WAVETBL** (owner, 2026-11-25; first SY WAVETABLE), short name `WTBL`, type **72**, mod `mods/wavetable-st`; in the samples category (11), after SP SLICE (rank 14) |
 
 ## 3. The machine
 
-Descriptor: `{72, 17, "SY WAVETABLE", "WTBL", "SYN", controls, ST_MACHINE_NO_INIT, 44, 10, 17}`,
+Descriptor: `{72, 17, "SP WAVETBL", "WTBL", "SYN", controls, ST_MACHINE_NO_INIT, 44, 11, 14}`,
 with a UI descriptor (`machine-ui-v1`) of two pages. Controls 0 to 7 are the
 first page and 8 to 15 the second, so page 2 comes from `st_machine_extended`
 (MACHINE-REFERENCE section 7: keep our own defaults while it is null).
@@ -128,7 +128,7 @@ page per oscillator, its eight controls around the wave. On the Syntakt the
 native track rail (x < 19), the header (y > 51) and the page indicator
 (x > 124) stay native; the page indicator plays the Tonverk's W1/W2.
 
-| Where | Tonverk | SY WAVETABLE (`page.c`) |
+| Where | Tonverk | SP WAVETBL (`page.c`) |
 |---|---|---|
 | top row | TUNE as `..0..` in a box, LEV over its bar, `[POS]`, `W` + the slot inverted | the same; page 2 shows DTUN's steps in the box |
 | middle | the wave at the position | the wave at the position, crossfaded between neighbours, 102 columns from level 5 (64 samples a wave) |

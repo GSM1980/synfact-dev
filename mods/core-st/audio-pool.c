@@ -31,7 +31,7 @@ typedef unsigned int u32;typedef unsigned short u16;
 #define MAGIC 0x45505331u
 static u32 last,answer,start,extent,received;
 /* Core 2.8: 16 records; record 8 + t is track t's second (a second
- * oscillator's position, SY WAVETABLE). Query 6 answers all 64 words. */
+ * oscillator's position, SP WAVETBL). Query 6 answers all 64 words. */
 static u32 cursors[64];
 void audio_pool_cursor(u32 track,u32 pointer,u32 frames,u32 position,u32 active)
 {

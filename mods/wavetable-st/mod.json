@@ -1,6 +1,6 @@
 {
   "id": "wavetable-st", "version": "0.1.0", "device": "syntakt", "os": "1.42",
-  "title": "SY WAVETABLE", "category": "Synth", "author": "Synfact", "license": "GPL-2.0-or-later",
+  "title": "SP WAVETBL", "category": "Synth", "author": "Synfact", "license": "GPL-2.0-or-later",
   "description": "Two wavetable oscillators, each with its own ANIM modulator on position and level, after the Tonverk's Wavefinder. Reads canonical wavetables from the project pool (core 2.8); loops follow the tempo.",
   "sources": ["main.c", "page.c", "slot-list.c", "input.c"],
   "resources": {"names": ["machine:72"]},

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * SY WAVETABLE on cfbench: the instructions of one track's 32-frame block,
+ * SP WAVETBL on cfbench: the instructions of one track's 32-frame block,
  * both oscillators on a 64-wave table, crossfading between waves, ANIM on
  * position and level (the heaviest case), at a given note. Bit 16 of the
  * argument: no ANIM, a fixed position between two waves (the usual case);

@@ -207,8 +207,8 @@ and `put`/`get` on an in-memory device (folder v2, `wavetables` created once,
 `--wavetable`, level 0 back). `js/test/wavetable.test.ts` checks that
 `js/src/wavetable.ts` gives the Python's bytes and messages
 (`js/tools/wavetable_vectors.py` writes its vectors).
-SY WAVETABLE (`mods/wavetable-st`): `tests/test_wavetable_st.py --cc <clang>
---out <folder>` (the regressions' `SY WAVETABLE engine/reference`) builds
+SP WAVETBL (`mods/wavetable-st`): `tests/test_wavetable_st.py --cc <clang>
+--out <folder>` (the regressions' `SP WAVETBL engine/reference`) builds
 `engine.c` for the host with `tests/wavetable_st_host.c` and requires the same
 samples and state as `tests/wavetable_st_reference.py` over 12 random
 scenarios of 400 blocks, plus the pitch and level tables, `tables.h` equal to
@@ -217,8 +217,8 @@ scenarios of 400 blocks, plus the pitch and level tables, `tables.h` equal to
 block on analog-emu's ColdFire (instructions only). Core 2.8's tempo alias:
 `test_st_parameters.c` (every index 8..23, publication on a tempo change
 alone) and `test_st_smz_extensions.c` (accepted at 8..23 only).
-SY WAVETABLE's SYN pages: `tests/test_wavetable_st_page_emu.py --stock <OS 1.42>
---bank <bank> [--out <folder>]` (the regressions' `SY WAVETABLE SYN pages
+SP WAVETBL's SYN pages: `tests/test_wavetable_st_page_emu.py --stock <OS 1.42>
+--bank <bank> [--out <folder>]` (the regressions' `SP WAVETBL SYN pages
 (Unicorn)`, with `SYNTAKT_STOCK`) runs the bank's `wt_draw`/`wt_idle` on the
 stock fill/pixel routines with a real converted table; text is a boundary
 (recorded; drawn by the test in the PNGs). Core 2.8's cursor records:

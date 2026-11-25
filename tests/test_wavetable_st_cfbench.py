@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""SY WAVETABLE on cfbench (analog-emu's ColdFire V4e): the instructions of one
+"""SP WAVETBL on cfbench (analog-emu's ColdFire V4e): the instructions of one
 track's 32-frame block, both oscillators on a 64-wave table at the heaviest
 setting, per note. Built with the bank's flags. Instructions only: no cache
 stalls, not a hardware CPU percentage. No device access.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Ports elekloader/sdk/syntakt/wavetable.py: the canonical wavetable of core 2.8 (wavetable.h,
-// docs/SY-WAVETABLE.md section 4) and the converter that writes it. For the same channels and name
+// docs/SP-WAVETBL.md section 4) and the converter that writes it. For the same channels and name
 // it gives the same bytes and messages as the Python: every float operation is in the same order
 // and uses only +, -, *, / and sqrt (Math.cos and Math.sin are not correctly rounded).
 

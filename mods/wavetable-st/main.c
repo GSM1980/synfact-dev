@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * SY WAVETABLE (type 72): two wavetable oscillators with their own ANIM
- * modulators, after the Tonverk's Wavefinder (docs/SY-WAVETABLE.md). MAIN
+ * SP WAVETBL (type 72): two wavetable oscillators with their own ANIM
+ * modulators, after the Tonverk's Wavefinder (docs/SP-WAVETBL.md). MAIN
  * owns the descriptor and the SYN pages only; the sound is audio.c.
  * Page 1 is osc 1, page 2 osc 2, in the Tonverk's knob order. Control 16 is
  * hidden: the core sends AUDIO the tempo in it (core 2.8).
@@ -20,7 +20,7 @@ static const struct core_machine_param wt_controls[17]={
     P("DTUN","DETUNE OSC 2",0x7f00,0x4000),OSC("2",0),
     {"TMPO","TEMPO",0,0xffff,14400,ST_MACHINE_TEMPO_PARAMETER}
 };
-const struct core_machine_def wt_machine={72,17,"SY WAVETABLE","WTBL","SYN",wt_controls,ST_MACHINE_NO_INIT,44,10,17};
+const struct core_machine_def wt_machine={72,17,"SP WAVETBL","WTBL","SYN",wt_controls,ST_MACHINE_NO_INIT,44,11,14};
 
 enum {INTEGER,TUNE,DETUNE,DECIMAL,SAMPLE,BIPOLAR,SHAPE};
 static const unsigned char wt_kinds[8]={TUNE,INTEGER,DECIMAL,SAMPLE,INTEGER,BIPOLAR,BIPOLAR,SHAPE};

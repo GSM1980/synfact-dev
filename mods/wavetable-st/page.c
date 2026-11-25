@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * SY WAVETABLE's SYN pages, laid out as the Tonverk's Wavefinder SRC page
- * (docs/SY-WAVETABLE.md, "The screen"): page 1 is osc 1, page 2 osc 2.
+ * SP WAVETBL's SYN pages, laid out as the Tonverk's Wavefinder SRC page
+ * (docs/SP-WAVETBL.md, "The screen"): page 1 is osc 1, page 2 osc 2.
  *
  *   top row     TUNE (DTUN) box . LEV with its bar . [POS] . W + SLOT
  *   middle      the wave at the position, crossfaded between neighbours,

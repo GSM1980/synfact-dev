@@ -1,4 +1,4 @@
-# SY WAVETABLE (Syntakt)
+# SP WAVETBL (Syntakt)
 
 Version **0.1.0**, machine type **72**. Requires **core 2.8** (wavetables in
 the pool, the tempo control); an older core refuses a bank with it.
@@ -6,7 +6,7 @@ the pool, the tempo control); an older core refuses a bank with it.
 Two wavetable oscillators, each with its own ANIM modulator on position and
 level, mixed on one track. It does what the Tonverk's Wavefinder SRC machine
 does; the design, the decisions and the open points are in
-[docs/SY-WAVETABLE.md](../../docs/SY-WAVETABLE.md).
+[docs/SP-WAVETBL.md](../../docs/SP-WAVETBL.md).
 
 ## Pages
 
@@ -30,7 +30,7 @@ sample of the pool, as the Tonverk does: it plays as a wavetable of
 2048-frame waves (at most 64, evenly spaced; a stereo sample's L), with no
 band-limited levels, so high notes alias. An empty slot or a sample shorter
 than 2048 frames is silent; the page reads EMPTY SLOT or SAMPLE TOO SHORT. Wavetables go to the unit with
-`long_samples put` (`docs/SY-WAVETABLE.md`, section 6).
+`long_samples put` (`docs/SP-WAVETBL.md`, section 6).
 
 ## Sound
 
@@ -48,7 +48,7 @@ than 2048 frames is silent; the page reads EMPTY SLOT or SAMPLE TOO SHORT. Wavet
 ## Screen
 
 Each SYN page is drawn as the Tonverk's Wavefinder page (`page.c`;
-docs/SY-WAVETABLE.md, section 3b): TUNE (DTUN) box, LEV with its bar,
+docs/SP-WAVETBL.md, section 3b): TUNE (DTUN) box, LEV with its bar,
 [POS] and W + SLOT on top; the wave at the position in the middle, moving
 with ANIM while the track plays; the position's track under it; SPD's
 scale, A.LEV and A.POS bipolar bars and ANIM's shape at the bottom. Locked

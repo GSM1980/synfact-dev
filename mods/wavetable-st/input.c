@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * SY WAVETABLE's encoders, through the core's guarded view events:
+ * SP WAVETBL's encoders, through the core's guarded view events:
  * - SLOT (knob D, either page) opens the pool list (slot-list.c) as the SP
  *   machines open theirs on SAMP; the native edit still turns it.
  * - FUNC + a knob sticks to values: one stop per detent of travel, from the

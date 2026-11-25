@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""SY WAVETABLE's oscillator in Python: the reference for mods/wavetable-st/engine.c.
+"""SP WAVETBL's oscillator in Python: the reference for mods/wavetable-st/engine.c.
 
-Written from the design (docs/SY-WAVETABLE.md, section 3) with the engine's
+Written from the design (docs/SP-WAVETBL.md, section 3) with the engine's
 integer steps: 32-bit wrap where C wraps, arithmetic shifts where C shifts a
 signed value. tests/test_wavetable_st.py runs both on the same inputs and
 requires the same samples.

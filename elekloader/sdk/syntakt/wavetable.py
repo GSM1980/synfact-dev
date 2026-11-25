@@ -2,7 +2,7 @@
 """Canonical wavetables in HZFS and the pool (core 2.8), and the converter.
 
 The layout is the one in elekloader/sdk/include/syntakt/wavetable.h and
-docs/SY-WAVETABLE.md, section 4: W waves (1..64) at nine band-limited
+docs/SP-WAVETBL.md, section 4: W waves (1..64) at nine band-limited
 levels, level k holding waves of 2048 >> k samples, level-major. One wave
 uses 4088 samples over all levels, so a table's frames are W * 4088.
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""SY WAVETABLE (mods/wavetable-st): the engine built for the host against its
+"""SP WAVETBL (mods/wavetable-st): the engine built for the host against its
 Python reference (tests/wavetable_st_reference.py), the generated tables, the
 descriptor's shape and the sound's basic behaviour. No device, no firmware.
 
@@ -118,7 +118,7 @@ def check_tables():
 
 def check_descriptor():
     src = (ROOT / 'mods/wavetable-st/main.c').read_text(encoding='utf-8')
-    assert re.search(r'wt_machine=\{72,17,"SY WAVETABLE","WTBL","SYN"', src)
+    assert re.search(r'wt_machine=\{72,17,"SP WAVETBL","WTBL","SYN"', src)
     assert 'ST_MACHINE_TEMPO_PARAMETER' in src
     labels = re.findall(r'P\("([^"]+)"', src)
     assert labels[:7] == ['LEV', 'POS', 'SLOT', 'SPD', 'A.LEV', 'A.POS', 'ANIM'], labels
@@ -194,7 +194,7 @@ def main():
     # A plain sample's waves: 64 of 100 evenly spaced (first and last), all of 5, none under 2048.
     assert R.sample_starts(2048 * 100 + 77, False)[:2] == [0, 2048 * 2] and R.sample_starts(2048 * 100 + 77, False)[-1] == 99 * 2048
     assert R.sample_starts(2048 * 5 + 3, True) == [i * 4096 for i in range(5)] and R.sample_starts(1500, False) == []
-    print('PASS: SY WAVETABLE engine equals its Python reference (12 table and 8 plain-sample scenarios x 400 blocks, '
+    print('PASS: SP WAVETBL engine equals its Python reference (12 table and 8 plain-sample scenarios x 400 blocks, '
           'mono and stereo samples, tables, pitch, levels); '
           'tables.h generated; descriptor; level, position, ANIM loop/one-shot timing')
 

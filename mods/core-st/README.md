@@ -10,8 +10,8 @@ and transport are a mono sample's, so machines that test `== 2` see mono.
 Any other count with the flag reads as plain mono and `long_samples fsck`
 reports it; both flag bits read as stereo, as before. Machines read the waves
 with `st_machine_sample_wavetable(slot)` (machines.h), MAIN with
-`core_pool_sample_wavetable(slot)`. For SY WAVETABLE
-([docs/SY-WAVETABLE.md](../../docs/SY-WAVETABLE.md)); no hook, host API,
+`core_pool_sample_wavetable(slot)`. For SP WAVETBL
+([docs/SP-WAVETBL.md](../../docs/SP-WAVETBL.md)); no hook, host API,
 SMZ4 contract or project record change. The Sample Manager (1.3.1) shows `WT `
 before a wavetable's name.
 
@@ -22,7 +22,7 @@ MAIN sender (`machine-params.c`) puts the tempo there, BPM x 120 from
 AUDIO reads it as an ordinary extended control. It has no modulation flags
 and is not randomized, like a configuration control; the SMZ parser accepts
 it at 8..23 only. A tempo change alone publishes the row (a full compare runs
-every fourth block). SY WAVETABLE's looping ANIM uses it. A bank with such a
+every fourth block). SP WAVETBL's looping ANIM uses it. A bank with such a
 control needs core 2.8: older parsers refuse it.
 
 **A second cursor record per track.** AUDIO keeps 16 cursor records (track
@@ -33,7 +33,7 @@ reaches MAIN again since samplers 1.6.2's machines.h, below.)
 **UI API 9: a wavetable level for a display.** `wavetable_level(slot, level,
 out, max)` (`wavetable-ui.c`) reads one level of a pool slot's wavetable from
 eMMC, every wave one after the other, through the same storage snapshot as
-the lazy waveform; UI task only, no CRC (the load checked it). SY WAVETABLE
+the lazy waveform; UI task only, no CRC (the load checked it). SP WAVETBL
 draws its wave from it. `sample_wavetable(slot)` (the waves, or 0) lets a
 list tag wavetables, and `sample_read(slot, first, count, out)` reads any
 slot's frames (a stereo sample's L; count 0 gives its frames), so SY

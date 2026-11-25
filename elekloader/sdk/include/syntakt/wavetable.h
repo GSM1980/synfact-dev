@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Core 2.8: canonical wavetables in HZFS and the project pool
- * (docs/SY-WAVETABLE.md, section 4; mods/core-st/HZFS.md, "Wavetables").
+ * (docs/SP-WAVETBL.md, section 4; mods/core-st/HZFS.md, "Wavetables").
  *
  * A wavetable is a mono HZFS sample with entry flag ST_HZ_WAVETABLE. Its PCM
  * holds W waves (1..64) at nine band-limited levels: level k has waves of

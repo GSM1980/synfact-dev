@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * SY WAVETABLE's oscillator: portable integer C, no firmware calls. The AUDIO
+ * SP WAVETBL's oscillator: portable integer C, no firmware calls. The AUDIO
  * glue (audio.c) and the host test (tests/test_wavetable_st.py, against
  * tests/wavetable_st_reference.py) both build this file. No FPU, no 64-bit
  * arithmetic, no division per sample.

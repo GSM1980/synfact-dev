@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""SY WAVETABLE's SYN pages (mods/wavetable-st/page.c), executed in Unicorn on
+"""SP WAVETBL's SYN pages (mods/wavetable-st/page.c), executed in Unicorn on
 the stock OS 1.42 MAIN image: the bank's own wt_draw/wt_idle with the native
 fill, pixel, text routines and fonts. Fixture boundaries: the parameter
 values and locks (40039160), the track (4001ff74), the page indicator
@@ -439,7 +439,7 @@ def run(stock, bank, out):
         answers.append(call('wt_idle', API, machine, view, 0))
     assert answers in ([1, 0, 1, 0, 1, 0], [0, 1, 0, 1, 0, 1]), answers     # every other call, whatever the phase
     print('instructions per page draw (bank + native routines):', state['draw_steps'])
-    print('PASS: SY WAVETABLE pages drawn by the bank on native OS 1.42 routines: Tonverk layout, '
+    print('PASS: SP WAVETBL pages drawn by the bank on native OS 1.42 routines: Tonverk layout, '
           'labels and values, the wave over its width, one card read per slot, the moving position '
           'from each oscillator\'s cursor record, locks, an empty slot, nothing outside x 19..124 / y 0..51; '
           'the SLOT list on either page (names, WT/ST tags), NO reverting a value and a new p-lock')
