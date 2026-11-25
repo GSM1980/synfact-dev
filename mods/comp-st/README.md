@@ -1,4 +1,19 @@
-# COMP (comp-st 1.1.0)
+# COMP (comp-st 1.1.2)
+
+Core 2.9 / host API 20 supplies the application-owned KitActive notifier;
+1.1.2 uses it instead of a fixed address in raw pattern memory. Its native
+mirror regression now creates the real application/KitActive layout.
+
+## Independent power-cycle persistence (1.1.1)
+
+With **core 2.8.1 / host API 19**, all seven COMP controls survive switching
+off and on without a project save, including banks **without LFO3**. The
+native Kit edit already queues the mirror update; the core now recognizes
+both KitActive mirror kinds (arrays of 128 Kits and individual slots) and
+notifies COMP that their full encoded-slot padding is available. COMP uses
+only this shared notification on API 19, avoiding duplicate metadata events.
+The record format and DSP are unchanged. Earlier cores retain 1.1.0's
+LFO3-dependent fallback below.
 
 ## Limiter ratios and GR readout (1.1.0)
 
@@ -21,15 +36,13 @@ an empty control (a dotted box) is cleared first. Each UI tick keeps the peak, s
 a short peak between repaints is not lost. It repaints by the bar's rule: at
 most 10 times a second, for a change of 1 dB or more, or back to 0.0.
 
-**Settings survive a power cycle without a save.** COMP 1.0.0 kept its
-settings through a project save, not through switching off without one. A
-Kit edit asks the firmware to re-encode the Kit's mirror slots (what the unit
-reloads at power-up), and those slots are in a container that only LFO3's
-Sound metadata names: COMP listened only to the core's Kit notifications,
-which do not, so it never wrote its record there and read its defaults back
-at power-up. It now also listens to LFO3's (`ST_NATIVE_SOUND_META`, as
-Playhead does) and accepts the kit slots of the container they name. Without
-LFO3 in the bank nothing changes from 1.0.0 (settings need a save).
+**Earlier-core fallback (1.1.0).** COMP 1.0.0 kept its settings through a
+project save, but did not recognize all native power-cycle mirrors. Version
+1.1.0 added LFO3's Sound metadata (`ST_NATIVE_SOUND_META`, as Playhead does)
+to recognize the Kit slots of the containers its adapter names. This path
+still depends on LFO3 and does not identify KitActive's two mirror vectors
+directly. On cores before 2.8.1 that fallback remains in use; without LFO3,
+settings need a project save.
 
 1.0.0 is COMP's first release. The 0.1 to 0.3 versions named below were
 development builds; their measurements and compatibility notes still apply.
@@ -190,9 +203,12 @@ does not transport these extra settings in native Kit SysEx.
 Core query 34 notifies Kit copy/new/encode/decode; query 35 preserves LFO3's
 owning-object memcpy path. Kit edits call the native mirror update, as other
 Kit controls do. No native Sound/FX field is reused for COMP values.
-The audited slots include both working containers, the native project image
-and save/reload buffers. Temporary Kit associations validate the native
-bytes' hash, so reuse of a clipboard/decode buffer cannot revive old settings.
+On host API 19 the core also supplies the capacity of both native mirror
+kinds and queries an optional codec adapter for scoped project slots (LFO3
+1.3.5, query 37). The audited slots include both working containers, the
+native project image and save/reload buffers. Temporary Kit associations
+validate the native bytes' hash, so reuse of a clipboard/decode buffer cannot
+revive old settings.
 
 ```sh
 python -B tests/test_st_comp_emu.py --core out/<build>/main.bin \

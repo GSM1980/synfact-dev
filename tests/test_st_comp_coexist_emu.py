@@ -8,7 +8,7 @@ from pathlib import Path
 import struct
 from test_st_lfo3_activity_emu import Activity
 from test_st_module_startup_emu import DESCRIPTORS
-from test_st_comp_emu import ID,KIT
+from test_st_comp_emu import ID,KIT,DEFAULT
 
 
 def verify(core,bank):
@@ -44,10 +44,9 @@ def verify(core,bank):
     assert [m.call('getglobal',api,ID+i) for i in range(7)]==values
     assert [m.call('getglobal',api,0x403+i) for i in range(7)]==chorus
     assert m.word(m.lfo['hooks_installed'])==1
-    # 1.1.0: a kit slot of a container only LFO3 knows (registered as its serializer
-    # registers one; kitChanged's mirror slots are such slots): the real codec's
-    # Sound metadata names it, so COMP's record is written and read back there,
-    # which the core's notification alone never did.
+    # A temporary project container registered by LFO3's serializer. API 19
+    # borrows its capacity through query 37 before broadcasting query 34;
+    # COMP no longer depends on duplicate native Sound metadata callbacks.
     m.w(0x800030b8,KIT);m.w(0x800030bc,KIT+0xdce)
     container=0x4c000000;mirror=container+0x2e0200+5*0x1600
     m.u.mem_map(container,0x400000)                # a whole native container (3e6604h), zeroed
@@ -59,7 +58,9 @@ def verify(core,bank):
     assert m.call('kitdec',KIT,mirror)&255
     assert [m.call('getglobal',api,ID+i) for i in range(7)]==values,'COMP back from the mirror'
     m.w(m.bs['containers'],0)
-    print('PASS four real providers: COMP/Chorus values, LFO3 Kit depth/trailer, native codecs and owning copy, COMP in an LFO3-named container')
+    assert m.call('kitdec',KIT,mirror)&255
+    assert [m.call('getglobal',api,ID+i) for i in range(7)]==DEFAULT,'expired scope cannot revive settings'
+    print('PASS four real providers: COMP/Chorus values, LFO3 Kit depth/trailer, native codecs and owning copy, scoped capacity and expiry')
 
 
 if __name__=='__main__':

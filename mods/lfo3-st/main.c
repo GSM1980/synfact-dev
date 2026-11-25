@@ -46,6 +46,7 @@ _Static_assert(__alignof__(ddr_bank)>=4,"LFO3 DDR bank alignment");
 struct lfo3_bank *lfo3_bank;
 static render_t render;
 static u32 code_bytes,code_crc,ticks,in_sram,refused;
+u32 lfo3_feature_enabled=0;
 
 static u32 crc(u32 at,u32 n){return ~host->crc_update(~0u,(const u8 *)LFO3_MEM(at),n);}
 static void bank_reset(struct lfo3_bank *b)
@@ -294,17 +295,19 @@ static int lfo3_native(u32 op,const u32 *a,u32 *result)
 void lfo3_output_interest(u32 live)
 {
     if(host)host->native_interest((void (*)(void))lfo3_native,
-        (live?(1u<<ST_NATIVE_LFO):0u)|
-        (hooks_installed?(1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_NAV)|(1u<<ST_NATIVE_PAGE_LAYOUT):0u));
+        (live && lfo3_feature_enabled?(1u<<ST_NATIVE_LFO):0u)|
+        (hooks_installed && lfo3_feature_enabled?(1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_NAV)|(1u<<ST_NATIVE_PAGE_LAYOUT):0u));
 }
 static void lfo3_tick(void *controller)
 {
+    if(!lfo3_feature_enabled)return;
     ticks++;
     if(in_sram && ticks%60u==0 && crc(SRAM_CODE,code_bytes)!=code_crc){render=0;use_ddr();refused=4;}
     if(ticks<=300u && ticks%30u==0)((u8 *)controller)[0x20]=1;
 }
 static void lfo3_draw(void *bitmap,void *controller)
 {
+    if(!lfo3_feature_enabled)return;
     /* Only the DDR fallback is worth a notice; running from SRAM is normal. */
     static char line[]="LFO3 SRAM ON";
     (void)controller;if(ticks>300u || in_sram)return;
@@ -318,8 +321,11 @@ static int initialize(const struct st_smz_api *api)
 {
     if(!api || api->version<3 || !api->ui || api->ui->version<7 || !api->ui->host)return 1;
     host=api->ui->host;
+    if(host->version<20)return 1;
+    {extern const struct st_persistence_api *state_persistence;
+     state_persistence=host->version>=20?host->persistence:0;}
     if(host->version<7){refused=5;return 0;}          /* core older than 0.12.14 */
-    refused=install();if(refused)use_ddr();
+    use_ddr();
     kits_base=0x41ad6134u;pool_base=0x41b94ec9u;image_container=0x40653514u;
     save_buffer=0x40600554u;reload_buffer=0x405fe354u;
     lfo3_records_init();
@@ -332,4 +338,11 @@ static const struct st_smz_subscription subscriptions[]={
     {ST_EV_NATIVE,(void (*)(void))lfo3_native},
     {ST_EV_TICK,(void (*)(void))lfo3_tick},
     {ST_EV_DRAW,(void (*)(void))lfo3_draw}};
-const struct st_smz_module lfo3_module={"LFO3",initialize,subscriptions,3};
+const struct st_smz_module state_service_module={"STATE",initialize,subscriptions,3};
+int st_state_enable_lfo(const struct st_smz_api *api)
+{
+    extern u32 lfo3_output_rows;
+    if(!api || !api->ui || !api->ui->host || !hooks_installed)return 1;
+    lfo3_feature_enabled=1;refused=install();if(refused)use_ddr();
+    lfo3_output_interest(lfo3_output_rows!=0);return 0;
+}

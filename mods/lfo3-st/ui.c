@@ -305,7 +305,9 @@ u32 lfo3_destination_valid(void *model,u32 raw)
 /* ---- LFO view: third page ---- */
 u32 lfo3_page_sync(void *view)
 {
+    extern u32 lfo3_feature_enabled;
     u32 begin,end,capacity,index,*p,native_count,wanted;
+    if(!lfo3_feature_enabled)return 0;
     if(!view || FIELD(view,0)!=LFO_VIEW || FIELD(view,0x88)!=0x17)return 0;
     begin=FIELD(view,0x7c);end=FIELD(view,0x80);capacity=FIELD(view,0x84);
     if(!begin || (begin&3) || end<begin || capacity<end || (capacity&3) ||
@@ -362,7 +364,9 @@ void lfo3_page_wave(void *view,u32 canvas)
 const void *lfo3_actions_layout(u32);
 int lfo3_page_native(u32 op,const u32 *a,u32 *result)
 {
+    extern u32 lfo3_feature_enabled;
     u32 id;
+    if(!lfo3_feature_enabled)return 0;
     if(op==ST_NATIVE_PAGE_LAYOUT){                 /* pages 37/38: LFO3 projections */
         const void *p=lfo3_actions_layout(a[0]);
         if(!p)return 0;
@@ -395,6 +399,8 @@ int lfo3_parameter_query(u32 q,u32 *args,void *result,u32 *value)
      * copy path, shadow codecs and depth guard, without installing twice. */
     extern void lfo3_owned_copy_entry(void),lfo3_kit_new(u32),lfo3_kit_encoded(u32,u32,u32),lfo3_kit_decoded(u32,u32,u32);
     extern u32 kit_codec_depth;
+    extern u32 lfo3_kit_slot_bytes(u32);
+    if(q==37){*value=lfo3_kit_slot_bytes(args[0]);return *value!=0;}
     if(q==35){*value=(u32)lfo3_owned_copy_entry;return 1;}
     if(q==34){
         if(args[0]==5 || args[0]==6){
@@ -412,6 +418,7 @@ int lfo3_parameter_query(u32 q,u32 *args,void *result,u32 *value)
     /* core 1.2: the FX record codec, as lfo3_fx_encode_entry/_decode_entry did */
     if(q==28){lfo3_fx_encoded(args[0],args[1],args[2]);return 0;}
     if(q==29){lfo3_fx_decoded(args[0],args[1],args[2]);lfo3_republish();return 0;}
+    {extern u32 lfo3_feature_enabled;if(!lfo3_feature_enabled)return 0;}
     u32 id=q==18 || q==20 || q==24?args[1]:args[0],i=lfo3_index(id),*out=result;const u32 *d;
     if(q==6){if(args[0]-LFO3_UI>=10u)return 0;*value=LFO3_ID+args[0]-LFO3_UI;return 1;}
     if(i>=10)return 0;

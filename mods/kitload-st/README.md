@@ -15,14 +15,15 @@ this module is its rewrite on core events. Needs core 2.7 (host API
 (see below).** SETTINGS > **KIT BANK** reads `OFF` when no named bank is
 found. YES turns it on with **P128** offered; LEFT/RIGHT pick any project,
 P1..P128 (and turn it on); YES again turns it off. A manual choice made here
-lasts until power-off.
+is saved globally by core 2.9 / host API 20 (kitload-st 0.2.4), including an
+explicit OFF. Earlier cores retain the temporary choice behavior.
 
-**Kept across power-off: name the bank project `KITBANK`** (or `KIT BANK`, any
+**Default before a manual choice: name the bank project `KITBANK`** (or `KIT BANK`, any
 case). After power-on, while KIT BANK has not been changed by hand, the
 lowest saved project with that name is the bank, and KIT BANK reads its
 number. Nothing is written anywhere: the name is the setting. Rename or
 delete the project and the bank is off again. Changing KIT BANK by hand
-(YES or LEFT/RIGHT) takes over until the next power-on. The name is read
+(YES or LEFT/RIGHT) takes over and persists across power-on on API 20. The name is read
 from the OS project manager's slot cache; the first lookup after power-on
 reads the header of each slot whose entry is not filled yet (512 bytes each,
 once).

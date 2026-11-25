@@ -38,6 +38,8 @@ extern void comp_process(struct st_fx_cv *),comp_audio(struct st_fx_cv *);
 extern u32 comp_lock(void);extern void comp_unlock(u32);
 extern s32 comp_param_get(u32),comp_param_set(u32,s32);
 extern void comp_meta(const u32 *),comp_sound_meta(const u32 *),comp_params_init(void);
+extern u32 comp_core_slots;
+extern const struct st_persistence_api *comp_persistence;
 extern const u16 *comp_current_values(void);
 extern int comp_ui_init(const struct st_smz_api *);
 extern int comp_query(u32,u32 *,void *,u32 *),comp_native(u32,const u32 *,u32 *);

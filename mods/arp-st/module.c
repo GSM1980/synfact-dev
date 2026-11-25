@@ -351,7 +351,7 @@ static int arp_initialize(const struct st_smz_api *a)
     if(!a || a->version<3 || !a->ui || !a->ui->host || a->ui->host->version<9 ||
        !a->ui->host->native_dispatch || !a->ui->host->storage ||
        !a->ui->host->machine_telemetry || a->ui->host->version<10)return 1;
-    arp_host=a->ui->host;arp_persist_init();for(i=0;i<ARP_TRACKS;i++)arp_runtime_init(&arp_voice[i],&arp_native_api);interest();
+    arp_host=a->ui->host;arp_persistence_bind(arp_host);arp_persist_init();for(i=0;i<ARP_TRACKS;i++)arp_runtime_init(&arp_voice[i],&arp_native_api);interest();
     /* PAGE_SYNC for the TRIG view only, as POLY declares (host API 6). */
     arp_host->native_page_view((void (*)(void))arp_native,ST_TRIG_VIEW);return 0;
 }

@@ -7,6 +7,7 @@
 #define ELEKLOADER_ST_HOST_H
 #include "storage.h"
 #include "sample-pool.h"
+#include "persist.h"
 #define ST_PARAMETER_UI_DEST_FLAGS 36u
 /* Init-only MAIN mixer replacement for a stopped-transport preview session.
  * ready() returns 0 or 1. mix has native OS 1.42 mixer C ABI (three words),
@@ -99,6 +100,15 @@ struct st_machine_host_api {
      * 35 may return a synchronous task memcpy entry, same native C ABI,
      * to preserve owning-object metadata; zero replays the stock copy.
      * The core owns these sites on 16; modules must not install them.
+     * Host API 19 (core 2.8.1): query 34 appends args[5], the encoded Kit
+     * slot capacity (1600h or zero). After a successful codec the core
+     * recognizes the fixed project/save buffers and KitActive's currently
+     * registered mirror arrays, even without LFO3. Zero gives no permission
+     * to access padding beyond the native 14d2h record. The five-field
+     * prefix and all native results remain unchanged.
+     * Query 37 lets a project-codec adapter lend a known slot's capacity:
+     * args[0]=encoded slot, *value=1600h, nonzero return, or unhandled.
+     * Task-only, no IO/allocation; never infer capacity from a record header.
      * Host API 17 (core 2.6): query ST_PARAMETER_UI_DEST_FLAGS (36), only
      * while the native destination builder enumerates a registered machine.
      * args[0] is the engine ID; result is the borrowed model/proxy whose
@@ -137,6 +147,8 @@ struct st_machine_host_api {
      * mix() replaces the native mixer call only while stopped and ready.
      * Both are bounded, no heap/IO; mix may use the native EMAC/output ABI. */
     const struct st_audio_idle_owner *volatile *audio_idle;
+    /* API 20: independent Kit mirrors and global preferences. */
+    const struct st_persistence_api *persistence;
     /* Host API 16 adds no field: the shared Kit queries 32..35. API 15's
      * stopped-transport mixer owner and its ABI offset remain unchanged. */
     /* Host API 17 adds no field: UI-only destination query 36, and extended

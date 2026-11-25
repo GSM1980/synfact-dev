@@ -1,7 +1,14 @@
 # Digitone ARP → Syntakt: experimental source port
 
-Desktop OS 1.42 release: **1.10.8**.
-Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+Desktop OS 1.42 release: **1.11.0**, core **2.9 / host API 20**.
+The native builder automatically includes the internal `state-st` service.
+ARP can be loaded without the third LFO: its Sound settings, shared
+parameter locks, copies, quick save/reload and project metadata remain
+available. The browser catalog no longer requires selecting LFO3.
+Full live-project mirrors retain the existing APC1 pattern carrier;
+individual live-Kit mirrors resolve their registered full-project owner
+and validate native Sound bindings before restoring those rows. No project
+save is needed for the normal power-cycle mirror path.
 
 Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
 See [the port notes](../../docs/OS142-PORT.md).
@@ -411,10 +418,10 @@ recording and the F/G/H encoder feel still need a Syntakt check.
 
 ## Pattern locks (2026-11-01)
 
-ARP now uses the shared pattern-lock service hosted by `lfo3-st`; both modules
-must be included in the bank, with LFO3 before ARP. Neither engine needs the
-other engine enabled. This bank requires the expanded service; do not mix its
-ARP object with an older LFO3 object.
+ARP uses the shared pattern-lock service hosted by internal `state-st`,
+automatically included before ARP. Selecting LFO3 is optional. Keep the
+matching service and ARP objects together when building a bank; do not mix
+ARP 1.11 with the older backend from an LFO3 1.x bank.
 
 In the ARP view, enable **REC**, hold a sequencer trig and turn encoders A..D
 to lock MODE, SPEED, RANGE and note LEN. OFS, the arp sequence length (F) and

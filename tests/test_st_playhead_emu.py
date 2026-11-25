@@ -607,7 +607,10 @@ def run_key(stock_path, bank_path):
     u = m.u
     u.mem_map(0x40a70000, 0x10000)
     u.mem_map(FAKE, 0x10000)
-    kit_active = 0x40a713f0
+    app_model = 0x40a79000  # application model must be in native DDR
+    m.w32(0x444e23f4, app_model)
+    m.w32(app_model, 0x401c5708)
+    kit_active = app_model + 0x130
     m.w32(kit_active, 0x401c3694)
     m.w32(kit_active + 16, KITS)
     ui, screen, app = FAKE, FAKE + 0x100, FAKE + 0x200

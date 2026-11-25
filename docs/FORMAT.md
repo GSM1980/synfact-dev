@@ -1,5 +1,23 @@
 # The .elemod format
 
+Core 2.9 / host API 20 adds an internal `state-st` service dependency in
+source manifests (`smz_module.services`). It uses ordinary module entries;
+the SMZ4 byte layout and project/lock records do not change. Native service
+resolution includes each dependency once, before its consumers, and rejects
+cycles or dependencies not marked `internal_service`. Browser catalogs carry
+the same service as an always-included module.
+
+Global preferences occupy the spare sector immediately preceding each v2
+bank's metadata: `(CORE_MODS_SLOT_META(slot)-512)`, slots 0 and 1. These
+sectors begin at the existing exclusive payload limit; capacity is unchanged.
+Each 512-byte record is big-endian: `SYPR` at +0, version 1 at +4, sequence
+at +8, key count 8 at +12, then eight 36-byte rows at +16. Each row is a
+word count (0..8), then eight value words. Unused bytes are zero, CRC32 over
+bytes 0..507 is at +508. New values replace the older copy and are read back
+and verified before success; unchanged values cause no write. Native bank
+metadata is never changed. A valid committed legacy `/mods` file overlapping
+either sector prevents preference access/writes, preserving that file.
+
 Core 2.7 / host API 18 adds SMZ module events **16, PATTERN_MENU** and **17,
 RELOAD_MENU**, with the same subscription record geometry; older core parsers
 reject them. Bank contract, envelope and feature bits are unchanged. See

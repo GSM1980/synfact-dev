@@ -1,4 +1,32 @@
-# Syntakt core 2.8.0
+# Syntakt core 2.9.0
+
+**Independent parameter storage.** Host API 20 appends the persistence
+service (`syntakt/persist.h`): encoded Kit capacity/context, the real
+application-owned KitActive notifier and redundant global preferences.
+The application singleton at `444e23f4` owns KitActive at `+130h`; treating
+the raw live project as a UI model and adding `378d8h` addressed pattern
+memory instead. Both object and Kit pointers are validated before use.
+
+The shared object/codec/lock backend is the internal `state-st` bank
+service. LFO3 2.0 enables the optional third-LFO feature separately; ARP
+and Playhead no longer require that feature. Every service dependency is
+included once, with the existing deferred initialization and preimage gate.
+Recorder's six controls and the manual KIT BANK choice use keys 1/2 in
+the core's redundant preference records, independently of project saves.
+
+## Core 2.8.1
+
+**Kit mirrors without LFO3.** Host API 19 appends a recognized encoded-slot
+capacity to query 34's Kit codec notification. The core recognizes the fixed
+project/save buffers and KitActive's live mirror registrations: its +20h
+vector holds arrays of 128 Kits, its +2Ch vector individual Kit slots.
+COMP 1.1.1 uses this to preserve all seven controls across power cycles
+without loading LFO3 or saving the project. Query 37 lets LFO3 1.3.5 lend
+the capacity of a temporary project-codec slot during its established
+serialization scope. No new hook, host-record field, audio work or saved
+format; unknown/short buffers never authorize access beyond native bytes.
+
+## Core 2.8.0
 
 **Wavetables in the pool.** An HZFS entry with flag `ST_HZ_WAVETABLE` (2) and
 a canonical count (1 to 64 waves of 4088 samples: nine band-limited levels,

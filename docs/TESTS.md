@@ -4,7 +4,7 @@
 
 Core 2.7: `tests/test_st_menu_events.py [--as AS --ld LD] [--stock STOCK]`
 checks the PATTERN menu events' manifest entries, SMZ event numbers 16/17,
-the bank parser's bound and host API 18; with binutils it runs both adapters
+the bank parser's bound and current host API; with binutils it runs both adapters
 in Unicorn, with `--stock` it checks the stock epilogues. `kitload-st`'s
 `tests/test_st_kitload.py` (handlers against OS stubs) and
 `tests/test_st_kitload_restore_emu.py --core --bank` (LOAD with the real codecs
@@ -19,6 +19,15 @@ Application/model selection, allocator and some UI state are explicit
 boundaries. `tools/bench_st_comp.py` counts the full shared FX hook against
 the original native window, per 32 stereo frames; not cycles or CPU percent.
 No device access. Both require the corrected ColdFire EMAC Unicorn setup.
+COMP 1.1.1 / core 2.8.1 additionally executes the real parameter setter,
+KitActive mirror updates, both queued native codec jobs and a fresh bank
+instance restoring only the encoded mirrors, without LFO3. Kits 0/127,
+all seven controls, neighboring records and an old-path negative control
+are covered. The task queue and observer fanout are explicit doubles;
+this is not a full boot or physical power-cycle test.
+`tests/test_st_kit_meta.c`, included in the common regressions, checks the
+production capacity resolver: every array slot, individual mirrors, live
+registration changes, malformed vectors, failed codecs and query 37.
 `tests/test_st_comp_coexist_emu.py --core <build-folder> --bank <bank.smz4>`
 also initializes the real four parameter providers (POLY/LFO3/Chorus/COMP),
 round-trips both effects through native Kit codecs and LFO3's owning copy,
@@ -912,3 +921,23 @@ active replay, zero-only saturation, all six source groups, overlap fallback,
 matrix deactivation/reactivation and the 64-block audit boundary. SRAM and LFO
 heap must remain identical to native stock; each selected group and transition
 must actually reach partial execution. The same test also runs against 1.3.
+
+Core 2.9 independent persistence checks:
+
+- `test_st_preferences.c` runs in the common regressions. It checks separate
+  keys, redundant CRC records, interrupted/corrupt writes, unchanged values
+  avoiding writes and preservation of overlapping legacy banks.
+- `test_st_independent_persistence_emu.py --core <folder> --bank <bank>`
+  accepts repeated banks. Run ARP, LFO3 and Playhead separately and together
+  with COMP/Chorus. Actual initializers, native mirror queues and codecs
+  restore values in a fresh core/bank instance from encoded mirrors only.
+  ARP/Playhead-only cases require no LFO pages, feature flag or renderer SRAM;
+  short exports must preserve bytes beyond their native capacity.
+- `test_st_module_preferences_emu.py --core <folder> --bank <bank>` checks
+  Recorder options and KIT BANK (including OFF) through real core preference
+  transactions and fresh module initialization. Sector IO and native
+  boundaries are doubled; no physical power cycle is claimed.
+
+SDK units cover service dependency order, deduplication, invalid service IDs,
+foreign modules and cycles. SMZ parser checks still apply to every bank,
+including the optional LFO3 module's init-only descriptor.

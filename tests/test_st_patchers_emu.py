@@ -23,7 +23,7 @@ class Patchers(Startup):
         e=Elf.load(bank.with_suffix('.work')/'main.elf')
         self.bs={s.name:BANK+s.value for s in e.symbols if s.name}
         for name,init,_ in self.modules:
-            if name in ('LFO3','MODULATION SKIP'):self.real[init]=name
+            if name in ('STATE','LFO3','MODULATION SKIP'):self.real[init]=name
         self.alloc_entry=self.bs.get('lfo3_owned_native_allocate')
         self.release_entry=self.bs.get('lfo3_owned_native_release')
         group=None;self.lfo={}

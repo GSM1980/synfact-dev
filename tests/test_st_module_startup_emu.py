@@ -63,7 +63,7 @@ class Startup(Core):
                 self.modules.append((label,init,subscriptions))
                 if init!=0xffffffff:self.init_entries[init]=label
             self.count=len(self.modules)
-            if mode=='reject':self.fail_name=next(n for n,_,_ in self.modules if n not in ('LFO3','MODULATION SKIP'))
+            if mode=='reject':self.fail_name=next(n for n,_,_ in self.modules if n not in ('STATE','LFO3','MODULATION SKIP'))
         self.fail_alloc=mode=='no_memory'
 
     def c_string(self,at):
@@ -118,8 +118,8 @@ class Startup(Core):
             assert self.word(self.sym['core:core_module_count'])==self.count
             assert self.word(self.sym['core:core_module_subscriptions'])==sum(len(x) for _,_,x in self.modules)
             if mode!='empty':
-                ordinary=[n for n,init,_ in self.modules if init!=0xffffffff and n not in ('LFO3','MODULATION SKIP')]
-                patchers=[n for n,init,_ in self.modules if init!=0xffffffff and n in ('LFO3','MODULATION SKIP')]
+                ordinary=[n for n,init,_ in self.modules if init!=0xffffffff and n not in ('STATE','LFO3','MODULATION SKIP')]
+                patchers=[n for n,init,_ in self.modules if init!=0xffffffff and n in ('STATE','LFO3','MODULATION SKIP')]
                 assert self.initialized==ordinary+patchers
                 for i in range(self.event_count):
                     ptr=self.word(self.sym['core:events']+8*i)

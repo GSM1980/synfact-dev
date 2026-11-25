@@ -67,7 +67,9 @@ rest of the file (the second option keeps GCC from turning loops into `memset`
 and `memcpy` calls, which the freestanding core does not have).
 
 - Files: `sample-pool.c`, `hzfs.c`, `files.c`, `smz.c`, `storage.c`,
-  `machine-boot.c`, `high-storage.c`, `boot-preimages.c`.
+  `machine-boot.c`, `high-storage.c`, `boot-preimages.c`, `preferences.c`.
+  The latter is a storage transaction; its public encoder/task entry
+  `core_preferences` is `CORE_HOT`, its bounded sector/CRC helpers are cold.
 - A function of those files that a tick, a draw, a key, an encoder or a native
   path calls is marked `CORE_HOT` (`__attribute__((optimize("O3")))`) and keeps
   `-O3`: the pool's cursor tick, sample source, name, channels, cursor, cached
@@ -160,6 +162,8 @@ Core 2.7+: the kit bank goes after COMP (or after Chorus without COMP):
 
 - **Module order matters**: `lfo3-st` must come **before** `poly-st` (both
   use the core's native LFO operation; LFO3 is non-consuming and runs first).
+  Core 2.9's builder inserts the internal `state-st` service once before
+  LFO3, ARP or Playhead. ARP and Playhead can each be built without LFO3.
   Put `playhead-st` before the optional UI modules: its mode selector must
   consume KEY/ENC before ARP or the recorder can edit a page behind the modal.
 - The three always-included modules go last, before nothing else, in this

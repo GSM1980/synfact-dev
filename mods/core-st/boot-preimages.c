@@ -37,7 +37,7 @@ int core_boot_preimages_ok(const u8 *info)
     /* Every folder of the directory (core 2.6.1: up to 48): LFO3 or MSKIP
      * listed late must not skip its preimage check. */
     for(i=0;i<CORE_SMZ_MOD_INFO_MAX && info[40*i];i++){
-        if(name_is(info+40*i,"lfo3-st"))lfo3=1;
+        if(name_is(info+40*i,"lfo3-st") || name_is(info+40*i,"state-st"))lfo3=1;
         if(name_is(info+40*i,"modulation-skip-st"))skip=1;
     }
     return (!lfo3 || check(lfo3_preimages,LFO3_PREIMAGES,LFO3_PREIMAGE_CRC)) &&

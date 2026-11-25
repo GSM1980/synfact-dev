@@ -19,7 +19,7 @@ SITES = {0x4004ae0c: ('core_pattern_menu', '4cef7c7c0010', 0x4004ae12, 16),
 
 def static_checks():
     m = json.loads((CORE / 'mod.json').read_text())
-    assert m['sources'][-1] == 'menu-events.s'                      # last: nothing before it moves
+    assert m['sources'][-2:] == ['menu-events.s','preferences.c']                      # last: nothing before it moves
     sites = {int(s['addr'], 16): s for s in m['sites']}
     for at, (target, stock, _, _) in SITES.items():
         s = sites[at]
@@ -36,8 +36,8 @@ def static_checks():
     smz = (CORE / 'smz.c').read_text()
     assert '!(x<18 ||' in smz and '!(x<16 ||' not in smz           # 16/17 accepted, nothing above
     host = (CORE / 'machine-host.c').read_text()
-    assert re.search(r'core_machine_host_api=\{\s*18,', host)
-    print('static: manifest, event numbers 16/17, parser bound 18, host API 18')
+    assert re.search(r'core_machine_host_api=\{\s*20,', host)
+    print('static: manifest, event numbers 16/17, parser bound 18, host API 20')
 
 
 def stock_checks(path):

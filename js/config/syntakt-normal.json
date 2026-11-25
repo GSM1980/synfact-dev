@@ -1,6 +1,12 @@
 {
   "modules": [
     {
+      "id": "state-st",
+      "path": "mods/state-st",
+      "kind": "module",
+      "always": true
+    },
+    {
       "id": "samplers-st",
       "path": "mods/samplers-st",
       "kind": "machine"
@@ -23,7 +29,10 @@
     {
       "id": "playhead-st",
       "path": "mods/playhead-st",
-      "kind": "module"
+      "kind": "module",
+      "requires": [
+        "state-st"
+      ]
     },
     {
       "id": "recorder-st",
@@ -33,14 +42,17 @@
     {
       "id": "lfo3-st",
       "path": "mods/lfo3-st",
-      "kind": "module"
+      "kind": "module",
+      "requires": [
+        "state-st"
+      ]
     },
     {
       "id": "arp-st",
       "path": "mods/arp-st",
       "kind": "module",
       "requires": [
-        "lfo3-st"
+        "state-st"
       ]
     },
     {

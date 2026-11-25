@@ -1,5 +1,43 @@
 # How to adapt your mod to the Syntakt
 
+## Syntakt core 2.9: autonomous parameter storage
+
+Host API 20 appends `host->persistence` (`syntakt/persist.h`): borrowed
+encoded-Kit capacity, full project context, a live Kit's registered project
+mirror, the native KitChanged notifier, and redundant global preferences.
+Resolve the application singleton at `444e23f4`, validate its stock vtable,
+then its KitActive member at `+130h`; no fixed KitActive address is valid.
+
+`state-st` is the internal bank service for the established object/codec
+notifications and shared lock backend. A module declares
+`smz_module.services: ["state-st"]`; the native builder/exporter includes
+that service once, before its first consumer, and rejects cycles, foreign
+services and escaping paths. The normal browser config always includes it.
+LFO3 2.0 only enables the optional LFO feature; ARP 1.11 and Playhead 1.3.1
+use storage independently. The service remains a deferred patcher with the
+same boot preimage checks, all before executable hooks are changed.
+
+Global preferences accept keys 1..8 and up to eight words per key, task
+context only. Reads return 1 found, 0 absent, -1 IO; writes commit and verify
+a redundant CRC/sequence record. Keys 1/2 belong to Recorder/KIT BANK.
+No project save is required. The two bank-slot spare sectors are outside
+payload capacity and bank metadata. A committed legacy file overlapping
+them disables preferences without modifying that file. See FORMAT.md.
+
+## Syntakt core 2.8.1: encoded Kit slot capacity
+
+Host API 19 appends `args[5]` to parameter-provider query 34: after a
+successful Kit codec, `0x1600` means the core recognizes a full encoded
+slot, zero gives no permission to access its padding. The existing
+`{kind,a,b,n,phase}` prefix and native results are unchanged. The core
+recognizes fixed project/save buffers and KitActive's current mirror
+vectors without an optional module. A project-codec adapter may lend an
+additional scoped slot through query 37 (`args[0]=slot`, `*value=0x1600`,
+nonzero return); do not infer capacity from metadata headers. Task-only,
+no allocation or IO. COMP 1.1.1 consumes query 34 exclusively on this API;
+on earlier cores it retains its LFO3 Sound-metadata fallback. LFO3 1.3.5
+implements query 37 for its established temporary containers.
+
 ## Syntakt core 2.4: FX CV and shared Kit parameters
 
 Core 2.4 / host API 16 owns the global Kit model's has/get/set and task-side

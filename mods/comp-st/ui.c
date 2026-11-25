@@ -122,7 +122,7 @@ static void sync_page(void *raw)
 int comp_native(u32 op,const u32 *a,u32 *result)
 {
     if(!a)return 0;
-    if(op==ST_NATIVE_SOUND_META){comp_sound_meta(a);return 0;}   /* an observer */
+    if(op==ST_NATIVE_SOUND_META){if(!comp_core_slots)comp_sound_meta(a);return 0;}   /* older-core fallback */
     if(op==ST_NATIVE_PAGE_LAYOUT && a[0]==COMP_PAGE){*result=(u32)layout;return 1;}
     if(op==ST_NATIVE_PAGE_SYNC || op==ST_NATIVE_PAGE_NAV){
         sync_page((void *)a[0]);
@@ -232,11 +232,13 @@ int comp_query(u32 q,u32 *a,void *out,u32 *value)
 int comp_ui_init(const struct st_smz_api *api)
 {
     const char allocator=0;const struct st_machine_host_api *host=api->ui->host;
+    comp_core_slots=host->version>=19;
+    comp_persistence=host->version>=20?host->persistence:0;
     rat_limit_make();
     host->parameter_provider(comp_query);
-    /* 1.1.0: and LFO3's Sound metadata (host API 10), for the kit slots of the
-     * container a codec call names (params.c, comp_sound_meta) */
+    /* Older cores use LFO3's Sound metadata for scoped containers. API 19
+     * supplies full slot capacity through query 34, independently of LFO3. */
     host->native_interest((void (*)(void))comp_native,(1u<<ST_NATIVE_PAGE_LAYOUT)|(1u<<ST_NATIVE_PAGE_SYNC)|(1u<<ST_NATIVE_PAGE_NAV)|
-                          (host->version>=10?1u<<ST_NATIVE_SOUND_META:0u));
+                          (!comp_core_slots && host->version>=10?1u<<ST_NATIVE_SOUND_META:0u));
     STRING(layout,"COMP",&allocator);STRING(layout+1,"Compressor",&allocator);return 0;
 }

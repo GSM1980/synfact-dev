@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from elekloader.sdk.elf import Elf
 from elekloader.sdk.syntakt import donor
+from elekloader.sdk.syntakt.smz import service_modules
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -39,7 +40,7 @@ def main():
         if hashlib.sha256(Path(name).read_bytes()).hexdigest()!=digest:
             raise ValueError('A source changed since the audited build: '+name)
     work=a.bank.with_suffix('.work')
-    folders=[(Path(p),False) for p in a.machine]+[(Path(p),True) for p in a.module]
+    folders=[(Path(p),False) for p in a.machine]+[(p,True) for p in service_modules(a.module)]
     if not folders:raise ValueError('Supply the machine and module directories used in the build')
     source_root=folders[0][0].resolve().parents[1]
     if any(folder.resolve().parents[1]!=source_root for folder,_ in folders):raise ValueError('All modules must belong to one source tree')

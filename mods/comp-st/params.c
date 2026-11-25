@@ -21,6 +21,7 @@ struct row {u32 valid;u16 value[COMP_COUNT];struct comp_config config;};
 static struct row live[128] DATA={{0,{0}}};
 static struct {u32 address,hash;struct row r;} side[24] DATA={{0,0,{0,{0}}}};
 static u32 next DATA=0;
+const struct st_persistence_api *comp_persistence DATA=0;
 static struct comp_config default_config DATA={0};
 extern const u32 comp_k_expt[17];
 static u32 frac_positive(u32 a,u32 b)
@@ -99,14 +100,18 @@ s32 comp_param_get(u32 id)
 {u16 v[COMP_COUNT];if(id-COMP_ID>=COMP_COUNT)return 0;read_values(current(),v);return v[id-COMP_ID];}
 s32 comp_param_set(u32 id,s32 value)
 {
-    u16 v[COMP_COUNT];u32 k=index_of(current()),i=id-COMP_ID;const volatile u32 *active=(const volatile u32 *)0x40a713f0u;
+    u16 v[COMP_COUNT];u32 k=index_of(current()),i=id-COMP_ID;
+    u32 app=*(volatile u32 *)0x444e23f4u;
+    const volatile u32 *active=app>=0x40000000u && app<0x48000000u &&
+        !(app&3u) && *(volatile u32 *)app==0x401c5708u?(const volatile u32 *)(app+0x130u):0;
     if(i>=COMP_COUNT || k>=128)return -1;
     if(value<0)value=0;if((u32)value>comp_max(i))value=comp_max(i);
     if(i==4 || i==COMP_SCF)value&=~255;
     read_values(current(),v);if(v[i]==(u16)value)return 0;
     v[i]=(u16)value;store_mask(current(),v,1u<<i);
     /* Re-encode the same native mirrors that survive MRAM power cycles. */
-    if(active[0]==0x401c3694u && active[4]==COMP_KIT_BASE &&
+    if(comp_persistence)comp_persistence->kit_changed(k);
+    else if(active && active[0]==0x401c3694u && active[4]==COMP_KIT_BASE &&
        ((const u32 *)0x401c3694u)[0x5c/4]==0x40172414u)
         ((void (*)(const volatile void *,u32,u32))0x40172414u)(active,k,0);
     {u8 *root=*(u8 *volatile *)0x444e2334u;if(root)root[96]=1;}
@@ -130,6 +135,8 @@ static u32 known_slot(u32 p,u32 container)
 /* 1.1.0: LFO3's Sound metadata notifications have arrived: their decode
  * decides a slot the core's notification does not know (below). */
 static u32 meta_live DATA=0;
+/* API 19 appends the core's recognized slot capacity to query 34. */
+u32 comp_core_slots DATA=0;
 /* The record: a kit's values into a known slot, or a slot's into a kit (none,
  * damaged or out of range: the initial values). */
 static void encode(u32 slot,u32 kit)
@@ -149,7 +156,7 @@ static void decode(u32 kit,u32 slot)
     for(i=0;i<6;i++){v[i]=i==4?(u16)(w&0xff00u):((u16 *)r)[i+1];if(v[i]>comp_max(i))break;}
     store(kit,i==6 && v[COMP_SCF]<=comp_max(COMP_SCF)?v:comp_initial);
 }
-/* The core's Kit lifecycle (query 34): {kind, a, b, n, phase}. */
+/* Query 34: {kind,a,b,n,phase}, API 19 appends encoded slot capacity. */
 void comp_meta(const u32 *a)
 {
     u16 v[COMP_COUNT];if(!a[4])return;
@@ -157,13 +164,12 @@ void comp_meta(const u32 *a)
     case 1:if(a[3]==COMP_KIT_SIZE){read_values(a[2],v);store(a[1],v);}break;
     case 2:if(a[3]==COMP_KIT_SIZE)store(a[1],comp_initial);break;
     case 5:
-        if((a[3]&255u) && known_slot(a[1],0))encode(a[1],a[2]);break;
+        if((a[3]&255u) && (known_slot(a[1],0) || (comp_core_slots && a[5]==0x1600u)))encode(a[1],a[2]);break;
     case 6:
         if(!(a[3]&255u))break;
-        /* A slot this notification cannot place: with LFO3's notifications
-         * arriving, theirs decides (it names the container); without them,
-         * the initial values, so no buffer revives old settings. */
-        if(!known_slot(a[2],0)){if(!meta_live)store(a[1],comp_initial);break;}
+        /* API 19 decides every decode here. Earlier cores defer an unknown
+         * slot to LFO3's metadata once that fallback is active. */
+        if(!known_slot(a[2],0) && !(comp_core_slots && a[5]==0x1600u)){if(comp_core_slots || !meta_live)store(a[1],comp_initial);break;}
         decode(a[1],a[2]);break;
     }
 }

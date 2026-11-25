@@ -6,14 +6,15 @@
 #include <syntakt/host.h>
 #include <stddef.h>
 #include <string.h>
-/* API 12 core_info/bank_info retain 92/96; API 15 appends audio_idle at 100. */
-typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==104 &&
+/* API 12 retains 92/96; API 15 audio_idle is 100; API 20 persistence is 104. */
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==108 &&
     offsetof(struct st_machine_host_api,native_query)==84 &&
     offsetof(struct st_machine_host_api,native_dispatch)==84 &&
     offsetof(struct st_machine_host_api,pool)==88 &&
     offsetof(struct st_machine_host_api,core_info)==92 &&
     offsetof(struct st_machine_host_api,bank_info)==96 &&
-    offsetof(struct st_machine_host_api,audio_idle)==100 ? 1 : -1];
+    offsetof(struct st_machine_host_api,audio_idle)==100 &&
+    offsetof(struct st_machine_host_api,persistence)==104 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)

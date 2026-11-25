@@ -41,7 +41,7 @@ static char lab_buf[LBL + 8] DATA = {0};
 u32 kl_bank DATA = 0;                   /* 0 off, else the bank project 1..128 */
 u32 kl_pick DATA = KL_DEFAULT;          /* the project KIT BANK offers */
 u32 kl_scanned DATA = 0;                /* the slot cache was completed once since power-on */
-u32 kl_user DATA = 0;                   /* KIT BANK changed by hand since power-on: no naming */
+u32 kl_user DATA = 0;                   /* persisted manual KIT BANK choice: no naming */
 u32 kl_valid DATA = 0;                  /* names: 0 to read, 1 read, 2 a read failed (retry on entry) */
 u32 kl_mode DATA = 0;                   /* 0 LOAD, 1 SAVE */
 u32 kl_pm DATA = 0;                     /* PatternMenuView */
@@ -56,6 +56,14 @@ u32 kl_item[129][2] DATA = {{0}};       /* their shared_ptr<MenuItem>s, to put b
 u32 kl_busy DATA = 0;                   /* creating the bank */
 u32 kl_from DATA = 0, kl_to DATA = 0;   /* its source and destination slots, 0..127 */
 static const struct st_machine_host_api *kl_host DATA = 0;
+static void bank_preferences(u32 write)
+{
+    u32 v[3]={kl_user,kl_bank,kl_pick};
+    if(!kl_host || kl_host->version<20 || !kl_host->persistence)return;
+    if(kl_host->persistence->preferences(ST_PREF_KIT_BANK,v,3,write)!=1 || write)return;
+    if(v[0]>1 || v[1]>128 || v[2]<1 || v[2]>128)return;
+    kl_user=v[0];kl_bank=v[1];kl_pick=v[2];
+}
 
 static const char s_off[] = "KIT BANK OFF: SETTINGS";
 static const char s_dash[] = "-";
@@ -552,7 +560,7 @@ void kl_pattern_menu(void *menu) { kl_pm = (u32)menu; }
 
 /* ---- SETTINGS > KIT BANK: OFF, or the bank project. YES turns it on (with
  * the last project offered, P128 at first) or off; LEFT/RIGHT pick the
- * project and turn it on. Kept until power-off. */
+ * project and turn it on. Persisted through the core preferences service. */
 static void auto_bank(void);
 const char *kl_bank_text(void)
 {
@@ -591,6 +599,7 @@ void kl_bank_select(const u32 *fn)
 {
     kl_user = 1;
     bank_changed(kl_bank ? 0u : kl_pick);
+    bank_preferences(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
 void kl_bank_change(const u32 *fn, int amount)
@@ -601,6 +610,7 @@ void kl_bank_change(const u32 *fn, int amount)
     if (p < 1) p = 1;
     if (p > 128) p = 128;
     bank_changed((u32)p);
+    bank_preferences(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
 void kl_bank_draw(const u32 *fn, void *item, void *bmp, int x, int y)
@@ -700,6 +710,7 @@ static int initialize(const struct st_smz_api *api)
 {
     if (!api || !api->ui || !api->ui->host || api->ui->host->version < 18) return 1;   /* core 2.7 */
     kl_host = api->ui->host;
+    bank_preferences(0);
     return 0;
 }
 static const struct st_smz_subscription subscriptions[] = {

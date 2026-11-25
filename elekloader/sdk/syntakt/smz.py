@@ -31,6 +31,25 @@ STORED_PARAMS=28
 def align(n,a=16):return (n+a-1)&-a
 def be32(*words):return struct.pack('>'+str(len(words))+'I',*words)
 
+def service_modules(directories):
+    """Include internal bank services once, before their consumers."""
+    ordered=[];seen=set();visiting=set()
+    def add(directory):
+        folder=Path(directory).resolve()
+        if folder in visiting:raise ValueError('cyclic SMZ service dependency')
+        if folder in seen:return
+        visiting.add(folder)
+        manifest=json.loads((folder/'mod.json').read_text(encoding='utf-8-sig'))
+        for name in manifest.get('smz_module',{}).get('services',[]):
+            if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',name):raise ValueError('invalid SMZ service name')
+            service=folder.parent/name
+            spec=json.loads((service/'mod.json').read_text(encoding='utf-8-sig'))
+            if spec.get('id')!=name or not spec.get('internal_service'):raise ValueError('not an internal SMZ service: '+name)
+            add(service)
+        visiting.remove(folder);seen.add(folder);ordered.append(folder)
+    for directory in directories:add(directory)
+    return ordered
+
 def source_inputs(src,folder,inputs,binary=False):
     """Pin transitive C/assembler includes, including private nested resources
     and the files assembler sources .incbin."""
@@ -111,7 +130,7 @@ def build(directories,stock_path=None,output=None,module_directories=()):
     inputs[str(api_header)]=hashlib.sha256(api_header.read_bytes()).hexdigest()
     modules_header=Path(sdk.INCLUDE)/'syntakt/modules.h'
     inputs[str(modules_header)]=hashlib.sha256(modules_header.read_bytes()).hexdigest()
-    folders=[(d,False) for d in directories]+[(d,True) for d in module_directories]
+    folders=[(d,False) for d in directories]+[(d,True) for d in service_modules(module_directories)]
     for k,(directory,is_module) in enumerate(folders):
         folder=Path(directory).resolve()
         manifest=json.loads((folder/'mod.json').read_text(encoding='utf-8-sig'))

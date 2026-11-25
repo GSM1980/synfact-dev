@@ -1,0 +1,37 @@
+{
+  "id": "state-st",
+  "version": "1.0.0",
+  "title": "Core parameter storage",
+  "device": "syntakt",
+  "os": "1.42",
+  "license": "GPL-2.0-or-later",
+  "sources": [
+    "../lfo3-st/main.c",
+    "../lfo3-st/ui.c",
+    "../lfo3-st/shadow.c",
+    "../lfo3-st/codec.c",
+    "../lfo3-st/actions.c",
+    "../lfo3-st/locks_runtime.c",
+    "../lfo3-st/locks/locks.c",
+    "../lfo3-st/locks/pattern.c",
+    "../lfo3-st/locks/budget.c",
+    "../lfo3-st/locks/bounded.c",
+    "../lfo3-st/locks/owned.c",
+    "../lfo3-st/locks/events.c",
+    "../lfo3-st/locks/owners.c",
+    "../lfo3-st/locks/lock_ui.c",
+    "../lfo3-st/render.s",
+    "../lfo3-st/ui.s",
+    "../lfo3-st/shadow.s",
+    "../lfo3-st/actions.s",
+    "../lfo3-st/locks/pattern_entry.s",
+    "../lfo3-st/locks/owned_entry.s",
+    "../lfo3-st/locks/event_entry.s",
+    "../lfo3-st/locks/lock_ui_entry.s",
+    "../lfo3-st/sram.s"
+  ],
+  "smz_module": {
+    "descriptor": "state_service_module"
+  },
+  "internal_service": true
+}

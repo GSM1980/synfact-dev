@@ -19,11 +19,12 @@ extern void core_parameter_provider_set(int (*)(unsigned int,unsigned int *,void
 extern const unsigned char core_mod_info[];
 extern const unsigned char *core_bank_info;
 extern const struct st_audio_idle_owner *volatile core_audio_idle_owner;
+extern const struct st_persistence_api core_persistence_api;
 const struct st_machine_host_api core_machine_host_api={
-    18,&core_hzfs_native_io,core_hzfs_open,core_hzfs_close,core_crc_update,
+    20,&core_hzfs_native_io,core_hzfs_open,core_hzfs_close,core_crc_update,
     core_pool_read,core_pool_write,core_pool_ready,st_pool_live_sync,
     st_pool_preview_stop,core_event_view,core_clock_snapshot,core_additem,
     &core_pool_busy,&core_pool_query_owner,core_native_original,core_machine_telemetry,
     core_native_profile,core_native_interest_set,core_native_page_view_set,
     core_parameter_provider_set,{core_native},&core_sample_pool_api,core_mod_info,&core_bank_info,
-    &core_audio_idle_owner};
+    &core_audio_idle_owner,&core_persistence_api};

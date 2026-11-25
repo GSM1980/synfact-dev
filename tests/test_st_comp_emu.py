@@ -271,11 +271,11 @@ def test_persistence(m):
     set_values(m,values)
     m.call(0x400b3384,KIT,sr=0x2000)
     assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
-    # 1.1.0: the mirror slots kitChanged re-encodes (what survives a power cycle
-    # without a project save) are in a container only LFO3's Sound metadata
-    # names (ST_NATIVE_SOUND_META 21: KIT_ENCODE 5 {slot, kit, container},
-    # KIT_DECODE 6 {kit, slot, container}). The core's notification alone never
-    # wrote COMP's record there and read the initial values back at power-up.
+    # Older-core fallback: LFO3 names a temporary full project container in
+    # its Sound metadata, which the old five-field core notification cannot
+    # recognize. API 19 uses query 34 exclusively; the real KitActive mirror
+    # descriptors/jobs are exercised separately below.
+    m.w(m.sym['comp_core_slots'],0)
     container=0x4c000000;mirror=container+0x2e0200+3*0x1600
     m.u.mem_map(0x4c2e0000,0x10000);m.u.mem_write(mirror,bytes(0x1600))
     def core_meta(kind,a,b):m.u.mem_write(W+0x300,struct.pack('>5I',kind,a,b,1,1));m.call('comp_meta',W+0x300)
@@ -295,7 +295,78 @@ def test_persistence(m):
     assert [m.call('comp_param_get',ID+i) for i in range(7)]==DEFAULT
     # A known slot is the same through either notification.
     set_values(m,values);lfo3_meta(5,slot,KIT,0);assert m.read(slot+0x15d0,16)==saved
-    print('PASS persistence: full Q8, SCF in RAT low byte, 0.2.0 record, 16 corrupt-record cases, neighboring mods, native Kit constructor, LFO3-named mirror container (power cycle without a save)')
+    print('PASS persistence: full Q8, SCF in RAT low byte, 0.2.0 record, 16 corrupt-record cases, neighboring mods, native Kit constructor, legacy LFO3 container fallback')
+
+
+class MirrorMachine(NativeStrings):
+    """Native KitActive/codec; task queue and observer fanout are boundaries."""
+    def __init__(self,*args):
+        self.jobs=[]
+        super().__init__(*args)
+
+    def code(self,u,pc,n,a):
+        if pc==0x4016ec18:self.ret(W+0x18000);return   # native task queue singleton
+        if pc==0x400bdc48:
+            closure=self.word(u.reg_read(UC_M68K_REG_A7)+12)
+            self.jobs.append((self.word(closure+12),self.read(self.word(closure),12)))
+            self.ret(0);return
+        if pc in (0x4016dc10,0x40171eda):self.ret(0);return  # queue owns its copy; observers
+        super().code(u,pc,n,a)
+
+    def drain(self):
+        jobs,self.jobs=self.jobs,[]
+        for callback,job in jobs:
+            self.u.mem_write(W+0x18100,job);self.w(W+0x18120,W+0x18100)
+            assert callback in (0x4000ea98,0x4000eac8)
+            assert self.call(callback,W+0x18120,sr=0x2000)==1
+        return len(jobs)
+
+
+def mirror_active(m):
+    app,vectors=0x45500000,0x45000000
+    active=app+0x130
+    m.w(0x444e23f4,app);m.w(app,0x401c5708)
+    m.w(active,0x401c3694);m.w(active+0x10,KIT)
+    m.w(active+0x44,(m.word(0x800030b8)-KIT)//0x1618)
+    # The first list holds arrays of 128 Kits; the second individual slots
+    # of the selected Kit. Neither holds full project containers. Include
+    # an empty entry; both native KitActive mirror lists are exercised.
+    for offset,entry,base in ((0x20,vectors,0x45001000),(0x2c,vectors+8,0x45100000)):
+        m.w(active+offset,entry);m.w(active+offset+4,entry+8)
+        m.w(entry,0);m.w(entry+4,base+(0 if offset==0x20 else m.word(active+0x44)*0x1600))
+
+
+def test_mirror_power_cycle(core,bank):
+    values=[0x1234,0x2345,0x3456,0x4567,0xa00,0x5678,0x7f00]
+    for k in (0,127):
+        m=MirrorMachine(core,bank);initialize(m)
+        kit=KIT+k*0x1618;m.call(0x400b3384,kit,sr=0x2000);m.w(0x800030b8,kit)
+        slots=[base+k*0x1600 for base in (0x45001000,0x45100000)]
+        for slot in slots:m.u.mem_write(slot,b'\xa7'*0x1600)
+        mirror_active(m)
+        # Production setter -> real KitActive::kitChanged -> native jobs ->
+        # real Kit encoder -> core notification. No LFO3 initialized/provider.
+        set_values(m,values)
+        assert m.drain()==2*len(values)
+        for slot in slots:
+            assert m.half(slot+0x15d0)==0x4351,'COMP must reach both power-cycle mirrors without LFO3'
+            assert m.read(slot+0x14e0,0xf0)==b'\xa7'*0xf0,'LFO3 neighbors'
+            assert m.read(slot+0x15e0,0x20)==b'\xa7'*0x20,'Playhead neighbors'
+            # A fresh bank instance has no retained COMP RAM. Restore only
+            # the encoded native mirror, as at boot, then run the real decoder.
+            boot=MirrorMachine(core,bank);initialize(boot);boot.w(0x800030b8,kit);mirror_active(boot)
+            boot.u.mem_write(slot,m.read(slot,0x1600))
+            assert boot.call(0x400a78a0,kit,slot,sr=0x2000)&255
+            assert [boot.call('comp_param_get',ID+i) for i in range(7)]==values
+        # Negative control: old COMP's five-field notifications cannot place
+        # either mirror. Keep native jobs/codecs identical and remove only
+        # the new capacity input; the record must then remain absent.
+        m.w(m.sym['comp_core_slots'],0)
+        for slot in slots:m.u.mem_write(slot+0x15d0,bytes(16))
+        assert m.call('comp_param_set',ID,0x1200)==0
+        assert m.drain()==2
+        assert all(m.read(slot+0x15d0,16)==bytes(16) for slot in slots)
+    print('PASS power-cycle mirrors without LFO3: native setter/KitActive/jobs/codecs, both mirror kinds, Kits 0/127, seven controls, fresh RAM, neighbors, old-path negative control')
 
 
 def test_native_codec(core,bank):
@@ -389,6 +460,7 @@ def main():
     m=fixture(a.core,a.bank);test_controls(m);test_math(a.core,a.bank);test_fx_site(a.core,a.bank)
     test_scf(a.core,a.bank)
     test_persistence(fixture(a.core,a.bank))
+    test_mirror_power_cycle(a.core,a.bank)
     test_native_codec(a.core,a.bank);test_page(a.core,a.bank,a.preview)
     print('PASS comp-st; no device access')
 if __name__=='__main__':main()

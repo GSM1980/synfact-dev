@@ -1,7 +1,10 @@
 # Playhead: step order per track (playhead-st)
 
-Desktop OS 1.42 release: **1.3.0**.
-Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+Desktop OS 1.42 release: **1.3.1**, core **2.9 / host API 20**.
+The builder includes the internal `state-st` service automatically. Modes
+persist through native Kit mirrors without loading the third LFO or saving
+the project; the core resolves the actual application-owned KitActive and
+recognizes both full arrays and individual Kit slots.
 
 **TRK + UP** / **TRK + DOWN** opens a centered mode selector for the active
 track. All nine modes are visible in two columns, each with its icon and name.
@@ -44,9 +47,8 @@ selector open with `MODES N/A`; NO still closes it.
 Modes belong to the pattern: each pattern has its own thirteen, and changing
 patterns changes them with it. They are saved with the pattern's kit and
 come back when the project or the pattern is loaded, copied with it and
-reset to FORWARD when the kit is initialised ("Saving" below). This needs
-LFO3 in the bank (it is in every normal bank); without it the modes last
-until a restart.
+reset to FORWARD when the kit is initialised ("Saving" below). The builder
+includes the internal `state-st` service automatically; LFO3 is optional.
 
 While the active track is not FORWARD, its mode's icon is in the header,
 two pixels left of the metronome: a thin arrow to the left (REVERSE), a thin
@@ -240,13 +242,13 @@ and a project without the record (or with a damaged one) opens with every
 track FORWARD.
 
 `persist.c` hooks nothing. It observes the Sound metadata notifications
-that LFO3's object/codec adapter publishes on the core's native bus (host
+that the internal state service's object/codec adapter publishes on the core's native bus (host
 API 10, `<syntakt/sound-meta.h>`): KIT_ENCODE writes a known slot's record
 from the kit's modes, KIT_DECODE gives the kit the slot's modes (FORWARD for
 an unknown buffer, a SysEx import), COPY and RELOCATE of a whole kit carry
 its modes, NEW initialises them, FREE forgets buffers, PROJECT_NEW clears the
 records of the container's 128 slots. A known slot is one by construction, as
-LFO3's: the two project containers and the event's own container
+the state service's: the fixed project containers, registered native mirrors and the event's own container
 (+2e0200h + k × 1600h, k < 128) and the save and reload buffers; nothing is
 written past the native record of any other buffer. Kits outside the live
 array (undo, clipboard, decode buffers) keep their modes in a 16-entry table
@@ -255,14 +257,15 @@ encoded slot (1600h) carry the record with the slot's bytes.
 
 A change of mode must also reach what survives a power cycle without a
 project save: the kit's mirror slots. A native edit of a kit ends in
-`KitActive::kitChanged` (`40172250`, its vtable +5Ch), which re-encodes the
+`KitActive::kitChanged` (`40172414`, its vtable +5Ch), which re-encodes the
 kit into its mirrors (the job "KitActive::updateSingleMirror", `4001082e`).
 After YES confirms a different mode the module calls it for the captured
 playing kit, so the
-re-encode reaches KIT_ENCODE and the record. The KitActive object is in the
-project (`40a38b18` + 378d8h, as `40018ece` reaches it) and is used only
-while its vtable (`401c33f4`), its kits (+10h, `41ad5134`) and that vtable
-entry are the stock ones; otherwise the change waits for a project save.
+re-encode reaches KIT_ENCODE and the record. Host API 20 resolves KitActive
+from the application singleton at `444e23f4` plus `130h`, checking the
+application vtable (`401c5708`), KitActive vtable (`401c3694`), live kits
+(`41ad6134`) and changed entry. Its registered mirror arrays also authorize
+their full project container. Unknown buffers never acquire tail capacity.
 
 The live modes are a table of 128 kits × 13 tracks. The sequencer's pattern
 pointers name their kits (`43bd7430` playing with `43bd743c`, `43bd7438`
@@ -274,8 +277,8 @@ project that uses modes in any pattern installs them.
 
 Any bank, as a module. Put it before the other optional UI modules so its
 modal consumes KEY/ENC before ARP or the recorder can edit a page behind it.
-Machine-owned view subscribers can retain their prefix. Keep LFO3 before ARP
-before POLY, and `modulation-skip-st` last, as in the normal catalog:
+Machine-owned view subscribers can retain their prefix. If selected, keep
+LFO3 before POLY, and `modulation-skip-st` last, as in the normal catalog:
 
 ```bash
 "$PY" -m elekloader.sdk.syntakt.smz mods/samplers-st mods/fm-tone-st \

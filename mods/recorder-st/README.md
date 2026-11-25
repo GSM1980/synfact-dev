@@ -6,7 +6,14 @@ Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 Version 1.2 consolidates the MAIN idle callback work tested as development
 1.1.1. See [the release mapping](../../docs/MAIN-OPTIMIZATION-RELEASE.md).
 
-Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
+Recorder **1.4.2**, core **2.9 / host API 20**: SRC, RLEN, THR, MON, POST FX
+and STEREO are global preferences saved through the core's redundant,
+verified records. They survive restart without saving the project or
+loading any other optional module. Invalid/absent preferences keep the
+existing defaults. An unsaved recording/trim buffer remains a working take;
+use SAVE to keep its audio file.
+
+Current desktop target: **Syntakt OS 1.42 / core 2.9**. Rebuild this mod in a
 new bank; older hardware measurements below refer to the previous OS. See
 [the port notes](../../docs/OS142-PORT.md).
 

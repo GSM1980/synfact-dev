@@ -597,9 +597,26 @@ with `0x43bd7444`; OS 1.42 live kits are `0x41ad6134 + k × 0x1618`, k < 128. An
 encoded kit slot (0x1600 bytes) uses [0, 0x14d2) natively, LFO3
 [0x14e0, 0x15d0), COMP [0x15d0, 0x15e0), and playhead-st [0x15e0, 0x15f8).
 On OS 1.42 a native edit of a kit ends in `KitActive::kitChanged`
-(`0x40172414`, vtable `0x401c3694` +0x5c; object `0x40a713f0`, kits at its
-+0x10), which re-encodes the Kit into its mirror slots: what survives a
+(`0x40172414`, vtable `0x401c3694` +0x5c; KitActive at application `+0x130`,
+kits at its +0x10), which re-encodes the Kit into its mirror slots: what survives a
 power cycle without a project save.
+
+`KitActive +0x20/+0x24` is a vector of pointers to arrays of 128 encoded
+Kits: `4001082e` adds `k*0x1600` to each before queuing `4000ea98`.
+`+0x2c/+0x30` is a vector of individual encoded slots of the selected Kit:
+`400109ba` passes each unchanged to `4000eac8`. Both jobs invoke the native
+Kit encoder. These pointers are not full project-container addresses.
+Core 2.8.1 reads the current registrations for query 34's appended capacity
+(host API 19), so COMP does not depend on LFO3 to recognize either mirror.
+
+Core 2.9 corrects the owning object: `4016e9c8` publishes the heap-allocated
+UI project model through `444e23f4`; its constructor `4001bb10` sets vtable
+`401c5708` and constructs KitActive at `+130h` (`4001bbc2..4001bbc8`).
+The raw live project at `40a39b18` is not this model. `4001b336` registers
+a full project's `container+2e0200h` Kit array through `401728b0`
+(`4001b36e..4001b37c`), then its 128 pattern mirrors at `container+200h`
+with stride `5c00h`. This native array registration authorizes the associated
+full-container context; an individual slot registration alone does not.
 
 FUNC + YES on the MainScreen (key 12 with FUNC, `400341a0`) calls the quick
 save `4001a8d2(obj, temp 1, pattern, 1, 1)`: pattern k is encoded

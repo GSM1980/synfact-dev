@@ -82,7 +82,8 @@ class Activity(Patchers):
             # Pre-optimization LFO3 remains subscribed even with neutral output.
             assert route[11]&(0x80|self.route_bit('chorus_native')) and route[17]==(
                 0 if self.dynamic else self.lfo_route_bit),('initial_inactive_route',route.hex())
-        assert self.word(self.lfo['hooks_installed'])==1 and self.word(self.lfo['in_sram'])==1
+        assert self.word(self.lfo['hooks_installed'])==1
+        assert self.word(self.lfo['in_sram'])==int(any(name=='LFO3' for name,_,_ in self.modules))
         self.sr=0x2000
         self.w(0x444dc730,POOL)
         self.context=self.word(self.bs['lfo3_events_context'])

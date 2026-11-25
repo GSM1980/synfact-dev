@@ -26,6 +26,14 @@ static u32 sam_max_frames(u32 stereo){return stereo?SAM_STEREO_FRAMES:SAM_MAX_FR
 /* STEREO offers the stereo pairs and the tracks: IN L+R, MAIN L+R, TRK1..12. */
 static u32 sam_source_ok(u32 source,u32 stereo)
 {return !stereo || (source!=0 && source!=1 && source!=3 && source!=4);}
+void recorder_preferences(u32 write)
+{
+    u32 v[6]={sam_source,sam_rlen,sam_thr,sam_mon,sam_post,sam_stereo};
+    if(!host || host->version<20 || !host->persistence)return;
+    if(host->persistence->preferences(ST_PREF_RECORDER,v,6,write)!=1 || write)return;
+    if(v[0]>17 || v[1]>8 || v[2]>127 || v[3]>1 || v[4]>1 || v[5]>1 || !sam_source_ok(v[0],v[5]))return;
+    sam_source=v[0];sam_rlen=v[1];sam_thr=v[2];sam_mon=v[3];sam_post=v[4];sam_stereo=v[5];
+}
 #define SAM_NORM_PEAK 29204u /* nearest PCM16 magnitude to -1 dBFS */
 enum { SAM_EMPTY, SAM_ARMED, SAM_RECORDING, SAM_READY, SAM_NORMALIZING };
 static short *sam_pcm DATA=0;
@@ -456,7 +464,7 @@ static void sam_adjust(u32 field,s32 delta)
             value=next;
         }
         sam_source=(u32)value;sam_peak=sam_peak_r=0;sam_hint=0;
-        sam_focus=field;sam_report[4]++;sam_redraw();return;
+        recorder_preferences(1);sam_focus=field;sam_report[4]++;sam_redraw();return;
     }
     value=(s32)(field==0?sam_rlen:field==1?sam_thr:field==3?sam_mon:field==4?sam_post:sam_stereo);
     limit=field==0?8:field==1?127:1;
@@ -471,7 +479,7 @@ static void sam_adjust(u32 field,s32 delta)
         if(!sam_source_ok(sam_source,sam_stereo))sam_source=sam_source<3?2:5;
     }
     if(field<4)sam_focus=field; /* STEREO (A) and POST FX (B) are not arrow-key fields */
-    sam_report[4]++;sam_redraw();
+    recorder_preferences(1);sam_report[4]++;sam_redraw();
 }
 u32 sampler_encoder(u8 *iface,const u8 *ev)
 {

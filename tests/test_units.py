@@ -1234,6 +1234,31 @@ def test_an_smz_source_pins_what_it_incbins():
         assert sorted(os.path.basename(k) for k in inputs) == ['blob.bin', 'main.s', 'part.s']
 
 
+def test_internal_smz_services_are_explicit_acyclic_and_included_once():
+    from pathlib import Path
+    from elekloader.sdk.syntakt.smz import service_modules
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp)
+        def mod(name,services=(),internal=False):
+            p=root/name;p.mkdir(exist_ok=True)
+            (p/'mod.json').write_text(json.dumps(dict(id=name,internal_service=internal,smz_module=dict(services=list(services)))))
+            return p
+        state=mod('state-st',internal=True);arp=mod('arp-st',['state-st']);lfo=mod('lfo3-st',['state-st'])
+        assert service_modules([arp,lfo,state,arp])==[state,arp,lfo]
+        mod('state-st',['arp-st'],True);mod('arp-st',['state-st'],True)
+        try:service_modules([arp])
+        except ValueError as e:assert 'cyclic' in str(e)
+        else:raise AssertionError('accepted a cyclic service graph')
+        mod('state-st',internal=False);mod('arp-st',['state-st'])
+        try:service_modules([arp])
+        except ValueError as e:assert 'not an internal' in str(e)
+        else:raise AssertionError('accepted a user module as an internal service')
+        mod('arp-st',['../state-st'])
+        try:service_modules([arp])
+        except ValueError as e:assert 'invalid' in str(e)
+        else:raise AssertionError('accepted an escaping service path')
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

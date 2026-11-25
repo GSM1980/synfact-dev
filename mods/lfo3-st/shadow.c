@@ -1,4 +1,6 @@
 #include <syntakt/sound-meta.h>
+#include <syntakt/persist.h>
+const struct st_persistence_api *state_persistence=0;
 extern void lfo3_meta_notify(unsigned int,unsigned int,unsigned int,unsigned int);
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Imported from Synfact src/features/lfo3/shadow_owned.c (sha256 5a7ceca4...).
@@ -443,6 +445,7 @@ static u32 full_container(u32 a)
 static u32 kit_slot(u32 a)
 {
     u32 i, base, off;
+    if(state_persistence && state_persistence->kit_slot(a)==KIT_SLOT)return 1;
     if (a && (a == save_buffer || a == reload_buffer))
         return 1;
     for (i = 0; i < 2; i++) {
@@ -491,9 +494,13 @@ static u32 subslot(u32 record,u32 fx,u32 *track)
     }
     return 0;
 }
+/* API 19: lend the established adapter's scoped slot capacity to the core.
+ * No metadata header or arbitrary caller pointer authorizes a full slot. */
+u32 lfo3_kit_slot_bytes(u32 slot){return kit_slot(slot)?KIT_SLOT:0;}
 static u32 meta_container(u32 record)
 {
     u32 i,base;
+    if(state_persistence && (base=state_persistence->container(record)))return base;
     for(i=0;i<(container_scope_callback?0xffffffffu:CONTAINERS+3);i++) {
         base=container_at(i);if(container_scope_callback && !base)break;
         if(base && record>=base && record-base<0x3a5604u)return base;

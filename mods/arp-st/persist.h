@@ -3,6 +3,8 @@
 #define ARP_PERSIST_H
 #include "arp.h"
 void arp_persist_init(void);
+struct st_machine_host_api;
+void arp_persistence_bind(const struct st_machine_host_api *);
 const struct arp_settings *arp_sound_settings(arp_u32 sound);
 void arp_sound_read(arp_u32 sound,struct arp_settings *);
 int arp_sound_store(arp_u32 sound,const struct arp_settings *);

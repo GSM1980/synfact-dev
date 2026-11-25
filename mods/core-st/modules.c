@@ -191,7 +191,7 @@ u32 core_module_count,core_module_subscriptions;
  * avoid duplicating the comparison in the resident initializer. */
 static int patching_module(const char *name)
 {
-    const char *wanted=*name=='L'?"LFO3":"MODULATION SKIP";
+    const char *wanted=*name=='L'?"LFO3":*name=='S'?"STATE":"MODULATION SKIP";
     while(*name && *name==*wanted){name++;wanted++;}
     return *name==*wanted;
 }

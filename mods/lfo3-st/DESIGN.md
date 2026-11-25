@@ -1,6 +1,18 @@
 # LFO3 port to elekloader (working design, 2026-10-28)
 
-Desktop OS 1.42 release: **1.3.2**; core 2.4 integration is described below.
+Desktop OS 1.42 release: **2.0.0**, core **2.9 / host API 20**.
+The descriptor only enables the optional LFO feature. The established
+metadata and lock backend is now the automatically included internal
+`state-st` service, so ARP and Playhead do not require the third LFO.
+Service-only banks expose no LFO3 controls/page, install no LFO3 SRAM
+renderer and subscribe to no LFO render operation. Native Kit capacity
+and project context come from the core's validated application singleton.
+
+Earlier core 2.4 integration is described below.
+On core 2.8.1 / host API 19, provider query 37 lends the encoded-slot
+capacity of the adapter's known temporary project containers to the core.
+COMP consumes the core's shared Kit notifications on this API; recognition
+of native power-cycle mirrors no longer depends on LFO3.
 Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
 
 The consolidated release is **LFO3 1.3**, one step from main's 1.2. Numbers

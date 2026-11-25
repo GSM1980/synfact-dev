@@ -78,6 +78,15 @@ def check_bank_modules(report, raw, allowed):
     subscriptions in the file. Other module contents retain their own audits.
     """
     modules=report['modules']
+    # The internal storage service is a real, separately validated module,
+    # inserted before its first consumer by the native builder.
+    has_state='state_service_module' in modules
+    if has_state:
+        assert modules.count('state_service_module')==1
+        assert any(Path(p).as_posix().endswith('/mods/state-st/mod.json') for p in report['source_sha256'])
+        for consumer in ('lfo3_module','arp_module','playhead_module'):
+            if consumer in modules:assert modules.index('state_service_module')<modules.index(consumer)
+        modules=[m for m in modules if m!='state_service_module']
     expected=[list(names) for names in allowed]
     expected += [['sp_sampler_input_module',*names] for names in allowed]
     # samplers-st 1.3: its stereo-track module follows the input module
@@ -114,10 +123,20 @@ def check_bank_modules(report, raw, allowed):
         expected.append(reordered)
     assert modules in expected, ('unexpected module composition/order',modules)
     directory,count=struct.unpack_from('>II',raw,32)
-    assert count==len(modules), 'module directory/report count differs'
+    assert count==len(report['modules']), 'module directory/report count differs'
+    if has_state:
+        image=80+4*struct.unpack_from('>I',raw,56)[0]
+        entry=image+directory+16*report['modules'].index('state_service_module')
+        name,init,subs,n=struct.unpack_from('>4I',raw,entry)
+        assert raw[image+name:raw.index(0,image+name)]==b'STATE'
+        assert init<report['main_bytes'] and not init&1
+        assert n==3 and subs+8*n<=report['main_bytes'] and not subs&3
+        rows=[struct.unpack_from('>II',raw,image+subs+8*i) for i in range(n)]
+        assert [event for event,fn in rows]==[11,0,1]
+        assert all(fn<report['main_bytes'] and not fn&1 for event,fn in rows)
     if 'st_subtype_module' in modules:
         image=80+4*struct.unpack_from('>I',raw,56)[0]
-        check_subtype_module(report,raw,image+directory+16*modules.index('st_subtype_module'),image)
+        check_subtype_module(report,raw,image+directory+16*report['modules'].index('st_subtype_module'),image)
     if 'sp_sampler_input_module' not in modules:return
     assert any(Path(name).as_posix().endswith('/mods/samplers-st/input.c')
                for name in report['source_sha256']), 'sampler input source not pinned'

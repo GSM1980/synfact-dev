@@ -166,6 +166,7 @@ static int initialize(const struct st_smz_api *api)
     if(!api || !api->ui || api->ui->version<6 || !api->ui->host ||
        api->ui->host->version<15 || !api->ui->host->audio_idle || *api->ui->host->audio_idle)return 1;
     host=api->ui->host;
+    recorder_preferences(0);
     *host->audio_idle=&recorder_idle_owner;return 0;
 }
 static const struct st_smz_subscription subscriptions[]={

@@ -6,6 +6,10 @@
  */
 #include "persist.h"
 #include <syntakt/sound-meta.h>
+#include <syntakt/host.h>
+static const struct st_persistence_api *persistence;
+void arp_persistence_bind(const struct st_machine_host_api *host)
+{persistence=host && host->version>=20?host->persistence:0;}
 #define DATA __attribute__((section(".data")))
 #define KIT 0x1618u
 #define SOUND 0x123u
@@ -351,6 +355,20 @@ static void sound_meta(const arp_u32 *a)
             }
         }else if(kind==ST_SOUND_KIT_DECODE && !n && record==ST_SOUND_KIT_RELOAD_BUFFER && temp_load(kit)){
             /* FUNC+NO: restored from the reloaded pattern record's tail */
+        }else if(persistence && live_kit(kit,&k) && persistence->kit_slot(record)==0x1600u &&
+                 record!=ST_SOUND_KIT_SAVE_BUFFER && record!=ST_SOUND_KIT_RELOAD_BUFFER &&
+                 (off=persistence->kit_container(k))!=0){
+            /* An individual live-Kit mirror has no room for twelve ARP
+             * rows. Its registered full-project mirror owns the existing
+             * APC1 pattern carrier. Never invent a parent for short buffers,
+             * temporary Kits or records whose native Sound bytes differ. */
+            if(kind==ST_SOUND_KIT_ENCODE)save_kit(off,k,kit);
+            else for(i=0;i<12;i++){
+                arp_u32 parent=row_record(off,k,i),source=record+0x2eu+i*RECORD;
+                if(hash((const unsigned char *)parent,RECORD)==hash((const unsigned char *)source,RECORD))load_row(&p,off,k,i);
+                else copy_settings(&p,&defaults);
+                arp_sound_store(kit+0x2a+i*SOUND,&p);
+            }
         }else{
             struct kit_assoc *entry=kind==ST_SOUND_KIT_ENCODE?kit_remember(record):kit_remembered(record);
             for(i=0;i<12;i++)if(kind==ST_SOUND_KIT_ENCODE)copy_settings(&entry->p[i],arp_sound_settings(kit+0x2a+i*SOUND));

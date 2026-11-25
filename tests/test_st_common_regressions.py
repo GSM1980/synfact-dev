@@ -147,7 +147,9 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         'stereo-transport':['tests/test_st_stereo.c'],
         'sampler-fast':['tests/test_st_sampler_fast.c'],
         'cursor-publish':['tests/test_st_cursor_publish.c'],
-        'kit-sound':['tests/test_st_kit_sound.c']}
+        'kit-sound':['tests/test_st_kit_sound.c'],
+        'kit-meta':['tests/test_st_kit_meta.c','mods/core-st/kit-meta.c'],
+        'preferences':['tests/test_st_preferences.c','mods/core-st/preferences.c','mods/core-st/crc.c']}
     cases['hzfs-storage']=['tests/test_core_st_storage.c','mods/core-st/high-storage.c','mods/core-st/crc.c']
     # Safe boot (core 1.7.1): slot storage alone, the boot orchestration, and the
     # production loader with the production storage end to end (both on the bank).

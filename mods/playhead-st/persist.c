@@ -45,6 +45,7 @@ void playhead_enter(void){((void (*)(void *))0x40001980u)(mutex);}
 void playhead_leave(void){((void (*)(void *))0x40001aa2u)(mutex);}
 static struct {u32 address,hash;u8 modes[PLAYHEAD_TRACKS];} side[SIDE];
 static u32 side_next;
+static const struct st_persistence_api *persistence;
 static u32 fnv(const volatile u8 *p,u32 n)
 {u32 h=0x811c9dc5u;while(n--)h=(h^*p++)*0x1000193u;return h;}
 static u32 kit_hash(u32 kit){return fnv((const volatile u8 *)kit,PLAYHEAD_KIT_BYTES);}
@@ -57,7 +58,7 @@ static u32 in_container(u32 a,u32 base)
 }
 static u32 known_slot(u32 a,u32 container)
 {
-    return a && (a==SAVE_BUFFER || a==RELOAD_BUFFER || in_container(a,0x43c0dfc0u) ||
+    return a && ((persistence && persistence->kit_slot(a)==KIT_SLOT) || a==SAVE_BUFFER || a==RELOAD_BUFFER || in_container(a,0x43c0dfc0u) ||
                  in_container(a,0x43ff45d0u) || in_container(a,container));
 }
 /* A kit's modes: the live table, the side table, or all FORWARD. */
@@ -127,19 +128,21 @@ static void meta(const u32 *a)
     }
 }
 /* A mode changed in a live kit. The native edits of a kit end in
- * KitActive::kitChanged (40172250, its vtable +5Ch): it re-encodes the kit
+ * KitActive::kitChanged (40172414, its vtable +5Ch): it re-encodes the kit
  * into its mirror slots (job "KitActive::updateSingleMirror", 4001082e), and
  * the mirrors are what survives a power cycle without a project save. The
- * KitActive object is in the project (40a38b18 + 378d8h, as 40018ece reaches
- * it); it is used only while its vtable (401c33f4), its kits (+10h,
- * 41ad5134) and that vtable entry are the stock ones. The re-encode reaches
+ * KitActive object is application singleton +130h. Host API 20 resolves it;
+ * the fallback checks the same stock vtables, live kits and entry. The re-encode reaches
  * KIT_ENCODE above, which writes the record. */
-#define KIT_ACTIVE 0x40a713f0u
 #define KIT_ACTIVE_VTABLE 0x401c3694u
 #define KIT_CHANGED 0x40172414u
 u32 playhead_persist_changed(u32 k)
 {
-    const volatile u32 *o=(const volatile u32 *)KIT_ACTIVE;
+    if(persistence)return persistence->kit_changed(k);
+    u32 app=*(volatile u32 *)0x444e23f4u;
+    const volatile u32 *o;
+    if(app<0x40000000u || app>=0x48000000u || (app&3u) || *(volatile u32 *)app!=0x401c5708u)return 0;
+    o=(const volatile u32 *)(app+0x130u);
     if(k>=PLAYHEAD_KITS || o[0]!=KIT_ACTIVE_VTABLE || o[4]!=PLAYHEAD_KIT_BASE ||
        ((const u32 *)KIT_ACTIVE_VTABLE)[0x5c/4]!=KIT_CHANGED)return 0;
     ((void (*)(volatile void *,u32,u32))KIT_CHANGED)((volatile void *)o,k,0);
@@ -155,6 +158,7 @@ int playhead_native(u32 op,const u32 *args,u32 *result)
 void playhead_persist_init(const struct st_machine_host_api *host)
 {
     if(!host || host->version<5)return;      /* every operation reaches playhead_native */
+    persistence=host->version>=20?host->persistence:0;
     host->native_interest((void (*)(void))playhead_native,
                           host->version>=10?1u<<ST_NATIVE_SOUND_META:0u);
 }

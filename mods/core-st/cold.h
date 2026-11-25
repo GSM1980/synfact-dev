@@ -2,7 +2,8 @@
  * cold.h - the exception to -O3 in the core (docs/SYNTAKT-BUILD.md, "The -Os
  * exception"). Included last by the files whose code runs at boot, over USB or in
  * a storage transaction, never per tick or per block: sample-pool.c, hzfs.c,
- * files.c, smz.c, storage.c, machine-boot.c, high-storage.c, boot-preimages.c.
+ * files.c, smz.c, storage.c, machine-boot.c, high-storage.c, boot-preimages.c,
+ * preferences.c (its public task entry remains CORE_HOT).
  * Their functions are compiled for size, which keeps the 64 KiB resident reserve
  * from filling (core 2.1.1: about 9.7 KB less). A function of these files that a
  * tick, a draw, a key, an encoder or a native path calls is marked CORE_HOT and
