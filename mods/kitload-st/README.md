@@ -11,10 +11,11 @@ this module is its rewrite on core events. Needs core 2.7 (host API
 
 ## What it does
 
-**Off until you turn it on.** SETTINGS > **KIT BANK** reads `OFF`. YES turns
-it on with **P128** offered; LEFT/RIGHT pick any project, P1..P128 (and turn
-it on); YES again turns it off. Installing the module never makes an
-existing project a bank. A choice made here lasts until power-off.
+**Off by default, unless a bank project is named `KITBANK` or `KIT BANK`
+(see below).** SETTINGS > **KIT BANK** reads `OFF` when no named bank is
+found. YES turns it on with **P128** offered; LEFT/RIGHT pick any project,
+P1..P128 (and turn it on); YES again turns it off. A manual choice made here
+lasts until power-off.
 
 **Kept across power-off: name the bank project `KITBANK`** (or `KIT BANK`, any
 case). After power-on, while KIT BANK has not been changed by hand, the
@@ -60,7 +61,7 @@ With the bank on:
 - **No bank project.** An empty bank slot offers `CREATE KITBANK IN P128`
   (above). A slot holding something the OS does not load reads
   `BANK P128 FORMAT n` (the slot status; 13 is the one the OS loads); YES on
-  it rereads the slot header and tries again. Nothing is read or written.
+  it rereads the slot header and tries again. No kit data is read or written.
 - **Messages** (`LOADED A06 NAME`, `SAVED A09 NAME`, `KITBANK CREATED IN
   P128`, ...) appear in the OS's text box, the one PROJECT's COPY PROJECT
   shows, drawn over the menu.
@@ -80,7 +81,8 @@ position follows Playhead's own load behaviour.
 ## Before you use it
 
 - **The bank project is written.** Pick a project you made for the purpose.
-  Every write needs SAVE mode and a YES in the confirmation box.
+  Saving a kit needs SAVE mode and a YES in the confirmation box. Creating
+  a bank also writes a project, after its own confirmation.
 - **Samples are per project.** A bank kit's sampler tracks, and pool
   positions 65..128, play the *current* project's samples, not the bank's.
 - **Machines are per bank.** A kit that uses SMZ4 machines missing from the
