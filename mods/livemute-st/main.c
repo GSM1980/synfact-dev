@@ -10,13 +10,15 @@
  * trigs and every other event pass, so nothing is left hanging. MAIN IRQ;
  * reads three OS words, writes nothing.
  *
- * SETTINGS > LIVE MUTE turns it on and off (YES, or LEFT/RIGHT); it is ON
- * after power-on, since a bank with the module asks for it, and the choice
- * lasts until power-off (a module has no settings store yet).
+ * SETTINGS > LIVE MUTE turns it on and off (YES, or LEFT/RIGHT). ON until
+ * changed, since a bank with the module asks for it. With host API 20 (core
+ * 2.9) the choice is kept in the core's preferences (key ST_PREF_LIVE_MUTE)
+ * across power-off; before it, until power-off.
  */
 #include <syntakt/modules.h>
 #include <syntakt/host.h>
 #include <syntakt/native.h>
+#include <syntakt/persist.h>
 #include "mute.h"
 
 #define LM_TRACKS 12u          /* audio tracks; 12 is the FX track */
@@ -28,6 +30,15 @@
 unsigned int lm_dropped __attribute__((section(".data"))) = 0;
 unsigned int lm_on __attribute__((section(".data"))) = 1;   /* SETTINGS > LIVE MUTE */
 static const struct st_machine_host_api *lm_host __attribute__((section(".data"))) = 0;
+
+/* The core's preferences (host API 20, task only): one word, 0 or 1. */
+static void lm_prefs(unsigned int write)
+{
+    unsigned int v[1] = {lm_on};
+    if (!lm_host || lm_host->version < 20 || !lm_host->persistence) return;
+    if (lm_host->persistence->preferences(ST_PREF_LIVE_MUTE, v, 1, write) != 1 || write) return;
+    if (v[0] <= 1u) lm_on = v[0];
+}
 
 /* args = {event, sound, effective time, frame end} */
 int lm_native(unsigned int op, const unsigned int *a, unsigned int *result)
@@ -59,11 +70,13 @@ __asm__(".text\n.globl lm_label\nlm_label:\n"
 void lm_select(const unsigned int *fn)
 {
     lm_on ^= 1u;
+    lm_prefs(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
 void lm_change(const unsigned int *fn, int amount)
 {
     lm_on = amount > 0;
+    lm_prefs(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
 void lm_draw(const unsigned int *fn, void *item, void *bmp, int x, int y)
@@ -83,6 +96,7 @@ static int initialize(const struct st_smz_api *api)
     const struct st_machine_host_api *h;
     if (!api || !api->ui || !(h = api->ui->host) || h->version < 10 || !h->native_interest) return 1;
     lm_host = h;
+    lm_prefs(0);
     h->native_interest((void (*)(void))lm_native, 1u << ST_NATIVE_NOTE_ACCEPT);
     return 0;
 }

@@ -1,6 +1,6 @@
 # Live mute (livemute-st)
 
-**0.2.0.** Tried on a unit (OS 1.42, core 2.7.0, an OXI ONE mk2 sequencing over MIDI): muted tracks go quiet, LIVE MUTE OFF restores the stock behaviour.
+**0.3.0.** 0.2.0 was tried on a unit (OS 1.42, core 2.7.0, an OXI ONE mk2 sequencing over MIDI): muted tracks go quiet, LIVE MUTE OFF restores the stock behaviour. 0.3.0 (the setting kept in the core 2.9 preferences) has not.
 
 On the Syntakt, MUTE stops a track's sequencer trigs but not live notes:
 a track played from MIDI in (an external sequencer such as an OXI ONE) or
@@ -15,9 +15,10 @@ module in the bank, a muted track also ignores live notes.
   note already sounding when you mute keeps its tail, as with the sequencer.
 - **Sequencer trigs** are untouched: the OS already mutes them.
 - **SETTINGS > LIVE MUTE** turns it on and off: YES toggles, LEFT/RIGHT
-  set OFF/ON. It is ON after power-on (a bank with the module asks for it)
-  and the choice lasts until power-off: a module has no settings store yet.
-  OFF is the stock behaviour. Leaving the module out of the bank is OFF too.
+  set OFF/ON. It is ON until you change it (a bank with the module asks for
+  it). With core 2.9 (host API 20) the choice is kept across power-off in
+  the core's preferences, key `ST_PREF_LIVE_MUTE` (3); on older cores it
+  lasts until power-off. OFF is the stock behaviour. Leaving the module out of the bank is OFF too.
 - ARP on a muted track: its live arps are muted too (their notes are live
   notes); sequence arps were already muted by the OS.
 

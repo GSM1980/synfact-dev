@@ -949,4 +949,7 @@ a muted track is consumed; unmuted tracks, sequencer trigs, releases, the FX
 track and other operations pass; solo and the pattern/song mute count; init
 refuses host API < 10 and registers NOTE_ACCEPT only; SETTINGS > LIVE MUTE
 starts ON, YES toggles, LEFT/RIGHT set it, each redraws, and OFF passes every
-note. Without a ColdFire compiler it is skipped.
+note; with host API 20 the setting is read from the core preferences (key 3)
+at start and written on each change, a stored value other than 0/1 is
+ignored, and older hosts leave the preferences alone. Without a ColdFire
+compiler it is skipped.

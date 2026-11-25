@@ -19,7 +19,8 @@ same boot preimage checks, all before executable hooks are changed.
 
 Global preferences accept keys 1..8 and up to eight words per key, task
 context only. Reads return 1 found, 0 absent, -1 IO; writes commit and verify
-a redundant CRC/sequence record. Keys 1/2 belong to Recorder/KIT BANK.
+a redundant CRC/sequence record. Keys 1/2/3 belong to Recorder/KIT BANK/
+LIVE MUTE (`ST_PREF_*` in `syntakt/persist.h`).
 No project save is required. The two bank-slot spare sectors are outside
 payload capacity and bank metadata. A committed legacy file overlapping
 them disables preferences without modifying that file. See FORMAT.md.

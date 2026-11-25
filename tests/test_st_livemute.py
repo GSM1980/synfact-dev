@@ -10,7 +10,10 @@ release (action 2), the FX track and other operations pass untouched; solo
 mutes every track not soloed; the pattern/song mute counts too; the module
 registers its interest in NOTE_ACCEPT only, and refuses a host before API 10;
 SETTINGS > LIVE MUTE starts ON, YES toggles it, LEFT/RIGHT set OFF/ON, each
-redraws the menu, and while OFF every note passes.
+redraws the menu, and while OFF every note passes; with host API 20 the
+setting is read from the core preferences (key 3) at start and written on
+each change, a stored value other than 0/1 is ignored, and before API 20 the
+preferences are not touched.
 
 It does not run the real OS or the core's dispatcher.
 
@@ -29,7 +32,7 @@ from unicorn.m68k_const import UC_CPU_M68K_CFV4E, UC_M68K_REG_A7, UC_M68K_REG_D0
 CODE, DATA, STOP = 0x46100000, 0x48000000, 0x46fffff0
 EVENT, ARGS, RESULT, HOST, UI, API, INTEREST = (DATA + o for o in (0, 0x100, 0x200, 0x300, 0x400, 0x500, 0x600))
 NOTE_ACCEPT = 20
-ADDITEM, VIEW = DATA + 0x700, DATA + 0x800
+ADDITEM, VIEW, PREFS, PERSIST = DATA + 0x700, DATA + 0x800, DATA + 0xa00, DATA + 0xb00
 
 
 def build(cc):
@@ -56,12 +59,27 @@ class Unit:
             u.mem_map(at, n)
         u.mem_write(CODE, image)
         self.interest, self.invalidated, self.rows = [], [], []
-        for at, fn in ((INTEREST, self._interest), (0x400ffe22, self._invalidate), (ADDITEM, self._additem)):
+        self.prefs, self.pref_calls = {}, []
+        for at, fn in ((INTEREST, self._interest), (0x400ffe22, self._invalidate), (ADDITEM, self._additem),
+                       (PREFS, self._prefs)):
             u.mem_write(at, b'\x4e\x75')
             u.hook_add(UC_HOOK_CODE, fn, begin=at, end=at)
 
     def _invalidate(self, u, at, size, _):
         self.invalidated.append(struct.unpack('>I', u.mem_read(u.reg_read(UC_M68K_REG_A7) + 4, 4))[0])
+
+    def _prefs(self, u, at, size, _):           # preferences(key, words, count, write): 1 found/ok, 0 absent
+        key, v, n, write = struct.unpack('>4I', u.mem_read(u.reg_read(UC_M68K_REG_A7) + 4, 16))
+        self.pref_calls.append((key, n, write))
+        if write:
+            self.prefs[key] = list(struct.unpack('>%dI' % n, u.mem_read(v, 4 * n)))
+            r = 1
+        elif key in self.prefs:
+            u.mem_write(v, struct.pack('>%dI' % n, *self.prefs[key][:n]))
+            r = 1
+        else:
+            r = 0
+        u.reg_write(UC_M68K_REG_D0, r)
 
     def _additem(self, u, at, size, _):
         menu, row = struct.unpack('>2I', u.mem_read(u.reg_read(UC_M68K_REG_A7) + 4, 8))
@@ -99,13 +117,14 @@ def offsets(cc):
     w = Path(tempfile.mkdtemp())
     src = w / 'o.c'
     src.write_text('#include <stddef.h>\n#include <syntakt/modules.h>\n#include <syntakt/host.h>\n'
-                   'const unsigned int o[3]={offsetof(struct st_machine_ui_api,host),'
+                   'const unsigned int o[4]={offsetof(struct st_machine_ui_api,host),'
                    'offsetof(struct st_machine_host_api,native_interest),'
-                   'offsetof(struct st_machine_host_api,additem)};\n')
+                   'offsetof(struct st_machine_host_api,additem),'
+                   'offsetof(struct st_machine_host_api,persistence)};\n')
     subprocess.run([cc, '-mcpu=5475', '-I', str(ROOT / 'elekloader/sdk/include'), '-c', str(src), '-o', str(w / 'o.o')],
                    check=True)
     subprocess.run([cc[:-3] + 'objcopy', '-O', 'binary', '-j', '.rodata', str(w / 'o.o'), str(w / 'o.bin')], check=True)
-    return struct.unpack('>3I', (w / 'o.bin').read_bytes()[:12])
+    return struct.unpack('>4I', (w / 'o.bin').read_bytes()[:16])
 
 
 def check(image, sym):
@@ -145,6 +164,48 @@ def check(image, sym):
     print('dropped count:', struct.unpack('>I', u.u.mem_read(sym['lm_dropped'], 4))[0])
 
 
+def start(image, sym, offs, version, stored=None):
+    """A unit whose initialize ran on a host of this version (preferences from API 20)."""
+    u = Unit(image, sym)
+    if stored is not None:
+        u.prefs[3] = [stored]
+    desc = struct.unpack('>4I', image[sym['livemute_module'] - CODE:sym['livemute_module'] - CODE + 16])
+    u.u.mem_write(HOST, struct.pack('>I', version) + b'\0' * 0x100)
+    u.u.mem_write(HOST + offs[1], struct.pack('>I', INTEREST))
+    u.u.mem_write(HOST + offs[2], struct.pack('>I', ADDITEM))
+    if version >= 20:
+        u.u.mem_write(HOST + offs[3], struct.pack('>I', PERSIST))
+        u.u.mem_write(PERSIST, struct.pack('>6I', 1, 0, 0, 0, 0, PREFS))
+    u.u.mem_write(UI, b'\0' * 0x40)
+    u.u.mem_write(UI + offs[0], struct.pack('>I', HOST))
+    u.u.mem_write(API, struct.pack('>2I', 3, UI))
+    assert u.call(desc[1], [API]) == 0
+    return u
+
+
+def check_prefs(image, sym, offs):
+    fn = DATA + 0x900
+    u = start(image, sym, offs, 20)                                            # nothing stored: ON
+    assert u.text() == 'LIVE MUTE: ON' and u.pref_calls == [(3, 1, 0)]
+    u.u.mem_write(fn, struct.pack('>I', VIEW))
+    u.call(sym['lm_select'], [fn])
+    assert u.prefs[3] == [0] and u.pref_calls[-1] == (3, 1, 1)               # OFF, written
+    u.call(sym['lm_change'], [fn, 1])
+    assert u.prefs[3] == [1]
+    u.call(sym['lm_change'], [fn, 0xffffffff])
+    assert u.prefs[3] == [0]
+    v = start(image, sym, offs, 20, stored=u.prefs[3][0])                     # power-on: OFF kept
+    v.mutes(track=1 << 3)
+    assert v.text() == 'LIVE MUTE: OFF' and v.note(3) == (0, 0xdead)
+    assert start(image, sym, offs, 20, stored=7).text() == 'LIVE MUTE: ON'    # not 0/1: ignored
+    w = start(image, sym, offs, 18)                                            # before API 20: untouched
+    w.u.mem_write(fn, struct.pack('>I', VIEW))
+    w.call(sym['lm_select'], [fn])
+    assert w.text() == 'LIVE MUTE: OFF' and not w.pref_calls
+    print('prefs: API 20 reads key 3 at start, writes each change, OFF survives power-on, '
+          'bad value ignored, older hosts untouched')
+
+
 def check_init(image, sym, offs):
     for version, ok in ((9, False), (10, True), (18, True)):
         u = Unit(image, sym)
@@ -176,6 +237,7 @@ def main():
     image, sym = build(args.cc)
     offs = offsets(args.cc)
     check_init(image, sym, offs)
+    check_prefs(image, sym, offs)
     check(image, sym)
 
 
