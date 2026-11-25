@@ -1,13 +1,7 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft, 0.2.5.** 0.2.0 and 0.2.1 were built and tried in review; 0.2.2
-(the stock page while KIT BANK is off, the row confirmation and its repaint)
-was tried on a unit; 0.2.3 (a project named KITBANK), 0.2.4 (the OS's
-confirmation box) and 0.2.5 (creating the bank, messages in the OS's text
-box) have not. The same
-feature has been used on OS 1.42 as a binary patch outside this project;
-this module is its rewrite on core events. Needs core 2.7 (host API
-18, SMZ events 16/17).
+**Draft, 0.3.0.** 0.2.0 to 0.2.5 were tried in review and on a unit; 0.3.0
+(the naming box on SAVE, the SETTINGS icon) has not.
 
 ## What it does
 
@@ -52,10 +46,15 @@ With the bank on:
   SOUND? uses). YES in the box replaces the current pattern's kit with that
   bank kit, whole; NO closes it. The bank is only read.
 - **Save.** YES on the MODE row switches to `MODE: SAVE KIT` (every row then
-  reads `SAVE A01 ...`). YES on a row opens the box, `SAVE TO A09?`; YES
-  there writes the current pattern's kit into that position of the bank with
-  the OS's own Kit encoder and slot writer, and the row shows the new name.
-  The project in memory and its "kit changed" flags are untouched.
+  reads `SAVE A01 ...`). YES on a row opens the OS's naming box, `SAVE TO
+  A09`, offering the current pattern's name (or the slot's own name when the
+  pattern has none). Its YES writes the current pattern's kit into that
+  position of the bank under the typed name (an empty name saves as `KIT`),
+  with the OS's own Kit encoder and slot writer, and the row shows the new
+  name; NO cancels. The project in memory and its "kit changed" flags are
+  untouched.
+- **Icon.** The KIT BANK row in SETTINGS has its own icon (four pads), drawn
+  as Sample Manager draws its own.
 - **Shortcut.** A long press of **SETTINGS** opens the page from anywhere,
   instead of the LED INTENSITY quick view (LED intensity stays in the
   SETTINGS menu). The page stays open; NO closes it.
@@ -109,6 +108,20 @@ bank slot, 0)` pastes it, and the header `400c1b64(store, slot)` gets the
 name `KITBANK` at +8 and is written by `400c1cbc(store, slot, empty
 function)`; `store` is `4016f15a()`, the current slot `40018c2c(project)`.
 The done function rereads the slot header (SREFR) and shows the result.
+
+**The naming box** (SAVE) is the one PROJECT NAME (`4005e0a6`) and SAVE
+PATTERN (`401836be`) open: a make_shared block of `0xb0` bytes, control
+`{401cbb0c, 1, 1, box}` with the box at +16, constructed by `400fca64(box,
+title, name, 0, 16, 0, std::function<void(std::string &, int)>)` as SAVE
+PATTERN passes the arguments, pushed on the global view manager. YES trims
+trailing spaces and calls the function with the name (`400fd40c`); NO closes
+it without a call. The name replaces the 16 bytes at +4 of the encoded
+record before the slot write.
+
+**The icon** is a 12x11 bitmap in the OS's column format (bit 31 the top
+row) with its mask, a non-owning descriptor (`400f72be`) blitted by
+`400f8f70` at the row's x/y from the row's draw callback, as Sample
+Manager's.
 
 **The confirmation box** is the OS's ConfirmWindow, built as CLEAR TRACK
 SOUND? (`400653ae`) builds it: `operator new(0x7c)`, the constructor
@@ -165,11 +178,18 @@ stubs of the OS routines, at their real addresses:
   current project, a failed copy (no rename), a slot holding a project (not
   offered, and checked again at the answer) are refused;
 - messages go to the OS's text box (`400fdfc8`), over the menu;
-- YES on a kit row opens the confirmation box with `LOAD KIT A06?` /
-  `SAVE TO A09?` and `CONFIRM Y/N`, its function carrying the row and mode,
-  its shared_ptr and push as the OS's own; the box's NO does nothing, its YES
-  loads or saves; a box answered after KIT BANK went off does nothing; an
-  answered SAVE and MODE invalidate the view and ask the tick for one redraw;
+- YES on a kit row in LOAD mode opens the confirmation box with `LOAD KIT
+  A06?` and `CONFIRM Y/N`, its function carrying the row and mode, its
+  shared_ptr and push as the OS's own; the box's NO does nothing, its YES
+  loads; a box answered after KIT BANK went off does nothing; an answered
+  box and MODE invalidate the view and ask the tick for one redraw;
+- in SAVE mode YES opens the naming box (`SAVE TO A09`, the slot's own name
+  offered when the pattern has none, arguments 0/16/0, make_shared control
+  block with the box at +16); its YES saves under the typed name (written at
+  +4 of the record), an empty name saves as `KIT`, nothing after KIT BANK
+  went off;
+- the KIT BANK icon: a 12x11 column bitmap with its mask, blitted at the
+  row's x/y and released;
 - the names are read again on each entry (SETTINGS > PATTERN or the
   shortcut), and a failed read shows `?` and is retried on the next entry;
 - LOAD replaces the whole Kit in one COPY of `0x1618` bytes, with what the

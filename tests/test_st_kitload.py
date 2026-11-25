@@ -46,6 +46,9 @@ def u32(b, o=0):
     return struct.unpack_from('>I', b, o)[0]
 
 
+NAMEBOX_START = 'KIT 08'     # pattern names are empty here: the box offers the slot's own name
+
+
 def build(cc):
     sys.path.insert(0, str(ROOT))
     from elekloader.devices import syntakt
@@ -121,6 +124,8 @@ class Unit:
             0x4016e044: lambda a: UIROOT_V, 0x40100d86: self.push,
             SEL_FN: self.sel, 0x40001300: self.additem, 0x400ffe22: self.invalidate,
             0x400f6156: self.cwctor, 0x401bd86e: lambda a: self.log('strdtor', 0),
+            0x400fca64: self.nbctor, 0x400f72be: self.bmctor, 0x400f8f70: self.blit,
+            0x400f71f0: lambda a: self.log('bmdtor', 0),
             0x400fdfc8: self.tbctor, 0x40184b38: self.tbsp, 0x40008392: lambda a: UIROOT_V + 64,
             0x40018c2c: lambda a: self.cur_slot, 0x4016ec18: lambda a: 0x48090000, 0x400bdc48: self.jobpost,
             0x4016f15a: lambda a: 0x480a0000, 0x400c1e54: lambda a: self.pjob('copy', a[1]),
@@ -272,6 +277,27 @@ class Unit:
     def cwctor(self, a):                        # ConfirmWindow(this, question, second line, function, 0)
         self.boxes.append(dict(box=a[0], q=self.strings[-2], sub=self.strings[-1], flag=a[4],
                                fn=struct.unpack('>4I', self.u.mem_read(a[3], 16))))
+
+    def nbctor(self, a):                        # naming box(this, title, name, a4, length, a6, function)
+        self.boxes.append(dict(box=a[0], q=self.strings[-2], name=self.strings[-1], a4=a[3], length=a[4],
+                               a6=a[5], fn=struct.unpack('>4I', self.u.mem_read(a[6], 16))))
+
+    def type_name(self, text):                  # the naming box's YES with this text: invoker(any, &string, int)
+        fn = self.boxes[-1]['fn']
+        any_ = self.new([16])
+        self.u.mem_write(any_, struct.pack('>4I', *fn))
+        chars = self.new([64])
+        self.u.mem_write(chars, text.encode() + b'\0')
+        string = self.new([4])
+        self.u.mem_write(string, struct.pack('>I', chars))
+        self.call(fn[3], [any_, string, 0])
+
+    def bmctor(self, a):                        # bitmap(this, width, height, columns, mask)
+        self.bitmap = (a[1], a[2], struct.unpack('>12I', self.u.mem_read(a[3], 48)),
+                       struct.unpack('>12I', self.u.mem_read(a[4], 48)))
+
+    def blit(self, a):
+        self.blits = getattr(self, 'blits', []) + [(a[0], a[2], a[3], a[4])]
 
     def answer(self, yes):                      # the box's YES (1) or NO (0): invoker(any, answer)
         fn = self.boxes[-1]['fn']
@@ -477,21 +503,44 @@ def check(image, sym):
     # SAVE then LOAD: the encoded tail round-trips
     m.yes(0)
     assert m.msgs[-1] == 'List mode: SAVE' and m.label(9) == 'SAVE A09 KIT 08'
-    m.yes(9)
-    assert m.boxes[-1]['q'] == 'SAVE TO A09?' and m.boxes[-1]['fn'][:2] == (9, 1) and not m.writes
-    m.answer(0)
-    assert not m.writes
-    m.yes(9); m.answer(1)
+    pushes = len(m.pushes)
+    m.yes(9)                                                                   # SAVE: the OS's naming box
+    b = m.boxes[-1]
+    assert (b['q'], b['a4'], b['length'], b['a6']) == ('SAVE TO A09', 0, 16, 0) and not m.writes
+    assert b['name'] == NAMEBOX_START and b['fn'][:2] == (9, 0) and b['fn'][3] == m.sym['kl_name_inv']
+    mgr_, box, ctrl, flag = m.pushes[-1]
+    assert len(m.pushes) == pushes + 1 and (mgr_, flag) == (UIROOT_V + 64, 0)
+    assert struct.unpack('>4I', m.u.mem_read(ctrl, 16)) == (0x401cbb0c, 1, 1, ctrl + 16) and box == ctrl + 16
+    assert b['box'] == ctrl + 16                                               # make_shared: the box at +16
+    m.yes(9); m.type_name('MY KIT')                                                 # YES with a typed name
     (block, data), = m.writes
     assert block * 512 == KITS_AT + 8 * KIT_STORED and len(data) == KIT_STORED
     assert data[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]                  # module records written
-    assert data[20:] == m.encoded[20:] and m.msgs[-1].startswith('SAVED A09')
+    assert data[20:] == m.encoded[20:] and m.msgs[-1] == 'SAVED A09 MY KIT'
+    assert data[4:20] == b'MY KIT'.ljust(16, b'\0') and m.label(9) == 'SAVE A09 MY KIT'   # the typed name
+    m.writes.clear()
+    m.yes(9); m.type_name('')                                                       # an empty name: KIT
+    assert m.writes[-1][1][4:20] == b'KIT'.ljust(16, b'\0')
+    m.writes.clear()
+    m.yes(9); m.bank_select(); m.type_name('LATE'); m.bank_select()                 # KIT BANK off meanwhile
+    assert not m.writes and m.label(0) == 'MODE: LOAD KIT'                     # back on: LOAD mode
+    m.yes(0); m.yes(9); m.type_name('MY KIT')
+    data = m.writes[-1][1]
+    print('name: SAVE opens the naming box (title, start name, 0/16/0, make_shared at +16), its YES saves '
+          'under the typed name, an empty name is KIT, nothing after KIT BANK went off')
     m.yes(0)
     m.decoded.clear()
     m.yes(9); m.answer(1)
     (src,) = m.decoded
     assert src == data and src[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]   # ... and handed back to the decoder
     print('save/load: the whole record, Kit tail [14e0,15f8) included, round-trips through the bank')
+
+    # the KIT BANK row's icon: 12x11 column bitmap, blitted at the row's x/y
+    m.call(m.sym['kl_bank_draw'], [0, 0, 0x48060000, 3, 17])
+    w, h, cols, mask = m.bitmap
+    assert (w, h) == (12, 11) and m.blits == [(0x48060000, 3, 17, 0)] and m.calls['bmdtor'] == 1
+    assert all(c & ~0xffe00000 == 0 for c in cols) and set(mask) == {0xffe00000} and cols[5] == cols[11] == 0
+    print('icon: a 12x11 kit icon in the OS column format, its own mask, blitted at the row and released')
 
     # another bank project
     p = Unit(image, sym)
