@@ -1,8 +1,8 @@
 # kitload-st: a kit bank in a saved project
 
-**Draft, 0.3.0.** 0.2.0 to 0.2.5 were tried in review and on a unit; 0.3.0
-(the naming box on SAVE, LOAD without confirmation, the SETTINGS icon) has
-not.
+**0.3.0.** Tried on a unit (OS 1.42, core 2.9.0, the synfact.app bank): the
+naming box on SAVE, LOAD without confirmation and the SETTINGS icon. 0.2.0
+to 0.2.5 were tried in review and on a unit.
 
 ## What it does
 
