@@ -7,12 +7,17 @@
  * changed, and only the rows that bank holds stale. Byte +0x1a9 names the
  * newest COMPLETE generation in every frame: a bank is never rewritten until
  * a newer one is complete, so AUDIO may retry it on any later block.
+ * Core 2.8: a control with alias ST_MACHINE_TEMPO_PARAMETER carries the
+ * tempo (BPM x 120) instead of its Sound value.
  */
 #include "machines.h"
 #include <syntakt/native.h>
 extern unsigned int core_native(unsigned int,const unsigned int *);
 typedef st_u32 u32;typedef unsigned short u16;typedef core_u8 u8;
 #define ROW CORE_MACHINE_SHADOW_ROW
+#ifndef CORE_MACHINE_TEMPO
+#define CORE_MACHINE_TEMPO() (*(const volatile u32 *)0x402d7360u)  /* OS 1.42: BPM x 120 (ARP, Playhead) */
+#endif
 #ifndef CORE_MACHINE_TIMER
 #define CORE_MACHINE_TIMER() (*(const volatile u32 *)0xfc07000cu) /* accounting's MAIN timer */
 #endif
@@ -32,6 +37,12 @@ static u32 generation,published,stale[2]={~0u,~0u};
  * four blocks (2.7 ms); a removal waits for the next full block. */
 static u32 cadence,active,routed;
 static __inline__ int extended_slot(u32 s){return s==0x11 || s==0x18 || (s>=0x36 && s<=0x46);}
+/* One contiguous extended control 8..23: effective, saved (configuration) or the tempo. */
+static __inline__ u32 contiguous(const struct core_machine_def *m,u32 index,const u16 *working,const u16 *mirror,u32 tempo)
+{
+    u32 a=m->parameter[index].alias,slot=0x36+index-8;
+    return a==ST_MACHINE_TEMPO_PARAMETER?tempo:a==ST_MACHINE_CONFIG_PARAMETER?mirror[slot]:working[slot];
+}
 /* Index -> Sound slot is the core's fixed layout (machines.c, checked by the
  * registry test): indices 8..23 are the contiguous slots 36..45, then 0, 11,
  * 18 and 46. Slots 11/18 carry type/gate in the working projection: their
@@ -49,7 +60,7 @@ static u32 special(const u16 *working,const u16 *mirror,const struct core_machin
 static __attribute__((noinline)) void publish_block(u32 trigs)
 {
     volatile u8 *tail=(void *)0x800021a9u;
-    volatile u32 *bank,*r;u32 t,j,n,b,type,tag,mask,changed=0,sum,words,owner,w,bits,all=0,*row,rows=0,todo,full,lfo=0;
+    volatile u32 *bank,*r;u32 t,j,n,b,type,tag,mask,changed=0,sum,words,owner,w,bits,all=0,*row,rows=0,todo,full,lfo=0,tempo;
     const unsigned char *owners,*lfo_owners;const struct core_machine_def *m;
     const u16 *working,*mirror;
     /* The native boot sender owns the whole 0x800..0xfff page until AUDIO
@@ -66,7 +77,7 @@ static __attribute__((noinline)) void publish_block(u32 trigs)
     full=!(cadence++&3u);
     todo=full?0xffu:(trigs|routed)&0xffu;
     if(!todo){*tail=published?(u8)generation:0;return;}
-    mask=full?0:active;
+    mask=full?0:active;tempo=CORE_MACHINE_TEMPO()&65535u;
     for(t=0;t<8;t++){
         if(!(todo&(1u<<t)))continue;
         owner=owners && owners[t]<=t?owners[t]:t;
@@ -79,10 +90,8 @@ static __attribute__((noinline)) void publish_block(u32 trigs)
         bits=row[0]^type;row[0]=type;
         /* Pairs of contiguous slots: plain loads, no per-value lookup. */
         for(j=0;j<words && j<8;j++){
-            w=(u32)(m->parameter[8+2*j].alias==ST_MACHINE_CONFIG_PARAMETER?
-                    mirror[0x36+2*j]:working[0x36+2*j])<<16;
-            if(9+2*j<n)w|=m->parameter[9+2*j].alias==ST_MACHINE_CONFIG_PARAMETER?
-                    mirror[0x37+2*j]:working[0x37+2*j];
+            w=contiguous(m,8+2*j,working,mirror,tempo)<<16;
+            if(9+2*j<n)w|=contiguous(m,9+2*j,working,mirror,tempo);
             bits|=row[1+j]^w;row[1+j]=w;
         }
         if(words>8){                         /* n >= 25: indices 24..27 */

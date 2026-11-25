@@ -96,6 +96,7 @@ aliases in use:
 | `0x1f2` | SAMP: the project sample slot | sample slot controls. Randomize never draws it (`docs/ADAPTING.md`) |
 | `0x1f7` | OVER: the stock OVER dial | overdrive controls that keep the stock behaviour |
 | `0xfffffffe` | `ST_MACHINE_CONFIG_PARAMETER`, scalar editor (`0x13`) | core 2.3.1 / host API 17: saved configuration at indices 8..23; zero modulation flags and unmodulated Sound mirror sent to AUDIO |
+| `0xfffffffd` | `ST_MACHINE_TEMPO_PARAMETER`, scalar editor (`0x13`) | core 2.8: indices 8..23; AUDIO receives the tempo (BPM x 120, `0x402d7360` on OS 1.42) in its extended word instead of the Sound value; no modulation flags, not randomized. Leave it out of the UI layout. A core before 2.8 refuses the bank |
 
 Any other alias value is not listed in the repository.
 
@@ -462,7 +463,15 @@ and the AMP envelope (about 380 a track). Not yet measured on the unit.
   MAIN's display a playhead; `api->cursor(track, slot)` lends it while the
   slot's PCM matches. It finds the core's record through the ABI directory;
   before samplers 1.6.2 it looked at a stale address (from core 2.2.0 to 2.6.x
-  no playhead arrived).
+  no playhead arrived). Core 2.8: tracks 8..15 are each track's second record.
+- `st_machine_sample_wavetable(slot)` (core 2.8) returns the waves (1 to 64) of a
+  canonical wavetable in that slot, or 0. Its PCM is `st_machine_sample`'s, mono;
+  `st_wt_offset(waves, level, wave)` (wavetable.h) finds a wave at a level.
+- UI API 9 (core 2.8): `api->wavetable_level(slot, level, out, max)` reads one
+  level of a wavetable from eMMC for a display; UI task only, once per slot.
+  `api->sample_wavetable(slot)` gives a slot's waves (or 0), cheap, for lists.
+  `api->sample_read(slot, first, count, out)` reads any slot's frames (a stereo
+  sample's L) from eMMC for a display; count 0 gives the slot's frames.
 - `st_machine_extended(params)` returns the extended words for controls 8 to 27,
   or null. Null means the value has not arrived yet for this machine type. Keep
   your own default. Never read the null case as zero.

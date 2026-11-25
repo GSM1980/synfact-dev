@@ -127,7 +127,14 @@ int main(void)
      assert(row_size(&c,size) && !strcmp(size,"0.19MB"));
      memset(ui_index+0x160,'W',32);st_pool_item_label(label,&fn);
      assert(strstr(label,"...") && text_width(test_font,label)+3+text_width(test_font,size)<=row_width());
-     memcpy(ui_index+0x160,"PAD\0",4);texts=0;st_pool_row_size_draw(&fn,0,0,8,42);
+     /* Core 2.8: a canonical wavetable reads WT before its name; a wrong count does not. */
+     memcpy(ui_index+0x160,"PAD\0",4);put32(ui_index+0x15c,ST_HZ_WAVETABLE);put32(ui_index+0x150,2*ST_WT_FRAMES);
+     st_pool_item_label(label,&fn);assert(!strcmp(label,"--- WT PAD"));
+     put32(ui_index+0x150,2*ST_WT_FRAMES-2);st_pool_item_label(label,&fn);assert(!strcmp(label,"--- PAD"));
+     put32(ui_index+0x15c,ST_HZ_STEREO|ST_HZ_WAVETABLE);put32(ui_index+0x150,2*ST_WT_FRAMES);
+     st_pool_item_label(label,&fn);assert(!strcmp(label,"--- ST PAD"));
+     put32(ui_index+0x15c,0);put32(ui_index+0x150,100000);
+     texts=0;st_pool_row_size_draw(&fn,0,0,8,42);
      assert(texts==1 && !strcmp(painted[0],"0.19MB") && paint_x[0]+text_width(test_font,size)==8+row_width());
      texts=0;st_pool_ui_draw(ui_view+0x38,0);assert(texts==3 && paint_x[0]==2);
      assert(!strcmp(painted[0],"SAMPLE MANAGER") && !strcmp(painted[1],"Project MEM"));

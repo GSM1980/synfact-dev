@@ -193,6 +193,42 @@ MD KIT 0.3 / SY MnM 0.8.2: `tests/test_st_kit_sound.c` (the regressions'
 `kit-sound`) maps the playing-Kit pointer and the 128 live Kits and checks
 `<syntakt/kit.h>`: a track's machine at `+a2` and values at `+14 + 2 * slot`,
 nothing without a live Kit, and the answer following the pointer to another Kit.
+Core 2.8: `tests/test_st_wavetable_access.c` (the regressions'
+`wavetable-access`) maps the ABI directory and checks
+`st_machine_sample_wavetable` (kind `0x81`, 1 to 64 waves of 4088, every other
+slot 0) and the level-major layout of wavetable.h. `test_st_pool_receiver.c`
+and `test_st_pool.c` cover bit 9 of COMMIT/ALIAS, kinds that must match, both
+bits refused, boot and live loads; `test_st_manager.c` the `WT ` rows and
+`test_st_storage.py` fsck, the listing and the C and Python constants.
+`tests/test_st_wavetable.py` (the regressions' `wavetable converter and
+transfer`) checks the converter against its own DFT (band limits per level,
+no DC, raw steps, 64 of 100 waves, remainders, mixing, names and messages)
+and `put`/`get` on an in-memory device (folder v2, `wavetables` created once,
+`--wavetable`, level 0 back). `js/test/wavetable.test.ts` checks that
+`js/src/wavetable.ts` gives the Python's bytes and messages
+(`js/tools/wavetable_vectors.py` writes its vectors).
+SY WAVETABLE (`mods/wavetable-st`): `tests/test_wavetable_st.py --cc <clang>
+--out <folder>` (the regressions' `SY WAVETABLE engine/reference`) builds
+`engine.c` for the host with `tests/wavetable_st_host.c` and requires the same
+samples and state as `tests/wavetable_st_reference.py` over 12 random
+scenarios of 400 blocks, plus the pitch and level tables, `tables.h` equal to
+`tools/gen_tables.py`, the descriptor and ANIM timing.
+`tests/test_wavetable_st_cfbench.py --cfbench <cfbench>` counts one track's
+block on analog-emu's ColdFire (instructions only). Core 2.8's tempo alias:
+`test_st_parameters.c` (every index 8..23, publication on a tempo change
+alone) and `test_st_smz_extensions.c` (accepted at 8..23 only).
+SY WAVETABLE's SYN pages: `tests/test_wavetable_st_page_emu.py --stock <OS 1.42>
+--bank <bank> [--out <folder>]` (the regressions' `SY WAVETABLE SYN pages
+(Unicorn)`, with `SYNTAKT_STOCK`) runs the bank's `wt_draw`/`wt_idle` on the
+stock fill/pixel routines with a real converted table; text is a boundary
+(recorded; drawn by the test in the PNGs). Core 2.8's cursor records:
+`test_st_pool_receiver.c` (records 8..15, query 6 with 64 words) and
+`test_st_wavetable_access.c` (the record found through the directory);
+UI API 9: `test_st_pool.c` (every level read back from the card, any slot's
+frames read back, a stereo sample's L, the cut at the end, errors).
+`tests/test_wavetable_st.py` also runs 8 plain-sample scenarios (mono and
+stereo, more than 64 waves, a few, less than one), and the page test a plain
+sample drawn from 64 card reads, EMPTY SLOT and SAMPLE TOO SHORT.
 Disk, heap, semaphore, notification and mailbox delivery are boundaries, not a full
 RTOS boot or hardware validation. The host project-pool fixture additionally
 covers empty/oversized headers, missing disk, read/allocation failures, exact

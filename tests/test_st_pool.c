@@ -14,6 +14,7 @@ static void receiver_sleep(unsigned int);
 int core_parameter_provider(unsigned int q,unsigned int *a,void *r,unsigned int *v)   /* machines.c (host API 7), none here */
 {(void)q;(void)a;(void)r;(void)v;return 0;}
 #include "../mods/core-st/sample-wave.c"
+#include "../mods/core-st/wavetable-ui.c"
 static u32 receiver_table[256],receiver_stock[128],receiver_bell,receiver_calls;
 static unsigned char receiver_channels[128];
 #define CHANNELS receiver_channels
@@ -24,7 +25,7 @@ static unsigned char receiver_channels[128];
 #include "../mods/core-st/audio-pool.c"
 static void receiver_sleep(u32 delay)
 {assert(delay==500);receiver_calls++;audio_pool_receive();}
-static unsigned char disk[4][0x80000],sample[64+2200];
+static unsigned char disk[6][0x80000],sample[64+2200];
 static unsigned char project_sector[512];
 static u32 io_fail,live,id,allocations;
 static u32 stock_lengths[64],stock_reads,stock_peaks,stock_io_fail;
@@ -66,10 +67,23 @@ static int write_sector(u32 lba,u32 n,const void *p)
 static u32 sectors(void){return fw_mmc_sectors[0];}
 static void *allocate_mem(u32 n){return malloc(n);}
 const struct st_storage_io core_hzfs_native_io={fw_mmc_read,write_sector,sectors,allocate_mem,free};
-void core_pool_ui_progress(u32 d,u32 t){(void)d;(void)t;assert(0);}
-void core_pool_ui_file(u32 code,u32 ordinal,u32 n){(void)code;(void)ordinal;(void)n;assert(0);}
+static u32 ui_files_allowed,ui_files;
+void core_pool_ui_progress(u32 d,u32 t){(void)d;(void)t;assert(ui_files_allowed);}
+void core_pool_ui_file(u32 code,u32 ordinal,u32 n){(void)code;(void)ordinal;(void)n;assert(ui_files_allowed);ui_files++;}
 static int sample_source(void *ctx,u32 at,u32 n,void *dst)
 {(void)ctx;memcpy(dst,sample+at,n);return 0;}
+/* Core 2.8: one canonical wave (4088 samples over its nine levels). */
+static unsigned char table_body[64+2*ST_WT_FRAMES];
+static int table_source(void *ctx,u32 at,u32 n,void *dst)
+{(void)ctx;memcpy(dst,table_body+at,n);return 0;}
+static void set_flags(u32 file,u32 flags)
+{
+    u32 i,k;for(i=0;i<2;i++)if(rd(disk[i])==0x485a4653u){
+        u8 *e=disk[i]+ST_HZ_ENTRIES;u32 n=rd(disk[i]+12),len=rd(disk[i]+36);
+        for(k=0;k<n;k++,e+=64)if(rd(e)==file)wr(e+28,flags);
+        wr(disk[i]+32,0);wr(disk[i]+32,~core_crc_update(0,disk[i],len));
+    }
+}
 static void reset_state(void)
 {core_pool_boot_release();if(state)fw_free(state);state=0;stock_last=0xffffffffu;
  if(waves)fw_free(waves);waves=0;work=128;
@@ -225,6 +239,70 @@ int main(void)
      assert(wave->lo[0]<=l && wave->hi[0]>=l && wave->lo_r[0]<=r && wave->hi_r[0]>=r);
      assert(wave->lo[0]!=wave->lo_r[0] || wave->hi[0]!=wave->hi_r[0]);}
     reset_state();
+    /* Core 2.8: flag ST_HZ_WAVETABLE on a canonical count boots as kind 0x81
+     * in the channel table, with mono frames and bytes; on any other count
+     * (file 1: 1100 samples) the entry stays a plain mono sample. */
+    {u32 wid;struct st_pool_memory memory;
+     wr(table_body,0x53414d50);wr(table_body+8,ST_WT_FRAMES);
+     for(i=64;i<sizeof(table_body);i++)table_body[i]=(u8)(i*7);
+     assert(core_hzfs_put(&core_hzfs_native_io,"table",sizeof(table_body),0,table_source,0,&wid)==1);
+     set_flags(1,ST_HZ_WAVETABLE);set_flags(wid,ST_HZ_WAVETABLE);
+     memset(PROJECT,0,512);core_pool_read(PROJECT,entries);
+     entries[64]=0x8001;entries[65]=(u16)(0x8000|wid);core_pool_write(PROJECT,entries);
+     core_pool_prepare();assert(state && state->files==2);
+     for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+     assert(state->image[0xb80+64]==1 && state->image[0xb80+65]==ST_POOL_KIND_WAVETABLE);
+     assert(state->frames[64]==1100 && state->frames[65]==ST_WT_FRAMES && state->channels[65]==ST_POOL_KIND_WAVETABLE);
+     assert(core_pool_sample_wavetable(65)==1 && !core_pool_sample_wavetable(64) && !core_pool_sample_wavetable(66));
+     assert(core_pool_sample_channels(65)==1);
+     core_pool_memory(&memory);assert(memory.bytes[65]==2*ST_WT_FRAMES);
+     {u32 out[5];assert(core_pool_wave_storage(65,out)==0);core_pool_boot_release();
+      assert(core_pool_wave_storage(65,out)==1 && out[1]==ST_WT_FRAMES && out[2]==1);}
+     /* UI API 9: a level read back from eMMC, for a machine's display. */
+     {static short level[ST_WT_WAVE];u32 k,n;
+      for(k=0;k<ST_WT_LEVELS;k++){
+          n=ST_WT_WAVE>>k;memset(level,0x55,sizeof(level));
+          assert(core_pool_wavetable_level(65,k,level,64)==1);
+          /* big-endian bytes, as MAIN's shorts are on the unit */
+          assert(!memcmp(level,table_body+64+2*st_wt_offset(1,k,0),2*n));
+      }
+      assert(!core_pool_wavetable_level(65,9,level,64) && !core_pool_wavetable_level(65,0,level,0));
+      assert(!core_pool_wavetable_level(64,0,level,64) && !core_pool_wavetable_level(66,0,level,64));
+      io_fail=1;assert(!core_pool_wavetable_level(65,0,level,64));io_fail=0;
+      /* UI API 9: any slot's frames, for a display; a mono file reads as it is. */
+      assert(core_pool_sample_read(65,0,0,0)==ST_WT_FRAMES && core_pool_sample_read(64,0,0,0)==1100);
+      assert(core_pool_sample_read(65,10,5,level)==5 && !memcmp(level,table_body+64+20,10));
+      assert(core_pool_sample_read(64,1090,50,level)==10 && !memcmp(level,sample+64+2180,20));   /* cut at the end */
+      assert(!core_pool_sample_read(64,1100,5,level) && !core_pool_sample_read(66,0,0,0));
+      io_fail=1;assert(!core_pool_sample_read(65,0,5,level));io_fail=0;}
+     reset_state();
+     /* Both flag bits: stereo, as before core 2.8. sample_read gives L. */
+     set_flags(wid,ST_HZ_STEREO|ST_HZ_WAVETABLE);core_pool_prepare();
+     for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
+     assert(state->channels[65]==2 && state->frames[65]==ST_WT_FRAMES/2 && !core_pool_sample_wavetable(65));
+     core_pool_boot_release();
+     {static short left[8];u32 k;
+      assert(core_pool_sample_read(65,0,0,0)==ST_WT_FRAMES/2 && core_pool_sample_read(65,3,4,left)==4);
+      for(k=0;k<4;k++)assert(!memcmp(left+k,table_body+64+4*(3+k),2));}
+     reset_state();
+     /* Live load: COMMIT and ALIAS carry bit 9; AUDIO's table says 0x81. */
+     set_flags(wid,ST_HZ_WAVETABLE);
+     assert(VirtualAlloc((void *)(CORE_POOL_PCM&~0xffffu),0x20000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)(CORE_POOL_PCM&~0xffffu));
+     memset(PROJECT,0,512);core_pool_read(PROJECT,entries);core_pool_write(PROJECT,entries);
+     core_pool_prepare();for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);core_pool_boot_release();
+     core_pool_read(PROJECT,entries);entries[65]=entries[66]=(u16)(0x8000|wid);core_pool_write(PROJECT,entries);
+     ui_files_allowed=1;assert(core_pool_sync()==1);ui_files_allowed=0;assert(ui_files==1);
+     assert(receiver_channels[65]==ST_POOL_KIND_WAVETABLE && receiver_channels[66]==ST_POOL_KIND_WAVETABLE);
+     assert(receiver_table[130]==ST_WT_FRAMES && receiver_table[132]==ST_WT_FRAMES && receiver_table[131]==receiver_table[133]);
+     {const u32 *w=(const u32 *)receiver_table[131];u32 k;   /* big-endian words, as the window carries them */
+      for(k=0;k<ST_WT_FRAMES/2;k++)assert(w[k]==rd(table_body+64+4*k));}
+     assert(core_pool_sample_wavetable(65)==1 && core_pool_sample_wavetable(66)==1);
+     core_pool_read(PROJECT,entries);entries[65]=entries[66]=0;core_pool_write(PROJECT,entries);
+     assert(core_pool_sync()==1 && receiver_channels[65]==1 && receiver_channels[66]==1 && !receiver_table[130]);
+     reset_state();assert(VirtualFree((void *)(CORE_POOL_PCM&~0xffffu),0,MEM_RELEASE));
+     /* Leave what the stereo case left: file 1 stereo in position 65. */
+     set_flags(1,ST_HZ_STEREO);memset(PROJECT,0,512);core_pool_read(PROJECT,entries);
+     entries[64]=0x8001;core_pool_write(PROJECT,entries);}
     /* Budget snapshots exclude stock/lower slots and deduplicate upper aliases.
      * Dry-run rejection must leave every descriptor and the mailbox untouched. */
     core_pool_prepare();for(i=0;i<core_pool_boot_pages;i++)core_pool_boot_page(i,&wire);
@@ -306,5 +384,5 @@ int main(void)
     if(waves)fw_free(waves);if(saved_record)fw_free(saved_record);assert(!live);
     assert(VirtualFree(project_ram,0,MEM_RELEASE));
     assert(VirtualFree((void *)0x10000000u,0,MEM_RELEASE));assert(VirtualFree((void *)0x43bd0000u,0,MEM_RELEASE));
-    puts("PASS: project pool codecs/migration, snapshot/validation, stock preservation, boot page mapping, full long-sample CRC, shared transfer and a stereo entry");return 0;
+    puts("PASS: project pool codecs/migration, snapshot/validation, stock preservation, boot page mapping, full long-sample CRC, shared transfer, a stereo entry and a wavetable entry (and its levels read back)");return 0;
 }

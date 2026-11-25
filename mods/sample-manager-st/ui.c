@@ -371,6 +371,8 @@ static void row_name(char *s,u32 code)
     if((code&HZ_FLAG) && ui_index && (e=hz_find(ui_index,ui_index_len,code&~HZ_FLAG))) {
         /* Core 1.8: entry flag ST_HZ_STEREO (interleaved L, R; an even count). */
         if((be32(e+28)&ST_HZ_STEREO) && !(be32(e+16)&1u)){text_set(s,"ST ",4);s+=3;}
+        /* Core 2.8: a canonical wavetable (wavetable.h). */
+        else if(st_wt_waves(be32(e+28),be32(e+16))){text_set(s,"WT ",4);s+=3;}
         name_copy(s,e+32,32); return;
     }
     text_set(s,"MISSING",32);

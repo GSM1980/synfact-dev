@@ -349,6 +349,7 @@ Each header says at its top what it is for.
 | `host.h` | borrowed core services: storage, pool, preview, events. Storage and telemetry are task-only; the view event is UI |
 | `storage.h` | HZFS storage (task context only). Serialize calls with transfers |
 | `sample-pool.h` | the project sample pool service |
+| `wavetable.h` | the canonical wavetable layout and its pool kind (core 2.8). `storage.h` and `machines.h` include it |
 | `mix.h` | the shared mix bus on MAIN (inverted Q31, stereo, 32 frames) |
 | `pattern.h` | borrowed pattern services for the UI task |
 | `trig-pages.h` | pages a module adds to the native TRIG view |

@@ -1135,6 +1135,39 @@ def test_digimono_fm_replacement_is_limited_to_its_adapter_and_new_engine():
         else:raise AssertionError('accepted unrelated or incomplete FM+ replacement')
 
 
+def test_wavetable_added_to_a_bank_changes_nothing_else():
+    from copy import deepcopy
+    from test_st_common_regressions import check_wavetable_added
+    old={'machines':[66,67,68,69,65],'modules':['a','fm_tone_module','b'],
+         'source_sha256':{},'object_sha256':{f'audio{m}-{n}.o':f'{m}-{n}' for m in range(2) for n in range(4)}}
+    new=deepcopy(old)
+    new['machines'].append(72)
+    new['modules']=['a','fm_tone_module','wt_slot_module','b']
+    for n in range(2):new['object_sha256'][f'audio2-{n}.o']='wt'+str(n)
+    new['source_sha256']['/mods/wavetable-st/engine.c']='source'
+    check_wavetable_added(new,old)
+    for change in ('object','machine','module','folder'):
+        bad=deepcopy(new)
+        if change=='object':bad['object_sha256']['audio1-3.o']='changed'
+        elif change=='machine':bad['machines']=[66,67,68,69,72,65]
+        elif change=='module':bad['modules']=['a','fm_tone_module','b','wt_slot_module']
+        else:bad['object_sha256']['audio3-0.o']='elsewhere'
+        try:check_wavetable_added(bad,old)
+        except AssertionError:continue
+        raise AssertionError(change+' accepted')
+    # With the samplers' change: their objects may move, nothing else may.
+    moved=deepcopy(new);moved['object_sha256']['audio0-1.o']='playhead'
+    check_wavetable_added(moved,old,True)
+    for name in ('audio1-3.o',):
+        bad=deepcopy(moved);bad['object_sha256'][name]='changed'
+        try:check_wavetable_added(bad,old,True)
+        except AssertionError:continue
+        raise AssertionError(name+' accepted')
+    try:check_wavetable_added(new,old,True)
+    except AssertionError:pass
+    else:raise AssertionError('samplers said changed but identical')
+
+
 def test_digimono_added_to_a_bank_changes_nothing_else():
     from copy import deepcopy
     from test_st_common_regressions import check_digimono_added

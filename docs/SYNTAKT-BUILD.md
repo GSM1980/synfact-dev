@@ -72,6 +72,7 @@ and `memcpy` calls, which the freestanding core does not have).
   path calls is marked `CORE_HOT` (`__attribute__((optimize("O3")))`) and keeps
   `-O3`: the pool's cursor tick, sample source, name, channels, cursor, cached
   name, wave storage, code-used, readiness, validity, empty, stock-changed,
+  wavetable (2.8),
   memory snapshot; the
   bank's auto-confirm tick; the sample write guard. GCC does not inline a
   function compiled at another level, so a hot function that calls a cold
@@ -206,6 +207,14 @@ To compare a bank with SY MnM against a previous bank without it (for
 example main's normal bank), use `--digimono-added`: machine 71 is appended,
 `dm_destination_module` follows `fm_tone_module`, SY MnM's AUDIO objects are one
 new folder, and every other AUDIO object is identical.
+
+To compare a bank with SY WAVETABLE (`mods/wavetable-st`, listed after the
+other machine folders; core 2.8) against a previous bank without it, use
+`--wavetable-added`: machine 72 is appended, no module changes, its AUDIO
+objects are one new folder, and every other AUDIO object is identical.
+Against a build before samplers 1.6.2, add `--sampler-audio-changed` too: its
+machines.h moves the samplers' playhead call, so their objects (`audio0-*`) may
+differ as well, and nothing else.
 
 For SY MnM 0.8.0's DigiPRO, use `--digimono-dpro-changed`: one new DigiPRO
 object (`audio2-5.o`), changes to the adapter and MONO2K dispatch only (`audio2-0.o`,

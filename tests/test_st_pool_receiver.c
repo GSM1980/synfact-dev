@@ -56,6 +56,11 @@ int main(void)
     assert(win[36]==LO+256 && win[37]==300 && win[38]==40 && win[39]==1);
     {u32 i,sum=21;for(i=0;i<32;i++)sum+=win[8+i];assert(sum==win[7]);}
     request(22,6,0,1,0,0);assert((win[6]&65535)==2);
+    /* Core 2.8: records 8..15 (a track's second record) answer too, past 16 none. */
+    audio_pool_cursor(15,LO+512,64,10,1);audio_pool_cursor(16,1,2,3,4);
+    request(46,6,0,0,0,0);
+    assert(win[68]==LO+512 && win[69]==64 && win[70]==10 && win[71]==1 && win[8]==LO);
+    {u32 i,sum=46;for(i=0;i<64;i++)sum+=win[8+i];assert(sum==win[7]);}
     /* Core 1.8, stereo: bit 8 of the slot. 4 frame pairs span 16 bytes. */
     {u32 st=LO+0x1000,data[4]={1,2,3,4};
      request(23,1,st,16,0,0);request(24,2,st,16,data,4);
@@ -68,6 +73,19 @@ int main(void)
      request(31,4,9,0,0,0);assert(!table[18] && chans[9]==1);
      request(32,4,10,0,0,0);assert(!table[20] && chans[10]==1);
      request(33,1,st+8,8,0,0);assert((win[6]&65535)==1);}       /* retired: free again */
+    /* Core 2.8, wavetable: bit 9 of the slot, mono PCM, kind byte 0x81. */
+    {u32 wt=LO+0x1000,data[4]={5,6,7,8};
+     request(34,1,wt,16,0,0);request(35,2,wt,16,data,4);
+     request(36,3,12|0x300,8,0,0);assert((win[6]&65535)==2);    /* stereo and wavetable at once */
+     request(37,3,12|0x200,8,0,0);assert((win[6]&65535)==1 && table[24]==8 && table[25]==wt && chans[12]==0x81);
+     request(38,5,13,8,&wt,1);assert((win[6]&65535)==2);        /* a plain mono alias of a wavetable */
+     request(39,5,13|0x100,4,&wt,1);assert((win[6]&65535)==2);  /* a stereo alias of it */
+     request(40,5,13|0x200,8,&wt,1);assert((win[6]&65535)==1 && table[26]==8 && chans[13]==0x81);
+     pointer=stocks[1];request(41,5,14|0x200,240000,&pointer,1);assert((win[6]&65535)==2); /* stock is no wavetable */
+     request(42,5,14|0x300,8,&wt,1);assert((win[6]&65535)==2);
+     request(43,4,12,0,0,0);assert(!table[24] && chans[12]==1);
+     request(44,4,13,0,0,0);assert(!table[26] && chans[13]==1);
+     request(45,1,wt,16,0,0);assert((win[6]&65535)==1);}        /* retired: free again */
     assert(bell);assert(VirtualFree(ram,0,MEM_RELEASE));
-    puts("PASS: core AUDIO pool staged publication, duplicate ACK, retirement, overlap, boundaries, checksums and stereo slots");return 0;
+    puts("PASS: core AUDIO pool staged publication, duplicate ACK, retirement, overlap, boundaries, checksums, stereo and wavetable slots, 16 cursor records");return 0;
 }

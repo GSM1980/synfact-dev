@@ -147,6 +147,36 @@ class Storage(unittest.TestCase):
             self.assertEqual((forced['flags'],forced['frames']),(0,48000))
             index,_=self.store.current();index.entries[0]['frames']-=1;index.entries[0]['bytes']-=2
             self.assertIn('wide: stereo with an odd sample count',H.problems(index))
+    def test_wavetable_flag(self):
+        # Core 2.8: flag WAVETABLE on a canonical count (W * 4088 samples,
+        # 1 <= W <= 64) is a wavetable; anything else is reported and read as mono.
+        W=H.wavetable
+        self.assertEqual([W.waves(2,n) for n in (4088,4088*64,4088*65,4087,0)],[1,64,0,0,0])
+        self.assertEqual((W.waves(0,4088),W.waves(3,4088)),(0,0))   # no flag; both bits = stereo
+        self.assertEqual([W.offset(64,k,0) for k in (0,1,8)],[0,64*2048,64*(4096-16)])
+        self.assertEqual(W.offset(64,8,63)+8,64*4088)               # the last level ends the PCM
+        e=dict(flags=2,frames=4088*3);self.assertEqual((H.kind(e),H.channels(e)),('wt',1))
+        self.assertEqual(H.kind(dict(flags=3,frames=4088*3)),'st')
+        with tempfile.TemporaryDirectory() as tmp:
+            wav=Path(tmp)/'table.wav'
+            with wave.open(str(wav),'wb') as f:
+                f.setparams((1,2,48000,0,'NONE','not compressed'))
+                f.writeframes(b''.join(struct.pack('<h',(i*37)%30000) for i in range(4088)))
+            H.cmd_put(self.store,wav)
+            index,_=self.store.current()
+            index.entries[0]['flags']=W.WAVETABLE;self.assertEqual(H.problems(index),[])
+            index.entries[0]['frames']-=2;index.entries[0]['bytes']-=4
+            self.assertIn('table: wavetable flag on 4086 samples, not 1 to 64 waves of 4088; read as mono',H.problems(index))
+    def test_wavetable_header_matches_python(self):
+        # wavetable.h and wavetable.py state the same layout.
+        import re
+        text=(Path(__file__).resolve().parents[1]/'elekloader/sdk/include/syntakt/wavetable.h').read_text()
+        defs={m[0]:int(m[1],0) for m in re.findall(r'#define (\w+) (0x[0-9a-f]+|\d+)u',text)}
+        W=H.wavetable
+        self.assertEqual((defs['ST_HZ_WAVETABLE'],defs['ST_WT_WAVE'],defs['ST_WT_LEVELS'],defs['ST_WT_FRAMES'],
+                          defs['ST_WT_MAX'],defs['ST_POOL_KIND_WAVETABLE']),
+                         (W.WAVETABLE,W.WAVE,W.LEVELS,W.FRAMES,W.MAX_WAVES,W.POOL_KIND))
+        self.assertEqual(sum(W.WAVE>>k for k in range(W.LEVELS)),W.FRAMES)
     def test_put_progress(self):
         # The CLI's live progress: each phase reaches 100 %; a 44.1 kHz stereo
         # file shows its conversion per channel. Without progress, put is silent.

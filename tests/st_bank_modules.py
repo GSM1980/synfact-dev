@@ -23,6 +23,12 @@ def check_bank_machines(report, raw, baseline=(66,67,68,69,65)):
         assert len(md)==1
         assert hashlib.sha256(md[0].read_bytes()).hexdigest()==report['source_sha256'][str(md[0])]
         expected.append(70)
+    # SY WAVETABLE (core 2.8), after the other optional machines.
+    wt=[Path(p) for p in report['source_sha256'] if Path(p).as_posix().endswith('/mods/wavetable-st/mod.json')]
+    if wt:
+        assert len(wt)==1
+        assert hashlib.sha256(wt[0].read_bytes()).hexdigest()==report['source_sha256'][str(wt[0])]
+        expected.append(72)
     assert report['machines']==expected, ('unexpected machine composition/order',report['machines'],expected)
     image=80+4*struct.unpack_from('>I',raw,56)[0]
     directory,count=struct.unpack_from('>II',raw,40)
@@ -79,6 +85,12 @@ def check_bank_modules(report, raw, allowed):
     # SY MnM and MD KIT: the one SUBTYPE SELECTOR follows FM's module.
     expected += [names[:names.index('fm_tone_module')+1]+['st_subtype_module']+
                  names[names.index('fm_tone_module')+1:] for names in list(expected) if 'fm_tone_module' in names]
+    # SY WAVETABLE (core 2.8): its SLOT list module follows the machines' own
+    # modules (FM's, or the SUBTYPE SELECTOR when MnM or MD KIT is there).
+    def after_machines(names):
+        at=max(names.index(n) for n in ('fm_tone_module','st_subtype_module') if n in names)+1
+        return names[:at]+['wt_slot_module']+names[at:]
+    expected += [after_machines(names) for names in list(expected) if 'fm_tone_module' in names]
     expected += [names+['sample_manager_module'] for names in list(expected)]
     # Optional modules in bank order: Chorus, COMP, KITLOAD, Playhead, then Modulation Skip.
     # (docs/SYNTAKT-BUILD.md puts modulation skip last in every bank)
@@ -93,7 +105,7 @@ def check_bank_modules(report, raw, allowed):
     expected += [names+['modulation_skip_module'] for names in list(expected)]
     # Playhead 1.2's modal must receive global KEY/ENC before the other UI
     # modules. Machine-owned view callbacks retain their original prefix.
-    prefix={'sp_sampler_input_module','st_stereo_module','fm_tone_module','st_subtype_module'}
+    prefix={'sp_sampler_input_module','st_stereo_module','fm_tone_module','st_subtype_module','wt_slot_module'}
     for names in list(expected):
         if 'playhead_module' not in names:continue
         reordered=[name for name in names if name!='playhead_module']

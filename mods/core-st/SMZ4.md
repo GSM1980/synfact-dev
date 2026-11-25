@@ -91,7 +91,8 @@ Each parameter record is 24 bytes:
 `{short_label*, long_label*, raw_min, raw_max, raw_default, native_formatter_alias}`.
 Labels are bounded ASCII, min/default/max are unsigned 16-bit raw values in order,
 and the alias is an existing native engine descriptor ID (0..1f8h). Core 2.3.1
-(host API 17) also permits `fffffffeh` (`ST_MACHINE_CONFIG_PARAMETER`) at
+(host API 17) also permits `fffffffeh` (`ST_MACHINE_CONFIG_PARAMETER`) and, from core 2.8, `fffffffdh`
+(`ST_MACHINE_TEMPO_PARAMETER`, AUDIO receives the tempo) at
 indices 8..23 only: a saved configuration control with zero modulation flags,
 the ordinary native scalar editor and stored Sound values sent to AUDIO instead of
 modulated working values. Existing routes/locks cannot change its AUDIO value.

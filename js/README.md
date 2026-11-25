@@ -6,7 +6,8 @@ elekloader's mod manager as a TypeScript package with no dependencies, for web p
 - Elektron OS files: the Digitakt mk1 and II, the Digitone mk1, the Octatrack and the Analog Rytm MKII;
 - the `.elemod` checks and the linker;
 - the build with its verification;
-- the web page's bridge.
+- the web page's bridge;
+- the Syntakt's wavetable converter (core 2.8, `wavetable`), byte for byte the Python's `elekloader/sdk/syntakt/wavetable.py`.
 
 The Python package in this repository is the reference. For the same stock file and mods, this engine writes the same files byte for byte (the `.syx`, the `.bin`, the manifest, the symbol map). It refuses the same things with the same messages and says the same about each mod. `tools/parity.ts` checks all of that against the Python.
 

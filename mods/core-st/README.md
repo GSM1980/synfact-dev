@@ -1,4 +1,51 @@
-# Syntakt core 2.7.0
+# Syntakt core 2.8.0
+
+**Wavetables in the pool.** An HZFS entry with flag `ST_HZ_WAVETABLE` (2) and
+a canonical count (1 to 64 waves of 4088 samples: nine band-limited levels,
+level-major; `elekloader/sdk/include/syntakt/wavetable.h`) is a mono
+wavetable. Its pool slot carries kind `0x81` (`ST_POOL_KIND_WAVETABLE`) in
+the channel table on both CPUs; COMMIT and ALIAS carry it in bit 9 of the
+slot (bit 8 stays stereo; both together are refused). Frames, bytes, budget
+and transport are a mono sample's, so machines that test `== 2` see mono.
+Any other count with the flag reads as plain mono and `long_samples fsck`
+reports it; both flag bits read as stereo, as before. Machines read the waves
+with `st_machine_sample_wavetable(slot)` (machines.h), MAIN with
+`core_pool_sample_wavetable(slot)`. For SY WAVETABLE
+([docs/SY-WAVETABLE.md](../../docs/SY-WAVETABLE.md)); no hook, host API,
+SMZ4 contract or project record change. The Sample Manager (1.3.1) shows `WT `
+before a wavetable's name.
+
+**The tempo for machines.** A control at indices 8..23 with alias
+`ST_MACHINE_TEMPO_PARAMETER` (`0xfffffffd`, machines.h) is a hidden one: the
+MAIN sender (`machine-params.c`) puts the tempo there, BPM x 120 from
+`0x402d7360` (the word ARP and Playhead read), instead of the Sound value, so
+AUDIO reads it as an ordinary extended control. It has no modulation flags
+and is not randomized, like a configuration control; the SMZ parser accepts
+it at 8..23 only. A tempo change alone publishes the row (a full compare runs
+every fourth block). SY WAVETABLE's looping ANIM uses it. A bank with such a
+control needs core 2.8: older parsers refuse it.
+
+**A second cursor record per track.** AUDIO keeps 16 cursor records (track
+t's second is 8 + t, for a second oscillator), query 6 answers 64 words,
+and `api->cursor(8 + t, slot)` lends the second one. (The cursor itself
+reaches MAIN again since samplers 1.6.2's machines.h, below.)
+
+**UI API 9: a wavetable level for a display.** `wavetable_level(slot, level,
+out, max)` (`wavetable-ui.c`) reads one level of a pool slot's wavetable from
+eMMC, every wave one after the other, through the same storage snapshot as
+the lazy waveform; UI task only, no CRC (the load checked it). SY WAVETABLE
+draws its wave from it. `sample_wavetable(slot)` (the waves, or 0) lets a
+list tag wavetables, and `sample_read(slot, first, count, out)` reads any
+slot's frames (a stereo sample's L; count 0 gives its frames), so SY
+WAVETABLE can draw a plain sample it plays as a wavetable.
+
+Tests: `test_st_pool_receiver.c` (bit 9 commits and aliases, kinds that must
+match, both bits refused), `test_st_pool.c` (boot and live loads, a wrong
+count, both bits), `test_st_wavetable_access.c` (the machine accessor and the
+layout), `test_st_manager.c` (`WT ` rows) and `test_st_storage.py` (fsck, the
+listing, header and Python constants equal).
+
+## Core 2.7.0
 
 **PATTERN menu build events.** Two new collections, SMZ events **16**
 (`ev_pattern_menu`, end of PatternMenuView's constructor, `4004ae0c`) and

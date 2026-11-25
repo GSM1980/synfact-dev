@@ -24,7 +24,9 @@ int main(int argc,char **argv)
                 at=v.image+param+24*index+20;
                 memcpy(bad,b,n);put(bad+at,ST_MACHINE_CONFIG_PARAMETER);sum(bad,n,&v);
                 assert(!!core_smz_validate(&r,&v)==(index>=8 && index<24));
-                memcpy(bad,b,n);put(bad+at,0xfffffffdu);sum(bad,n,&v);
+                memcpy(bad,b,n);put(bad+at,ST_MACHINE_TEMPO_PARAMETER);sum(bad,n,&v);   /* core 2.8 */
+                assert(!!core_smz_validate(&r,&v)==(index>=8 && index<24));
+                memcpy(bad,b,n);put(bad+at,0xfffffffcu);sum(bad,n,&v);
                 assert(!core_smz_validate(&r,&v));
                 memcpy(bad,b,n);put(bad+at,0x1f9u);sum(bad,n,&v);
                 assert(!core_smz_validate(&r,&v));
@@ -72,5 +74,5 @@ int main(int argc,char **argv)
         }
         free(bad);free(b);
     }
-    puts("PASS: OS 1.42 banks, configuration alias bounds, old/untagged bank refusal, UI layouts/callbacks and checksummed invalid metadata");return 0;
+    puts("PASS: OS 1.42 banks, configuration and tempo alias bounds, old/untagged bank refusal, UI layouts/callbacks and checksummed invalid metadata");return 0;
 }

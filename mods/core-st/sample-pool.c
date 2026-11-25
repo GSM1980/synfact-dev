@@ -5,6 +5,9 @@
  * Core 1.8: an HZFS entry with flag ST_HZ_STEREO holds interleaved L, R; its
  * frames field counts 16-bit samples as before. On AUDIO the descriptor counts
  * frame pairs and the channel table says 2 (audio-pool.c).
+ * Core 2.8: an entry with flag ST_HZ_WAVETABLE and a canonical count
+ * (wavetable.h) is a mono wavetable. Its kind byte is 0x81 on both CPUs and
+ * travels in bit 9 of the slot; its frames and bytes are a mono sample's.
  */
 #include "sample-pool.h"
 #include "crc.h"
@@ -32,7 +35,7 @@ struct pool_state {
     char names[128][17];
     struct file_plan file[128];
     u32 files,data_pages,last_ordinal,boot_finished,seq,fault,query,query_age;
-    struct st_machine_cursor cursors[8];
+    struct st_machine_cursor cursors[16];   /* core 2.8: 8 + t is track t's second */
 };
 static struct pool_state *state;
 /* TASK-only boot scratch. No aggregate PCM allocation or fixed native blob.
@@ -112,11 +115,19 @@ void core_pool_before_save(void *object,u32 slot)
 }
 static int find_file(struct st_hzfs *fs,u32 id,struct st_sample_entry *out)
 {u32 i;for(i=0;i<core_hzfs_count(fs);i++)if(core_hzfs_entry(fs,i,out)==1 && out->id==id)return 1;return 0;}
-/* frames: frame pairs for a stereo slot; bytes: what the slot's PCM spans. */
+/* A slot's kind: 1 mono, 2 stereo, ST_POOL_KIND_WAVETABLE (mono samples).
+ * frames: frame pairs for a stereo slot; bytes: what the slot's PCM spans. */
+static u32 kind_count(u32 k){return k==2?2:1;}
+static u32 kind_byte(u32 k){return k==2 || k==ST_POOL_KIND_WAVETABLE?k:1;}
+static u32 slot_bits(u32 k){return k==2?0x100u:k==ST_POOL_KIND_WAVETABLE?0x200u:0;}
 static void entry(u32 slot,u32 frames,u32 pointer,u32 channels)
-{state->frames[slot]=frames;state->pointer[slot]=frames?pointer:0;state->channels[slot]=channels==2?2:1;}
-static u32 bytes_of(u32 slot){return 2*state->channels[slot]*state->frames[slot];}
-static u32 channels_of(const struct st_sample_entry *e){return (e->flags&ST_HZ_STEREO) && !(e->frames&1)?2:1;}
+{state->frames[slot]=frames;state->pointer[slot]=frames?pointer:0;state->channels[slot]=(u8)kind_byte(channels);}
+static u32 bytes_of(u32 slot){return 2*kind_count(state->channels[slot])*state->frames[slot];}
+static u32 channels_of(const struct st_sample_entry *e)
+{
+    if((e->flags&ST_HZ_STEREO) && !(e->frames&1))return 2;
+    return st_wt_waves(e->flags,e->frames)?ST_POOL_KIND_WAVETABLE:1;
+}
 CORE_HOT void core_pool_memory(struct st_pool_memory *out)
 {
     u32 i,j;out->used=0;out->total=CORE_POOL_END-CORE_POOL_PCM;
@@ -219,7 +230,7 @@ const void *core_pool_boot_page(u32 ordinal,u32 *wire)
                 if(state->wanted[j]&CORE_POOL_HZ){
                     for(k=0;k<state->files;k++)if(state->file[k].id==(state->wanted[j]&0x7fff)){
                         f=state->file+k;if(!f->bad && f->last+1==f->pages && ~f->sum==f->crc)
-                            {entry(j,f->frames/f->channels,CORE_POOL_PCM+f->offset*2048,f->channels);
+                            {entry(j,f->frames/kind_count(f->channels),CORE_POOL_PCM+f->offset*2048,f->channels);
                              state->first[j]=f->first;state->file_crc[j]=f->crc;cp(state->names[j],f->name,17);}
                         break;
                     }
@@ -365,18 +376,18 @@ int core_pool_sync(void)
             first=state->first[j];checksum=state->file_crc[j];
             cp(state->names[i],state->names[j],17);break;}
         if(frames){
-            wr(payload,pointer);if(send(5,i|(ch==2?0x100u:0),frames,payload,4)!=1){result=-1;goto done;}
+            wr(payload,pointer);if(send(5,i|slot_bits(ch),frames,payload,4)!=1){result=-1;goto done;}
         }else if(n&CORE_POOL_HZ){
             if(!opened){opened=core_hzfs_open(&fs,&core_hzfs_native_io)==1;if(!opened){result=-1;goto done;}}
             if(!find_file(&fs,n&0x7fff,&e) || !e.frames || e.frames>(CORE_POOL_END-CORE_POOL_PCM)/2){result=-1;goto done;}
-            ch=channels_of(&e);frames=e.frames/ch;bytes=(2*e.frames+3)&~3u;pointer=allocate(bytes);
+            ch=channels_of(&e);frames=e.frames/kind_count(ch);bytes=(2*e.frames+3)&~3u;pointer=allocate(bytes);
             if(!pointer){result=-2;goto done;}
             core_pool_ui_file(n,++ordinal,bytes);
             if(send(1,pointer,bytes,0,0)!=1){result=-1;goto done;}
             zero(&stream,sizeof(stream));stream.dst=pointer;stream.total=bytes;
-            core_pool_wave_begin(n,frames,ch);
+            core_pool_wave_begin(n,frames,kind_count(ch));
             if(core_hzfs_get(&core_hzfs_native_io,n&0x7fff,sink,&stream)!=1 || flush(&stream) ||
-               send(3,i|(ch==2?0x100u:0),frames,0,0)!=1){core_pool_wave_finish(0);result=-1;goto done;}
+               send(3,i|slot_bits(ch),frames,0,0)!=1){core_pool_wave_finish(0);result=-1;goto done;}
             core_pool_wave_finish(1);
             first=e.first;checksum=e.crc;
             cp(state->names[i],e.name,16);state->names[i][16]=0;
@@ -411,13 +422,19 @@ CORE_HOT u32 core_pool_code_used(u32 code)
 {u32 i;if(state)for(i=0;i<128;i++)if(state->code[i]==code)return 1;return 0;}
 CORE_HOT u32 core_pool_sample_channels(u32 slot)
 {return state && slot<128 && state->frames[slot] && state->channels[slot]==2?2:1;}
+/* Core 2.8: waves in a loaded wavetable slot, else 0. */
+CORE_HOT u32 core_pool_sample_wavetable(u32 slot)
+{
+    if(!state || slot>=128 || !state->frames[slot] || state->channels[slot]!=ST_POOL_KIND_WAVETABLE)return 0;
+    return st_wt_waves(ST_HZ_WAVETABLE,state->frames[slot]);
+}
 /* UI-task lazy waveform source: code, frame pairs, channels, first sector, CRC.
  * Never lend boot PCM, and never read a stock file changed since AUDIO load. */
 CORE_HOT int core_pool_wave_storage(u32 slot,u32 *out)
 {
     u32 code;if(!state || boot || core_pool_busy || slot>=128 || !state->frames[slot])return 0;
     code=state->code[slot];if(!code)return 0;
-    out[0]=code;out[1]=state->frames[slot];out[2]=state->channels[slot];
+    out[0]=code;out[1]=state->frames[slot];out[2]=kind_count(state->channels[slot]);
     if(code<=64){if(state->stock_changed[code-1])return 0;out[3]=(code+7)<<10;out[4]=0;}
     else {if(!state->first[slot])return 0;out[3]=state->first[slot]<<10;out[4]=state->file_crc[slot];}
     return 1;
@@ -435,13 +452,13 @@ CORE_HOT int core_pool_sample_name(u32 slot,char *out)
 }
 CORE_HOT const struct st_machine_cursor *core_pool_cursor(u32 track,u32 slot)
 {
-    const struct st_machine_cursor *c;if(!state || track>=8 || slot>=128)return 0;
+    const struct st_machine_cursor *c;if(!state || track>=16 || slot>=128)return 0;
     c=state->cursors+track;
     return c->frames==state->frames[slot] && c->pointer==state->pointer[slot]?c:0;
 }
 CORE_HOT void core_pool_cursor_tick(void)
 {
-    volatile u32 *m=(void *)0x10000800u;u32 i,sum,seq,values[32];
+    volatile u32 *m=(void *)0x10000800u;u32 i,sum,seq,values[64];
     if(!core_pool_ready())return;
     if(core_pool_query_owner==2)return;
     if(state->query){
@@ -449,7 +466,7 @@ CORE_HOT void core_pool_cursor_tick(void)
         if(m[6]>>16!=seq){if(++state->query_age<8)return;
             state->query=0;core_pool_query_owner=0;zero(state->cursors,sizeof(state->cursors));return;}
         if((m[6]&65535u)==1){sum=seq;
-            for(i=0;i<32;i++){values[i]=m[8+i];sum+=values[i];}
+            for(i=0;i<64;i++){values[i]=m[8+i];sum+=values[i];}
             if(sum==m[7] && m[6]==(seq<<16|1u))cp(state->cursors,values,sizeof(values));}
         state->query=0;core_pool_query_owner=0;return;
     }

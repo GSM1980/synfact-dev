@@ -1,6 +1,6 @@
 # Sample Manager (Syntakt)
 
-Desktop OS 1.42 release: **1.3.0**.
+Desktop OS 1.42 release: **1.3.1**.
 Requires core 2.3 or later (sample-pool API 2) and a matching bank
 (SMZ4 contract `0x53594606`).
 
@@ -52,3 +52,6 @@ No hardware access.
 
 Core 1.8: a stereo sample's row (HZFS flag `ST_HZ_STEREO`) reads `ST ` before
 its name, in the eMMC and POOL views.
+
+1.3.1 (core 2.8): a canonical wavetable's row (HZFS flag `ST_HZ_WAVETABLE`,
+wavetable.h) reads `WT ` before its name, in the same views.

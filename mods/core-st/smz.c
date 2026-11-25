@@ -156,7 +156,7 @@ int core_smz_validate(const struct core_smz_reader *r,struct core_smz_view *v)
             x=core_smz_be(p+8);y=core_smz_be(p+12);n=core_smz_be(p+16);
             if(y>0xffff || x>y || n<x || n>y ||
                (core_smz_be(p+20)>0x1f8 &&
-                !(j>=8 && j<24 && core_smz_be(p+20)==ST_MACHINE_CONFIG_PARAMETER))){core_smz_failure=__LINE__;return 0;}
+                !(j>=8 && j<24 && ST_MACHINE_HIDDEN_ALIAS(core_smz_be(p+20))))){core_smz_failure=__LINE__;return 0;}
         }
     }
     if(!read_at(r,v->audio,ae,16) || core_smz_be(ae)!=0x534d4133u ||

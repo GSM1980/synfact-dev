@@ -31,6 +31,19 @@ static __inline__ st_u32 st_machine_sample_channels(st_u32 slot)
     table=(const volatile unsigned char *)api[3];
     return table[slot]==2?2:1;
 }
+/* Core 2.8: the waves (1..64) of a canonical wavetable in this slot, or 0
+ * for anything else, an empty slot, or an older core (wavetable.h has the
+ * layout). The PCM is st_machine_sample's, mono. Check it on every update. */
+#include "wavetable.h"
+static __inline__ st_u32 st_machine_sample_wavetable(st_u32 slot)
+{
+    const volatile st_u32 *api=(const volatile st_u32 *)0x40040f50u;
+    const struct st_pool_sample *s;
+    if(slot>=128 || api[0]!=0x454c5001u || !api[3])return 0;
+    if(((const volatile unsigned char *)api[3])[slot]!=ST_POOL_KIND_WAVETABLE)return 0;
+    s=st_machine_sample(slot);
+    return s?st_wt_waves(ST_HZ_WAVETABLE,s->frames):0;
+}
 #define ST_MACHINE_CONTROL_CAPACITY 32u
 /* Core 1.2: parameter IDs for modules, after the machines' blocks (types
  * 64..79: engine 0x1f9..0x3f8, UI 0x2e0..0x4df), 128 of each. They reach
@@ -59,6 +72,14 @@ struct core_machine_param {const char *label,*name;st_u32 min,max,initial,alias;
  * unmodulated Sound mirror, even with an old route/lock in the working row.
  * Explicit UI edits and the codec retain the ordinary ID and Sound slot. */
 #define ST_MACHINE_CONFIG_PARAMETER 0xfffffffeu
+/* Core 2.8: an extended control 8..23 that AUDIO receives as the tempo,
+ * BPM x 120 (120 BPM = 14400; 30..300 BPM), whatever its Sound slot holds.
+ * Like a configuration control it has no modulation destination, is not
+ * randomized and keeps the scalar editor; a machine leaves it out of its UI
+ * layout. A core before 2.8 refuses a bank that uses it (its parser knows
+ * only the configuration alias), so such a machine requires core 2.8. */
+#define ST_MACHINE_TEMPO_PARAMETER 0xfffffffdu
+#define ST_MACHINE_HIDDEN_ALIAS(alias) ((alias)==ST_MACHINE_CONFIG_PARAMETER || (alias)==ST_MACHINE_TEMPO_PARAMETER)
 struct core_machine_def {
     st_u32 type,params;const char *name,*short_name,*group;
     const struct core_machine_param *parameter;
@@ -84,7 +105,9 @@ struct st_machine_action_codec {
  * directory's channel table (service + b80h, whose own record {454c4801,
  * table} is at +40), so it follows the service wherever the core puts it.
  * Until samplers 1.6.2 this looked at 42100770, the service's place before
- * core 2.2, so from core 2.2.0 to 2.6.x no playhead reached MAIN. */
+ * core 2.2, so from core 2.2.0 to 2.6.x no playhead reached MAIN.
+ * Core 2.8: track 8 + t is track t's second record (another oscillator of
+ * the same voice); older cores ignore it. */
 static __inline__ void st_machine_cursor_publish(st_u32 track,st_u32 pointer,st_u32 frames,st_u32 position,st_u32 active)
 {
     const volatile st_u32 *api=(const volatile st_u32 *)0x40040f50u,*service;
@@ -119,6 +142,19 @@ struct st_machine_ui_api {
     /* API 8 (core 1.8): a pool slot's channel count, 1 or 2 (2: stereo; its
      * wave has channels 2 and R's bins). Empty slots answer 1. */
     st_u32 (*sample_channels)(st_u32 slot);
+    /* API 9 (core 2.8), UI task only: a canonical wavetable's level (0..8)
+     * read from eMMC into out, every wave one after the other (2048 >> level
+     * samples each), at most max waves. Returns the waves, or 0 (no
+     * wavetable in the slot, pool busy, too many waves, IO error). Call it
+     * when the slot changes, not every frame: it reads the card. */
+    st_u32 (*wavetable_level)(st_u32 slot,st_u32 level,short *out,st_u32 max);
+    /* API 9: the waves (1..64) of a canonical wavetable in a pool slot, or 0;
+     * cheap, for lists (a slot list tags these WT). */
+    st_u32 (*sample_wavetable)(st_u32 slot);
+    /* API 9, UI task only: frames first..first+count of any loaded slot from
+     * eMMC into out (a stereo sample's L); count 0 returns the slot's frames.
+     * Returns the frames read, or 0. For displays; it reads the card. */
+    st_u32 (*sample_read)(st_u32 slot,st_u32 first,st_u32 count,short *out);
 };
 #define ST_UI_FORMAT_POPUP 0u
 #define ST_UI_FORMAT_CONTROL 1u

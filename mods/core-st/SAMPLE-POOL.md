@@ -243,8 +243,9 @@ the record `{454c4301, function}` at the pool service's +32 (`4404ff70` from
 core 2.2). `st_machine_cursor_publish` (machines.h) finds it through the ABI
 directory's channel table (service + `b80`, checked against `{454c4801, table}`
 at +40). Until samplers 1.6.2 it looked at `42100770`, the service's place
-before core 2.2, so from core 2.2.0 to 2.6.x no playhead reached MAIN. EPS command 6 reads eight
-`{PCM pointer, frames, position, active}` records, with sequence/checksum and ACK.
+before core 2.2, so from core 2.2.0 to 2.6.x no playhead reached MAIN. EPS command 6 reads sixteen
+`{PCM pointer, frames, position, active}` records (eight before core 2.8;
+record 8 + t is track t's second), with sequence/checksum and ACK.
 UI polling never waits. A core ownership flag arbitrates the shared window with
 System info and sample transfers. The core lends a cursor only if its PCM
 identity and frame count match the selected project slot. No machine-specific
@@ -290,6 +291,24 @@ What changes is the descriptor:
   matches it; `lo`/`hi` hold L's peaks and, from UI API 8, `lo_r`/`hi_r` R's,
   with `channels` 2. UI API 8 also adds `sample_channels(slot)` for lists.
 - FUNC+YES audition plays a stereo sample in stereo on the preview bus.
+
+## Wavetables (core 2.8)
+
+An HZFS entry with `ST_HZ_WAVETABLE` and a canonical count (HZFS.md,
+"Wavetables") loads like a mono long sample: the same plan, stream, CRC and
+budget. Its slot's kind byte in the channel table is `0x81`
+(`ST_POOL_KIND_WAVETABLE`, wavetable.h) instead of 1, on MAIN and in the boot
+image and AUDIO table, so every reader that tests `== 2` still sees mono.
+
+- COMMIT (3) and ALIAS (5) carry the kind in bit 9 of the slot; bits 8 and 9
+  together are refused. ALIAS must name the kind of the slot it shares, so a
+  wavetable's PCM is never published as a plain sample or the reverse.
+  RETIRE (4) resets the slot to 1.
+- Machines read the waves with `st_machine_sample_wavetable(slot)`
+  (machines.h): 1 to 64, or 0 for any other slot or an older core. MAIN has
+  `core_pool_sample_wavetable(slot)`.
+- The waveform cache and FUNC+YES audition treat it as a mono sample (all
+  levels, one after the other).
 
 Fixed in core 1.8 (present since the cache was added in 0.8): when the cache
 needed an entry it took one whose sample no slot had published yet. At boot no

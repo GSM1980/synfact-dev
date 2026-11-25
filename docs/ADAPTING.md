@@ -404,8 +404,9 @@ one: Sounds saved with the old machine would open as the new one.
 | 69 | SP SLICE | `mods/samplers-st` |
 | 70 | MD KIT | `mods/md-st` |
 | 71 | SY MnM | `mods/digimono-st` |
+| 72 | SY WAVETABLE | `mods/wavetable-st` |
 
-**Free: 72 to 79.** Take the lowest free type, add your machine to this
+**Free: 73 to 79.** Take the lowest free type, add your machine to this
 table in the same change, and keep it if the machine is ever renamed.
 `tests/test_units.py` checks that this table names every type the mods
 and examples use.

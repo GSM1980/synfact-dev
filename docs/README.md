@@ -39,6 +39,8 @@ and change with the code, so a commit's docs match its code.
   original Digitakt controls, private SysEx importer and parallel MIX.
 - **[COMP sidechain filter study](COMP-SIDECHAIN-FILTER-FEASIBILITY.md)**: a
   fixed-position one-pole high-pass on the detector, its cost and SRAM fit.
+- **[SY WAVETABLE design](SY-WAVETABLE.md)**: a dual wavetable machine like
+  the Tonverk's Wavefinder, its canonical wavetable layout and the core change.
 - **[Parallel agents on this workstation](PARALLEL-AGENTS.md)**: one worktree
   per agent.
 - **[Safe core/SMZ4 startup proposal](SAFE-BOOT-SMZ4-07-16.md)**: compatibility

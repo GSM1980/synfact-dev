@@ -3,7 +3,7 @@
 Requires an already built core/SYX, matching SMZ, lint.json, and i686 clang.
 No target instruction execution, MIDI, device access or firmware installation.
 """
-import argparse,json,subprocess,sys
+import argparse,json,os,subprocess,sys
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -83,8 +83,32 @@ def check_digimono_added(current,baseline):
     assert any(Path(n).as_posix().endswith('/mods/digimono-st/dpro.c') for n in current['source_sha256'])
 
 
-def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False,digimono_fm_changed=False,digimono_dpro_changed=False,digimono_added=False):
-    assert sum((sampler_audio_changed,digimono_audio_changed,digimono_ens_changed,digimono_fm_changed,digimono_dpro_changed,digimono_added))<=1
+def check_wavetable_added(current,baseline,samplers_changed=False):
+    """SY WAVETABLE (core 2.8) added to a bank without it: machine 72 last, no
+    module change, its own AUDIO folder only; every other object identical,
+    except, with samplers_changed, the samplers' own objects (audio0-*: core
+    samplers 1.6.2's machines.h moves their playhead call)."""
+    assert 72 not in baseline['machines'] and current['machines']==baseline['machines']+[72]
+    # its SLOT list module, right after the machines' own modules
+    modules=list(baseline['modules'])
+    at=max(modules.index(n) for n in ('fm_tone_module','st_subtype_module') if n in modules)+1
+    modules.insert(at,'wt_slot_module')
+    assert current['modules']==modules
+    def objects(report):
+        return {Path(n).name:h for n,h in report['object_sha256'].items()
+                if Path(n).name.startswith('audio') and Path(n).suffix=='.o'}
+    new,old=objects(current),objects(baseline)
+    folder='audio%d-'%(max(int(n[5:n.index('-')]) for n in old)+1)
+    added=new.keys()-old.keys()
+    assert added and all(n.startswith(folder) for n in added) and not old.keys()-new.keys()
+    assert all(new[n]==old[n] for n in old if not (samplers_changed and n.startswith('audio0-')))
+    if samplers_changed:assert any(new[n]!=old[n] for n in old if n.startswith('audio0-'))
+    assert any(Path(n).as_posix().endswith('/mods/wavetable-st/engine.c') for n in current['source_sha256'])
+
+
+def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_changed=False,unicorn_python=None,digimono_audio_changed=False,digimono_ens_changed=False,digimono_fm_changed=False,digimono_dpro_changed=False,digimono_added=False,wavetable_added=False):
+    # SY WAVETABLE's addition may come with the samplers' change (samplers 1.6.2's playhead fix).
+    assert sum((sampler_audio_changed and not wavetable_added,digimono_audio_changed,digimono_ens_changed,digimono_fm_changed,digimono_dpro_changed,digimono_added,wavetable_added))<=1
     out=folder.resolve();checks=[];log=out/'regressions.log'
     log.write_text('Syntakt common-event native/static regressions.\n')
     def run(name,args):
@@ -115,6 +139,7 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         'sample-manager':['tests/test_st_manager.c','mods/core-st/crc.c'],
         'audio-pool':['tests/test_st_pool_receiver.c'],
         'pool-service':['tests/test_st_pool_service.c'],   # not "install": Windows asks to elevate such names
+        'wavetable-access':['tests/test_st_wavetable_access.c'],
         'parameter-transport':['tests/test_st_parameters.c'],
         'sampler-audio':['tests/test_st_samplers.c',*[str(p.relative_to(ROOT)) for p in
                          sorted((ROOT/'mods/samplers-st/audio').glob('*.c'))]],
@@ -171,7 +196,9 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         run('modulation skip host logic',[sys.executable,'tests/test_st_modulation_skip.py','--cc',cc,'--work',out/'modulation-skip-tests'])
     if 71 in json.loads((out/'synfact-machines.smz4.json').read_text())['machines']:
         run('Digi Mono adapter/DSP',[sys.executable,'tests/test_st_digimono.py','--cc',cc,'--out',out/'digimono-tests'])
+    run('SY WAVETABLE engine/reference',[sys.executable,'tests/test_wavetable_st.py','--cc',cc,'--out',out/'wavetable-st-tests'])
     run('folder catalogue',[sys.executable,'tests/test_st_sample_folders.py'])
+    run('wavetable converter and transfer',[sys.executable,'tests/test_st_wavetable.py'])
     run('folder C/Python round trip',[sys.executable,'tests/test_st_sample_folders.py','--cc',cc,'--out',out/'folder-tests'])
     run('units',[sys.executable,'tests/test_units.py'])
     run('instruction audit',[sys.executable,'tests/test_st_instruction_audit.py'])
@@ -223,7 +250,13 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
                 raw=path.read_bytes();at,n=struct.unpack_from('>II',raw,72);return raw[48+at:48+at+n]
             new_section=audio_section(out/'synfact-machines.smz4')
             old_section=audio_section(oldbank)
-            if digimono_added:
+            if wavetable_added:
+                assert new_section!=old_section
+                check_wavetable_added(json.loads((out/'synfact-machines.smz4.json').read_text()),
+                                      json.loads((previous/'synfact-machines.smz4.json').read_text()),sampler_audio_changed)
+                checks.append({'name':'SY WAVETABLE added'+(' and sampler AUDIO changed' if sampler_audio_changed else '')+
+                               '; every other AUDIO object identical to the previous build','ok':True})
+            elif digimono_added:
                 assert new_section!=old_section
                 check_digimono_added(json.loads((out/'synfact-machines.smz4.json').read_text()),
                                      json.loads((previous/'synfact-machines.smz4.json').read_text()))
@@ -296,6 +329,11 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
             unicorn_python,'-B','tests/test_st_stock_stream_emu.py',
             '--core',out,'--out',out/'stock-stream.json'])
         run('safe-boot record writes (Unicorn)',[unicorn_python,'-B','tests/test_st_safe_boot_emu.py',out])
+        if 72 in json.loads((out/'synfact-machines.smz4.json').read_text())['machines']:
+            if os.environ.get('SYNTAKT_STOCK'):
+                run('SY WAVETABLE SYN pages (Unicorn)',[unicorn_python,'-B','tests/test_wavetable_st_page_emu.py',
+                    '--stock',os.environ['SYNTAKT_STOCK'],'--bank',out/'synfact-machines.smz4','--out',out/'wavetable-pages'])
+            else:skipped.append('SY WAVETABLE SYN pages: set SYNTAKT_STOCK')
         run('module startup after native clearing (Unicorn)',[unicorn_python,'-B','tests/test_st_module_startup_emu.py',
             '--core',out,'--bank',out/'synfact-machines.smz4','--out',out/'module-startup.json'])
         if 'core:core_native_route_fill' in json.loads((out/'verification.json').read_text())['symbols']:
@@ -364,6 +402,8 @@ if __name__=='__main__':
         help='Digi Mono 0.3 updates ENS: only its adapter and existing MONO2K DSP object may change')
     p.add_argument('--digimono-fm-changed',action='store_true',
         help='Digi Mono 0.6 replaces FM+: only its adapter/dispatch change and one FM+ object is added')
+    p.add_argument('--wavetable-added',action='store_true',
+                   help='the bank adds SY WAVETABLE (type 72) to the previous build; nothing else may change')
     p.add_argument('--digimono-added',action='store_true',
         help='the bank adds SY MnM to a previous bank without it: only its machine, module and AUDIO folder are new')
     p.add_argument('--digimono-dpro-changed',action='store_true',
@@ -375,4 +415,4 @@ if __name__=='__main__':
         from elekloader.devices.syntakt import DEVICE
         window=DEVICE.secondary[7][3][-1]
         assert window==(0x40040860,0x40041050)
-    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed,a.digimono_ens_changed,a.digimono_fm_changed,a.digimono_dpro_changed,a.digimono_added)
+    verify(a.folder,a.cc,a.synfact,a.previous_build,window,a.sampler_audio_changed,a.unicorn_python,a.digimono_audio_changed,a.digimono_ens_changed,a.digimono_fm_changed,a.digimono_dpro_changed,a.digimono_added,a.wavetable_added)

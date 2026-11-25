@@ -46,7 +46,7 @@ def verify(folder,synfact=None):
         return main[at-0x40000400:at-0x40000400+n]
     host=s['core:core_machine_host_api'];ui=s['core:core_machine_ui_api']
     # UI API 8 (core 1.8) appends sample_channels after host; the prefix is unchanged.
-    assert struct.unpack('>I',read(ui,4))[0]==8 and struct.unpack('>I',read(ui+40,4))[0]==host
+    assert struct.unpack('>I',read(ui,4))[0]==9 and struct.unpack('>I',read(ui+40,4))[0]==host
     assert struct.unpack('>I',read(ui+44,4))[0]==s['core:core_pool_sample_channels']
     names=('core_hzfs_native_io','core_hzfs_open','core_hzfs_close','core_crc_update',
            'core_pool_read','core_pool_write','core_pool_ready','st_pool_live_sync','st_pool_preview_stop','core_event_view')

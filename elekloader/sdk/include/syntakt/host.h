@@ -144,5 +144,7 @@ struct st_machine_host_api {
      * are unmodulated and not destinations. */
     /* Host API 18 (core 2.7) adds no field: SMZ events 16/17 (modules.h),
      * the PATTERN and RELOAD FROM PROJ menus' build events. */
+    /* Core 2.8 adds no field either: ST_MACHINE_TEMPO_PARAMETER controls
+     * receive the tempo on AUDIO (machines.h). */
 };
 #endif

@@ -13,6 +13,9 @@ const struct st_machine_cursor *core_pool_cursor(pool_u32,pool_u32);
 void core_pool_cursor_tick(void);
 pool_u32 core_pool_sample_source(pool_u32,const pool_u8 **,pool_u32 *);
 pool_u32 core_pool_sample_channels(pool_u32 slot);
+pool_u32 core_pool_sample_wavetable(pool_u32 slot); /* core 2.8: waves, or 0 */
+pool_u32 core_pool_wavetable_level(pool_u32 slot,pool_u32 level,short *out,pool_u32 max); /* UI API 9 */
+pool_u32 core_pool_sample_read(pool_u32 slot,pool_u32 first,pool_u32 count,short *out); /* UI API 9 */
 pool_u32 core_pool_code_used(pool_u32 code);
 void core_pool_wave_begin(pool_u32 code,pool_u32 frames,pool_u32 channels);
 void core_pool_wave_feed(const pool_u8 *,pool_u32);

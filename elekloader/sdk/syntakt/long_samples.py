@@ -4,6 +4,8 @@
 python -m elekloader.sdk.syntakt.long_samples ls
 python -m elekloader.sdk.syntakt.long_samples put pad.wav --yes-write-device   # stereo stays stereo (core 1.8)
 python -m elekloader.sdk.syntakt.long_samples put pad.wav --mono --yes-write-device
+python -m elekloader.sdk.syntakt.long_samples put lead_wt1024.wav --yes-write-device  # a wavetable (core 2.8)
+python -m elekloader.sdk.syntakt.long_samples put serum.wav --wavetable --yes-write-device
 python -m elekloader.sdk.syntakt.long_samples get pad --out pad-back.wav
 python -m elekloader.sdk.syntakt.long_samples rm pad --yes-write-device
 python -m elekloader.sdk.syntakt.long_samples stock short.wav --slot 64 --yes-write-device
@@ -33,6 +35,7 @@ SAMP_HEADER=64
 
 # ------------------------------------------------------------------ index
 from .sample_catalog import Index, logical_length, enable_folders
+from . import wavetable
 
 
 def problems(index):
@@ -48,6 +51,9 @@ def problems(index):
             out.append(f"{e['name']}: size fields inconsistent")
         if e.get('flags', 0) & STEREO and e['frames'] & 1:
             out.append(f"{e['name']}: stereo with an odd sample count")
+        if e.get('flags', 0) & 3 == wavetable.WAVETABLE and not wavetable.waves(e['flags'], e['frames']):
+            out.append(f"{e['name']}: wavetable flag on {e['frames']} samples, not 1 to "
+                       f"{wavetable.MAX_WAVES} waves of {wavetable.FRAMES}; read as mono")
         if (e.get('folder',0),e['name']) in names or e['id'] in ids:
             out.append(f"{e['name']}: duplicate name or id")
         names.add((e.get('folder',0),e['name']))
@@ -359,7 +365,7 @@ class Store:
 def cmd_ls(store):
     index,copies=store.current()
     store.log(f'HZFS sequence {index.seq}: {len(index.entries)} samples')
-    for e in index.entries:store.log(f"{e['id']:5}  {e['name']:<32} {seconds(e):9.3f} s {'st' if channels(e)==2 else '  '} {e['bytes']/2**20:8.2f} MiB")
+    for e in index.entries:store.log(f"{e['id']:5}  {e['name']:<32} {seconds(e):9.3f} s {kind(e)} {e['bytes']/2**20:8.2f} MiB")
     # Safe allocation includes extents still referenced by the other catalogue.
     spans=sorted({s for c in copies if c for s in c.used()});at=DATA_FIRST_K;free=largest=0
     for lo,hi in spans:
@@ -386,15 +392,40 @@ def wav_body(path,name,mono=False,progress=None):
     samples=channels[0] if len(channels)==1 else [sum(frame)/len(channels) for frame in zip(*channels)]
     return samp_body(to_pcm16be(resample(samples,rate,converting('Converting to 48 kHz'))),name)[0],0
 
-def cmd_put(store,wav,name=None,folder=0,mono=False):
-    name=name or Path(wav).stem
+def wavetable_body(path,name=None):
+    """-> (name, SAMP body, notes): the canonical wavetable of a WAV (core 2.8;
+    wavetable.py). The name defaults to the file's, without its _wt suffix."""
+    _,channels=read_wav_channels(path)
+    stored,pcm,notes=wavetable.convert(channels,Path(path).stem)
+    name=name or stored
+    if not name or '\0' in name or len(name.encode('utf-8'))>32:raise ValueError('name must be 1..32 UTF-8 bytes')
+    return name,samp_body(pcm,name)[0],notes
+
+def wavetable_folder(index):
+    """The root folder for wavetables, created in this index when absent."""
+    for d in index.folders:
+        if d['parent']==0 and d['name']==wavetable.FOLDER:return d['id']
+    if index.version!=2:raise ValueError('Enable folders first: wavetables go in the folder '+wavetable.FOLDER)
+    return index.mkdir(wavetable.FOLDER)
+
+def cmd_put(store,wav,name=None,folder=0,mono=False,table=None):
+    """table: store a wavetable; None means when the name ends in _wt<size>.
+    A wavetable goes in the root folder `wavetables` unless folder is given."""
+    if table is None:table=wavetable.has_suffix(Path(wav).stem)
     store.log(f'Reading {Path(wav).name}')
-    body,flags=wav_body(wav,name,mono,store.progress)
-    store.log(f"{(len(body)-SAMP_HEADER)/(2*(2 if flags&STEREO else 1))/RATE:.3f} s "
-              f"{'stereo' if flags&STEREO else 'mono'}, {len(body)/2**20:.2f} MiB to send")
+    if table:
+        name,body,notes=wavetable_body(wav,name);flags=wavetable.WAVETABLE
+        for note in notes:store.log(note)
+        store.log(f"wavetable, {wavetable.waves(flags,u32(body,8))} waves, {len(body)/2**20:.2f} MiB to send")
+    else:
+        name=name or Path(wav).stem
+        body,flags=wav_body(wav,name,mono,store.progress)
+        store.log(f"{(len(body)-SAMP_HEADER)/(2*(2 if flags&STEREO else 1))/RATE:.3f} s "
+                  f"{'stereo' if flags&STEREO else 'mono'}, {len(body)/2**20:.2f} MiB to send")
     index,copies=store.current(store.ensure())
     if len(index.entries)>=MAX_ENTRIES or index.next_id==0xffffffff or index.seq==0xffffffff:
         raise ValueError('catalogue full/exhausted')
+    if table and not folder:folder=wavetable_folder(index)
     index.folder(folder)
     if folder and index.version!=2:raise ValueError('Enable folders first')
     logical_length(index.version,len(index.entries)+1,len(index.folders))
@@ -407,11 +438,18 @@ def cmd_put(store,wav,name=None,folder=0,mono=False):
            created=int(time.time()),flags=flags,name=name)
     if index.version==2:e['folder']=folder
     index.entries.append(e);index.next_id+=1;store.commit(index,copies)
-    store.log(f"Stored {name}: {seconds(e):.3f} s{' stereo' if flags&STEREO else ''}, id {e['id']}")
+    store.log(f"Stored {name}: "+(f"wavetable, folder {index.path(folder)}" if table else
+              f"{seconds(e):.3f} s{' stereo' if flags&STEREO else ''}")+f", id {e['id']}")
     return e
 
 def channels(e):
     return 2 if e.get('flags',0)&STEREO and not e['frames']&1 else 1
+
+
+def kind(e):
+    """'st' stereo, 'wt' canonical wavetable (core 2.8), '  ' mono."""
+    if channels(e)==2:return 'st'
+    return 'wt' if wavetable.waves(e.get('flags',0),e['frames']) else '  '
 
 
 def seconds(e):
@@ -427,8 +465,10 @@ def sample_read(store,e):
 def cmd_get(store,key,out,raw=False):
     if Path(out).exists():raise ValueError('output already exists')
     index,_=store.current();body=sample_read(store,index.find(key))
+    e=index.find(key);count=wavetable.waves(e.get('flags',0),e['frames'])
     if raw:Path(out).write_bytes(body)
-    else:write_wav(out,body[SAMP_HEADER:],channels(index.find(key)))
+    elif count:write_wav(out,wavetable.level0(body[SAMP_HEADER:],count))   # its 2048-sample waves
+    else:write_wav(out,body[SAMP_HEADER:],channels(e))
     return body
 
 def cmd_rm(store,key):
@@ -456,6 +496,7 @@ def main(argv=None):
     get=sub.add_parser('get');get.add_argument('key');get.add_argument('--out',required=True);get.add_argument('--raw',action='store_true')
     put=sub.add_parser('put');put.add_argument('wav');put.add_argument('--name');put.add_argument('--folder',type=int,default=0)
     put.add_argument('--mono',action='store_true',help='mix a stereo WAV to mono (default: keep it stereo)')
+    put.add_argument('--wavetable',action='store_true',default=None,help='store a wavetable (implied by a name ending in _wt<size>)')
     rm=sub.add_parser('rm');rm.add_argument('key')
     stock=sub.add_parser('stock');stock.add_argument('wav');stock.add_argument('--slot',type=int,required=True,choices=range(1,65));stock.add_argument('--name')
     for command in (put,rm,stock,sub.choices['init']):command.add_argument('--yes-write-device',action='store_true')
@@ -480,7 +521,7 @@ def main(argv=None):
             if client.read(path)!=stock_body:raise RuntimeError('stock sample readback differs')
         elif args.cmd=='ls':cmd_ls(store)
         elif args.cmd=='init':store.ensure()
-        elif args.cmd=='put':cmd_put(store,args.wav,args.name,args.folder,args.mono)
+        elif args.cmd=='put':cmd_put(store,args.wav,args.name,args.folder,args.mono,args.wavetable)
         elif args.cmd=='folders-enable':enable_folders(store,args.backup,firmware_confirmed=args.confirm_firmware)
         elif args.cmd in ('mkdir','move','rmdir'):
             index,copies=store.current()

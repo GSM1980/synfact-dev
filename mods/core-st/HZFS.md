@@ -104,6 +104,8 @@ python -m elekloader.sdk.syntakt.long_samples get pad --out pad-back.wav
 python -m elekloader.sdk.syntakt.long_samples rm pad --yes-write-device
 python -m elekloader.sdk.syntakt.long_samples fsck --deep
 python -m elekloader.sdk.syntakt.long_samples stock hit.wav --slot 64 --yes-write-device
+python -m elekloader.sdk.syntakt.long_samples put lead_wt1024.wav --yes-write-device   # a wavetable
+python -m elekloader.sdk.syntakt.long_samples put serum.wav --wavetable --yes-write-device
 ```
 
 `init --yes-write-device` is idempotent and has the same blank-zone restriction
@@ -204,3 +206,23 @@ unchanged; a stereo sample of n frames has `frames = 2n`. A reader that does
 not know the flag sees a mono sample twice as long, and never reads past it.
 A stereo flag on an odd count is read as mono; `fsck` reports it. Other flag
 bits keep no meaning and are preserved.
+
+## Wavetables (core 2.8)
+
+Entry flag bit 1 (`ST_HZ_WAVETABLE`, `wavetable.WAVETABLE`) marks a mono
+wavetable in the canonical layout of `elekloader/sdk/include/syntakt/wavetable.h`
+([docs/SY-WAVETABLE.md](../../docs/SY-WAVETABLE.md), section 4): W waves
+(1 to 64) at nine band-limited levels, level k holding waves of 2048 >> k
+samples, the levels one after the other. A wave uses 4088 samples over all
+levels, so `frames = W * 4088`; the body and every size check are a mono
+sample's. The flag on any other count is read as plain mono, and `fsck`
+reports it. Bits 0 and 1 together read as stereo, as before core 2.8. The
+import tools create the folder `wavetables` for them; the core does not
+depend on the folder. `ls` marks them `wt`.
+
+`put` stores a wavetable when the file name ends in `_wt<size>` (`r` after
+it: no interpolation) or with `--wavetable`, converting it as
+`elekloader/sdk/syntakt/wavetable.py` says (the Tonverk's file rules), into
+the root folder `wavetables` (created; folders must be enabled) unless
+`--folder` names another. `get` of a wavetable writes its level 0 waves, 2048
+samples each.

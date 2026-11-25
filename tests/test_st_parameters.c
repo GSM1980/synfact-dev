@@ -23,8 +23,9 @@ const struct core_machine_def *core_machine_find(u32 type)
 u32 core_machine_slot(u32 index){return test_slots[index];}
 static u32 test_shadow[8*CORE_MACHINE_SHADOW_ROW];
 u32 *core_machine_shadow=test_shadow;   /* bind allocation: uninitialized */
-static u32 fake_timer;
+static u32 fake_timer,test_tempo=14400;
 #define CORE_MACHINE_TIMER() (fake_timer+=7)
+#define CORE_MACHINE_TEMPO() test_tempo
 #include "../mods/core-st/machine-params.c"
 #define TEL core_machine_telemetry
 #define SNAP() (cadence=0,core_machine_snapshot(0))   /* a full compare block */
@@ -54,6 +55,7 @@ static u32 effective(u32 t,u32 owner,u32 index)
 {
     u32 slot=test_slots[index],n;int v;
     if(index>=8 && index<24 && param[index].alias==ST_MACHINE_CONFIG_PARAMETER)return mirror(owner)[slot];
+    if(index>=8 && index<24 && param[index].alias==ST_MACHINE_TEMPO_PARAMETER)return test_tempo;
     if(!slot)return mirror(owner)[0];                    /* None destination: unmodulated */
     if(slot!=0x11 && slot!=0x18)return working(t)[slot];
     v=mirror(owner)[slot];
@@ -276,7 +278,21 @@ int main(void)
         mirror(0)[slot]^=0x200;SNAP();audio_machine_receive();offered(3,0); /* explicit saved edit follows owner */
         param[i].alias=0;SNAP();audio_machine_receive();for(t=0;t<8;t++)offered(t,t==3?0:t);
     }
-    puts("PASS: unmodulated configuration controls 8..23, POLY owner mirroring, legacy routed values ignored, ordinary modulation restored; cadence (4-block edits, trig and routed-LFO blocks), 20000 randomized blocks vs oracle, never-received rows withheld, 8xFM boot, stable values without FPGA writes/reads, "
+    /* Core 2.8: a tempo control receives BPM x 120 on every track, whatever
+     * its Sound slot or modulation holds; a tempo change alone publishes. */
+    for(i=8;i<24;i++){
+        u32 slot=test_slots[i];param[i].alias=ST_MACHINE_TEMPO_PARAMETER;test_tempo=14400;
+        for(t=0;t<8;t++){mirror(t)[slot]=0x1000+t;working(t)[slot]=0x5000+t;}
+        SNAP();audio_machine_receive();for(t=0;t<8;t++)offered(t,t==3?0:t);
+        for(t=0;t<8;t++){const unsigned short *w=audio_machine_params(audio_params(t));
+            assert(w && w[(i-8)^1]==14400);}        /* big-endian halves of each word, read on the host */
+        g=FRAME_TAG;for(t=0;t<8;t++){working(t)[slot]^=0x100;mirror(t)[slot]^=0x100;}
+        SNAP();assert(FRAME_TAG==g);                 /* the Sound slot alone changes nothing */
+        test_tempo=36000;SNAP();assert(FRAME_TAG!=g);audio_machine_receive();
+        for(t=0;t<8;t++)offered(t,t==3?0:t);
+        param[i].alias=0;test_tempo=14400;SNAP();audio_machine_receive();for(t=0;t<8;t++)offered(t,t==3?0:t);
+    }
+    puts("PASS: unmodulated configuration controls 8..23, tempo controls 8..23, POLY owner mirroring, legacy routed values ignored, ordinary modulation restored; cadence (4-block edits, trig and routed-LFO blocks), 20000 randomized blocks vs oracle, never-received rows withheld, 8xFM boot, stable values without FPGA writes/reads, "
          "LFO slots/clamps, locks and retirement, stale-row-only rewrites, checksum retry, torn headers, "
          "lagging frames, 600-generation wrap, mask/type/owner changes, ready gate, receiver restart, "
          "stock/FM transitions");
