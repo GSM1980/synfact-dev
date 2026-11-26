@@ -645,7 +645,9 @@ void kl_bank_select(const u32 *fn)
     bank_preferences(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
-void kl_bank_change(const u32 *fn, int amount)
+/* The OS calls change(storage, item, amount), amount -1 for LEFT and +1 for RIGHT (the
+ * encoder: its accelerated step, signed): the amount is the third argument. */
+void kl_bank_change(const u32 *fn, void *item, int amount)
 {
     int p;
     kl_user = 1;

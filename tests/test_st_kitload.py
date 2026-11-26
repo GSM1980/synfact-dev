@@ -346,7 +346,7 @@ class Unit:
 
     def bank_change(self, amount):
         fn = self.new([16]); self.u.mem_write(fn, struct.pack('>I', 0x48060000))
-        self.call(self.rows[0][3], [fn, amount & 0xffffffff])
+        self.call(self.rows[0][3], [fn, 0x44123456, amount & 0xffffffff])   # storage, the MenuItem pointer, amount
 
     def bank_label(self):
         self.call(self.rows[0][0], [0, 0], a0=self.new([32]))
