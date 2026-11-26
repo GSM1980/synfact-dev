@@ -28,6 +28,17 @@ typedef struct { u32 d0, d1, mgr, inv; } fn_t;                         /* std::f
 #define CW_CTOR  ((void (*)(u32,void *,void *,fn_t *,u32))0x400f6156u)
 #define CW_SP_VT 0x401c88b0u
 
+/* The OS's naming box (PROJECT NAME 4005e0a6, SAVE PATTERN 401836be): a
+ * make_shared block of 0xb0 bytes, control {NB_SP_VT, use 1, weak 1, box} and
+ * the box at +16, constructed with (box, title, name, 0, 16, 0,
+ * std::function<void(std::string &, int)>), as SAVE PATTERN passes them. YES
+ * trims trailing spaces and calls the function (400fd40c) with the name;
+ * NO closes it without a call. */
+#define NB_SIZE  0xb0u
+#define NB_CTOR  ((void (*)(u32,void *,void *,u32,u32,u32,fn_t *))0x400fca64u)
+#define NB_SP_VT 0x401cbb0cu
+#define NB_LEN   16u
+
 /* The OS's text box ("COPY PROJECT", 4005c83c): operator new(0xa0),
  * 400fdfc8(this, std::string *), a shared_ptr made by 40184b38(sp, this),
  * pushed on 40008392(UIROOT()). Drawn over the menus. */

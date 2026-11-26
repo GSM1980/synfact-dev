@@ -14,10 +14,11 @@
  * (one row while that slot holds no loadable project: CREATE KITBANK IN Pn
  * for an empty slot, which makes the bank with PROJECT's own copy, paste and
  * rename, or BANK Pn FORMAT n). LOAD replaces the current pattern's kit with a bank
- * kit; SAVE writes the current pattern's kit into a bank position. Both ask
- * first in the OS's own confirmation box ("LOAD KIT A06?" / "SAVE TO A09?",
- * CONFIRM Y/N), the one CLEAR TRACK SOUND? uses: YES there does it, NO
- * closes it. A long press of SETTINGS opens the page.
+ * kit at once, on YES; SAVE writes the current pattern's kit into a bank
+ * position under a name typed in the OS's own naming box (the one PROJECT
+ * NAME opens): its YES saves, NO closes it. Creating the bank asks in the
+ * OS's confirmation box (the one CLEAR TRACK SOUND? uses). A long press of
+ * SETTINGS opens the page.
  *
  * Events only, no code site of its own:
  *   ST_EV_RELOAD_MENU  appends the rows (core 2.7);
@@ -54,6 +55,8 @@ u32 kl_dirty DATA = 0;                  /* a label changed: redraw at the next t
 u32 kl_managed DATA = 0;                /* the 129 rows were found where we added them */
 u32 kl_item[129][2] DATA = {{0}};       /* their shared_ptr<MenuItem>s, to put back */
 u32 kl_busy DATA = 0;                   /* creating the bank */
+char kl_name[NAME_FLD + 1] DATA = {0};  /* the name typed for the next SAVE */
+u32 kl_named DATA = 0;                  /* kl_name is set */
 u32 kl_from DATA = 0, kl_to DATA = 0;   /* its source and destination slots, 0..127 */
 static const struct st_machine_host_api *kl_host DATA = 0;
 static void bank_preferences(u32 write)
@@ -314,8 +317,12 @@ static void save(u32 src, u32 dst)
     obj = CUROBJ();
     mgr = MGR();
     if (SSTAT(mgr, slot) != 13) { say(bank_why(msg_buf, 0)); return; }
-    if (KENC(SAVEBUF, (void *)live_kit(obj, src), 0) == 0) { say(e_enc); return; }
-    pattern_name(obj, src, (char *)SAVEBUF + NAME_AT);
+    if (KENC(SAVEBUF, (void *)live_kit(obj, src), 0) == 0) { kl_named = 0; say(e_enc); return; }
+    if (kl_named) {                                     /* the name typed in the naming box */
+        for (k = 0; k < NAME_FLD; k++) ((char *)SAVEBUF)[NAME_AT + k] = kl_name[k];
+        kl_named = 0;
+    } else
+        pattern_name(obj, src, (char *)SAVEBUF + NAME_AT);
     r = SWRITE(mgr, SAVEBUF, slot, (KIT_STORED * dst + KITS_AT) >> 9, KIT_STORED);
     if (r != 0) { say(r == 3 ? e_prot : e_wr); return; }
     for (k = 0; k < NAME_MAX; k++) name[k] = ((const char *)SAVEBUF)[NAME_AT + k];
@@ -397,8 +404,6 @@ static void set_rows(u32 n)
     ((u32 (*)(u32))(*(u32 **)kl_rm)[MENU_SEL])(kl_rm);                    /* clamp the selection */
 }
 
-/* Ask in the OS's confirmation box: "LOAD KIT A06?" or "SAVE TO A09?" over
- * CONFIRM Y/N. 0 if it could not be opened. */
 /* Create the bank: PROJECT's own COPY of the current project's saved slot,
  * PASTE into the empty bank slot, and RENAME to KITBANK, as one job on the
  * OS's job queue. The current project stays current and is not touched; the
@@ -445,20 +450,58 @@ static void create(void)
     JOBPOST(JOBQ(), s_jobname, &work, &done);
 }
 
+/* SAVE: the OS's naming box, "SAVE TO A09", offering the current pattern's
+ * name, or the slot's own when the pattern has none. Its YES saves under the
+ * typed name; NO closes it. 0 if it could not be opened. */
+void kl_name_inv(const u32 *any, const u32 *str, u32 unused);
+static int name_box(u32 j)
+{
+    u32 q[1], nm[1], *cb, sp[2], k;
+    char alloc, start[NAME_FLD + 1];
+    fn_t fn = {j, 0, (u32)kl_mgr, (u32)kl_name_inv};
+    cpy(msg_buf, "SAVE TO ", 9);
+    msg_buf[8] = kl_lbl[j][0]; msg_buf[9] = kl_lbl[j][1]; msg_buf[10] = kl_lbl[j][2]; msg_buf[11] = 0;
+    for (k = 0; k <= NAME_FLD; k++) start[k] = 0;
+    pattern_name(CUROBJ(), CURIDX(CURSRC()), start);
+    if (!start[0] && kl_lbl[j][4] && kl_lbl[j][4] != '?' && kl_lbl[j][4] != '-')
+        cpy(start, kl_lbl[j] + 4, NAME_FLD + 1);
+    start[NAME_FLD] = 0;
+    cb = (u32 *)NEW(NB_SIZE);
+    if (!cb) return 0;
+    cb[0] = NB_SP_VT; cb[1] = 1; cb[2] = 1; cb[3] = (u32)cb + 16u;
+    STRCTOR(q, msg_buf, &alloc);
+    STRCTOR(nm, start, &alloc);
+    NB_CTOR((u32)cb + 16u, q, nm, 0, NB_LEN, 0, &fn);
+    sp[0] = (u32)cb + 16u; sp[1] = (u32)cb;
+    PUSHVIEW(UIROOT() + 64u, sp, 0);                    /* the manager keeps its own reference */
+    SPREL(&sp[1]);
+    STRDTOR(nm); STRDTOR(q);
+    return 1;
+}
+
+/* The naming box's answer: invoker(any, std::string &name, int), any = {row,
+ * 0}. Called on YES only, after the box trimmed trailing spaces. */
+void kl_name_inv(const u32 *any, const u32 *str, u32 unused)
+{
+    u32 j = any[0], k;
+    const char *n = str ? (const char *)str[0] : 0;
+    (void)unused;
+    if (j < 1u || j > 128u || !kl_bank || !bank_ok()) return;
+    for (k = 0; k < NAME_FLD; k++) kl_name[k] = 0;
+    for (k = 0; n && k < NAME_FLD && n[k]; k++) kl_name[k] = n[k];
+    if (!kl_name[0]) cpy(kl_name, "KIT", 4);            /* never an empty name */
+    kl_named = 1;
+    save(CURIDX(CURSRC()), j - 1u);
+    redraw();
+}
+
 void kl_confirm_inv(const u32 *any, u32 yes);
 static int confirm(u32 j, u32 mode)
 {
     u32 q[1], sub[1], box, *cb, sp[2];
     char alloc;
     fn_t fn = {j, mode, (u32)kl_mgr, (u32)kl_confirm_inv};
-    if (mode == 2)
-        bank_text(msg_buf, "CREATE KITBANK ", "?");    /* "CREATE KITBANK P128?" */
-    else {
-        char *d;
-        cpy(msg_buf, mode ? "SAVE TO " : "LOAD KIT ", 10);
-        d = msg_buf + (mode ? 8 : 9);
-        d[0] = kl_lbl[j][0]; d[1] = kl_lbl[j][1]; d[2] = kl_lbl[j][2]; d[3] = '?'; d[4] = 0;
-    }
+    bank_text(msg_buf, "CREATE KITBANK ", "?");        /* "CREATE KITBANK P128?" */
     box = NEW(CW_SIZE);
     if (!box) return 0;
     STRCTOR(q, msg_buf, &alloc);
@@ -506,20 +549,20 @@ void kl_act_inv(u32 *any, void *item)
         return;
     }
     if (!bank_ok()) { say(bank_why(msg_buf, 0)); return; }
-    if (!confirm(j, kl_mode)) say(e_box);
+    if (!kl_mode) {                                     /* LOAD: at once, no confirmation */
+        load(j - 1u, CURIDX(CURSRC()));
+        redraw();
+        return;
+    }
+    if (!name_box(j)) say(e_box);
 }
 
 /* The box's answer: invoker(any, answer), any = {row, mode} as confirm() set
  * it. Runs after the box has closed itself. */
 void kl_confirm_inv(const u32 *any, u32 yes)
 {
-    u32 j = any[0];
     if (!(yes & 0xffu) || !kl_bank) return;
-    if (any[1] == 2u) { create(); return; }
-    if (j < 1u || j > 128u || !bank_ok()) return;
-    if (!any[1]) load(j - 1u, CURIDX(CURSRC()));
-    else save(CURIDX(CURSRC()), j - 1u);
-    redraw();
+    if (any[1] == 2u) create();                         /* the only question asked in this box */
 }
 
 static void add_item(void *menu, u32 j)
@@ -602,7 +645,9 @@ void kl_bank_select(const u32 *fn)
     bank_preferences(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
-void kl_bank_change(const u32 *fn, int amount)
+/* The OS calls change(storage, item, amount), amount -1 for LEFT and +1 for RIGHT (the
+ * encoder: its accelerated step, signed): the amount is the third argument. */
+void kl_bank_change(const u32 *fn, void *item, int amount)
 {
     int p;
     kl_user = 1;
@@ -613,9 +658,21 @@ void kl_bank_change(const u32 *fn, int amount)
     bank_preferences(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
-void kl_bank_draw(const u32 *fn, void *item, void *bmp, int x, int y)
+/* The KIT BANK row's icon, as Sample Manager draws its own (its third
+ * callback, at the label's x/y): four pads, the first filled, 12x11, in the
+ * OS's column format (bit 31 the top row), a non-owning bitmap descriptor
+ * (400f72be) blitted by 400f8f70. */
+static const u32 kl_icon[12] = {0xfbe00000u, 0xfa200000u, 0xfa200000u, 0xfa200000u, 0xfbe00000u, 0,
+                                0xfbe00000u, 0x8a200000u, 0x8a200000u, 0x8a200000u, 0xfbe00000u, 0};
+static const u32 kl_icon_mask[12] = {0xffe00000u, 0xffe00000u, 0xffe00000u, 0xffe00000u, 0xffe00000u, 0xffe00000u,
+                                     0xffe00000u, 0xffe00000u, 0xffe00000u, 0xffe00000u, 0xffe00000u, 0xffe00000u};
+void kl_bank_draw(const u32 *fn, void *item, void *ctx, int x, int y)
 {
-    (void)fn; (void)item; (void)bmp; (void)x; (void)y;
+    u32 bitmap[8];
+    (void)fn; (void)item;
+    ((void (*)(void *, u32, u32, const void *, const void *))0x400f72beu)(bitmap, 12, 11, kl_icon, kl_icon_mask);
+    ((void (*)(void *, void *, int, int, u32))0x400f8f70u)(ctx, bitmap, x, y, 0);
+    ((void (*)(void *))0x400f71f0u)(bitmap);
 }
 void kl_settings(void *menu)
 {

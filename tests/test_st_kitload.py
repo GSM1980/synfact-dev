@@ -46,6 +46,9 @@ def u32(b, o=0):
     return struct.unpack_from('>I', b, o)[0]
 
 
+NAMEBOX_START = 'KIT 08'     # pattern names are empty here: the box offers the slot's own name
+
+
 def build(cc):
     sys.path.insert(0, str(ROOT))
     from elekloader.devices import syntakt
@@ -121,6 +124,8 @@ class Unit:
             0x4016e044: lambda a: UIROOT_V, 0x40100d86: self.push,
             SEL_FN: self.sel, 0x40001300: self.additem, 0x400ffe22: self.invalidate,
             0x400f6156: self.cwctor, 0x401bd86e: lambda a: self.log('strdtor', 0),
+            0x400fca64: self.nbctor, 0x400f72be: self.bmctor, 0x400f8f70: self.blit,
+            0x400f71f0: lambda a: self.log('bmdtor', 0),
             0x400fdfc8: self.tbctor, 0x40184b38: self.tbsp, 0x40008392: lambda a: UIROOT_V + 64,
             0x40018c2c: lambda a: self.cur_slot, 0x4016ec18: lambda a: 0x48090000, 0x400bdc48: self.jobpost,
             0x4016f15a: lambda a: 0x480a0000, 0x400c1e54: lambda a: self.pjob('copy', a[1]),
@@ -273,6 +278,27 @@ class Unit:
         self.boxes.append(dict(box=a[0], q=self.strings[-2], sub=self.strings[-1], flag=a[4],
                                fn=struct.unpack('>4I', self.u.mem_read(a[3], 16))))
 
+    def nbctor(self, a):                        # naming box(this, title, name, a4, length, a6, function)
+        self.boxes.append(dict(box=a[0], q=self.strings[-2], name=self.strings[-1], a4=a[3], length=a[4],
+                               a6=a[5], fn=struct.unpack('>4I', self.u.mem_read(a[6], 16))))
+
+    def type_name(self, text):                  # the naming box's YES with this text: invoker(any, &string, int)
+        fn = self.boxes[-1]['fn']
+        any_ = self.new([16])
+        self.u.mem_write(any_, struct.pack('>4I', *fn))
+        chars = self.new([64])
+        self.u.mem_write(chars, text.encode() + b'\0')
+        string = self.new([4])
+        self.u.mem_write(string, struct.pack('>I', chars))
+        self.call(fn[3], [any_, string, 0])
+
+    def bmctor(self, a):                        # bitmap(this, width, height, columns, mask)
+        self.bitmap = (a[1], a[2], struct.unpack('>12I', self.u.mem_read(a[3], 48)),
+                       struct.unpack('>12I', self.u.mem_read(a[4], 48)))
+
+    def blit(self, a):
+        self.blits = getattr(self, 'blits', []) + [(a[0], a[2], a[3], a[4])]
+
     def answer(self, yes):                      # the box's YES (1) or NO (0): invoker(any, answer)
         fn = self.boxes[-1]['fn']
         any_ = self.new([16])
@@ -320,7 +346,7 @@ class Unit:
 
     def bank_change(self, amount):
         fn = self.new([16]); self.u.mem_write(fn, struct.pack('>I', 0x48060000))
-        self.call(self.rows[0][3], [fn, amount & 0xffffffff])
+        self.call(self.rows[0][3], [fn, 0x44123456, amount & 0xffffffff])   # storage, the MenuItem pointer, amount
 
     def bank_label(self):
         self.call(self.rows[0][0], [0, 0], a0=self.new([32]))
@@ -451,21 +477,12 @@ def check(image, sym):
     assert m.label(0) == 'MODE: LOAD KIT' and m.label(1) == 'A01 KIT 00' and m.label(128) == 'H16 KIT 127'
     print('rows: 129 built without storage access; labels read the bank on draw')
 
-    # LOAD: YES opens the OS's confirmation box; its NO does nothing, its YES loads
+    # LOAD: YES loads at once, no box
+    pushes = len(m.pushes)
     m.yes(6)
-    (b,) = m.boxes
-    assert (b['q'], b['sub'], b['flag']) == ('LOAD KIT A06?', 'CONFIRM Y/N', 0) and 'note' not in m.calls
-    assert b['fn'][:2] == (6, 0) and b['fn'][2] == m.sym['kl_mgr'] and b['fn'][3] == m.sym['kl_confirm_inv']
-    mgr_, box, ctrl, flag = m.pushes[-1]
-    assert (mgr_, box, flag) == (UIROOT_V + 64, b['box'], 0)                    # on the global view manager
-    assert struct.unpack('>4I', m.u.mem_read(ctrl, 16)) == (0x401c88b0, 1, 1, b['box'])  # its shared_ptr
-    assert m.calls['sprel'] >= 1 and m.calls['strdtor'] >= 2                    # our references dropped
-    m.answer(0)
-    assert 'note' not in m.calls                                               # NO: nothing
-    m.yes(6)
-    m.answer(1)
+    assert not m.boxes and len(m.pushes) == pushes + 1                         # only the LOADED text box
     assert m.calls['note'] == 1 and m.msgs[-1] == 'LOADED A06 KIT 05'
-    print('confirmation: the OS box asks, its NO does nothing, its YES loads')
+    print('load: YES loads at once, no confirmation')
     live = BASE + KITS_RAM_OFS + KIT_RAM * m.cur
     assert [(d, s_, n) for d, s_, n in m.copies] == [(live, m.tmp, KIT_RAM)]     # the whole Kit, one COPY
     got = bytes(m.u.mem_read(live, KIT_RAM))
@@ -477,26 +494,49 @@ def check(image, sym):
     # SAVE then LOAD: the encoded tail round-trips
     m.yes(0)
     assert m.msgs[-1] == 'List mode: SAVE' and m.label(9) == 'SAVE A09 KIT 08'
-    m.yes(9)
-    assert m.boxes[-1]['q'] == 'SAVE TO A09?' and m.boxes[-1]['fn'][:2] == (9, 1) and not m.writes
-    m.answer(0)
-    assert not m.writes
-    m.yes(9); m.answer(1)
+    pushes = len(m.pushes)
+    m.yes(9)                                                                   # SAVE: the OS's naming box
+    b = m.boxes[-1]
+    assert (b['q'], b['a4'], b['length'], b['a6']) == ('SAVE TO A09', 0, 16, 0) and not m.writes
+    assert b['name'] == NAMEBOX_START and b['fn'][:2] == (9, 0) and b['fn'][3] == m.sym['kl_name_inv']
+    mgr_, box, ctrl, flag = m.pushes[-1]
+    assert len(m.pushes) == pushes + 1 and (mgr_, flag) == (UIROOT_V + 64, 0)
+    assert struct.unpack('>4I', m.u.mem_read(ctrl, 16)) == (0x401cbb0c, 1, 1, ctrl + 16) and box == ctrl + 16
+    assert b['box'] == ctrl + 16                                               # make_shared: the box at +16
+    m.yes(9); m.type_name('MY KIT')                                                 # YES with a typed name
     (block, data), = m.writes
     assert block * 512 == KITS_AT + 8 * KIT_STORED and len(data) == KIT_STORED
     assert data[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]                  # module records written
-    assert data[20:] == m.encoded[20:] and m.msgs[-1].startswith('SAVED A09')
+    assert data[20:] == m.encoded[20:] and m.msgs[-1] == 'SAVED A09 MY KIT'
+    assert data[4:20] == b'MY KIT'.ljust(16, b'\0') and m.label(9) == 'SAVE A09 MY KIT'   # the typed name
+    m.writes.clear()
+    m.yes(9); m.type_name('')                                                       # an empty name: KIT
+    assert m.writes[-1][1][4:20] == b'KIT'.ljust(16, b'\0')
+    m.writes.clear()
+    m.yes(9); m.bank_select(); m.type_name('LATE'); m.bank_select()                 # KIT BANK off meanwhile
+    assert not m.writes and m.label(0) == 'MODE: LOAD KIT'                     # back on: LOAD mode
+    m.yes(0); m.yes(9); m.type_name('MY KIT')
+    data = m.writes[-1][1]
+    print('name: SAVE opens the naming box (title, start name, 0/16/0, make_shared at +16), its YES saves '
+          'under the typed name, an empty name is KIT, nothing after KIT BANK went off')
     m.yes(0)
     m.decoded.clear()
-    m.yes(9); m.answer(1)
+    m.yes(9)
     (src,) = m.decoded
     assert src == data and src[TAIL[0]:TAIL[1]] == m.encoded[TAIL[0]:TAIL[1]]   # ... and handed back to the decoder
     print('save/load: the whole record, Kit tail [14e0,15f8) included, round-trips through the bank')
 
+    # the KIT BANK row's icon: 12x11 column bitmap, blitted at the row's x/y
+    m.call(m.sym['kl_bank_draw'], [0, 0, 0x48060000, 3, 17])
+    w, h, cols, mask = m.bitmap
+    assert (w, h) == (12, 11) and m.blits == [(0x48060000, 3, 17, 0)] and m.calls['bmdtor'] == 1
+    assert all(c & ~0xffe00000 == 0 for c in cols) and set(mask) == {0xffe00000} and cols[5] == cols[11] == 0
+    print('icon: a 12x11 kit icon in the OS column format, its own mask, blitted at the row and released')
+
     # another bank project
     p = Unit(image, sym)
     p.menu(bank=7)
-    p.yes(2); p.answer(1)
+    p.yes(2)
     assert p.msgs[-1].startswith('LOADED A02') and p.calls['read'] == 128 + 1 and p.slots == {6}
 
     # entering the page rereads the names; a box answered after the bank went off does nothing
@@ -504,10 +544,9 @@ def check(image, sym):
     n.menu()
     n.stack(0x48070000, RM)                                                    # the page is open
     n.tick()
+    n.bank_select()                                                            # KIT BANK off
     n.yes(9)
-    n.bank_select()                                                            # KIT BANK off meanwhile
-    n.answer(1)
-    assert 'note' not in n.calls
+    assert 'note' not in n.calls and n.msgs[-1] == 'Turn on KIT BANK'           # nothing loads
     n.bank_select()
     n.stack(0x48070000)                                                        # NO: the page leaves the stack
     n.tick()
@@ -525,17 +564,19 @@ def check(image, sym):
     n.u.mem_write(k, struct.pack('>5I', KEYEV_VT, 0, 0, SETTINGS, 0x20))
     assert n.call(n.sym['kl_key'], [0, k]) == 1                                 # entry by the shortcut
     assert n.label(1) == 'A01 AGAIN'
-    # the menu does not repaint after an action: an answered SAVE and MODE invalidate it
+    # the menu does not repaint after an action: a LOAD, a named SAVE and MODE invalidate it
     r = Unit(image, sym)
     r.menu(); r.stack(RM); r.tick(); r.invalidated = []
     r.yes(9)
-    assert not r.invalidated and r.tick() == 0                                 # the box is the OS's to draw
-    r.answer(1)
-    assert r.invalidated == [RM + 0x38] and r.tick() == 1 and r.tick() == 0    # once
+    assert r.invalidated == [RM + 0x38] and r.tick() == 1 and r.tick() == 0    # LOAD: once
     r.yes(0)
     assert r.invalidated == [RM + 0x38] * 2 and r.tick() == 1                 # MODE: every label changes
-    print('redraw: an answered box and MODE invalidate the view and ask the tick once')
-    print('page: names reread on each entry; a box answered after KIT BANK went off does nothing')
+    r.yes(9)
+    assert len(r.invalidated) == 2 and r.tick() == 0                           # the naming box is the OS's to draw
+    r.type_name('NEW')
+    assert r.invalidated == [RM + 0x38] * 3 and r.tick() == 1                 # saved: the row's name changed
+    print('redraw: a LOAD, a named SAVE and MODE invalidate the view and ask the tick once')
+    print('page: names reread on each entry; nothing loads while KIT BANK is off')
 
     # a failed read is not cached as done
     f = Unit(image, sym)
