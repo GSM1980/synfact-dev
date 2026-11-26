@@ -47,7 +47,7 @@
       "slug": "icache-lock-st",
       "id": "icache-lock-st",
       "title": "I-cache lock: stock audio code kept in MAIN's instruction cache",
-      "latest": "0.1",
+      "latest": "0.1.1",
       "path": "mods/icache-lock-st"
     },
     {
