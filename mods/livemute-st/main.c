@@ -67,13 +67,15 @@ __asm__(".text\n.globl lm_label\nlm_label:\n"
         "  lea 12(%sp),%sp\n"
         "  move.l (%sp)+,%d0\n"
         "  rts\n");
+/* The OS calls select(storage, item) and change(storage, item, amount), amount -1 for
+ * LEFT and +1 for RIGHT: the amount is the third argument. */
 void lm_select(const unsigned int *fn)
 {
     lm_on ^= 1u;
     lm_prefs(1);
     if (fn && fn[0]) INVALIDATE((char *)fn[0] + 0x38);
 }
-void lm_change(const unsigned int *fn, int amount)
+void lm_change(const unsigned int *fn, void *item, int amount)
 {
     lm_on = amount > 0;
     lm_prefs(1);

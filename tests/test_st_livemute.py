@@ -30,6 +30,7 @@ from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE   # noqa:
 from unicorn.m68k_const import UC_CPU_M68K_CFV4E, UC_M68K_REG_A7, UC_M68K_REG_D0  # noqa: E402
 
 CODE, DATA, STOP = 0x46100000, 0x48000000, 0x46fffff0
+ITEM = 0x44123456          # the OS passes the MenuItem pointer between the storage and the amount
 EVENT, ARGS, RESULT, HOST, UI, API, INTEREST = (DATA + o for o in (0, 0x100, 0x200, 0x300, 0x400, 0x500, 0x600))
 NOTE_ACCEPT = 20
 ADDITEM, VIEW, PREFS, PERSIST = DATA + 0x700, DATA + 0x800, DATA + 0xa00, DATA + 0xb00
@@ -154,9 +155,9 @@ def check(image, sym):
     u.call(sym['lm_select'], [fn])
     assert u.text() == 'LIVE MUTE: OFF' and u.invalidated == [VIEW + 0x38]
     assert u.note(3) == (0, 0xdead)                                            # OFF: muted track plays live notes
-    u.call(sym['lm_change'], [fn, 1])
+    u.call(sym['lm_change'], [fn, ITEM, 1])
     assert u.text() == 'LIVE MUTE: ON' and u.note(3) == (1, 1)
-    u.call(sym['lm_change'], [fn, 0xffffffff])
+    u.call(sym['lm_change'], [fn, ITEM, 0xffffffff])
     assert u.text() == 'LIVE MUTE: OFF' and u.note(3) == (0, 0xdead)
     u.call(sym['lm_select'], [fn]); u.call(sym['lm_select'], [0])           # no view: no redraw
     assert u.text() == 'LIVE MUTE: OFF' and len(u.invalidated) == 4
@@ -190,9 +191,9 @@ def check_prefs(image, sym, offs):
     u.u.mem_write(fn, struct.pack('>I', VIEW))
     u.call(sym['lm_select'], [fn])
     assert u.prefs[3] == [0] and u.pref_calls[-1] == (3, 1, 1)               # OFF, written
-    u.call(sym['lm_change'], [fn, 1])
+    u.call(sym['lm_change'], [fn, ITEM, 1])
     assert u.prefs[3] == [1]
-    u.call(sym['lm_change'], [fn, 0xffffffff])
+    u.call(sym['lm_change'], [fn, ITEM, 0xffffffff])
     assert u.prefs[3] == [0]
     v = start(image, sym, offs, 20, stored=u.prefs[3][0])                     # power-on: OFF kept
     v.mutes(track=1 << 3)
