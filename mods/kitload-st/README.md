@@ -1,8 +1,10 @@
 # kitload-st: a kit bank in a saved project
 
-**0.3.0.** Tried on a unit (OS 1.42, core 2.9.0, the synfact.app bank): the
-naming box on SAVE, LOAD without confirmation and the SETTINGS icon. 0.2.0
-to 0.2.5 were tried in review and on a unit.
+**0.3.1.** Tried on a unit (OS 1.42, core 2.9.0, the synfact.app bank): the
+naming box on SAVE, LOAD without confirmation and the SETTINGS icon. 0.3.1
+fixes the KIT BANK row's LEFT and RIGHT arrows, which only moved one way
+(the OS passes the step as the third argument of the change callback) and was
+tried on a unit. 0.2.0 to 0.2.5 were tried in review and on a unit.
 
 ## What it does
 
