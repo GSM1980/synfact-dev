@@ -1,6 +1,6 @@
 # Live mute (livemute-st)
 
-**0.3.0.** 0.2.0 was tried on a unit (OS 1.42, core 2.7.0, an OXI ONE mk2 sequencing over MIDI): muted tracks go quiet, LIVE MUTE OFF restores the stock behaviour. 0.3.0 (the setting kept in the core 2.9 preferences) has not.
+**0.3.1.** 0.2.0 was tried on a unit (OS 1.42, core 2.7.0, an OXI ONE mk2 sequencing over MIDI): muted tracks go quiet, LIVE MUTE OFF restores the stock behaviour. 0.3.0 (the setting kept in the core 2.9 preferences) was tried on a unit too. 0.3.1 fixes the row's LEFT and RIGHT arrows (the OS passes the step as the third argument of the change callback) and was tried on a unit.
 
 On the Syntakt, MUTE stops a track's sequencer trigs but not live notes:
 a track played from MIDI in (an external sequencer such as an OXI ONE) or
