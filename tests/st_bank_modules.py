@@ -107,6 +107,8 @@ def check_bank_modules(report, raw, allowed):
     expected += [names+['comp_module'] for names in list(expected)]
     # kitload-st (core 2.7): after COMP, before Playhead.
     expected += [names+['kitload_module'] for names in list(expected)]
+    # livemute-st (host API 10): after KIT BANK (after COMP without it), before Playhead.
+    expected += [names+['livemute_module'] for names in list(expected)]
     expected += [names+['playhead_module'] for names in list(expected)]
     # mix-fast-st and icache-lock-st (experimental, no UI): before modulation skip.
     expected += [names+['mix_fast_module'] for names in list(expected)]

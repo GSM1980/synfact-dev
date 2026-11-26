@@ -941,3 +941,15 @@ Core 2.9 independent persistence checks:
 SDK units cover service dependency order, deduplication, invalid service IDs,
 foreign modules and cycles. SMZ parser checks still apply to every bank,
 including the optional LFO3 module's init-only descriptor.
+
+livemute-st: `tests/test_st_livemute.py [--cc m68k-elf-gcc]` compiles the
+module with the device's flags and runs its NOTE_ACCEPT handler in Unicorn
+against the OS's mute words (80003048, 8000304c, 43bdd828): a live note-on on
+a muted track is consumed; unmuted tracks, sequencer trigs, releases, the FX
+track and other operations pass; solo and the pattern/song mute count; init
+refuses host API < 10 and registers NOTE_ACCEPT only; SETTINGS > LIVE MUTE
+starts ON, YES toggles, LEFT/RIGHT set it, each redraws, and OFF passes every
+note; with host API 20 the setting is read from the core preferences (key 3)
+at start and written on each change, a stored value other than 0/1 is
+ignored, and older hosts leave the preferences alone. Without a ColdFire
+compiler it is skipped.

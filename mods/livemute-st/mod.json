@@ -1,0 +1,8 @@
+{
+  "id": "livemute-st", "version": "0.3.1", "title": "Live mute",
+  "description": "Muted tracks also ignore live notes (MIDI in and the keys), so a track sequenced from an external sequencer goes quiet when you mute it. Note-offs still pass. SETTINGS > LIVE MUTE turns it on and off (ON until changed; kept across power-off with core 2.9).",
+  "author": "Safie Flato (steveflato)",
+  "device": "syntakt", "os": "1.42", "license": "GPL-2.0-or-later",
+  "sources": ["main.c"],
+  "smz_module": {"descriptor": "livemute_module"}
+}
