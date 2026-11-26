@@ -1,8 +1,8 @@
-# I-cache lock (`icache-lock-st`) 0.1
+# I-cache lock (`icache-lock-st`) 0.1.1
 
-Keeps 4 KB of the stock audio block's hottest code permanently in MAIN's
-instruction cache. It changes no code and no behavior, only how often MAIN
-fetches code from DDR. It has no sites, no patches, no pages and no settings.
+Locks half of MAIN's 8 KiB instruction cache and preloads hot stock audio code
+to reduce instruction fetches from DDR. It runs from the UI tick and has no
+pages or settings.
 
 Like the modulation skip, it ships in **every** bank and is not an optional
 choice: `"always": true` in `js/config/syntakt-normal.json`. It is a MAIN CPU
@@ -26,35 +26,44 @@ about 220 misses per block: MAIN at the stock reference goes from 77.0 % to
 
 ## How
 
-- `lock.s`: masks interrupts, writes the native CACR value with the
-  instruction and branch cache invalidate (`a40ce100`, the same value the
-  mods' code-change sequences write), touches the 256 lines with `INTOUCH`
-  (encoded as `.word 0xf428`; the SGDK assembler has no mnemonic for it),
-  writes the native value with IHLCK (`a408e800`), and restores SR. About
-  2,300 instructions with interrupts masked; each touch is one line fill.
-- `main.c`: applies the lock every 30 UI ticks (once a second). Every code
-  change in the core and the mods (LFO3, Chorus, Playhead, Modulation Skip,
-  the stereo placement, the bank loader) ends with that invalidate write,
-  which also unlocks the cache. The lock then comes back within a second.
-  A locked line therefore never holds code older than the latest
-  invalidate, the same guarantee the cache gives without locking.
-- Only stock MAIN addresses are locked (`0x40000400..0x40348b90`, OS 1.42).
-  A wrong or moved address only costs performance: `INTOUCH` fills a line
-  and changes nothing that runs.
+The UI tick schedules a refill every 30 ticks, about once a second. Before
+invalidating the instruction cache, the routine checks the codec's transmit
+DMA cursor and whether a MAIN render interrupt is pending. It defers to the
+next UI tick during the first frame or last four frames of either 32-frame
+half-buffer, when the cursor is outside the ring, or when the current
+interrupt priority already blocks the MAIN render handler.
 
-## Measuring it on the unit
+A refill invalidates the instruction and branch caches, touches the same 256
+stock lines with `INTOUCH`, then enables `CACR[IHLCK]`. Audio interrupts stay
+enabled throughout. If an interrupt preempts the refill, it can change which
+valid lines are retained. Code changes continue to invalidate and unlock the
+cache through the existing CACR write, and a later UI tick can reapply the lock.
 
-Same core, same pattern, same tempo and the same System Info page, and a
-restart between the two:
+In 0.1, the refill masked the audio interrupt across roughly 2,300 instructions
+and 256 cache fills. The codec DMA continued to advance. In emulation, a
+delayed interrupt could select the half of the receive buffer that was still
+filling. That boundary crossing is a plausible explanation for the hardware
+clicks.
 
-1. the bank without this module: CPU M reading;
-2. the same bank with `--module mods/icache-lock-st` before
-   `mods/modulation-skip-st`: CPU M reading after a few seconds.
+## Syntakt hardware test
 
-The model predicts about five points less on the stock reference. The bank's
-own code also competes for the remaining two ways, so the real figure may be
-lower. Listen for clicks or dropouts: interrupts stay masked for about
-2,300 instructions once a second.
+On 2026-11-26 the owner tested OS 1.42 with Synfact core 2.9.0 and the same
+19-module bank and pattern. Track 1 played a sustained SY BITS tone routed
+through the analog FX track with a digital FX send, monitored through the
+instrument's physical outputs.
+
+| Bank | Owner observation |
+| --- | --- |
+| Original, I-cache lock 0.1 | Intermittent clicks. |
+| Same bank with only the cache refill callback bypassed | Five minutes of playback without a click. |
+| Same bank rebuilt with `0.1.1-irq-test` | Click-free playback and the same MAIN CPU saving indicated by System Info as with 0.1. |
+
+The tested bank SHA-256 was
+`756202c8b4c85610c26102c58c2f60bebfa70649f9e15111a85858e50b20fb4e`.
+Version 0.1.1 uses the tested refill routine and the same line table.
+Offline checks exercised all 512 aligned DMA positions, a pending render,
+invalid cursors, interrupt priorities and the tick retry after a deferral.
+The hardware CPU result is a meter observation for this pattern.
 
 ## Regenerating `lines.c`
 
