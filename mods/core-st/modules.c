@@ -5,6 +5,7 @@
  */
 #include <syntakt/modules.h>
 #include <syntakt/native.h>
+#include <syntakt/host.h>
 #include "smz.h"
 typedef st_u32 u32;
 extern void *fw_malloc(u32);extern void fw_free(void *);
@@ -215,6 +216,7 @@ int core_event_native(u32 operation,const u32 *args,u32 *result)
 }
 #endif
 u32 core_module_count,core_module_subscriptions;
+const struct st_modulation_cache *volatile core_modulation_cache;
 /* These two audited modules write resident code during init. Their stock
  * preimages are checked by machine-boot.c before any initializer runs, and
  * they initialize after every module that may reject for an API/resource
@@ -249,6 +251,7 @@ int core_modules_bind(const struct st_smz_module *mods,u32 count)
     u32 *memory,*dst,*lists[ST_EV_COUNT];struct st_smz_api api={1,&core_machine_ui_api};
     core_machine_input_reset();
     core_audio_idle_reset();
+    core_modulation_cache=0;
     for(e=0;e<ST_EV_COUNT;e++){old[e]=add[e]=0;while(events[e].list[old[e]])old[e]++;}
     for(i=0;i<count;i++)for(j=0;j<mods[i].count;j++)add[ST_EV_INDEX(mods[i].subscriptions[j].event)]++;
     for(e=0;e<ST_EV_COUNT;e++)if(add[e])total+=old[e]+add[e]+1;
@@ -265,7 +268,8 @@ int core_modules_bind(const struct st_smz_module *mods,u32 count)
             if(e&ST_EV_PRE || e==ST_EV_NATIVE)api.version=3;
         }
         if((u32)mods[i].init!=0xffffffffu && mods[i].init(&api)){
-            core_machine_input_reset();core_audio_idle_reset();if(memory)fw_free(memory);return 0;}
+            core_machine_input_reset();core_audio_idle_reset();core_modulation_cache=0;
+            if(memory)fw_free(memory);return 0;}
     }
     for(e=0;e<ST_EV_COUNT;e++)if(add[e]){
         dst=memory+used;if(events[e].operand){patches[n++]=(u32)events[e].operand;patches[n++]=(u32)dst;}

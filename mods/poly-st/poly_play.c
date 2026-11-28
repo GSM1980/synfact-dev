@@ -15,8 +15,9 @@ extern void poly_fast_publish_span(u8 *,const volatile u8 *,u32);
 extern void poly_fast_publish_one(u8 *,const volatile u8 *,u32);
 typedef void (*poly_publish_t)(u8 *,const volatile u8 *,u32);
 static poly_publish_t poly_publish_entry DATA=poly_fast_publish_span;
-extern void poly_mod_shared(void);
+extern void poly_mod_shared(u32);
 extern void poly_mod_all(void);
+static void (*poly_mod_entry)(u32)=poly_mod_shared;
 
 static void poly_play_maps(const volatile u8 *owners)
 {
@@ -33,4 +34,11 @@ static void poly_play_maps(const volatile u8 *owners)
     }
     poly_publish_span=(first<<8)|end;
     poly_publish_entry=end==first+1?poly_fast_publish_one:poly_fast_publish_span;
+    if(poly_host && poly_host->version>=23) {
+        const struct st_modulation_cache *cache=*poly_host->modulation_cache;
+        if(cache) {
+            cache->scope(poly_shared_mask,poly_mod_shared);
+            poly_mod_entry=cache->apply;
+        }
+    }
 }

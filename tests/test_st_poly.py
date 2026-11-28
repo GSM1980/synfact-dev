@@ -59,9 +59,9 @@ def verify(folder,synfact=None):
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
     names+=['core_parameter_provider_set','core_native','core_sample_pool_api']
-    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',22,*[address(n) for n in names])
-    assert read(address('core_machine_host_api')+108,12)==struct.pack('>3I',*[address(n) for n in (
-        'core_native_relation_scope','core_voice_groups','core_voice_groups_set')])
+    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',23,*[address(n) for n in names])
+    assert read(address('core_machine_host_api')+108,16)==struct.pack('>4I',*[address(n) for n in (
+        'core_native_relation_scope','core_voice_groups','core_voice_groups_set','core_modulation_cache')])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
@@ -137,6 +137,7 @@ def verify(folder,synfact=None):
         fragment=fragment.replace('cmpi.l #8,%d0','cmpi.l #12,%d0')
         fragment=fragment.replace(' lea poly_fast_owners,%a0\n moveq #0,%d1\n move.b (%a0,%d0.l),%d1\n cmp.l %d0,%d1\n bhs.s ',
                                   ' move.l poly_slave_mask,%d1\n btst %d0,%d1\n beq.s ')
+        fragment=fragment.replace(' lea 124(%a2),%a2\n',' lea 124(%a2),%a2\n lea 4(%a4),%a4\n')
         assert fragment in (mod/'imported/kernels.s').read_text(encoding='utf-8')
     print('PASS: POLY source provenance; 6 existing/new shared subscriptions; 12 core-owned native bridges; exact replay ABI; host API 2; telemetry moved to SMZ; imported native guards; compact publication; -O3')
 

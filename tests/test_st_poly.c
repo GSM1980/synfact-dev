@@ -59,7 +59,7 @@ void poly_fast_publish_span(B *w,const volatile B *o,T span)
  poly_fast_publish(w,o);}
 void poly_fast_publish_one(B *w,const volatile B *o,T span)
 {assert((span&255)==(span>>8)+1);poly_fast_publish_span(w,o,span);}
-void poly_native_shared(void){}void poly_mod_shared(void){}
+void poly_native_shared(void){}void poly_mod_shared(T working){(void)working;}
 void poly_native_all(void){}void poly_mod_all(void){}
 
 static T original(T op,const T *a)

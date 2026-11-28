@@ -55,6 +55,9 @@ def verify(core,bank,refuse=False):
     if m.lfo:
         assert m.word(m.lfo['hooks_installed'])==1
         assert m.word(m.lfo['in_sram'])==1
+    cache=m.sym.get('core:core_modulation_cache')
+    if cache:
+        assert m.word(cache)==(0 if refuse else m.bs['modulation_cache'])
     if refuse:
         assert mode==3 and bytes(m.u.mem_read(0x400a313c,8))==writer
         return dict(bank_sha256=hashlib.sha256(bank.read_bytes()).hexdigest(),

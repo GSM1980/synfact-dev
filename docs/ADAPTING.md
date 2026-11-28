@@ -874,3 +874,10 @@ host copies it during configuration and adds the offset to the native Q16
 pitch only when accepting a note. Passing `NULL` disables the offsets. The
 original event pitch and the native release-index pitch retain their integer
 values. Both native pitch write paths use the service.
+
+Host API 23 appends `modulation_cache` at offset 120. A bank initializer can
+publish a retained `st_modulation_cache` after installing its native stock
+entry. POLY calls `scope` under MAIN exclusion with its shared slave mask and
+the native guarded fallback. Only shared controller modulation uses `apply`.
+The stock path remains the entry for independent tracks and banks without a
+shared group. The core clears the cache slot if binding the bank fails.

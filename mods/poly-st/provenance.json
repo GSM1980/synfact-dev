@@ -34,10 +34,11 @@
     "1.8: MOD labels retain the stored values; Sound Setup and Sound Browser share task publication; FX routes and Track Relation use effective group tracks",
     "1.9: analog MOD is stored in PT records, and the guarded native kernels skip only the voices that share their master's modulation",
     "1.10: compact pattern UNISON detune at the native note pitch write and separate ARP group eligibility in both MOD modes",
-    "1.10.1: UNISON encoder converts raw travel to individual cents across the entire range"
+    "1.10.1: UNISON encoder converts raw travel to individual cents across the entire range",
+    "1.10.2: native controller-cache composition in shared mode and the correct key-tracking cursor after skipped voices"
   ],
   "local_sha256": {
-    "main.c": "ef2210e6d3f940652f7ba0a1fc6ac6bf91a31f84ab933c549a991a687e30724f",
+    "main.c": "9be3cde5da25a84eb82cd4d9e52925b0e30cfdcd08eac01ae20e1466c0490260",
     "poly_core.c": "d88e5640466f339d92d9936417035c5ccb53d56e51b48f931844db71f1e50e11",
     "poly_event.c": "3fe623208c78f0553f6a0ddb387a86d2a376035952c71b2227893ef556b4d387",
     "poly_groups.c": "9d873f431e780f7201cc90edb8c60e2ec745e3543151bc256cd1ddc3cbdfc63b",
@@ -47,7 +48,7 @@
     "poly_ui.c": "a73530be2a3f570192fcb6f152cd626761c646e83cd4eabe88059a9b1b9f60b0",
     "publication.s": "9c95e3bcc66fdfa89b5009a4a88bc749b2a7abb8d3941a16a4504936f9145d39",
     "poly_codec.c": "4ec2381ead5f207622b00f60a6ea25532f25f02741f05cc65da5002269dc21ba",
-    "poly_play.c": "99316d0b7f601b623c1b55e6677fbe157324777f982aa00cde0558049d8471ff",
+    "poly_play.c": "fb2e0da1632509d3282b0c79fed63503e599b5df53da99298c3ba480247eabcf",
     "poly_copy.c": "c5d00cbe60399d84b072ada36d205e3e3a2ca272539a40dbe61ea74af05fbda3",
     "sync.s": "1217a57bb488ccce2cd3f3e890c5f42b05e457ceec9123f7b021ce5cda5783ae",
     "copies.s": "8ee5a01ccc74cfbf6d984bd632f98fd563e0d3230a8ca348a318061c588d7aa6"

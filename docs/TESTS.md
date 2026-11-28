@@ -751,6 +751,12 @@ voices, and checks that finite gates can be reused while an infinite first
   P.MOD on digital, analog and mixed groups against the full native
   modulation path, including deterministic LFO and controller output.
 
+`tests/test_st_poly_modulation_cache_emu.py --build BUILD --previous OLD`
+runs the installed Modulation Skip entry on linked banks and checks the full
+working rows against native controller, LFO and publication output over
+mixed modes, group changes and dense fallback. `--previous` also compares
+steady modulation, LFO and publication instruction counts by voice count.
+
 ### Unused-module MAIN work
 
 `tools/bench_st_idle_main.py` compares complete integer idle callbacks, native

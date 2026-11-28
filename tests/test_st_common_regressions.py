@@ -356,6 +356,10 @@ def verify(folder,cc,synfact=None,previous=None,audio_window=None,sampler_audio_
         from elekloader.sdk import elf
         bank_elf=out/'synfact-machines.work/main.elf'
         bank_symbols={s.name for s in elf.Elf.load(bank_elf).symbols}
+        if {'poly_module','modulation_skip_module'}<=bank_symbols and 'core:core_modulation_cache' in json.loads(
+                (out/'verification.json').read_text())['symbols']:
+            run('POLY shared modulation with MSKIP (Unicorn)',[unicorn_python,'-B',
+                'tests/test_st_poly_modulation_cache_emu.py','--build',out])
         if 'lfo3_owned_row_lookup' in bank_symbols:
             if 'playhead_native' in bank_symbols:
                 run('full native catalog interest capacity (Unicorn)',[

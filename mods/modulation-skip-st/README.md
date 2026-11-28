@@ -1,7 +1,14 @@
 # Skip native modulation per track
 
-Desktop OS 1.42 release: **1.2.5**, based on remote main `f48f3ab`.
-Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+Desktop OS 1.42 version **1.2.6**. Use core 2.9.3 and POLY 1.10.2 to keep
+the cache active with M.MOD. Other modes retain the original stock entry on
+core 2.2 or later (SMZ4 contract `0x53594606`).
+
+With M.MOD, the cache tracks the master's and unrelated tracks' controller
+inputs. Shared slaves receive the master's effective values through POLY's
+existing publication. A changed group mask rebuilds the dependency lists.
+Dense or unsafe inputs and the periodic comparison run the guarded native
+body, with the same exclusions.
 
 Current desktop target: **OS 1.42 / core 2.0**, including the latest remote main.
 See [the port notes](../../docs/OS142-PORT.md).

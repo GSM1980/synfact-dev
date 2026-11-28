@@ -165,6 +165,10 @@ changed_on:
 changed_verify:
     t=modulation_skip_skips;block(a);
     assert(modulation_skip_skips==t && modulation_skip_errors==2 && modulation_skip_mode==VERIFY);
+    modulation_cache_scope(1u<<3,0);
+    assert(enabled_tracks==(ALL_TRACKS&~(1u<<3)) && !raw_ready && !valid_mask);
+    modulation_cache_scope(0,0);
+    assert(enabled_tracks==ALL_TRACKS);
     /* Header: page 3 of 3, percentages per window. */
     ticks=0;for(i=0;i<239;i++)skip_tick(ctrl);paints=0;skip_draw(0,0);assert(!paints);
     skip_tick(ctrl);skip_draw(0,0);assert(paints==1 && !strncmp((char *)ui_drawn,"MSKIP VER",9) && ctrl[0x20]);

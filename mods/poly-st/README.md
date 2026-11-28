@@ -1,8 +1,11 @@
-# POLY for Syntakt (1.10.1)
+# POLY for Syntakt (1.10.2)
 
-Desktop OS 1.42 version **1.10.1**.
-Use core 2.9.2 with the matching bank for UNISON, ARP exclusion, Track Relation and track options
-(SMZ4 contract `0x53594606`).
+Desktop OS 1.42 version **1.10.2**.
+Core 2.9.3 and Modulation Skip 1.2.6 let M.MOD skip controller modulation when
+the inputs are unchanged. M.MOD still shares the master's effective values.
+The native fallback advances the pitch cursor past skipped voices, preserving
+the key tracking source of later tracks. Core 2.9.2 provides UNISON, ARP
+exclusion, Track Relation and track options (SMZ4 contract `0x53594606`).
 
 Older hardware measurements below refer to the previous OS. See
 [the port notes](../../docs/OS142-PORT.md).

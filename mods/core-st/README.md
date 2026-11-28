@@ -1,4 +1,8 @@
-# Syntakt core 2.9.2
+# Syntakt core 2.9.3
+
+Host API 23 lets MSKIP offer its controller modulation cache to POLY. POLY
+publishes the shared slave mask when the pattern or group changes. The native
+modulation and LFO adapters keep their existing firmware sites.
 
 Host API 22 publishes physical voice-group membership separately from the
 modulation routing tables. The provider can also publish signed Q16 semitone

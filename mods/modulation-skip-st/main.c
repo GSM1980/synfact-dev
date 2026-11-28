@@ -13,9 +13,9 @@
  * and dense matrices use stock.
  *
  * Site: 40097b04, the stock body after its prologue, where core-st's
- * modulation adapter jumps when no module replaces it (analog POLY does,
- * and that path is untouched). Its six bytes (two instructions) are replaced
- * by `jmp abs.l`; the stock path re-executes them. Install once at init,
+ * modulation adapter jumps when no module replaces it. POLY's shared
+ * modulation uses the cache directly through host API 23. The site's six
+ * bytes are replaced by `jmp abs.l`; the stock path re-executes them. Install once at init,
  * nothing if the bytes differ (header `MSKIP NO1`).
  * Modes: VERIFY always runs stock and compares (errors counted, never skips);
  * ON skips or runs selected tracks, with periodic stock comparisons; the first
@@ -24,6 +24,7 @@
  * dirty tracks, % avoiding the full stock body, differences found.
  */
 #include <syntakt/modules.h>
+#include <syntakt/host.h>
 typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;typedef short s16;typedef int s32;
 #ifndef SKIP_R32
 #define SKIP_R32(a) (*(const volatile u32 *)(a))
@@ -44,7 +45,7 @@ typedef unsigned int u32;typedef unsigned short u16;typedef unsigned char u8;typ
 #define CHECK_EVERY 64u
 enum {OFF,VERIFY,ON,REFUSED};
 enum {RUN_STOCK,SKIPPED,RUN_AND_CHECK,RUN_FILTERED,RUN_SPARSE};
-extern void modulation_skip_entry(void),modulation_skip_machine_entry(void),modulation_skip_filtered(void);
+extern void modulation_skip_entry(void),modulation_skip_machine_entry(void),modulation_skip_filtered(u32);
 extern u32 modulation_skip_lock(void);
 extern void modulation_skip_unlock(u32),modulation_skip_code16(u32,u32),modulation_skip_sync(void);
 u32 modulation_skip_mode;                       /* OFF until installed */
@@ -71,6 +72,7 @@ static u32 zero_all[TRACKS*ENTRIES] __attribute__((aligned(16)));
 static u32 zero_all_count,sparse_track_mask;
 static u16 zero_offset[TRACKS] __attribute__((aligned(4)));
 static u32 valid_mask,unsafe_mask,active_track_mask,zero_track_mask,total_used,raw_ready,count,check_mask,capture_mask;
+static u32 enabled_tracks=ALL_TRACKS;
 #ifndef SKIP_HOST
 u32 modulation_skip_decide(u32);
 extern u32 modulation_skip_zero_decide(u32),modulation_skip_stock_decide(u32);
@@ -130,6 +132,7 @@ static void build_track(u32 t)
 static __attribute__((noinline)) u32 refresh_machine(u32 scan)
 {
     u32 t,k,v,any,changed=0,bit,at;
+    scan&=enabled_tracks;
     for(t=0;t<TRACKS;t++){
         bit=1u<<t;if(!(scan&bit))continue;any=0;at=raw_address(t);
         for(k=0;k<ENTRIES;k++){
@@ -147,6 +150,7 @@ static __attribute__((noinline)) u32 refresh_machine(u32 scan)
     if(changed){
         active_track_mask=zero_track_mask=total_used=0;active_count=zero_count=0;zero_all_count=0;sparse_track_mask=0;
         for(t=0;t<TRACKS;t++){
+            if(!(enabled_tracks&(1u<<t)))continue;
             if(active_groups[t]){active_track_mask|=1u<<t;active_ids[active_count++]=(u8)t;}
             if(zero_used[t]){zero_track_mask|=1u<<t;zero_ids[zero_count++]=(u8)t;}
             if(sparse_safe[t])sparse_track_mask|=1u<<t;
@@ -226,7 +230,7 @@ static void prepare_partial(u32 dirty)
 }
 static u32 dirty_inputs(void)
 {
-    u32 j,t,g,i,mask=ALL_TRACKS&~valid_mask;
+    u32 j,t,g,i,mask=enabled_tracks&~valid_mask;
     for(j=0;j<active_count;j++){
         t=active_ids[j];
         for(g=t==12u?1u:0u;g<GROUPS;g++)if(active_groups[t]&(1u<<g)){
@@ -281,18 +285,19 @@ u32 modulation_skip_decide(u32 working)
     writes=modulation_skip_machine_writes;written=writes!=machine_seen;machine_seen=writes;
     periodic=!(++ticks_irq%CHECK_EVERY);
     if(written || !raw_ready || modulation_skip_mode==VERIFY || periodic){
+        u32 had_raw=raw_ready;
         for(t=0;t<TRACKS;t++)if(modulation_skip_machine_dirty[t]){
             scan|=1u<<t;modulation_skip_machine_dirty[t]=0;
         }
         if(!raw_ready || modulation_skip_mode==VERIFY || periodic || !scan)scan=ALL_TRACKS;
         changed=refresh_machine(scan);
-        if(changed && !written && modulation_skip_blocks>1u){
+        if(changed && !written && had_raw){
             modulation_skip_errors++;
             if(modulation_skip_mode==ON){modulation_skip_mode=OFF;valid_mask=0;return RUN_STOCK;}
         }
     }
     if(unsafe_mask || total_used>DEST_LIMIT){valid_mask=0;return RUN_STOCK;}
-    if(!active_track_mask && valid_mask==ALL_TRACKS && modulation_skip_mode==ON && !periodic){
+    if(!active_track_mask && valid_mask==enabled_tracks && modulation_skip_mode==ON && !periodic){
         if(++count%CHECK_EVERY){project_zero(ALL_TRACKS);modulation_skip_hits++;modulation_skip_skips++;return SKIPPED;}
         periodic=1;
     }
@@ -310,7 +315,7 @@ u32 modulation_skip_decide(u32 working)
         return sparse_ok(dirty)?RUN_SPARSE:RUN_FILTERED;
     }
     check_mask=valid_mask&~dirty;
-    capture_pre(ALL_TRACKS);capture_zero(ALL_TRACKS);capture_mask=ALL_TRACKS;
+    capture_pre(enabled_tracks);capture_zero(enabled_tracks);capture_mask=enabled_tracks;
     return RUN_AND_CHECK;
 }
 void modulation_skip_after(u32 working)
@@ -363,7 +368,7 @@ __asm__(
 "        tst.l raw_ready\n"
 "        beq.w 9f\n"
 "        move.l valid_mask,%d0\n"
-"        cmpi.l #0x1fff,%d0\n"
+"        cmp.l enabled_tracks,%d0\n"
 "        bne.w 9f\n"
 "        move.l modulation_skip_machine_writes,%d0\n"
 "        cmp.l machine_seen,%d0\n"
@@ -517,6 +522,41 @@ __asm__(
 "        rts\n");
 #endif
 
+/* POLY's mode and track list change under the native exclusion. Rebuild the
+ * cache in its next pass, including tracks returning to independent mode. */
+static void modulation_cache_scope(u32 shared,void (*native)(u32));
+#ifndef SKIP_HOST
+static void (*shared_native)(u32);
+extern u32 modulation_skip_dispatch(u32);
+
+static void modulation_cache_apply(u32 working)
+{
+    switch(modulation_skip_dispatch(working)) {
+    case SKIPPED:return;
+    case RUN_STOCK:shared_native(working);return;
+    case RUN_FILTERED:modulation_skip_filtered(working);break;
+    case RUN_SPARSE:modulation_skip_sparse(working);break;
+    default:shared_native(working);break;
+    }
+    modulation_skip_after(working);
+}
+static const struct st_modulation_cache modulation_cache={modulation_cache_scope,modulation_cache_apply};
+#endif
+
+static void modulation_cache_scope(u32 shared,void (*native)(u32))
+{
+    u32 enabled=ALL_TRACKS&~shared;
+#ifndef SKIP_HOST
+    shared_native=native;
+#else
+    (void)native;
+#endif
+    if(enabled==enabled_tracks)return;
+    enabled_tracks=enabled;
+    unsafe_mask&=enabled;
+    raw_ready=valid_mask=0;
+}
+
 /* ---- install and UI */
 static u32 be16(u32 at){return (u32)SKIP_MEM(at)[0]<<8|SKIP_MEM(at)[1];}
 /* 0 installed; 1 the modulation site, 2 the machine-data writer differs. */
@@ -567,6 +607,10 @@ static int initialize(const struct st_smz_api *api)
     if(!api || !api->version || !api->ui || api->ui->version<7)return 1;
     refused=install();
     modulation_skip_mode=refused?REFUSED:MODULATION_SKIP_VERIFY?VERIFY:ON;
+#ifndef SKIP_HOST
+    if(!refused && api->ui->host && api->ui->host->version>=23)
+        *api->ui->host->modulation_cache=&modulation_cache;
+#endif
     update();
     return 0;                                   /* a refusal leaves stock untouched */
 }

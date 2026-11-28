@@ -52,6 +52,7 @@ poly_mod_second_guard:
  addq.l #2,%d2
  addi.l #142,%d3
  lea 124(%a2),%a2
+ lea 4(%a4),%a4
  moveq #26,%d0
  cmp.l %d2,%d0
  bne.w poly_mod_second

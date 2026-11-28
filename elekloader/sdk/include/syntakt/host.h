@@ -16,6 +16,13 @@ struct st_audio_idle_owner {
     int (*ready)(void);
     void (*mix)(unsigned int,unsigned int,void *);
 };
+/* One optional cache for the native controller modulation pass. The group
+ * provider sets the slave exclusion mask and its exact native fallback under
+ * MAIN exclusion. The cache entry has the same C ABI as the native pass. */
+struct st_modulation_cache {
+    void (*scope)(unsigned int,void (*)(unsigned int));
+    void (*apply)(unsigned int);
+};
 struct st_machine_host_api {
     unsigned int version;
     const struct st_storage_io *storage;
@@ -170,5 +177,8 @@ struct st_machine_host_api {
      * twelve signed Q16 semitone offsets. Null clears the pitch offsets. */
     const volatile unsigned int *voice_groups;
     void (*voice_groups_set)(unsigned int,const int *);
+    /* API 23: one retained cache descriptor, installed at bank init. A failed
+     * bank bind clears the slot. A null slot leaves group modulation native. */
+    const struct st_modulation_cache *volatile *modulation_cache;
 };
 #endif

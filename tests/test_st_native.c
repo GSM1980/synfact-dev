@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <string.h>
 /* API 12 retains 92/96; API 15 audio_idle is 100; API 20 persistence is 104. */
-typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==120 &&
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==124 &&
     offsetof(struct st_machine_host_api,native_query)==84 &&
     offsetof(struct st_machine_host_api,native_dispatch)==84 &&
     offsetof(struct st_machine_host_api,pool)==88 &&
@@ -17,7 +17,8 @@ typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==120 &&
     offsetof(struct st_machine_host_api,persistence)==104 &&
     offsetof(struct st_machine_host_api,native_relation_scope)==108 &&
     offsetof(struct st_machine_host_api,voice_groups)==112 &&
-    offsetof(struct st_machine_host_api,voice_groups_set)==116 ? 1 : -1];
+    offsetof(struct st_machine_host_api,voice_groups_set)==116 &&
+    offsetof(struct st_machine_host_api,modulation_cache)==120 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)

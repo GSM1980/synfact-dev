@@ -1,4 +1,36 @@
-# POLY 1.6 MAIN optimization
+# POLY MAIN optimization
+
+## POLY 1.10.2 and Modulation Skip
+
+With M.MOD active, the POLY modulation override previously bypassed the
+entry patched by Modulation Skip. This ran the full controller loop on the
+remaining tracks in every block. Four voices leave two fewer tracks in those
+loops than two voices. That saved more work than publication added for the
+extra slaves. The publication still copies the same values with 1.10.2.
+
+With core 2.9.3 and Modulation Skip 1.2.6, the shared override uses the cache
+with those slave tracks excluded. It retains the guarded native fallback for
+dense or unsafe controller matrices and periodic checks. The fallback now
+advances the pitch cursor after skipping a voice so later tracks keep their
+own key-tracking source, including FX.
+
+In the linked ColdFire emulator, measurements average 128 blocks with neutral
+LFOs and an unchanged controller matrix, including periodic native checks.
+Counts are only for the controller, native LFO and publication stages. The
+paired POLY-off and P.MOD baselines agree in these stages.
+
+| Mode | Old delta vs. POLY off | New delta vs. POLY off |
+| --- | ---: | ---: |
+| Digital or analog M.MOD, 2 voices | +6,232 instructions/block | +223 instructions/block |
+| Analog M.MOD, 3 voices | +5,554 instructions/block | +30 instructions/block |
+| Digital M.MOD, 4 voices | +4,896 instructions/block | −144 instructions/block |
+
+Two-voice publication costs 207 instructions, including dispatch. Two-voice
+controller modulation drops from 6,490 to 481 instructions per block on
+average. These are instruction counts in an emulator. The MAIN meter on the
+instrument measures elapsed time across the whole audio path.
+
+## POLY 1.6
 
 Release versions and development labels: see [the consolidated MAIN release](MAIN-OPTIMIZATION-RELEASE.md). Numbers in the measurements below identify historical development iterations.
 
