@@ -41,3 +41,25 @@ note_stock:
         jmp 0x400a42bc
 note_consumed:
         jmp 0x400a4796
+
+| OS 1.42 pitch writes. D0 is the clamped note in Q16 and D2 the track.
+| Preserve the integer note in the event and the stock register contracts.
+        .macro pitch_bias name,reg,return
+        .globl \name
+\name:
+        tst.l core_note_pitch_bias
+        beq.s .Lpitch_store\@
+        movea.l core_note_pitch_bias,\reg
+        add.l (\reg,%d2.l*4),%d0
+        bpl.s .Lpitch_high\@
+        clr.l %d0
+.Lpitch_high\@:
+        cmpi.l #0x7f0000,%d0
+        bls.s .Lpitch_store\@
+        move.l #0x7f0000,%d0
+.Lpitch_store\@:
+        lea 0x800046b8,\reg
+        jmp \return
+        .endm
+        pitch_bias core_note_pitch_a0,%a0,0x400a4440
+        pitch_bias core_note_pitch_a1,%a1,0x400a44ea

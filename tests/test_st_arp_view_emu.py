@@ -7,7 +7,7 @@ selector and pool lifecycle execute target code. No physical UI/audio assertion.
 import argparse,hashlib,json,struct,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from test_st_arp_generator_emu import Machine,W,SP,RET,KIT,SEQ
+from test_st_arp_generator_emu import Machine,W,SP,RET,KIT,SEQ,LIST
 from unicorn.m68k_const import UC_M68K_REG_A7
 
 APP,MAIN,MODEL,NODE,EV,ROOT,BMP,VECTOR=0x49011000,0x49012000,0x49012400,0x49012500,0x49012600,0x49013000,0x49014000,0x49015000
@@ -359,11 +359,96 @@ def page_descriptors(core,bank):
     return ['ARP pages: "Arpeggiator" title, no control IDs; native pages and POLY\'s keep theirs',
             'ARP view on top while not opaque','encoders/pushes on an ARP page never reach the native editor']
 
+
+def poly_exclusion(core, bank):
+    m=ViewMachine(core,bank)
+    m.w(LIST+4,m.sym['poly_native']);m.w(LIST+8,0)
+    m.call(m.cs['core:core_native_initialize'])
+    assert m.call('poly_initialize',W)==0
+    args=W+0x9a0
+    for root,base in ((0,2),(8,1)):
+        for mode in (0,1):
+            assert m.call('poly_record_write',root,1,2)==1
+            m.u.mem_write(args,struct.pack('>6I',0x504f4c59,0x43464732,root,mode,0,0))
+            m.call(0x4011a8e6,args)
+            assert m.word(args+20)==1
+            for track in (root,root+1):
+                assert not m.configure(track=track)
+                m.track=track
+                m.pages([base,3,3,3,3]);m.w(PARAM+0x90,4)
+                assert not m.draw() and m.index()==0
+                assert m.vector()==[base,3,3]
+                m.call('arp_trig_sync',PARAM)
+                assert m.vector()==[base,3,3]
+                m.w(PARAM+0x90,2)
+                assert m.key(0x13,1,100)==0 and m.key(0x13,16,110)==0
+                assert not m.word(m.sym['arp_view'])
+            m.track=root+2;m.pages([base,3,3])
+            m.call('arp_trig_sync',PARAM)
+            assert m.vector()==[base,3,3,3,3]
+        assert m.call('poly_record_write',root,0,2)==1
+        m.track=root;m.pages([base,3,3]);m.call('arp_trig_sync',PARAM)
+        assert m.vector()==[base,3,3,3,3]
+
+
 TRACKDATA,TVT=0x4901e000,0x4901f000
 TDATA,TNOTIFY=RET+0x208,RET+0x20c
 # SCALE (1.8): the active pattern's PatternSettings model (pattern +2Ch) and its
 # record (vtable +28h): +1Eh scale (0 = Ionian, table row 1), +20h root (2 = D).
 PATTERN=APP+0x3394+2*0x680;SVT,SHEADER,SDATA=0x4901f400,0x4901f500,RET+0x210
+
+class PolyEncoderMachine(ViewMachine):
+    def __init__(self,core,bank):
+        super().__init__(core,bank)
+        self.w(LIST+4,self.sym['poly_native']);self.w(LIST+8,0)
+        self.call(self.cs['core:core_native_initialize'])
+        assert self.call('poly_initialize',W)==0
+        self.w(PARAM+0x68,APP)
+        self.w(PATTERN+0x2c,SVT);self.w(SVT+0x28,SDATA);self.w(SVT+0x10,NOTIFY)
+
+    def code(self,u,pc,n,ctx):
+        if pc==0x400f6866:
+            # Read the signed delta and pressed byte with the original OS.
+            return Machine.code(self,u,pc,n,ctx)
+        if pc==0x4007ba2a:
+            raise AssertionError('UNISON entered the accelerated Sound parameter path')
+        if pc==0x40019000:
+            assert self.args(1)==(APP,)
+            self.ret(PATTERN);return
+        if pc==SDATA:
+            assert self.args(1)==(PATTERN+0x2c,)
+            self.ret(SHEADER);return
+        if pc==NOTIFY:
+            assert self.args(2)==(PATTERN+0x2c,0)
+            self.notified+=1;self.ret();return
+        return super().code(u,pc,n,ctx)
+
+    def turn_unison(self,delta,pressed=False):
+        self.u.mem_write(EV+12,struct.pack('>IiB',4,delta,pressed))
+        assert self.call('poly_ui_encoder',PARAM,EV)==1
+        assert self.read(SHEADER+0x21,7)==self.read(SEQ+0x21381,7)
+        return self.read(self.sym['poly_unison']+self.track,1)[0]
+
+
+def poly_unison_encoder(core,bank):
+    m=PolyEncoderMachine(core,bank)
+    for track,base in ((0,2),(8,1)):
+        assert m.call('poly_record_write',track,1,2)==1
+        m.u.mem_write(SHEADER+0x21,m.read(SEQ+0x21381,7))
+        m.track=track;m.pages([base,3,3]);m.w(PARAM+0x90,2)
+        before=m.notified
+        assert m.turn_unison(8)==0 and m.notified==before
+        assert m.turn_unison(8)==1 and m.notified==before+1
+        assert [m.turn_unison(16) for _ in range(49)]==list(range(2,51))
+        assert m.turn_unison(16)==50 and m.notified==before+50
+        assert m.turn_unison(-8)==50 and m.turn_unison(-8)==49
+        assert [m.turn_unison(-16) for _ in range(49)]==list(range(48,-1,-1))
+        assert m.turn_unison(32,pressed=True)==2
+        assert m.turn_unison(12)==2 and m.turn_unison(-4)==2 and m.turn_unison(-12)==1
+        assert m.turn_unison(-0x80000000)==0 and m.turn_unison(0x7fffffff)==50
+        assert m.turn_unison(-0x80000000)==0
+        assert m.turn_unison(12)==0
+
 
 class ChordViewMachine(LockViewMachine):
     """1.2 chord page. The native track-model setters (4002755x..400282e8) and
@@ -696,7 +781,11 @@ def verify(core,bank,out):
     q.configure(mode=0);q.dispose()
     assert m.pool_counts()==initial
     binding=native_key_binding(core,bank);page_handoff=parameter_page_handoff(core,bank)
-    result=dict(ok=True,page_descriptors=descriptors,page_popups=popups,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,shown_track=shown,encoder_travel=travel,kit_sound_mirror=mirror,drawn_in_trig_view=True,
+    groups='poly_module' in m.sym
+    if groups:
+        poly_exclusion(core,bank)
+        poly_unison_encoder(core,bank)
+    result=dict(ok=True,page_descriptors=descriptors,page_popups=popups,key_binding=binding,parameter_page_handoff=page_handoff,step_editing=steps,chord_page=chord,shown_track=shown,encoder_travel=travel,kit_sound_mirror=mirror,drawn_in_trig_view=True,poly_group_exclusion=groups,poly_unison_encoder=groups,
         lifecycle=['TRIG on the last native TRIG page opens with MODE OFF','PAGE_SYNC adds two pages on eligible audio tracks',
                    'tick opens a page reached otherwise','encoders A..F clamp','selected step/mute','modal priority',
                    'native held-trig selection; MODE/SPEED/RANGE/LEN locks only; per-step relative values; base unchanged; release restores base',

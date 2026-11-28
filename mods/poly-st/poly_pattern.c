@@ -1,6 +1,9 @@
 /* Laboratory-only wrappers. No physical storage allocation or firmware release. */
 typedef unsigned int u32;
 typedef unsigned char u8;
+#define POLY_MODE_TRACKS 10
+#define POLY_RECORD_SIZE 7
+#define POLY_UNISON_MAX 50
 extern u32 stock_header_load(u8 *,const u8 *);
 extern void stock_header_reset(u8 *,u32);
 
@@ -46,7 +49,7 @@ u32 poly_header_load(u8 *destination,const u8 *source)
     u32 result=stock_header_load(destination,source),i,ok;
     if(destination && source && (result&255u)) {
         ok=valid(source+0x21);
-        for(i=0;i<7;i++)destination[0x21+i]=ok?source[0x21+i]:0;
+        for(i=0;i<POLY_RECORD_SIZE;i++)destination[0x21+i]=ok?source[0x21+i]:0;
     }
     return result;
 }
@@ -56,5 +59,5 @@ void poly_header_reset(u8 *destination,u32 quiet)
     u32 i;
     stock_header_reset(destination,quiet);
     if(destination && (!quiet || !valid(destination+0x21)))
-        for(i=0;i<7;i++)destination[0x21+i]=0;
+        for(i=0;i<POLY_RECORD_SIZE;i++)destination[0x21+i]=0;
 }

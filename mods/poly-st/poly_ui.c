@@ -16,12 +16,15 @@
 #define UI_TOGGLE POLY_CALL(0x400703dau,void (*)(void *,u32,void *,s32,s32,u32))
 static u32 poly_layout_view DATA=0;
 static u32 poly_trig_layout[11] DATA={0};
+static struct {u8 *view;u32 track,sequence;s32 rest;} poly_unison_turn;
 /*  page, as the native MIDI TRIG page (40041076..40041530): positions
  * 0..3 are the top row (encoders A..D), 4..7 the bottom row (E..H).
- * Top: POLY, VOICES. Bottom: NOTE, then NOT2/NOT3/NOT4 under the keyboard.
+ * Top: POLY, VOICES, MOD, UNISON. Bottom: NOTE, then NOT2/NOT3/NOT4 for chords.
  * POLY OFF leaves only POLY: the other controls are neither drawn nor edited. */
 static const u32 poly_control_ids[9]={0,0,0,0,0x15,0x1e,0x1f,0x20,10};
 static const u32 poly_analog_ids[9]={0,0,0,0,0x14,0x1e,0x1f,0x20,10};
+static const u32 poly_unison_ids[9]={0,0,0,0,0x15,0,0,0,10};
+static const u32 poly_analog_unison_ids[9]={0,0,0,0,0x14,0,0,0,10};
 static const u32 poly_off_ids[9]={0,0,0,0,0,0,0,0,10};
 
 u32 poly_ui_parameter_view(u8 *view)
@@ -96,8 +99,11 @@ static u32 poly_ui_on(u8 *view)
 
 static const u32 *poly_ui_ids(u8 *view)
 {
-    if(poly_ui_on(view))return poly_ui_track(view)<8?poly_control_ids:poly_analog_ids;
-    return poly_off_ids;
+    u32 track;
+    if(!poly_ui_on(view))return poly_off_ids;
+    track=poly_ui_track(view);
+    if(poly_unison_spread(track))return track<8?poly_unison_ids:poly_analog_unison_ids;
+    return track<8?poly_control_ids:poly_analog_ids;
 }
 
 /* POLY's page descriptor: page 3's first word, POLY's title (the header's
@@ -134,8 +140,8 @@ void poly_ui_action_end(u32 previous){poly_layout_view=previous;}
 
 /* UI owns the PatternSettings backing record; the sequencer owns its mirror.
  * Notify through the same virtual method as native settings setters, so later
- * updateMirror/save operations retain the seven-byte topology record. */
-static u32 poly_ui_settings_write(u8 *view,u32 track,u32 enabled,u32 voices,u32 mode)
+ * updateMirror/save operations retain the POLY record. */
+static u32 poly_ui_settings_write(u8 *view,u32 track,u32 enabled,u32 voices,u32 mode,u32 spread)
 {
     u32 app=*(u32 *)(view+0x68),pattern,i;
     u8 *model,*header;
@@ -146,16 +152,46 @@ static u32 poly_ui_settings_write(u8 *view,u32 track,u32 enabled,u32 voices,u32 
     model=(u8 *)(pattern+0x2cu);
     header=((u8 *(*)(void *))(*(u32 **)model)[0x28/4])(model);
     if(!header)return 0;
-    if(!(mode<2?poly_mode_write(track,mode):poly_record_write(track,enabled,voices)))return 0;
+    if(spread<=POLY_UNISON_MAX) {
+        if(!poly_spread_write(track,spread))return 0;
+    }else if(mode<2) {
+        if(!poly_mode_write(track,mode))return 0;
+    }else if(!poly_record_write(track,enabled,voices))return 0;
     poly_copy_ui();
     sequence=*(const volatile u8 **)0x43bd8430u;
-    for(i=0;i<7;i++)header[0x21+i]=sequence[0x21381+i];
+    for(i=0;i<POLY_RECORD_SIZE;i++)header[0x21+i]=sequence[0x21381+i];
     ((void (*)(void *,u32))(*(u32 **)model)[0x10/4])(model,0);
     return 1;
 }
 
 u32 poly_ui_record_write(u8 *view,u32 track,u32 enabled,u32 voices)
-{return poly_ui_settings_write(view,track,enabled,voices,4);}
+{return poly_ui_settings_write(view,track,enabled,voices,4,~0u);}
+
+/* Use the same unaccelerated travel as the sampler's discrete controls.
+ * The Sound parameter increment returns native units, not cents. */
+#define POLY_UNISON_TRAVEL 16
+static void poly_ui_unison_encoder(u8 *view,void *event,u32 track)
+{
+    u32 sequence=poly_seq_config.sequence;
+    s32 current=(s32)poly_unison_spread(track),next;
+    s32 delta=POLY_CALL(0x400f6866u,s32 (*)(void *,u32,u32))(event,1,1);
+    const s32 limit=POLY_UNISON_MAX*POLY_UNISON_TRAVEL;
+    s32 low= -current*POLY_UNISON_TRAVEL,high=limit+low;
+    if(!delta)return;
+    if(view!=poly_unison_turn.view || track!=poly_unison_turn.track ||
+       sequence!=poly_unison_turn.sequence || (delta<0)!=(poly_unison_turn.rest<0))
+        poly_unison_turn.rest=0;
+    poly_unison_turn.view=view;poly_unison_turn.track=track;poly_unison_turn.sequence=sequence;
+    if(delta>limit)delta=limit;
+    if(delta< -limit)delta= -limit;
+    delta+=poly_unison_turn.rest;
+    if(delta<low)delta=low;
+    if(delta>high)delta=high;
+    next=current+delta/POLY_UNISON_TRAVEL;
+    poly_unison_turn.rest=delta%POLY_UNISON_TRAVEL;
+    if(next!=current && poly_ui_settings_write(view,track,1,poly_seq_config.states[track]-1,4,(u32)next))
+        POLY_CALL(0x400ffe22u,void (*)(void *))(view);
+}
 
 u32 poly_ui_encoder(u8 *view,void *event)
 {
@@ -164,32 +200,36 @@ u32 poly_ui_encoder(u8 *view,void *event)
     s32 delta;
     poly_ui_sync(view);
     /* Shared core editor gate checks slave ownership before subscribers. */
-    if(!poly_ui_third(view))return 0;
+    if(!poly_ui_third(view)){poly_unison_turn.rest=0;return 0;}
     if(!POLY_CALL(0x400f67ceu,u32 (*)(void *,u32))(event,0xfffffffdu))return 0;
     position=POLY_CALL(0x400f67f6u,u32 (*)(void *))(event);
     if(position>7)return 0;
     /* Hidden controls are inert; NOTE and NOT2..NOT4 use the native editor. */
-    if(position && !poly_ui_on(view))return 1;
-    if(position>=4)return 0;
-    if(position==3)return 1;
+    if(position!=3)poly_unison_turn.rest=0;
+    if(position && !poly_ui_on(view)){poly_unison_turn.rest=0;return 1;}
+    track=poly_ui_track(view);
+    if(position>=4)return position>=5 && poly_unison_spread(track);
+    if(position==3) {
+        if(poly_has_unison_api())poly_ui_unison_encoder(view,event,track);
+        return 1;
+    }
     policy=POLY_CALL(0x4007ba2au,u32 (*)(u32))(0x13);
     for(i=0;i<7;i++)increment[i]=((u32 *)*(u32 *)(policy+16))[i];
     delta=POLY_CALL(0x400f6866u,s32 (*)(void *,u32,u32))(event,*(u32 *)(policy+4),*(u32 *)(policy+8));
     pressed=POLY_CALL(0x400f6884u,u32 (*)(void *))(event);
     delta=POLY_CALL(0x400f6a96u,s32 (*)(void *,u32,s32,void *,u32))(view+0x94,position,delta,increment,pressed);
     if(!delta)return 1;
-    track=poly_ui_track(view);poly_sync();state=poly_seq_config.states[track];
+    poly_sync();state=poly_seq_config.states[track];
     enabled=0;voices=state+2;
     if(state>=3){enabled=1;voices=state-1;}
-    if(position==2 && track>=8)return 1;
     if(position==2) {
-        /* UI order: POLY, M.LFO; one bounded selection per native increment. */
-        poly_ui_settings_write(view,track,enabled,voices,delta>0?0:1);
+        /* UI order: P.MOD, M.MOD; one bounded selection per native increment. */
+        poly_ui_settings_write(view,track,enabled,voices,delta>0?0:1,~0u);
     }else {
-    if(position==0) {if(delta>0)enabled=1;else enabled=0;}
-    else if(delta>0){if(voices<poly_max_voices(track))voices++;}
-    else if(voices>2)voices--;
-    poly_ui_record_write(view,track,enabled,voices);
+        if(position==0)enabled=delta>0;
+        else if(delta>0){if(voices<poly_max_voices(track))voices++;}
+        else if(voices>2)voices--;
+        poly_ui_record_write(view,track,enabled,voices);
     }
     POLY_CALL(0x400ffe22u,void (*)(void *))(view);
     return 1;
@@ -279,8 +319,9 @@ static void poly_ui_widget(u8 *view,void *ctx,u32 position,u32 id,u32 value,u8 l
 
 u32 poly_ui_draw(u8 *view,void *ctx)
 {
-    u32 i,track,state,voices,on=0,id,value,notes[4];u8 locked;
-    char number[2];
+    u32 i,track,state,voices,on=0,id,value,notes[4],spread;
+    u8 locked;
+    char number[4];
     /* : UI-loop point after the native live recorder (any view). */
     poly_rec_ui();
     if(!poly_ui_parameter_view(view))return 0;
@@ -305,21 +346,34 @@ u32 poly_ui_draw(u8 *view,void *ctx)
         UI_RECT(ctx,50,34,68,50,1);
         number[0]=(char)('0'+voices);number[1]=0;
         UI_TEXT(ctx,(void *)0x443db210u,59,39,2,"%s",number);
-        if(track<8) {
-        /* C: PLAY; D: native empty-position bitmap, no control. */
-        UI_TEXT(ctx,(void *)0x443db230u,85,27,2,"%s","PLAY");
+        /* C: MOD; D: UNISON, the total detune between the outer voices. */
+        UI_TEXT(ctx,(void *)0x443db230u,85,27,2,"%s","MOD");
         UI_TEXT(ctx,(void *)0x443db230u,85,39,2,"%s",
-            poly_modes[track]?"POLY":"M.LFO");
-        POLY_CALL(0x400f8f70u,void (*)(void *,void *,s32,s32,u32))(ctx,(void *)0x444e00b4u,103,34,0);
+            poly_modes[track]?"P.MOD":"M.MOD");
+        spread=poly_unison_spread(track);
+        if(poly_has_unison_api()) {
+            const char *label="OFF";
+            if(spread) {
+                i=0;
+                if(spread>=10)number[i++]=(char)('0'+spread/10);
+                number[i++]=(char)('0'+spread%10);
+                number[i++]='c';number[i]=0;
+                label=number;
+            }
+            UI_TEXT(ctx,(void *)0x443db230u,110,27,2,"%s","UNISON");
+            UI_TEXT(ctx,(void *)0x443db230u,110,39,2,"%s",label);
+        }else {
+            POLY_CALL(0x400f8f70u,void (*)(void *,void *,s32,s32,u32))(ctx,(void *)0x444e00b4u,103,34,0);
         }
         /* E: NOTE; F..H: NOT2..NOT4 labels, then the keyboard over F..H. */
-        for(i=0;i<4;i++) {
+        for(i=0;i<(spread?1u:4u);i++) {
             id=i?0x1du+i:(track<8?0x15u:0x14u);locked=0;
             value=UI_GET(view,id,&locked);
             notes[i]=value;
             poly_ui_widget(view,ctx,4+i,id,value,locked,i?1:0);
         }
-        poly_ui_keyboard(ctx,notes,voices);
+        if(spread)for(i=1;i<4;i++)notes[i]=0;
+        poly_ui_keyboard(ctx,notes,spread?1u:voices);
     }
     ((void (*)(void *,void *,u32))(*(u32 **)(view))[0xb8/4])(view,ctx,0);
     /* Every TRIG page counts, ARP's included (syntakt/trig-pages.h). */
@@ -331,6 +385,7 @@ u32 poly_ui_block_key(u8 *view,void *event)
 {
     volatile u32 blocked=0;
     u32 key=POLY_CALL(0x400f978cu,u32 (*)(void *))(event);
+    poly_unison_turn.rest=0;
     poly_ui_sync(view);
     /* A slave track blocks only the other parameter pages (TRIG 19, SYN 20,
      * FLTR 21, AMP 22, LFO 23); FUNC, TRK, the trigs and the rest pass, so

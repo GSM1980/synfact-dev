@@ -18,7 +18,7 @@ ALL=0xffffffff
 REGISTERS=[UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,
            UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A2,UC_M68K_REG_A3,
            UC_M68K_REG_A4,UC_M68K_REG_A5,UC_M68K_REG_A6]
-VALID=tuple(range(18))+(20,21)
+VALID=tuple(range(18))+(20,21,22,23)
 pack=lambda *v:struct.pack('>%dI'%len(v),*v)
 
 def expected(entries,registry):
@@ -39,10 +39,10 @@ def expected(entries,registry):
 def expected_routes(entries,registry):
     """Core 2.6.1: one bit per list entry up to 32, all ones past 32, for
     every subscriber, and for the TYPE bytes 18/19."""
-    out=[0]*22;every=0
+    out=[0]*24;every=0
     for index,fn in enumerate(entries):
         mask,_=registry.get(fn,(ALL,0))
-        for op in range(22):
+        for op in range(24):
             if mask>>op&1:out[op]=out[op]|1<<index if index<32 else ALL
         if index<32:every|=1<<index
     return [ALL if (every and x==every) or op in (18,19) else x for op,x in enumerate(out)]
@@ -50,7 +50,7 @@ def expected_routes(entries,registry):
 def merged(flags,words):
     """Core 2.6.1 native_merge: an interested byte from its word."""
     out=bytearray(flags)
-    for op in range(22):
+    for op in range(24):
         if op in (18,19) or not out[op] or not words[op]:continue
         out[op]=128 if words[op]==ALL else 127 if words[op]>>7 else words[op]
     return bytes(out)
@@ -101,11 +101,11 @@ class Routes(Core):
         # Core 2.6.1: the real word builder and byte rewrite, against the oracle.
         words=expected_routes(entries,registry);final=merged(flags,words)
         self.invoke('native_routes',WORDS,LIST)
-        actual=list(struct.unpack('>22I',bytes(self.u.mem_read(WORDS,88))))
+        actual=list(struct.unpack('>24I',bytes(self.u.mem_read(WORDS,96))))
         assert actual==words,(entries,registry,[hex(x) for x in actual],[hex(x) for x in words])
         self.invoke('native_merge',OUT,WORDS)
         assert bytes(self.u.mem_read(OUT,24))==final,(bytes(self.u.mem_read(OUT,24)).hex(),final.hex())
-        assert self.sym['core:core_native_interest']-self.sym['core:core_native_routes']==88
+        assert self.sym['core:core_native_interest']-self.sym['core:core_native_routes']==96
         self.u.mem_write(self.sym['core:core_native_interest'],final)
         self.u.mem_write(self.sym['core:core_native_routes'],pack(*words))
         self.oracle_words=words
@@ -114,7 +114,7 @@ class Routes(Core):
         self.operation=op;self.consume=consume;self.hits=[];self.w(RESULT,0xdeadbeef)
         bits=flags[op];want=[]
         # The setup oracle's words; after the public setters, the core's own.
-        if words is None:words=list(struct.unpack('>22I',bytes(self.u.mem_read(self.sym['core:core_native_routes'],88))))
+        if words is None:words=list(struct.unpack('>24I',bytes(self.u.mem_read(self.sym['core:core_native_routes'],96))))
         word=words[op]
         for i,fn in enumerate(entries):
             # Core 2.6.1: 0x80 (and ops 18/19) is everyone; another nonzero
@@ -143,6 +143,15 @@ def verify(folder,out):
     m.invoke('core_native_interest_set',entries[0],1<<17)
     flags=bytes(m.u.mem_read(m.sym['core:core_native_interest'],24))
     m.dispatch(entries,flags,17,None);assert m.hits==entries[:1]
+    # Only the scoped subscriber may narrow relation traffic for a track.
+    scoped=m.sym['core:core_relation_scope']
+    offsets=m.sym['core:core_relation_offsets']
+    m.invoke('core_native_relation_scope',entries[0],0x00020003,4)
+    assert m.word(scoped)==0x00020003 and m.word(offsets)==4
+    m.invoke('core_native_interest_set',entries[1],1<<22)
+    assert m.word(scoped)==m.word(offsets)==ALL
+    m.invoke('core_native_interest_set',entries[1],1<<21)
+    assert m.word(scoped)==0x00020003 and m.word(offsets)==4
     # Fill the entire table through the public API and exercise its last
     # record. A seventeenth callback must retain safe fail-open semantics.
     entries=[CALLBACK+32*i for i in range(m.native_slots+1)]
@@ -178,7 +187,7 @@ def verify(folder,out):
                           rng.choice((0,0x1234,0x5678))) for fn in functions[:4]}
             entries=[rng.choice(functions[:4] if case&1 else functions) for _ in range(count)]
             flags=m.setup(entries,registry);words=m.oracle_words
-            for op in range(22):
+            for op in range(24):
                 m.dispatch(entries,flags,op,None,words)
                 m.dispatch(entries,flags,op,rng.choice(entries) if entries else None,words)
                 checks+=2

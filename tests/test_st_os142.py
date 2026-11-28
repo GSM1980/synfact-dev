@@ -43,6 +43,10 @@ def check_module_composition(report):
     if 71 in report['machines'] or 70 in report['machines']:expected.add('st_subtype_module')
     actual=set(report['modules'])
     assert len(actual)==len(report['modules'])
+    if 'state_service_module' in actual:
+        expected.add('state_service_module')
+        for consumer in ('playhead_module','lfo3_module','arp_module'):
+            assert report['modules'].index('state_service_module')<report['modules'].index(consumer)
     assert actual-{'mix_fast_module','icache_lock_module'}==expected
 
 
@@ -63,7 +67,7 @@ def verify(stock_path, folder, previous=None):
         count += 1
 
     manifest = json.loads((ROOT / 'mods/core-st/mod.json').read_text())
-    assert manifest['os'] == '1.42' and len(manifest['sites']) == 129
+    assert manifest['os'] == '1.42' and len(manifest['sites']) == 139
     for path in sorted((ROOT / 'mods').glob('*-st/mod.json')):
         definition = json.loads(path.read_text())
         assert definition['os'] == '1.42'

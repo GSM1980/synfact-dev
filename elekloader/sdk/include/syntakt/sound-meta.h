@@ -27,7 +27,11 @@ enum st_sound_meta_kind {
  ST_SOUND_KIT_ENCODE,ST_SOUND_KIT_DECODE,ST_SOUND_ENCODE,ST_SOUND_DECODE,
  ST_SOUND_S1_SAVE,ST_SOUND_S1_LOAD,ST_SOUND_PROJECT_NEW,ST_SOUND_PROJECT_READY,
  ST_SOUND_KIT_RECORD_COPY,ST_SOUND_RECORD_COPY,ST_SOUND_RECORD_BIND,
- ST_SOUND_PATTERN_ENCODE
+ ST_SOUND_PATTERN_ENCODE,
+ /* Task query 34 {kind, Sound record, TrackModel, bytes, 1}. */
+ ST_SOUND_SETUP,
+ /* Task query 34 {kind, track, 0, 0, 1}, after the native load commits. */
+ ST_SOUND_TRACK_LOAD
 };
 /* OS 1.42 native quick save/reload buffers (4001a36a/4001a458 save,
  * 40019d78/4001b070 reload). The pattern buffers are 5c00h bytes. */

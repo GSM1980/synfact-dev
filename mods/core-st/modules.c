@@ -42,18 +42,18 @@ typedef char event_table_size[sizeof events/sizeof events[0]==ST_EV_COUNT?1:-1];
  * native.s tests these bytes by address. */
 #define NATIVE_TYPE_TRACKS ST_NATIVE_OPERATION_COUNT
 typedef char native_type_bytes[ST_NATIVE_OPERATION_COUNT==18 && ST_NATIVE_NOTE_ACCEPT==20?1:-1];
-#define NATIVE_BYTES_INIT {128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,0xff,1,128,128}
-#define NATIVE_ROUTES_INIT {~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u}
-typedef char native_routes_size[ST_NATIVE_OPERATION_LIMIT==22?1:-1];
+#define NATIVE_BYTES_INIT {128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,128,0xff,1,128,128,128,128}
+#define NATIVE_ROUTES_INIT {~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u,~0u}
+typedef char native_routes_size[ST_NATIVE_OPERATION_LIMIT==24?1:-1];
 #ifdef __mcoldfire__
-/* Core 2.6.1: the words sit 88 bytes before the bytes, so the dispatcher
+/* The words sit 96 bytes before the bytes, so the dispatcher
  * reads an operation's word with the base it already holds for its byte
  * (native-routes.s), at no extra instruction. */
 static struct {u32 routes[ST_NATIVE_OPERATION_LIMIT];unsigned char interest[4*NATIVE_WORDS];}
     native_table __attribute__((aligned(4)))={NATIVE_ROUTES_INIT,NATIVE_BYTES_INIT};
-typedef char native_table_layout[__builtin_offsetof(__typeof__(native_table),interest)==88?1:-1];
+typedef char native_table_layout[__builtin_offsetof(__typeof__(native_table),interest)==96?1:-1];
 __asm__(".globl core_native_routes\n.set core_native_routes,native_table\n"
-        ".globl core_native_interest\n.set core_native_interest,native_table+88");
+        ".globl core_native_interest\n.set core_native_interest,native_table+96");
 #define core_native_routes (native_table.routes)
 #define core_native_interest (native_table.interest)
 #else
@@ -74,6 +74,40 @@ static struct {u32 fn,mask,view;} native_masks[NATIVE_SLOTS];
  * word (machine-pages.c); 0 = every view. Nonzero only when every subscriber
  * of those operations declared the same view class. Published with the list. */
 u32 core_native_page_view;
+u32 core_relation_scope=~0u,core_relation_offsets=~0u;
+static u32 relation_callback,relation_tracks,relation_offsets;
+
+static u32 native_mask(u32 fn)
+{
+    u32 i;
+#pragma GCC unroll 1
+    for(i=0;i<NATIVE_SLOTS;i++)if(native_masks[i].fn==fn)return native_masks[i].mask;
+    return ~0u;
+}
+
+static u32 relation_scope(const u32 *list)
+{
+    u32 fn,scope=~0u;
+    if(!relation_callback)return scope;
+    while((fn=*list++)) {
+        if(fn==relation_callback)scope=relation_tracks;
+        else if(native_mask(fn)&((1u<<ST_NATIVE_RELATION_MASK)|(1u<<ST_NATIVE_RELATION_EVENT)))return ~0u;
+    }
+    return scope;
+}
+
+static void relation_refresh(void)
+{
+    u32 scope=relation_scope(events[ST_EV_NATIVE].list);
+    core_relation_scope=scope;
+    core_relation_offsets=scope==~0u?~0u:relation_offsets;
+}
+
+void core_native_relation_scope(void (*callback)(void),u32 tracks,u32 offsets)
+{
+    relation_callback=(u32)callback;relation_tracks=tracks;relation_offsets=offsets;
+    relation_refresh();
+}
 /* Ordered subscriber routes, one byte per operation; returns the page view
  * filter. Shared by startup, host API 5/6 and bind (cold). Reserved bytes
  * 18/19 retain TYPE track filtering. No new allocation or published pointer. */
@@ -109,12 +143,10 @@ __attribute__((noinline)) static u32 native_fill(unsigned char *out,const u32 *l
  * native_fill: an unregistered subscriber wants every operation. */
 __attribute__((noinline)) static void native_routes(u32 *out,const u32 *list)
 {
-    u32 fn,own,op,index=0,all=0,i;
+    u32 fn,own,op,index=0,all=0;
     for(op=0;op<ST_NATIVE_OPERATION_LIMIT;op++)out[op]=0;
     while((fn=*list++)){
-        own=~0u;
-#pragma GCC unroll 1
-        for(i=0;i<NATIVE_SLOTS;i++)if(native_masks[i].fn==fn){own=native_masks[i].mask;break;}
+        own=native_mask(fn);
         for(op=0;op<ST_NATIVE_OPERATION_LIMIT;op++)if(own>>op&1u)
             out[op]=index<32u?out[op]|1u<<index:~0u;
         if(index<32u)all|=1u<<index;
@@ -141,6 +173,7 @@ static u32 native_refresh(void)
     native_routes(core_native_routes,events[ST_EV_NATIVE].list);
     view=native_fill(core_native_interest,events[ST_EV_NATIVE].list);
     native_merge(core_native_interest,core_native_routes);
+    relation_refresh();
     return view;
 }
 void core_native_initialize(void)
@@ -212,7 +245,7 @@ int core_event_view(u32 event,void *view,void *data,u32 id)
 }
 int core_modules_bind(const struct st_smz_module *mods,u32 count)
 {
-    u32 i,j,k,e,phase,old[ST_EV_COUNT],add[ST_EV_COUNT],used=0,total=0,patches[4*ST_EV_COUNT+2*NATIVE_WORDS+2*ST_NATIVE_OPERATION_LIMIT+3],n=0;
+    u32 i,j,k,e,phase,old[ST_EV_COUNT],add[ST_EV_COUNT],used=0,total=0,patches[4*ST_EV_COUNT+2*NATIVE_WORDS+2*ST_NATIVE_OPERATION_LIMIT+7],n=0;
     u32 *memory,*dst,*lists[ST_EV_COUNT];struct st_smz_api api={1,&core_machine_ui_api};
     core_machine_input_reset();
     core_audio_idle_reset();
@@ -249,13 +282,16 @@ int core_modules_bind(const struct st_smz_module *mods,u32 count)
     }
     {union {unsigned char b[4*NATIVE_WORDS];u32 w[NATIVE_WORDS];} next;u32 wide[ST_NATIVE_OPERATION_LIMIT];
      const u32 *list=add[ST_EV_NATIVE]?lists[ST_EV_NATIVE]:events[ST_EV_NATIVE].list;
-     u32 view,*q=patches+n;
+     u32 view,scope,*q=patches+n;
      native_routes(wide,list);view=native_fill(next.b,list);native_merge(next.b,wide);
 #pragma GCC unroll 1
      for(i=0;i<ST_NATIVE_OPERATION_LIMIT;i++){*q++=(u32)(core_native_routes+i);*q++=wide[i];}
 #pragma GCC unroll 1
      for(i=0;i<NATIVE_WORDS;i++){*q++=(u32)(core_native_interest+4*i);*q++=next.w[i];}
-     *q++=(u32)&core_native_page_view;*q++=view;n=(u32)(q-patches);}
+     *q++=(u32)&core_native_page_view;*q++=view;
+     scope=relation_scope(list);
+     *q++=(u32)&core_relation_scope;*q++=scope;
+     *q++=(u32)&core_relation_offsets;*q++=scope==~0u?~0u:relation_offsets;n=(u32)(q-patches);}
     patches[n]=0;core_event_publish(patches);
     /* Both C context/native lists and assembly operands publish inside the
      * SAME IRQ exclusion. A new render subscriber must never observe an old

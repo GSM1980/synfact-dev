@@ -95,6 +95,9 @@ class Machine:
         values[10]=KIT+0x2a+track*0x123;values[11]=KIT+0x150 if pooled else 0;values[12]=length;values[17]=lock
         self.u.mem_write(e,struct.pack('>20I',*values));self.call(0x4011a80c,e,when)
         return e,lock
+    def expected_pitch(self,track,pitch,transpose):
+        return max(0,min(127,pitch+transpose))<<16
+
     def drain(self,begin,end):
         u=self.u;rounds=0
         while self.word(0x444df434):
@@ -120,7 +123,10 @@ class Machine:
                     transpose=int.from_bytes(self.read(sound+0xa8,1),'big',signed=True)
                     self.phase='effects';u.emu_start(pc,0,count=100000)
                     assert u.reg_read(UC_M68K_REG_PC)==0x400a3bee
-                    if flags&0x10000:assert self.word(0x800046b8+4*track)==max(0,min(127,pitch+transpose))<<16,'native pitch path diverged'
+                    if flags&0x10000:
+                        actual=self.word(0x800046b8+4*track)
+                        expected=self.expected_pitch(track,pitch,transpose)
+                        assert actual==expected,('native pitch path diverged',track,actual,expected)
                     if flags&0x200:assert self.word(0x80003084+4*track)==gate,'native gate path diverged'
                     self.log.append(dict(time=begin if self.word(b) else self.word(b+4),track=track,pitch=pitch,gate=gate,lock=lock,kind=kind))
                 assert u.reg_read(UC_M68K_REG_A7)==SP

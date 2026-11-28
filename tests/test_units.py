@@ -1015,12 +1015,15 @@ def test_os142_bank_allows_only_declared_optional_modules():
     check_module_composition(new)
     fast=deepcopy(new);fast['modules']+=['mix_fast_module','icache_lock_module']
     check_module_composition(fast)
+    with_state=deepcopy(fast);with_state['modules'].insert(3,'state_service_module')
+    check_module_composition(with_state)
     bad=[]
     for module in ('recorder_module','st_subtype_module','sp_sampler_input_module'):
         report=deepcopy(new);report['modules'].remove(module);bad.append(report)
     for module in ('unknown_module','st_subtype_module'):
         report=deepcopy(new);report['modules'].append(module);bad.append(report)
     report=deepcopy(old);report['modules'].append('st_subtype_module');bad.append(report)
+    report=deepcopy(fast);report['modules'].append('state_service_module');bad.append(report)
     for report in bad:
         try:check_module_composition(report)
         except AssertionError:pass

@@ -523,6 +523,12 @@ specifies. Analog masters keep their native shared modulation and saved Sounds.
 Only analog slaves enter the copied native kernels' skip bitmap. Digital
 independent groups must keep advancing when analog groups coexist.
 
+POLY 1.9 adds analog MOD via the PT pattern tag. Build the skip bitmap and
+late publication map together during the IRQ-excluded configuration commit.
+The native guarded kernels skip only M.MOD voices that take their parameters
+from the master. P.MOD voices and independent tracks keep their native
+modulation. Use the stock kernels when the shared bitmap is empty.
+
 
 Host API 11 appends `const struct st_sample_pool_api *pool` at byte 88,
 retaining every earlier offset. The original pool service version is 1. It supplies
@@ -854,3 +860,17 @@ parser's bound and the host API; with an assembler it runs both adapters in
 Unicorn (0, 1 and 3 handlers) and with `--stock` checks the stock bytes. The
 key IDs these menus' users need (SONG MODE, SETTINGS, FX) and the long-press
 flag are in [MACHINE-REFERENCE.md](MACHINE-REFERENCE.md).
+
+## Syntakt core 2.9.2 voice groups and note pitch
+
+Host API 22 appends `voice_groups` and `voice_groups_set` at offsets 112 and
+116. The group provider publishes the effective physical-track mask while
+holding the native note-queue exclusion. Readers can test the master or any
+slave with one bit. `~0u` means no mask has been published and lets older
+owner-map providers continue to serve eligibility queries.
+
+The optional pitch array contains 12 signed Q16 offsets in semitones. The
+host copies it during configuration and adds the offset to the native Q16
+pitch only when accepting a note. Passing `NULL` disables the offsets. The
+original event pitch and the native release-index pitch retain their integer
+values. Both native pitch write paths use the service.

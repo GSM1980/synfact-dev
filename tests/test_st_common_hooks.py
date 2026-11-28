@@ -120,7 +120,21 @@ def verify(folder):
     # 2.5: the PATTERN and RELOAD FROM PROJ menus' build events, at their constructors' epilogues.
     for at,name in ((0x4004ae0c,'core_pattern_menu'),(0x40182212,'core_reload_menu')):
         assert read(at,6)==jump(name),name
-    assert len(manifest['sites'])==129 and len(manifest['collections'])==19
+    track_options=(
+        (0x40024550,'core_meta_velocity_to_volume',8,0x4ef9),
+        (0x4000ecb8,'core_meta_track_sound_load',6,0x4ef9),
+        (0x4004bf8e,'core_fx_route_track',10,0x4ef9),
+        (0x4004c610,'core_fx_route_edit_track',6,0x4ef9),
+        (0x400a42f0,'core_relation_mask',6,0x4ef9),
+        (0x400a290c,'core_relation_event',6,0x4ef9),
+        (0x40010122,'core_relation_ui_mask',8,0x4ef9),
+        (0x400f24d0,'core_relation_ui_set',6,0x4eb9),
+        (0x400a443a,'core_note_pitch_a0',6,0x4ef9),
+        (0x400a44e4,'core_note_pitch_a1',6,0x4ef9),
+    )
+    for at,name,size,opcode in track_options:
+        assert read(at,size)==jump(name,opcode)+bytes.fromhex('4e71')*((size-6)//2),name
+    assert len(manifest['sites'])==139 and len(manifest['collections'])==19
     assert read(0x40083026,8)==jump('core_pool_sender_done',0x4eb9)+bytes.fromhex('4e71')
     # 2.1.1: the sender's end also returns the bank's file (its AUDIO section) to the heap.
     assert read(address('core_pool_sender_done'),22)==(
@@ -128,7 +142,7 @@ def verify(folder):
         bytes.fromhex('700423c041bb32b04e75'))
     assert read(address('core_pool_blob'),12)==(
         jump('core_pool_prepare',0x4eb9)+bytes.fromhex('4ef940082e9c'))
-    assert len({s['addr'] for s in manifest['sites']})==129
+    assert len({s['addr'] for s in manifest['sites']})==139
     assert read(0x400a5046,6)==jump('core_audio_idle_mix',0x4eb9)
     # Safe boot (1.7.1): every eMMC accessor table the core links (machine-boot.c
     # `storage`, files.c `io`) has read, write and sectors, each a code address.
@@ -139,6 +153,6 @@ def verify(folder):
         assert words[0]==address('fw_mmc_read') and words[1]==address('fw_mmc_write'),(name,[hex(w) for w in words])
     assert '-O3' in r['cflags'] and r['resident_ram']['free']>=0
     actual=syx.Syx(next(folder.glob('*.syx')).read_bytes());assert actual.section(3)==image
-    print('PASS: shared input/draw/preview, mixer events, codecs, Kit lifecycle, FX VCA, randomize and deferred cleanup; eMMC accessor tables complete; 127 sites, 17 collections; SYX and -O3')
+    print('PASS: shared input/draw/preview, mixer events, codecs, Kit lifecycle, track options, FX VCA, randomize and deferred cleanup; eMMC accessors; 139 sites, 19 collections; SYX and -O3')
 
 if __name__=='__main__':verify(sys.argv[1])

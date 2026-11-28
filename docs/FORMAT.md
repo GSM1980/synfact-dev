@@ -451,6 +451,27 @@ below 1,320,057. CRC and header extent are unchanged. Writers retain PQ/PX when
 digital PLAY is shared and PR when no analog group is active. Older banks
 reject PS; readers retain all previous PQ, analog flags and PR records.
 
+POLY 1.9 adds `PT` (`50h 54h`) for an analog group in P.MOD. PT uses the
+same payload and CRC as PS and requires analog code 1, 2 or 3. The digital
+rank retains its existing modes. Patterns using shared analog modulation
+retain their existing representation and load as M.MOD. An older bank
+rejects PT and disables POLY for that pattern, as with any unknown tag.
+
+POLY 1.10 uses the same seven bytes when any group in a pattern has UNISON
+enabled. The high nibble of the first byte is `Ah`. The lowest three bits
+of that byte and the next four bytes form a 35-bit digital rank in big-endian
+order. Bit 3 of the first byte and the sixth byte form a nine-bit analog
+rank. The seventh byte is CRC-8 (polynomial `07h`, initial value zero) over
+the first six bytes. The digital rank orders an independent track's three
+OFF voice preferences first, then groups by width (2, 3, 4), UNISON value
+(0–50), modulation mode (M.MOD, P.MOD) and the slave tracks' OFF voice
+preferences in base 3, lowest track first at the least significant digit.
+The analog rank is zero for no group, then orders shape (track 9 with 2 or 3
+voices, track 10 with 2), modulation mode and UNISON value. A record must
+include a nonzero UNISON value to use this encoding. All-OFF patterns retain
+the older encodings. Older banks treat the new encoding as an unknown record
+and disable POLY for that pattern.
+
 
 ### Syntakt HZFS v2 folders
 

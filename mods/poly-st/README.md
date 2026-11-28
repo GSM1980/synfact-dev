@@ -1,14 +1,14 @@
-# POLY for Syntakt (1.7)
+# POLY for Syntakt (1.10.1)
 
-Desktop OS 1.42 release: **1.7**, based on remote main `3d50e09`.
-Use core 2.2 or later and the matching bank (SMZ4 contract `0x53594606`).
+Desktop OS 1.42 version **1.10.1**.
+Use core 2.9.2 with the matching bank for UNISON, ARP exclusion, Track Relation and track options
+(SMZ4 contract `0x53594606`).
 
-Current desktop target: **Syntakt OS 1.42 / core 2.0**. Rebuild this mod in a
-new bank; older hardware measurements below refer to the previous OS. See
+Older hardware measurements below refer to the previous OS. See
 [the port notes](../../docs/OS142-PORT.md).
 
 Source port of Synfact POLY for digital and compatible analog tracks, with compact scalar
-publication. Playback uses native per-track modulation/LFO engines. Requires Syntakt OS 1.41,
+publication. Playback uses native per-track modulation/LFO engines. The original port required
 **UI API 7 / module API 3 / host API 2+**, and the matching AUDIO
 companion (the full bank with LFO3 needs host API 7). Code and state live in the optional SMZ, alongside the other mods.
 LFO3 remains a separate optional module; chorus is not included. With host API 5 (core 0.12.11+) POLY narrows
@@ -51,13 +51,12 @@ and its popup) POLY never found its page and the popup read page 3's
 shows POLY's page (`syntakt/trig-pages.h`, `st_trig_current`); before, it read
 page 3's "Euclidean".
 
-1.3: the third TRIG page is POLY's share of the TRIG page vector it shares
-with ARP (`syntakt/trig-pages.h`, list item 37). POLY sets only its page
-(index 2); ARP's two pages may follow it, and POLY's page indicator counts
-every TRIG page (five with ARP). `tests/test_st_poly.c` checks both.
+The third TRIG page belongs to POLY. With POLY off, an eligible audio track
+can display ARP's two pages as well. An active POLY group's master and every
+slave omit both ARP pages in either modulation mode.
 
-On a digital track, open the third TRIG page. It preserves Synfact's layout:
-**A: POLY, B: VOICES, C: PLAY, D: empty, E: NOTE, F/G/H: NOT2/NOT3/NOT4**, with its keyboard graphic.
+On an eligible track, open the third TRIG page. It preserves Synfact's layout:
+**A: POLY, B: VOICES, C: MOD, D: UNISON, E: NOTE, F/G/H: NOT2/NOT3/NOT4**, with its keyboard graphic.
 OFF hides/disables the remaining controls. VOICES selects 2, 3 or 4 contiguous
 digital tracks. The first track is the master; remaining tracks are slaves.
 Groups cannot overlap or cross the digital/analog boundary between tracks 8/9.
@@ -68,39 +67,63 @@ with track 10 ON. Analog NOTE uses native ID `14h` and range 0..84; chord
 notes outside this range are omitted. Digital NOTE stays `15h`. Analog slaves
 have the same TRACK IN / SLAVE MODE display and edit/Sound/machine guards.
 
-On digital masters, PLAY selects LFO behavior within the allocated group.
-Analog masters keep shared modulation and have no PLAY control:
+MOD selects how modulation is applied within a digital or analog group.
 
-| PLAY | Behavior |
+| MOD | Behavior |
 |---|---|
-| POLY | One held key per voice; LFO1/2 and optional LFO3 have independent voice state. |
-| M.LFO | Polyphonic notes with the master's shared modulation, preserving earlier banks. |
+| P.MOD | LFO1/2, optional LFO3, velocity modulation and key tracking are independent per voice. |
+| M.MOD | Voices follow the master's effective modulation, including key tracking and velocity modulation. |
 
-Both choices remain polyphonic. PLAY belongs to the pattern's group record.
+Both choices work with polyphonic allocation and UNISON. Existing analog patterns load as M.MOD.
 POLY 0.3 removes the experimental MONO/LEG and PRIO controls and all their
-runtime overrides. D has no control. PLAY edits never alter the native Sound's
+runtime overrides. MOD edits preserve the native Sound's
 LEGATO or NOTE PRIORITY settings; those remain in the stock Sound menu.
 LFO FREE/TRG/HLD/ONE/HLF keep their native behavior. Independent FREE oscillators
-can have equal phase; POLY does not impose random pan or an artificial spread.
+can have equal phase. Stereo position follows the Sound and its modulation.
 Use staggered note-ons and TRG to hear independent PAN trajectories.
+
+UNISON starts at OFF. Values `1c` through `50c` stack the selected VOICES on
+one note using the Sound's native note priority. The value is the distance in
+cents between the lowest and highest voices. Voices are evenly spaced around
+NOTE, so `50c` places the two outer voices 25 cents below and above it. The
+UI hides the chord intervals while UNISON is active and restores them at OFF.
+It is saved per POLY group with the pattern. Pitch offsets are calculated on
+configuration changes and applied only at the native note pitch write.
+The UNISON encoder accumulates raw travel for one-cent changes across the
+whole range, including the steps from OFF to `1c` and back.
+
+Core 2.9.1 republishes the master's Sound to the group's voices after Load
+Sound to Track and Sound Setup edits. Each voice retains its own saved Sound
+for when it leaves the group. The FX routing page shows the master's route
+for every active voice, on both the display and the track LEDs. Pressing a
+voice key in that page edits the group's route.
+
+Track Relation Trigger sends each note from a group using the master's
+relation. Incoming notes allocate a free voice first, reserve held keyboard
+voices and reuse the oldest sequenced voice when needed. Select the master as
+the destination. Existing relations saved against a voice slot resolve to its
+master once per note. The native release follows the allocated physical voice
+and related notes do not trigger a second relation.
 
 Keyboard and MIDI note input allocate one voice per held note, rotate free
 voices, steal the oldest occupied voice and absorb releases of stolen notes.
+Another press of a sounding pitch retriggers the same voice. Mono priority
+fallback during release never brings a stolen pitch back. When stock omits
+an individual note-off, the UI tick checks its native held-note bitmap and
+releases any voice whose pitch has disappeared, under the native queue lock.
 Track trigs and held-step preview play the chord. Sequencer chords retain
 native condition/probability decisions, event ownership, cancellation and
 first-step preparation. Live recording writes NOTE and relative note lanes.
 
-Since 1.1 the master's sequencer steps overlap instead of cutting each other:
-each note of a step (root, then NOT2..NOT4) takes the voice started least
-recently, so steps in a row play on the master, slave 1, slave 2... and a
-note cuts another only when every voice has started since. A chord takes as
-many voices, the oldest first, so it no longer always starts on the master.
-The ages are the ones held keys use, so keyboard and sequencer avoid each
-other's newest notes. The first step after STOP plays the chord natively on
-voices 0.. and counts as started. A trigless lock trig moves no voice: a
-chord's reaches every voice in order, as before, and a single note's the
-voice started last. Slide between steps now crosses voices, so it has no
-note to slide from.
+The sequencer allocates the root, then NOT2..NOT4, to distinct voices. It
+starts with free voices, then steals the oldest sequenced voice if needed.
+Live notes reserve their voices, so sequencer chords use the remaining
+voices in root-first order. Each allocation checks the native held gates and
+queued notes, and updates the ages after the batch is submitted. The first
+step after STOP plays the chord natively on voices 0..; its queued notes and
+held gates are visible to the allocator. A trigless lock trig retains its
+previous routing. These checks run on note events and the UI tick. The audio
+block callback keeps its existing work.
 
 Slaves show TRACK IN / SLAVE MODE and block parameter edits, page mutations,
 machine selection and Sound writes according to the reference. Of the keys,
@@ -113,7 +136,7 @@ own Sound. Suspension and disabling restore them too. Sequences remain separate.
 A group containing a MIDI-mode track is
 suspended while its saved topology remains available for audio mode.
 
-Topology uses the seven-byte PQ/PR record in PatternSettings `21h..27h`,
+Topology uses the seven-byte POLY record in PatternSettings `21h..27h`,
 with CRC16 and validation. PQ reads as M.LFO. PR ranks the valid groups,
 OFF voice-count preferences and PLAY choices into the same 24-bit payload;
 the experimental four-choice rank geometry remains readable, with retired
@@ -123,7 +146,10 @@ no native header byte outside this record is used. Disabling a group resets its
 PLAY preference to M.LFO when re-enabled. Older banks reject PR and disable POLY
 for that pattern. Version 0.8 also reads the verified analog PQ flag records
 (`58h/59h/5ch/5eh`) and stores combined independent-digital + analog groups as
-PS (`53h`); see [FORMAT](../../docs/FORMAT.md). Pattern copy/reset/undo/save use the native backing and notifications.
+PS (`53h`). POLY 1.9 uses PT (`54h`) to store analog P.MOD, with the same
+payload and checksum as PS. Older banks reject PT and disable POLY for the
+pattern. See [FORMAT](../../docs/FORMAT.md). Pattern copy, reset, undo and save
+use the native backing and notifications.
 This record does not overlap the project's sample-pool record.
 
 ## Integration and performance
@@ -156,21 +182,18 @@ Reload/paste keys also queue that propagation. The task flush has a null fast
 path with no record comparisons. Configuration changes prepare sequencer Sounds
 immediately; the UI copy completes their live KIT/shadow metadata.
 
-Without analog groups, both PLAY choices run the native per-track modulation
-and LFO1/2 engines.
-LFO3 uses its original SRAM parameter bank directly. POLY declines MODULATION,
-LFO, PUBLISH and OWNERS: no per-block parameter copy, controller adaptation,
-type override or ownership query is activated for an independent-only group.
+P.MOD uses the native per-track modulation and LFO1/2 engines. LFO3 uses its
+original SRAM parameter bank. An independent-only configuration leaves MODULATION,
+LFO, PUBLISH and OWNERS out of POLY's subscriptions.
 Native note copies retain the master's reference-counted lock object, so each
 voice receives its own native p-lock application, including captured LFO3 locks.
 Controller inputs, phases and velocity follow the native per-track behavior.
 
-M.LFO adds a late copy of the master's effective parameters to its slaves and
-reports shared owners for the extended FM sender. Its unused slave LFO results
-are discarded; the native engines stay in ROM instead of running copied guarded
-kernels in DDR. This preserves shared modulation but changes the random-stream
-advancement relative to older M.LFO banks, which skipped slave oscillators.
-Mixed groups only copy the M.LFO members. POLY groups retain their own outputs.
+M.MOD uses the guarded native engines to skip modulation and LFO1/2 for the
+voices that follow their master. The late copy publishes the master's effective
+parameters and the same bitmap bounds both paths. Independent groups in a mixed
+configuration still advance their per-track engines. Skipping unused oscillators
+can change the sequence drawn from the native shared random generator.
 
 The current generic machine transport supplies effective type and 28-parameter
 snapshots for FM TONE and SP machines. The obsolete FM-only mailbox is excluded.

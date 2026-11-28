@@ -732,6 +732,25 @@ Its shared-lock probe asserts the pinned
 LFO3 backend's exported context size and uses its 36-byte event rows, retaining
 all exact native/sparse lock values and ownership assertions.
 
+`tests/test_st_poly_voice_emu.py --core CORE/main.bin --bank BANK.smz4`
+uses an OS 1.42 core and a linked bank with ARP and POLY. It executes the
+native CC64 dispatcher, deferred releases, same-pitch retrigger and sequencer
+gate expiry. The test enumerates all 24 release orders for four notes on two
+voices, and checks that finite gates can be reused while an infinite first
+  step continues. It also checks native Track Relation routing
+  and release, separate P.MOD Sound Locks, Sound Browser and Velocity to Vol
+  publication, the FX screen/LED getter and edits to legacy relations.
+  The UNISON fixture checks 2/3/4-voice analog and digital stacks, exact
+  Q16 pitch offsets, note release and native pattern encoding/decoding.
+  `test_st_arp_view_emu.py` with the same bank verifies that stale ARP pages
+  disappear on digital and analog POLY masters and slaves in both modes,
+  and that independent tracks keep them. It also sends native encoder events
+  through all 51 UNISON values in both directions on digital and analog tracks.
+  Model notifications and synthesis are fixture boundaries.
+  Add `--modulation` with the EMAC-capable Unicorn to compare M.MOD and
+  P.MOD on digital, analog and mixed groups against the full native
+  modulation path, including deterministic LFO and controller output.
+
 ### Unused-module MAIN work
 
 `tools/bench_st_idle_main.py` compares complete integer idle callbacks, native

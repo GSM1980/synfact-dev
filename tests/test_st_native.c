@@ -7,14 +7,17 @@
 #include <stddef.h>
 #include <string.h>
 /* API 12 retains 92/96; API 15 audio_idle is 100; API 20 persistence is 104. */
-typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==108 &&
+typedef char host_dispatch_alias_abi[sizeof(struct st_machine_host_api)==120 &&
     offsetof(struct st_machine_host_api,native_query)==84 &&
     offsetof(struct st_machine_host_api,native_dispatch)==84 &&
     offsetof(struct st_machine_host_api,pool)==88 &&
     offsetof(struct st_machine_host_api,core_info)==92 &&
     offsetof(struct st_machine_host_api,bank_info)==96 &&
     offsetof(struct st_machine_host_api,audio_idle)==100 &&
-    offsetof(struct st_machine_host_api,persistence)==104 ? 1 : -1];
+    offsetof(struct st_machine_host_api,persistence)==104 &&
+    offsetof(struct st_machine_host_api,native_relation_scope)==108 &&
+    offsetof(struct st_machine_host_api,voice_groups)==112 &&
+    offsetof(struct st_machine_host_api,voice_groups_set)==116 ? 1 : -1];
 typedef unsigned int u32;
 #define EV(n) const unsigned char core_##n##_table[6]={0};const u32 ev_##n[]={0};
 EV(tick) EV(draw) EV(key) EV(enc) EV(settings) EV(render_in) EV(render_out)
@@ -31,7 +34,7 @@ void core_event_publish(const u32 *a)
 {
     u32 track=2,result=99;
     assert(a[0]==(u32)(core_key_table+2) && a[1] && a[2] && a[3]==a[1] && a[4] && a[5]);
-    {u32 k;for(k=6;a[k];k+=2)*(u32 *)a[k]=a[k+1];assert(k==6+2*(ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
+    {u32 k;for(k=6;a[k];k+=2)*(u32 *)a[k]=a[k+1];assert(k==6+2*(ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+3));}
     *(const u32 **)a[2]=(const u32 *)a[3];*(const u32 **)a[4]=(const u32 *)a[5];
     /* Simulate an IRQ immediately when the publisher unmasks, before bind
      * returns. Its native services must already be visible in the C list. */

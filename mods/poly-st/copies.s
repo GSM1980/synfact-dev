@@ -21,22 +21,34 @@ poly_copy_static_event_end:
 poly_scan_key_origin:
  movea.l 4(%sp),%a0
  move.l #1024,%d1
+ moveq #0,%d0
 poly_scan_key_origin_next:
  move.w (%a0)+,%d0
- swap %d0
- move.w (%a0),%d0
- cmpi.l #0x4002ed0a,%d0
- beq.s poly_scan_key_press
- cmpi.l #0x401055cc,%d0
- beq.s poly_scan_key_press
- cmpi.l #0x4002d602,%d0
- beq.s poly_scan_key_release
- cmpi.l #0x40105488,%d0
- beq.s poly_scan_key_release
+ cmpi.l #0x4002,%d0
+ beq.s poly_scan_keyboard_pc
+ cmpi.l #0x4010,%d0
+ beq.s poly_scan_midi_pc
+poly_scan_key_origin_continue:
  subq.l #1,%d1
  bne.s poly_scan_key_origin_next
  moveq #0,%d0
  rts
+poly_scan_keyboard_pc:
+ move.w (%a0),%d0
+ cmpi.l #0xed0a,%d0
+ beq.s poly_scan_key_press
+ cmpi.l #0xd602,%d0
+ beq.s poly_scan_key_release
+ bra.s poly_scan_key_origin_continue
+poly_scan_midi_pc:
+ move.w (%a0),%d0
+ cmpi.l #0x55cc,%d0
+ beq.s poly_scan_key_press
+ cmpi.l #0x5488,%d0
+ beq.s poly_scan_key_release
+ cmpi.l #0xa096,%d0
+ beq.s poly_scan_key_release
+ bra.s poly_scan_key_origin_continue
 poly_scan_key_press:
  moveq #2,%d0
  rts

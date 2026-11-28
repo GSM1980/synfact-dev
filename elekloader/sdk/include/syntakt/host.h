@@ -158,5 +158,17 @@ struct st_machine_host_api {
      * the PATTERN and RELOAD FROM PROJ menus' build events. */
     /* Core 2.8 adds no field either: ST_MACHINE_TEMPO_PARAMETER controls
      * receive the tempo on AUDIO (machines.h). */
+    /* API 21: an optional fast filter for the relation subscriber. The low
+     * 16 bits list physical destination tracks, the high 16 list sources
+     * that take their relation row from an owner. The second word packs the
+     * track-minus-owner offset in two bits per track. The core uses the filter
+     * while this is the only relation subscriber. Publish under exclusion. */
+    void (*native_relation_scope)(void (*)(void),unsigned int,unsigned int);
+    /* API 22. Group membership is independent of modulation ownership.
+     * The mask uses physical audio tracks 0..11, or ~0u with no publisher.
+     * A group allocator publishes under native exclusion. The core copies
+     * twelve signed Q16 semitone offsets. Null clears the pitch offsets. */
+    const volatile unsigned int *voice_groups;
+    void (*voice_groups_set)(unsigned int,const int *);
 };
 #endif

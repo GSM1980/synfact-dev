@@ -1,14 +1,20 @@
 /*  common state. File-owned heap storage, supplied by the existing plugin
  * image allocation. No fixed SRAM reservation or owning Sound copies. */
 #define DATA __attribute__((section(".data")))
+static u32 poly_unison_spread(unsigned int);
 #include "poly_event.c"
 #include "poly_groups.c"
 #include "poly_pattern.c"
-static u8 poly_modes[8],poly_next_modes[8];
+static u8 poly_modes[POLY_MODE_TRACKS],poly_next_modes[POLY_MODE_TRACKS];
+static u8 poly_unison[POLY_MODE_TRACKS] DATA={0},poly_next_unison[POLY_MODE_TRACKS] DATA={0};
+static u32 poly_unison_spread(u32 track){return track<POLY_MODE_TRACKS?poly_unison[track]:0;}
+static void poly_publish_voice_groups(void);
 static void poly_play_maps(const volatile u8 *);
 static void poly_copy_group(u32,u32);
-static void poly_seq_voices(u32 **,u32,u32,u32,const u32 *);
+static u32 poly_seq_voices(u32 **,u32,u32,u32,const u32 *,u32 *);
+static void poly_seq_committed(u32,u32,u32,u32);
 static void poly_seq_started(u32,u32);
+static void poly_live_reset(const u8 *);
 #include "poly_sequence.c"
 #include "poly_publication.c"
 #include "poly_play.c"
@@ -39,6 +45,21 @@ static u32 preview_depth DATA=0;
 
 u32 poly_effective_owner(u32 track) {return track<12?poly_owner_map[track]:track;}
 
+static u32 poly_has_unison_api(void){return poly_host && poly_host->version>=22;}
+static void poly_publish_voice_groups(void)
+{
+    int pitch[12]={0};
+    u32 t,v,voices,spread,active=0;
+    if(!poly_has_unison_api())return;
+    for(t=0;t<POLY_MODE_TRACKS;t++)if(poly_seq_config.states[t]>=3 && (spread=poly_unison[t])) {
+        voices=poly_seq_config.states[t]-1;
+        for(v=0;v<voices;v++)
+            pitch[t+v]=((int)(2*v)-(int)(voices-1))*(int)(spread*65536u)/(int)(200*(voices-1));
+        active=1;
+    }
+    poly_host->voice_groups_set(poly_relation_tracks&0xffffu,active?pitch:0);
+}
+
 /* Called at the early MAIN frame boundary and before sequencer construction.
  * UI edits are committed under the same native interrupt exclusion. */
 static u32 poly_sync_locked(void)
@@ -55,7 +76,11 @@ static u32 poly_sync_locked(void)
     if(midi_mask!=cache_midi_mask)changed=1;
     for(i=0;i<7;i++)if(record[i]!=record_cache[i])changed=1;
     if(!changed)return 1;
-    poly_decode(record,states,poly_next_modes);
+    if(!poly_decode_settings(record,states,poly_next_modes,poly_next_unison)) {
+        for(i=0;i<12;i++)states[i]=0;
+        for(i=0;i<POLY_MODE_TRACKS;i++)poly_next_modes[i]=poly_next_unison[i]=0;
+    }
+    if(!poly_has_unison_api())for(i=0;i<POLY_MODE_TRACKS;i++)poly_next_unison[i]=0;
     /* A saved group can be loaded with a KIT whose member is now MIDI.
      * Suspend only that group; retain its recorded topology for audio mode. */
     for(i=0;i<12;i++)if(states[i]>=3u) {
@@ -73,9 +98,9 @@ static u32 poly_sync_locked(void)
     return 1;
 }
 
-static u32 poly_record_settings_locked(u32 track,u32 enabled,u32 voices,u32 mode)
+static u32 poly_record_settings_locked(u32 track,u32 enabled,u32 voices,u32 mode,u32 spread)
 {
-    u8 states[12],owners[12],raw[7],modes[8];
+    u8 states[12],owners[12],raw[POLY_RECORD_SIZE],modes[POLY_MODE_TRACKS],values[POLY_MODE_TRACKS];
     u32 i,midi_bit;
     volatile u8 *sequence=*(volatile u8 **)0x43bd8430u;
     u32 kit=*(volatile u32 *)0x43bd843cu;
@@ -84,8 +109,12 @@ static u32 poly_record_settings_locked(u32 track,u32 enabled,u32 voices,u32 mode
     if(poly_seq_config.owners[track]!=track)return 0;
     /* Keep suspended groups in the persistent record when another master is
      * edited. Runtime states can differ only because of the current MIDI KIT. */
-    poly_decode(sequence+0x21381u,states,modes);
-    if(track<8 && mode<2)modes[track]=(u8)mode;
+    if(!poly_decode_settings(sequence+0x21381u,states,modes,values)) {
+        for(i=0;i<12;i++)states[i]=0;
+        for(i=0;i<POLY_MODE_TRACKS;i++)modes[i]=values[i]=0;
+    }
+    if(mode<2)modes[track]=(u8)mode;
+    if(spread<=POLY_UNISON_MAX)values[track]=(u8)spread;
     states[track]=(u8)(voices-2u+(enabled?3u:0u));
     if(!poly_resolve(states,owners))return 0;
     /* Do not silently convert existing MIDI tracks into digital voices. */
@@ -93,17 +122,23 @@ static u32 poly_record_settings_locked(u32 track,u32 enabled,u32 voices,u32 mode
         midi_bit=(*(volatile u16 *)(kit+0x1550u)>>i)&1u;
         if(midi_bit)return 0;
     }
-    poly_encode(raw,states,modes);
-    for(i=0;i<7;i++)sequence[0x21381u+i]=raw[i];
+    poly_encode_settings(raw,states,modes,values);
+    for(i=0;i<POLY_RECORD_SIZE;i++)sequence[0x21381u+i]=raw[i];
     return poly_sync_locked();
 }
 
 static u32 poly_record_write_locked(u32 track,u32 enabled,u32 voices)
-{return poly_record_settings_locked(track,enabled,voices,4);}
+{return poly_record_settings_locked(track,enabled,voices,4,~0u);}
 
 static u32 poly_mode_write(u32 track,u32 mode)
 {
     u32 command[6]={0x504f4c59u,0x43464732u,track,mode,0,0};
+    native_immediate(command);return command[5];
+}
+
+static u32 poly_spread_write(u32 track,u32 spread)
+{
+    u32 command[6]={0x504f4c59u,0x554e4953u,track,spread,0,0};
     native_immediate(command);return command[5];
 }
 
@@ -221,9 +256,9 @@ void poly_preview(u32 *event)
  * MIDI note input play one voice per key; everything else (a track's TRIG
  * key, a held step's preview) plays the chord. The origin is the native
  * caller still on the stack: KEYBOARD press 4002e850 (returns to 4002ed0a)
- * and its release callback 4002d5f2 (4002d602); MIDI channel input 401052da
- * (40105408) and its release loop 401051ae (401052c4). Only live frames
- * above this function are read, never written. */
+ * and its release callback 4002d5f2 (4002d602); MIDI press returns to
+ * 401055cc and release to 40105488. The CC64 pedal-up loop calls the same
+ * note-off producer and returns to 4010a096. Only live frames are read. */
 #ifdef __mcoldfire__
 extern u32 poly_scan_key_origin(const volatile u16 *);
 #endif
@@ -247,7 +282,7 @@ static u32 poly_live_from_keys(void)
         /* 2 = a key press (recorded by the native recorder); 1 = a release,
          * whose native last-note re-send is not a new key. */
         if(word==0x4002ed0au || word==0x401055ccu)return 2;
-        if(word==0x4002d602u || word==0x40105488u)return 1;
+        if(word==0x4002d602u || word==0x40105488u || word==0x4010a096u)return 1;
     }
     return 0;
 #endif
@@ -343,93 +378,302 @@ void poly_rec_ui(void)
     }
 }
 
-/* FM_LAYOUT: each held key takes one voice of the group, like a polyphonic synth:
- * a press goes to a free voice (round robin after the last one used, else the
- * oldest note is stolen) and its release to the voice that holds it. The
- * event itself is retargeted to that voice and continues on the native path;
- * nothing is allocated. Releasing the current note makes the native last-note
- * priority re-send the newest held key: if that key still sounds on its voice
- * the repeat is absorbed, if it was stolen it takes a voice again. A release
- * of a stolen key is absorbed. */
+/* A live pitch owns its voice until the native release or a newer allocation
+ * replaces it. Native mono fallback on release never creates an allocation. */
 static u8 live_notes[12][4] DATA={{0}};
+static u8 live_mask[12] DATA={0};
+static u8 live_confirmed[12] DATA={0};
+static u8 seq_timed[12] DATA={0};
+static u8 seq_untimed[12] DATA={0};
 static u32 live_age[12][4] DATA={{0}};
 static u32 live_clock DATA=0;
-static u32 live_next[12] DATA={0};
-static u32 live_generation[12] DATA={0};
+static u8 live_next[12] DATA={0};
+static unsigned short poly_relation_keys[12] DATA={0};
 
-/* Sequencer notes of a group (1.1): each note of a step, root first, takes
- * the voice started least recently (ties: the lowest), on the same ages as
- * the held keys. Steps in a row overlap on master, slave 1, slave 2... and
- * a note steals only once every voice has started since. The events come
- * from poly_prepare (lane i on voice i); each is retargeted as if prepared
- * for its voice, from the source's Sound. */
-static void poly_seq_voices(u32 **batch,u32 count,u32 track,u32 voices,const u32 *source)
+static void poly_forget_relation(u32 track)
 {
-    u32 j,v,voice,taken=0;
-    if((source[9]&0x10201u)!=0x10201u) {
-        if(count!=1)return;
-        for(voice=0,v=1;v<voices;v++)if(live_age[track][v]>live_age[track][voice])voice=v;
-        batch[0][10]=source[10];
-        poly_voice_target(batch[0],track,voice);
-        return;
+    u32 key=poly_relation_keys[track];
+    if(key) {
+        ((volatile unsigned short *)0x43bdda3cu)[key-1u]&=(unsigned short)~(1u<<track);
+        poly_relation_keys[track]=0;
     }
-    for(j=0;j<count;j++) {
-        voice=4;
-        for(v=0;v<voices;v++)
-            if(!(taken>>v&1u) && (voice>3 || live_age[track][v]<live_age[track][voice]))voice=v;
-        taken|=1u<<voice;
+}
+
+static void poly_live_reset(const u8 *affected)
+{
+    u32 track;
+    for(track=0;track<12;track++)if(affected[track]) {
+        u32 voice;
+        poly_forget_relation(track);
+        for(voice=0;voice<4;voice++)live_age[track][voice]=0;
+        live_mask[track]=0;
+        live_confirmed[track]=0;
+        seq_timed[track]=0;
+        seq_untimed[track]=0;
+        live_next[track]=0;
+    }
+}
+
+static u32 poly_live_voice(u32 track,u32 note)
+{
+    u32 voice,mask=live_mask[track];
+    for(voice=0;mask;mask>>=1,voice++)
+        if((mask&1u) && live_notes[track][voice]==note)return voice;
+    return 4;
+}
+
+/* The same OS 1.42 held-note bitmap the ARP reads after note priority. */
+static const volatile u32 *poly_native_held(u32 track)
+{return (const volatile u32 *)(0x455406e0u+track*0x2e18u);}
+
+static u32 poly_live_stale(u32 track,u32 mask)
+{
+    const volatile u32 *held=poly_native_held(track);
+    u32 voice,stale=0;
+    for(voice=0;mask;mask>>=1,voice++)if(mask&1u) {
+        u32 note=live_notes[track][voice];
+        if(!(held[note>>5]>>(note&31u)&1u))stale|=1u<<voice;
+    }
+    return stale;
+}
+
+static void poly_live_reap(u32 track)
+{
+    u32 voice,stale=poly_live_stale(track,live_confirmed[track]);
+    live_confirmed[track]&=(u8)~stale;
+    live_mask[track]&=(u8)~stale;
+    for(voice=0;stale;stale>>=1,voice++)if(stale&1u)native_release_track(track+voice,0x7fffu);
+}
+
+static void poly_live_ui(void)
+{
+    u32 track;
+    if(!poly_has_groups)return;
+    for(track=0;track<12;track++) {
+        u32 mask=live_confirmed[track];
+        if(mask && poly_live_stale(track,mask)) {
+            u32 command[6]={0x504f4c59u,0x4c495645u,track,0,0,0};
+            /* A release suppressed by note priority has no IMMEDIATE event.
+             * Recheck under native exclusion before releasing any voice. */
+            native_immediate(command);
+        }
+    }
+}
+
+/* A finite gate can reach zero while its native held bit stays set. Some
+ * untimed notes never set that bit. Keep the duration class of routed notes
+ * to disambiguate zero; a merely prepared first step is not yet sounding.
+ * The native timer and queue cover releases and pending notes. */
+static u32 poly_voice_busy(u32 track,u32 voices,u32 live)
+{
+    u32 limit=(1u<<voices)-1u;
+    u32 busy=live,voice,held,timed,untimed,timers;
+    const volatile s32 *countdown=(const volatile s32 *)0x80003084u+track;
+    const volatile u32 *bucket;
+    if(live==limit)return live;
+    held=*(const volatile u32 *)0x80003124u>>track;
+    timed=seq_timed[track];
+    untimed=*(const volatile u32 *)0x43bd83bcu==1?seq_untimed[track]:0;
+    timers=(held|timed|untimed)&limit&~live;
+    held=(held&~timed)|untimed;
+    for(voice=0;timers;timers>>=1,voice++)if(timers&1u) {
+        s32 remaining=countdown[voice];
+        /* A native release request sets the countdown to one. */
+        if(remaining>1 || (!remaining && (held>>voice&1u)))busy|=1u<<voice;
+    }
+    if(busy==limit)return limit;
+    bucket=*(const volatile u32 **)0x444df434u;
+    while(bucket) {
+        const volatile u32 *event=(const volatile u32 *)bucket[2];
+        while(event) {
+            u32 voice=event[2]-track;
+            if(voice<voices && event[3]-1u<2u && event[1]==1 && (event[9]&0x10201u)==0x10201u) {
+                busy|=1u<<voice;
+                if(busy==limit)return busy;
+            }
+            event=(const volatile u32 *)event[19];
+        }
+        bucket=(const volatile u32 *)bucket[4];
+    }
+    return busy;
+}
+
+static u32 poly_oldest(u32 track,u32 voices,u32 available)
+{
+    u32 v,voice=4;
+    for(v=0;v<voices;v++)
+        if((available>>v&1u) && (voice==4 || live_age[track][v]<live_age[track][voice]))voice=v;
+    return voice;
+}
+
+/* Select free voices first and steal the oldest sequenced voice on overflow.
+ * Keep the selected order packed until the native queue accepts the batch. */
+static u32 poly_seq_voices(u32 **batch,u32 count,u32 track,u32 voices,const u32 *source,u32 *routes)
+{
+    u32 j,v,voice,available,busy,live,eligible,order=0;
+    *routes=0;
+    if((source[9]&0x10201u)!=0x10201u) {
+        if(count==1) {
+            for(voice=0,v=1;v<voices;v++)if(live_age[track][v]>live_age[track][voice])voice=v;
+            batch[0][10]=source[10];
+            poly_voice_target(batch[0],track,voice);
+        }
+        return count;
+    }
+    live=live_mask[track];
+    if(poly_unison_spread(track)) {
+        if(live)return 0;
+        for(j=0;j<count;j++) {
+            batch[j][10]=source[10];
+            poly_voice_target(batch[j],track,j);
+        }
+        *routes=0xe4u|(((1u<<count)-1u)<<8);
+        return count;
+    }
+    eligible=((1u<<voices)-1u)&~live;
+    available=eligible;
+    if(!available)return 0;
+    busy=poly_voice_busy(track,voices,live);
+    for(j=0;j<count && available;j++) {
+        u32 free=available&~busy;
+        voice=poly_oldest(track,voices,free?free:available);
+        available&=~(1u<<voice);
         batch[j][10]=source[10];
         poly_voice_target(batch[j],track,voice);
-        live_age[track][voice]=++live_clock;
+        order|=voice<<(j*2u);
     }
+    *routes=order|((eligible^available)<<8);
+    return j;
+}
+
+static void poly_seq_committed(u32 track,u32 count,u32 routes,u32 length)
+{
+    u32 used=routes>>8;
+    if(length) {
+        seq_timed[track]|=(u8)used;
+        seq_untimed[track]&=(u8)~used;
+    }else {
+        seq_timed[track]&=(u8)~used;
+        seq_untimed[track]|=(u8)used;
+    }
+    for(;count;count--,routes>>=2)live_age[track][routes&3u]=++live_clock;
+}
+
+/* Trigger relations are defined per logical track. Older kits may name a
+ * voice slot directly. Fold its bit onto the owner without changing the kit. */
+static u32 poly_relation_mask(const volatile u8 *kit,u32 source,u32 stock)
+{
+    u32 owner=poly_effective_owner(source),track,mask=stock;
+    if(owner!=source)mask=*(const volatile unsigned short *)(kit+0x15e4u+2*owner);
+    for(track=1;track<12 && (mask>>track);track++)if(mask>>track&1u) {
+        u32 target=poly_owner_map[track];
+        if(target!=track)mask=(mask&~(1u<<track))|(1u<<target);
+    }
+    return owner<13?mask&~(1u<<owner):mask;
+}
+
+static u32 poly_relation_route(const u32 *parent,const volatile u8 *kit,u32 stock)
+{
+    u32 track,mask=poly_relation_mask(kit,parent[2],stock),physical=mask,previous=0;
+    u32 pitch=parent[6],source=parent[2];
+    u32 owner=poly_effective_owner(source);
+    if(owner!=source && poly_unison_spread(owner))return 0;
+    if(mask && parent[3]==2 && (parent[9]&0x81u)==0x81u && source<13 && pitch<128) {
+        /* Stock stores one mask per source and pitch. A live retrigger must
+         * reuse the same sounding voice so its next Note Off can reach it. */
+        previous=((const volatile unsigned short *)0x43bdda3cu)[128*source+pitch];
+        previous&=*(const volatile u32 *)0x80003124u;
+    }
+    for(track=0;track<12 && (mask>>track);track++)if(mask>>track&1u) {
+        u32 state=poly_seq_config.states[track];
+        if(state>=3) {
+            u32 voices=state-1,live=live_mask[track];
+            u32 available=((1u<<voices)-1u)&~live;
+            physical&=~(1u<<track);
+            if(available) {
+                if(poly_unison_spread(track)) {
+                    if(!live)physical|=available<<track;
+                    continue;
+                }
+                u32 voice,retrigger=(previous>>track)&available;
+                for(voice=0;voice<voices;voice++)
+                    if((retrigger>>voice&1u) && ((const volatile u32 *)0x45512208u)[track+voice]==pitch)break;
+                if(voice==voices) {
+                    u32 free=available&~poly_voice_busy(track,voices,live);
+                    voice=poly_oldest(track,voices,free?free:available);
+                }
+                physical|=1u<<(track+voice);
+            }
+        }
+    }
+    return physical;
+}
+
+static void poly_relation_event(u32 *event)
+{
+    u32 track=event[2],owner,voice,bit,key=0;
+    if(track>=12)return;
+    owner=poly_owner_map[track];
+    if(poly_seq_config.states[owner]<3)return;
+    if(event[3]==2 && event[18]<13 && event[6]<128)key=1u+128u*event[18]+event[6];
+    if(event[1]!=1) {
+        if(event[1]==2 && poly_relation_keys[track]==key)poly_relation_keys[track]=0;
+        return;
+    }
+    if((event[9]&0x81u)!=0x81u)key=0;
+    if(poly_relation_keys[track]!=key) {
+        poly_forget_relation(track);
+        poly_relation_keys[track]=(unsigned short)key;
+    }
+    voice=track-owner;bit=1u<<voice;
+    if(voice) {
+        u32 kit=*(volatile u32 *)0x800030b8u;
+        if(kit)event[10]=kit+poly_sound_offset[owner];
+    }
+    /* Native relation events set the held bit and release through the
+     * stock relation table. Retire an older duration class when reusing it. */
+    seq_untimed[owner]&=(u8)~bit;
+    seq_timed[owner]&=(u8)~bit;
+    if(event[12])seq_timed[owner]|=(u8)bit;
+    live_age[owner][voice]=++live_clock;
 }
 
 /* The first-step statics play voices 0.. natively: mark them started. */
 static void poly_seq_started(u32 track,u32 played)
 {
-    u32 v;
-    for(v=0;v<4;v++)if(played>>v&1u)live_age[track][v]=++live_clock;
+    u32 v,timed=0;
+    for(v=0;v<4;v++)if(played>>v&1u) {
+        if(PREP_EVENT(track+v)[12])timed|=1u<<v;
+        live_age[track][v]=++live_clock;
+    }
+    seq_timed[track]=(u8)timed;
+    seq_untimed[track]=0;
 }
 
-static u32 poly_live_keys(u32 *event,u32 track,u32 voices,u32 press)
+static void poly_live_press(u32 *event,u32 track,u32 voices)
 {
-    u32 note=event[6],i,v,voice=4,oldest=0xffffffffu,held=0;
-    if(live_generation[track]!=poly_seq_config.generation) {
-        /* A release from before a group change keeps the native path. */
-        if(event[1]!=1)return 0;
-        for(i=0;i<4;i++)live_notes[track][i]=128;
-        live_next[track]=0;
-        live_generation[track]=poly_seq_config.generation;
-    }
-    for(i=0;i<voices;i++)if(live_notes[track][i]==note){voice=i;break;}
-    if(event[1]==1) {
-        if(voice<4) {
-            if(!event[0])native_event_free(event);
-            return 1;
-        }
-        for(i=0;i<voices;i++)if(live_notes[track][i]<128){held=1;break;}
+    u32 note=event[6],i,v,voice=poly_live_voice(track,note);
+    if(voice==4) {
+        u32 live=live_mask[track],busy=poly_voice_busy(track,voices,live);
         for(i=0;i<voices;i++) {
-            v=live_next[track]+i;
+            v=(u32)live_next[track]+i;
             if(v>=voices)v-=voices;
-            if(live_notes[track][v]>127){voice=v;break;}
+            if(!(busy>>v&1u)){voice=v;break;}
         }
-        if(voice>=4)for(i=0;i<voices;i++)if(live_age[track][i]<oldest) {
-            oldest=live_age[track][i];voice=i;
-        }
+        if(voice==4)voice=poly_oldest(track,voices,(1u<<voices)-1u);
         live_notes[track][voice]=(u8)note;
-        live_age[track][voice]=++live_clock;
-        live_next[track]=voice+1u<voices?voice+1u:0;
-        if(press==2)poly_rec_note(track,note,held);
-    }else {
-        if(voice>=4) {
-            if(!event[0])native_event_free(event);
-            return 1;
-        }
-        live_notes[track][voice]=128;
+        live_mask[track]=(u8)(live|(1u<<voice));
+        live_confirmed[track]&=(u8)~(1u<<voice);
+        seq_timed[track]&=(u8)~(1u<<voice);
+        seq_untimed[track]&=(u8)~(1u<<voice);
+        live_next[track]=(u8)(voice+1u<voices?voice+1u:0);
+        poly_rec_note(track,note,live!=0);
     }
+    if(poly_native_held(track)[note>>5]>>(note&31u)&1u)live_confirmed[track]|=(u8)(1u<<voice);
+    poly_forget_relation(track+voice);
+    live_age[track][voice]=++live_clock;
     /* Voice 0 is the master's own event, untouched; SLAVE fields as FM_FAST. */
     if(voice)poly_voice_target(event,track,voice);
-    return 0;
 }
 
 /* FM_FAST chord (restored in  for TRIG keys and step preview): the master's
@@ -478,9 +722,46 @@ static u32 poly_live_chord(u32 *event,u32 track,u32 voices)
     return 1;
 }
 
+static u32 poly_live_unison(u32 *event,u32 track,u32 voices,u32 origin)
+{
+    u32 note=event[6],voice,mask,off=event[1]==2;
+    u32 *batch[4];
+    if(!origin)return poly_live_chord(event,track,voices);
+    if(off && (!live_mask[track] || live_notes[track][0]!=note)) {
+        if(!event[0])native_event_free(event);
+        return 1;
+    }
+    batch[0]=event;
+    for(voice=1;voice<voices;voice++) {
+        batch[voice]=copy_event(event);
+        if(!batch[voice])break;
+        poly_voice_target(batch[voice],track,voice);
+    }
+    if(voice<voices || !poly_submit(batch,voices,0,1)) {
+        while(voice>1)native_event_free(batch[--voice]);
+        if(!event[0])native_event_free(event);
+        if(!off)return 1;
+        for(voice=0;voice<voices;voice++)native_release_track(track+voice,0x7fffu);
+    }
+    if(off) {
+        live_mask[track]=live_confirmed[track]=0;
+        return 1;
+    }
+    mask=(1u<<voices)-1u;
+    live_mask[track]=(u8)mask;
+    live_confirmed[track]=(poly_native_held(track)[note>>5]>>(note&31u)&1u)?(u8)mask:0;
+    seq_timed[track]=seq_untimed[track]=0;
+    for(voice=0;voice<voices;voice++) {
+        poly_forget_relation(track+voice);
+        live_notes[track][voice]=(u8)note;
+        live_age[track][voice]=++live_clock;
+    }
+    return 1;
+}
+
 static u32 poly_live_locked(u32 *event)
 {
-    u32 track=event[2],note=event[6],voices,i,origin;
+    u32 track=event[2],note=event[6],voices,origin;
     if(event[1]!=1 && event[1]!=2)return 0;
     poly_sync_locked();
     if(poly_seq_config.owners[track]<track) {
@@ -490,11 +771,24 @@ static u32 poly_live_locked(u32 *event)
     }
     if(poly_seq_config.states[track]<3 || note>127)return 0;
     voices=poly_seq_config.states[track]-1u;
-    if(event[1]==2 && live_generation[track]==poly_seq_config.generation)
-        for(i=0;i<voices;i++)if(live_notes[track][i]==note)return poly_live_keys(event,track,voices,0);
+    if(poly_unison_spread(track))return poly_live_unison(event,track,voices,poly_live_from_keys());
+    if(event[1]==2) {
+        u32 voice=poly_live_voice(track,note);
+        if(voice<4) {
+            live_mask[track]&=(u8)~(1u<<voice);
+            live_confirmed[track]&=(u8)~(1u<<voice);
+            if(voice)poly_voice_target(event,track,voice);
+            return 0;
+        }
+    }
     origin=poly_live_from_keys();
-    if(origin)return poly_live_keys(event,track,voices,origin);
-    return poly_live_chord(event,track,voices);
+    if(!origin)return poly_live_chord(event,track,voices);
+    if(origin==2 && event[1]==1) {
+        poly_live_press(event,track,voices);
+        return 0;
+    }
+    if(!event[0])native_event_free(event);
+    return 1;
 }
 
 /* This hook runs after the original native function has saved SR and raised
@@ -510,12 +804,19 @@ u32 poly_preview_locked(u32 *event)
             event[5]=poly_record_write_locked(event[2],event[3],event[4]);return 1;
         }
         if(event[1]==0x43464732u) {
-            if(event[2]<8 && event[3]<2 && poly_seq_config.states[event[2]]>=3)
-                event[5]=poly_record_settings_locked(event[2],1,poly_seq_config.states[event[2]]-1,event[3]);
+            if(event[2]<POLY_MODE_TRACKS && event[3]<2 && poly_seq_config.states[event[2]]>=3)
+                event[5]=poly_record_settings_locked(event[2],1,poly_seq_config.states[event[2]]-1,event[3],~0u);
+            return 1;
+        }
+        if(event[1]==0x554e4953u) {
+            if(poly_has_unison_api() && event[2]<POLY_MODE_TRACKS && event[3]<=POLY_UNISON_MAX &&
+               poly_seq_config.states[event[2]]>=3)
+                event[5]=poly_record_settings_locked(event[2],1,poly_seq_config.states[event[2]]-1,4,event[3]);
             return 1;
         }
         if(event[1]==0x414e4c47u) {poly_analog_publish_locked();return 1;}
         if(event[1]==0x53594e43u) {event[5]=poly_sync_locked();return 1;}
+        if(event[1]==0x4c495645u && track<12) {poly_live_reap(track);return 1;}
     }
     if(preview_depth || track>=12)return 0;
     if(event[3]==2) {
@@ -544,7 +845,7 @@ u32 poly_sound_write_allowed(u32 track)
     if(track>=12)return 1;
     if(poly_seq_config.owners[track]==track) {
         allowed=1;
-        if(track<8 && poly_seq_config.states[track]>=3)poly_copy_mark(track);
+        if(poly_seq_config.states[track]>=3)poly_copy_mark(track);
     }
     return allowed;
 }

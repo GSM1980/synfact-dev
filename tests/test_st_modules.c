@@ -30,7 +30,7 @@ void *fw_malloc(u32 n){return fail_alloc?0:VirtualAlloc((void *)0x47000000u,n,ME
 void fw_free(void *p){assert(VirtualFree(p,0,MEM_RELEASE));}
 void core_event_publish(const u32 *p)
 {assert(p[0]==(u32)(core_tick_table+2));ticks=(const u32 *)p[1];assert(p[2] && p[3]==p[1]);
- {u32 k;for(k=4;p[k];k+=2)*(u32 *)p[k]=p[k+1];assert(k==4+2*(ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+1));}
+ {u32 k;for(k=4;p[k];k+=2)*(u32 *)p[k]=p[k+1];assert(k==4+2*(ST_NATIVE_OPERATION_LIMIT+(ST_NATIVE_OPERATION_LIMIT+3)/4+3));}
  *(const u32 **)p[2]=ticks;published++;}
 static void extra(void *c){(void)c;}
 static int init(const struct st_smz_api *api){assert(api->version==1 && api->ui->version==1);initialized++;

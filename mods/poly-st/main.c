@@ -3,6 +3,7 @@
  */
 #include <syntakt/native.h>
 #include <syntakt/host.h>
+#include <syntakt/sound-meta.h>
 typedef unsigned int u32;typedef unsigned char u8;
 #ifndef POLY_CALL
 #define POLY_CALL(address,type) ((type)(address))
@@ -35,21 +36,29 @@ static int poly_native(u32 op,const u32 *a,u32 *result);
 #define POLY_NATIVE_ALWAYS ((1u<<ST_NATIVE_TRIG)|(1u<<ST_NATIVE_IMMEDIATE)| \
     (1u<<ST_NATIVE_HEADER_LOAD)|(1u<<ST_NATIVE_HEADER_RESET)|(1u<<ST_NATIVE_PAGE_SYNC)| \
     (1u<<ST_NATIVE_PAGE_NAV)|(1u<<ST_NATIVE_PAGE_LAYOUT)|(1u<<ST_NATIVE_PAGE_BEGIN)|(1u<<ST_NATIVE_PAGE_END))
-#define POLY_NATIVE_GROUPED ((1u<<ST_NATIVE_ENQUEUE)|(1u<<ST_NATIVE_PUBLISH)| \
-    (1u<<ST_NATIVE_SOUND_ALLOWED)|(1u<<ST_NATIVE_MACHINE_ALLOWED)|(1u<<ST_NATIVE_PAGE_GUARD)| \
-    (1u<<ST_NATIVE_OWNERS))
+#define POLY_NATIVE_GROUPED ((1u<<ST_NATIVE_ENQUEUE)|(1u<<ST_NATIVE_SOUND_ALLOWED)| \
+    (1u<<ST_NATIVE_MACHINE_ALLOWED)|(1u<<ST_NATIVE_PAGE_GUARD))
+#define POLY_NATIVE_SHARED ((1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_OWNERS)| \
+    (1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO))
 static u32 poly_interest;
+static u32 poly_relation_interest,poly_relation_offset_interest;
 void poly_native_interest(void)
 {
     u32 mask=POLY_NATIVE_ALWAYS;
+    if(!poly_host || poly_host->version<5)return;
+    if(poly_host->version>=21 && (poly_relation_tracks!=poly_relation_interest ||
+                                 poly_relation_offsets!=poly_relation_offset_interest)) {
+        poly_relation_interest=poly_relation_tracks;
+        poly_relation_offset_interest=poly_relation_offsets;
+        poly_host->native_relation_scope((void (*)(void))poly_native,poly_relation_tracks,poly_relation_offsets);
+    }
     if(poly_grouped()){
         mask|=POLY_NATIVE_GROUPED;
-        if(!poly_shared_mask)mask&=~((1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_MODULATION)|
-            (1u<<ST_NATIVE_LFO)|(1u<<ST_NATIVE_OWNERS));
-        if(poly_analog_active)mask|=(1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO);
+        if(poly_shared_mask)mask|=POLY_NATIVE_SHARED;
+        if(poly_host->version>=21)mask|=(1u<<ST_NATIVE_RELATION_MASK)|(1u<<ST_NATIVE_RELATION_EVENT);
         /* New voices already own a native Sound/type; no TYPE dispatcher. */
     }
-    if(mask==poly_interest || !poly_host || poly_host->version<5)return;
+    if(mask==poly_interest)return;
     poly_interest=mask;poly_host->native_interest((void (*)(void))poly_native,mask);
 }
 static void poly_draw(void *view,void *bitmap,u32 phase)
@@ -62,11 +71,11 @@ static int poly_key(void *view,void *event,u32 phase)
     /* Reload/paste/Sound selection finishes in the same UI task before tick. */
     if(poly_ui_parameter_view(view)) {
         track=poly_ui_track(view);
-        if(track<8 && poly_seq_config.states[track]>=3)poly_copy_mark(track);
+        if(track<12 && poly_seq_config.states[track]>=3)poly_copy_mark(track);
     }
     return poly_ui_block_key(view,event);
 }
-static void poly_tick(void *ctrl){(void)ctrl;poly_copy_ui();poly_rec_ui();poly_analog_ui();}
+static void poly_tick(void *ctrl){(void)ctrl;poly_copy_ui();poly_rec_ui();poly_analog_ui();poly_live_ui();}
 static u32 poly_context[16],poly_depth;
 static int poly_native(u32 op,const u32 *a,u32 *result)
 {
@@ -81,6 +90,10 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
     case ST_NATIVE_ENQUEUE:
         if(!poly_grouped())return 0;
         *result=poly_sequence_enqueue((u32 *)a[0],a[1]);return 1;
+    case ST_NATIVE_RELATION_MASK:
+        *result=poly_relation_route((const u32 *)a[0],(const volatile u8 *)a[1],a[2]);return 1;
+    case ST_NATIVE_RELATION_EVENT:
+        poly_relation_event((u32 *)a[0]);break;
     case ST_NATIVE_IMMEDIATE:*result=poly_preview_locked((u32 *)a[0]);return 1;
     case ST_NATIVE_PUBLISH:
         if(poly_shared_mask)poly_publish_entry((u8 *)a[0],poly_post_map,poly_publish_span);return 0;
@@ -104,9 +117,7 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
         if(!poly_shared_mask)return 0;
         *result=(u32)(a && a[0]==1?poly_lfo_map:poly_post_map);return 1;
     case ST_NATIVE_MODULATION:case ST_NATIVE_LFO:
-        /* Preserve the validated analog skip kernels. Their bitmap excludes
-         * digital voices, which keep native per-track modulation in either PLAY. */
-        if(!poly_analog_active)return 0;
+        if(!poly_shared_mask)return 0;
         *result=(u32)(op==ST_NATIVE_MODULATION?poly_mod_shared:poly_native_shared);return 1;
     default:return 0;
     }
@@ -114,9 +125,21 @@ static int poly_native(u32 op,const u32 *a,u32 *result)
 }
 /* Host API 14 query 31: TRIG + YES on POLY's page draws the chord's
  * NOT2..NOT4 (stock trig IDs 1e..20, laid out only there). NOTE stays, as
- * on the stock TRIG page; POLY, VOICES and PLAY are never drawn. */
+ * on the stock TRIG page; POLY, VOICES and MOD are never drawn. */
 static int poly_query(unsigned int q,unsigned int *args,void *result,unsigned int *value)
-{(void)result;(void)value;return q==31 && args[0]-0x1eu<3u;}
+{
+    (void)result;
+    switch(q){
+    case 31:return args[0]-0x1eu<3u;
+    case 34:poly_copy_sound_changed(args);break;
+    case 38:
+        *value=poly_effective_owner(args[0]);return 1;
+    case 39:
+        if(!poly_grouped())break;
+        *value=poly_relation_mask((const volatile u8 *)args[0],args[1],args[2]);return 1;
+    }
+    return 0;
+}
 static int poly_initialize(const struct st_smz_api *api)
 {
     if(!api || api->version<3 || !api->ui || api->ui->version<7 ||

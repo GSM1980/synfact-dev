@@ -49,7 +49,7 @@ static void poly_voice_target(volatile u32 *event,u32 master,u32 voice)
 u32 poly_prepare(const u32 *source,const volatile u8 *sequence,u32 step,
                      u32 voices,u32 **out)
 {
-    u32 i,count=0,track,raw,root;
+    u32 i,count=0,track,raw,root,unison;
     s32 note;
     for(i=0;i<4;i++)out[i]=(u32 *)0;
     if(!source || !sequence)return 0;
@@ -57,8 +57,9 @@ u32 poly_prepare(const u32 *source,const volatile u8 *sequence,u32 step,
     track=source[2];root=source[6];
     if(track>=12 || root>127 || step>=64 || voices<2 || voices>4 ||
        track+voices>(track<8?8u:11u) || (track>=8 && voices>(track==8?3u:track==9?2u:0u)))return 0;
+    unison=poly_unison_spread(track);
     for(i=0;i<voices;i++) {
-        if(i==0)note=(s32)root;
+        if(i==0 || unison)note=(s32)root;
         else {
             raw=sequence[track*0x499u+0x2c0u+i*0x40u+step];
             if(raw==255)raw=sequence[track*0x499u+0x3c5u+i];
@@ -84,18 +85,17 @@ u32 poly_prepare(const u32 *source,const volatile u8 *sequence,u32 step,
  * No tagging or overlay of the native event's fields is introduced. */
 u32 poly_submit(u32 **events,u32 count,u32 time,u32 immediate)
 {
-    volatile u32 *bucket=*(volatile u32 **)0x444df434u;
-    u32 can_queue=*(volatile u32 *)0x444df43cu!=0,i;
+    u32 i;
     if(count<1 || count>4)return 0;
-    if(immediate) {
-        if(bucket && bucket[0])can_queue=1;
-    }else {
-        while(bucket) {
-            if(!bucket[0] && bucket[1]==time){can_queue=1;break;}
-            bucket=(volatile u32 *)bucket[4];
+    if(!*(volatile u32 *)0x444df43cu) {
+        const volatile u32 *bucket=*(const volatile u32 **)0x444df434u;
+        if(immediate) {
+            if(!bucket || !bucket[0])return 0;
+        }else {
+            while(bucket && (bucket[0] || bucket[1]!=time))bucket=(const volatile u32 *)bucket[4];
+            if(!bucket)return 0;
         }
     }
-    if(!can_queue)return 0;
     for(i=0;i<count;i++) {
         if(immediate)native_immediate(events[i]);
         else native_enqueue(events[i],time);

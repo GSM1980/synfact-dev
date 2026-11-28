@@ -1,4 +1,17 @@
-# Syntakt core 2.9.0
+# Syntakt core 2.9.2
+
+Host API 22 publishes physical voice-group membership separately from the
+modulation routing tables. The provider can also publish signed Q16 semitone
+offsets for the native note pitch writes. Group membership serves ARP's
+eligibility checks, and pitch offsets apply at note acceptance for UNISON.
+The native event retains the integer note used by gate and release matching.
+
+Host API 21 exposes native Track Relation destination selection and clone
+preparation on note events. The track-option provider also shares Sound Setup
+and completed Sound loads, and supplies the effective track used by the FX
+routing display and controls. A sole relation subscriber may publish a track
+filter so ordinary notes bypass its callback. These hooks run at the existing
+note and UI boundaries.
 
 **Independent parameter storage.** Host API 20 appends the persistence
 service (`syntakt/persist.h`): encoded Kit capacity/context, the real

@@ -38,6 +38,7 @@ static s32 poly_chord_note(const volatile u8 *sequence,u32 track,u32 step,u32 vo
 {
     u32 raw=255;
     s32 note;
+    if(poly_unison_spread(track))return root<=(track<8?127u:84u)?(s32)root:-1;
     if(step<64)raw=sequence[track*0x499u+0x2c0u+voice*0x40u+step];
     if(raw==255)raw=sequence[track*0x499u+0x3c5u+voice];
     if(root>127)return -1;
@@ -128,14 +129,14 @@ volatile u8 poly_has_groups DATA=0;
 volatile u8 poly_analog_active DATA=0;
 u32 poly_publish_end DATA=1;
 u32 poly_publish_first DATA=1;
-u32 poly_slave_mask DATA=0;
+static u32 poly_relation_tracks DATA=0,poly_relation_offsets DATA=0;
 static u8 poly_analog_type[2] DATA={0,0};
 
 extern void poly_native_interest(void);
 u32 poly_commit(u32 sequence,const volatile u8 *states)
 {
     u8 owners[12],old_roots[12],new_roots[12],affected[12];
-    u32 i,changed=0,on;
+    u32 i,changed=0,on,analog_setup=0;
     u32 old;
     volatile u32 *bucket;
     u32 *event;
@@ -143,7 +144,8 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
     if(sequence!=poly_seq_config.sequence)changed=1;
     for(i=0;i<12;i++) {
         old_roots[i]=0;new_roots[i]=0;
-        if(states[i]!=poly_seq_config.states[i] || (i<8 && poly_modes[i]!=poly_next_modes[i]))changed=1;
+        if(states[i]!=poly_seq_config.states[i] || (i<POLY_MODE_TRACKS &&
+           (poly_modes[i]!=poly_next_modes[i] || poly_unison[i]!=poly_next_unison[i])))changed=1;
     }
     if(!changed)return 1;
     for(i=0;i<12;i++) {
@@ -153,7 +155,8 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
         if(states[i]>=3)on=1;
         if(poly_seq_config.states[i]>=3)on=1;
         if((sequence!=poly_seq_config.sequence && (on || old!=i || owners[i]!=i)) || old!=owners[i] ||
-           (on && (states[i]!=poly_seq_config.states[i] || (i<8 && poly_modes[i]!=poly_next_modes[i])))) {
+           (on && (states[i]!=poly_seq_config.states[i] || (i<POLY_MODE_TRACKS &&
+             (poly_modes[i]!=poly_next_modes[i] || poly_unison[i]!=poly_next_unison[i]))))) {
             old_roots[old]=1;new_roots[owners[i]]=1;
         }
     }
@@ -172,11 +175,13 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
         native_release_track(i,0x7fffu);
         /* Non-destructive setup, digital and analog alike: a new voice
          * publishes its master's Sound; a removed voice (shrink, disable, MIDI
-         * suspension) publishes its own saved Sound again. A PLAY-only change
+         * suspension) publishes its own saved Sound again. A MOD-only change
          * publishes nothing. Analog new voices publish below. */
         if(owners[i]<i) {
-            if(i<8 && (owners[i]!=poly_seq_config.owners[i] || sequence!=poly_seq_config.sequence))
-                poly_copy_group(i,owners[i]);
+            if(owners[i]!=poly_seq_config.owners[i] || sequence!=poly_seq_config.sequence) {
+                if(i<8)poly_copy_group(i,owners[i]);
+                else analog_setup|=1u<<i;
+            }
         }else if(poly_seq_config.owners[i]<i) {
             u32 kit=*(volatile u32 *)0x43bd843cu;
             if(kit)native_publish_sound((const volatile u8 *)(kit+0x2au+i*0x123u),i);
@@ -184,25 +189,31 @@ u32 poly_commit(u32 sequence,const volatile u8 *states)
     }
     for(i=0;i<12;i++)poly_seq_config.states[i]=states[i];
     for(i=0;i<12;i++)poly_seq_config.owners[i]=owners[i];
-    for(i=0;i<8;i++)poly_modes[i]=poly_next_modes[i];
+    for(i=0;i<POLY_MODE_TRACKS;i++) {
+        poly_modes[i]=poly_next_modes[i];poly_unison[i]=poly_next_unison[i];
+    }
     poly_play_maps(poly_seq_config.owners);
-    poly_has_groups=0;poly_analog_active=0;poly_publish_end=1;poly_slave_mask=0;
+    poly_has_groups=0;poly_analog_active=0;poly_publish_end=1;
+    poly_relation_tracks=0;poly_relation_offsets=0;
     for(i=1;i<12;i++)if(owners[i]<i) {
         if(!poly_has_groups)poly_publish_first=i;
         poly_has_groups=1;poly_publish_end=i+1;
-        if(i>=8)poly_slave_mask|=1u<<i;
+        poly_relation_tracks|=(1u<<(16+i))|(1u<<i)|(1u<<owners[i]);
+        poly_relation_offsets|=(i-owners[i])<<(2*i);
         if(i>=8)poly_analog_active=1;
     }
     /* Analog TYPE is native, so publish its master's Sound at group apply. */
-    for(i=8;i<12;i++)if(owners[i]<i) {
+    for(i=8;i<12;i++)if(analog_setup>>i&1u) {
         u32 kit=*(volatile u32 *)0x43bd843cu;
         if(kit)native_publish_sound((const volatile u8 *)(kit+0x2au+owners[i]*0x123u),i);
+        poly_analog_type[owners[i]-8]=*(volatile u8 *)(0x80002f50u+owners[i]);
     }
-    for(i=8;i<10;i++)poly_analog_type[i-8]=*(volatile u8 *)(0x80002f50u+i);
+    poly_publish_voice_groups();
     poly_native_interest();
     poly_seq_config.sequence=sequence;
     poly_seq_config.generation++;
     if(!poly_seq_config.generation)poly_seq_config.generation=1;
+    poly_live_reset(affected);
     /* A group edited while stopped must not start from statics prepared
      * under the previous topology. Only the same sequence is rebuilt: a new
      * pattern is prepared by its own native 4008c0b0 pass. */
@@ -239,7 +250,10 @@ static u32 *poly_trig_synced(u32 track,const volatile u8 *seq,u32 kit,u32 step,u
         prep_step[track]=(u8)step;
         prep_generation[track]=generation;
         if(result && time)prep_fill_group(seq,track,(s32)*time);
-        else for(i=1;i+1u<poly_seq_config.states[track];i++)PREP_EVENT(track+i)[1]=0;
+        else {
+            for(i=1;i+1u<poly_seq_config.states[track];i++)PREP_EVENT(track+i)[1]=0;
+            poly_seq_started(track,0);
+        }
     }
     if(!result)return result;
     if(track>=12)return result;
@@ -263,7 +277,7 @@ u32 *poly_trig(u32 track,const volatile u8 *seq,u32 kit,u32 step,u32 *event,u32 
  * Other enqueue callers retain the original function and ABI unchanged. */
 u32 poly_sequence_enqueue(u32 *event,u32 time)
 {
-    u32 track=event[2],count,i;
+    u32 track=event[2],count,i,routes,voices,note,length;
     u32 *batch[4];
     volatile struct pending *pending;
     if(track>=12)return stock_enqueue(event,time);
@@ -274,21 +288,27 @@ u32 poly_sequence_enqueue(u32 *event,u32 time)
         if(!event[0])native_event_free(event);
         return 0;
     }
-    count=poly_prepare(event,(const volatile u8 *)pending->sequence,pending->step,
-                           poly_seq_config.states[track]-1u,batch);
-    /* Note trigs rotate over the voices. A trigless lock trig (as ARP tells
-     * them: not all of +24h's 10201h bits) moves no voice: a chord's reaches
-     * every voice, a single note's the voice started last. */
-    if(count)poly_seq_voices(batch,count,track,poly_seq_config.states[track]-1u,event);
+    voices=poly_seq_config.states[track]-1u;
+    note=(event[9]&0x10201u)==0x10201u;
+    length=event[12];
+    count=poly_prepare(event,(const volatile u8 *)pending->sequence,pending->step,voices,batch);
     if(!count) {
-        /* A failed reservation has rolled back all child refs. Keep the
-         * original master behavior when the native queue can accept it. */
+        /* Pool pressure leaves only the source. Route that note as well so
+         * the fallback cannot write over a voice held by the keyboard. */
+        u32 routed=note && event[3]==1 && !event[11] && event[6]<=(track<8?127u:84u);
         batch[0]=event;
-        if(poly_submit(batch,1,time,0))return 1;
+        if((!routed || poly_seq_voices(batch,1,track,voices,event,&routes)) && poly_submit(batch,1,time,0)) {
+            if(routed)poly_seq_committed(track,1,routes,length);
+            return 1;
+        }
         if(!event[0])native_event_free(event);
         return 0;
     }
-    if(poly_submit(batch,count,time,0)) {
+    /* Trigless lock trigs stay on the last voice or on every chord voice. */
+    i=poly_seq_voices(batch,count,track,voices,event,&routes);
+    while(count>i)native_event_free(batch[--count]);
+    if(count && poly_submit(batch,count,time,0)) {
+        if(note)poly_seq_committed(track,count,routes,length);
         if(!event[0])native_event_free(event);
         return 1;
     }

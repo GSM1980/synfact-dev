@@ -98,6 +98,10 @@ static int eligible(arp_u32 track)
     arp_u32 kit=*(const volatile arp_u32 *)0x43bd843cu;
     const unsigned char *owner;unsigned int i;
     if(track>=ARP_TRACKS || !kit || (*(const volatile unsigned short *)(kit+0x1550u)&(1u<<track)))return 0;
+    if(arp_host->version>=22) {
+        arp_u32 grouped=*arp_host->voice_groups;
+        if(grouped!=~0u)return !(grouped&(1u<<track));
+    }
     owner=(const unsigned char *)arp_host->native_dispatch(ST_NATIVE_OWNERS,0);
     if(owner){if(owner[track]!=track)return 0;for(i=track+1;i<ARP_TRACKS;i++)if(owner[i]==track)return 0;}
     return 1;

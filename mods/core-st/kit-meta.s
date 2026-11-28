@@ -86,3 +86,24 @@ core_meta_kit_decode:
         move.l 4(%sp),%d0
         movea.l 8(%sp),%a0
         jmp 0x400a78a8
+
+        .globl core_meta_velocity_to_volume
+core_meta_velocity_to_volume:
+        move.b %d1,0xa3(%a0)
+        move.l %d0,-8(%a6)
+        move.l %a2,-(%sp)
+        move.l %a0,-(%sp)
+        jsr core_sound_setup_changed
+        addq.l #8,%sp
+        jmp 0x40024558
+
+        .globl core_meta_track_sound_load
+core_meta_track_sound_load:
+        jsr (%a0)
+        lea 16(%sp),%sp
+        move.l %d3,%d0
+        lsr.l #6,%d0
+        move.l %d0,-(%sp)
+        jsr core_track_sound_loaded
+        addq.l #4,%sp
+        jmp 0x4000ecbe

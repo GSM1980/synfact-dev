@@ -44,7 +44,11 @@ enum st_native_operation {
  ST_NATIVE_OWNERS, ST_NATIVE_MODULATION, ST_NATIVE_LFO, ST_NATIVE_OPERATION_COUNT,
  /* 18/19 remain the TYPE filter bytes, including for older bank binaries.
   * OPERATION_COUNT stays 18: host API 4 profiler buffers are 36 words. */
- ST_NATIVE_NOTE_ACCEPT=20, ST_NATIVE_SOUND_META, ST_NATIVE_OPERATION_LIMIT
+ ST_NATIVE_NOTE_ACCEPT=20, ST_NATIVE_SOUND_META,
+ /* API 21, MAIN IRQ. MASK {parent, kit, stock mask} returns the physical
+  * destinations, before stock saves them for release. EVENT {clone}
+  * observes the native allocated relation event before it is queued. */
+ ST_NATIVE_RELATION_MASK, ST_NATIVE_RELATION_EVENT, ST_NATIVE_OPERATION_LIMIT
 };
 /* Host API 8, MAIN IRQ, after track mute/staleness and Sound resolution, before
  * note gate/pitch/lock effects. args = {event, sound, effective_time, frame_end}.

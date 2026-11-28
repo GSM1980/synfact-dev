@@ -405,12 +405,12 @@ static void arp_trig_page(unsigned int page)
 {
     arp_u8 *trig=arp_trig_view(arp_main);
     arp_page=page;
-    if(trig && (st_trig_mask(trig)&ST_TRIG_ARP))
+    if(trig && (st_trig_mask(trig)&ST_TRIG_ARP) && eligible(arp_trig_track(trig)))
         arp_trig_index(trig,st_trig_first(st_trig_mask(trig),ST_TRIG_ARP)+page);
 }
 /* 1.9: the page popup the native page key shows ("Arpeggiator (4/5)",
  * "TRIG (1/5)"), for the TRIG presses that move the page here instead. */
-static void arp_trig_popup(arp_u8 *trig){if(trig)st_trig_popup(trig);}
+static void arp_trig_popup(arp_u8 *trig){if(trig){arp_trig_sync(trig);st_trig_popup(trig);}}
 /* Close the view, leaving the TRIG view on page 0 (the first TRIG page) or,
  * with before, on the page before the arp's; returns that TRIG view. */
 static arp_u8 *arp_trig_close(int before)
@@ -457,7 +457,9 @@ static void arp_view_draw(void *v,void *bmp,arp_u32 phase)
     struct arp_settings other;const struct arp_settings *shown;
     if(!trig || view_word(trig,0)!=ST_TRIG_VIEW || view_word(trig,0x88)!=0x13u)return;
     mask=st_trig_mask(trig);
-    if(!(mask&ST_TRIG_ARP) || (index=view_word(trig,0x90))<(first=st_trig_first(mask,ST_TRIG_ARP)))return;
+    if(!(mask&ST_TRIG_ARP))return;
+    if(!eligible(arp_trig_track(trig))){st_trig_set(trig,ST_TRIG_ARP,0);return;}
+    if((index=view_word(trig,0x90))<(first=st_trig_first(mask,ST_TRIG_ARP)))return;
     ARP_FILLRECT(bmp,ARP_AREA_X0,0,127,ARP_AREA_Y1,0);
     if(arp_view && arp_trig_view(arp_main)==trig){
         /* Native TRIG can advance beneath a transparent mute/selection view.
@@ -525,7 +527,7 @@ static int arp_trig_layout(const arp_u32 *a,arp_u32 *result)
 {
     arp_u8 *trig;const arp_u32 *page3;
     if(!a || a[0]!=ST_TRIG_ADDED_ID || !(trig=st_trig_current()) ||
-       st_trig_owner(trig,view_word(trig,0x90))!=ST_TRIG_ARP)return 0;
+       st_trig_owner(trig,view_word(trig,0x90))!=ST_TRIG_ARP || !eligible(arp_trig_track(trig)))return 0;
     page3=(const arp_u32 *)arp_host->native_original(ST_NATIVE_PAGE_LAYOUT,a);
     if(!page3)return 0;
     *result=(arp_u32)st_trig_descriptor(arp_descriptor,page3,&arp_title,0);return 1;
@@ -535,7 +537,7 @@ static int arp_trig_layout(const arp_u32 *a,arp_u32 *result)
 static int arp_trig_page_shown(void *app)
 {
     arp_u8 *trig=arp_trig_view(arp_top(app));
-    return trig && st_trig_owner(trig,view_word(trig,0x90))==ST_TRIG_ARP;
+    return trig && st_trig_owner(trig,view_word(trig,0x90))==ST_TRIG_ARP && eligible(arp_trig_track(trig));
 }
 static void arp_enc_reset(void);
 /* UI events and the existing foreground tick adopt native navigation. Never
@@ -543,7 +545,7 @@ static void arp_enc_reset(void);
 static int arp_follow_page(void)
 {
     arp_u8 *trig=arp_trig_view(arp_main);unsigned int page;
-    if(!trig || st_trig_owner(trig,view_word(trig,0x90))!=ST_TRIG_ARP){
+    if(!trig || st_trig_owner(trig,view_word(trig,0x90))!=ST_TRIG_ARP || !eligible(arp_trig_track(trig))){
         arp_cancel_steps();arp_view_close();return 0;
     }
     page=view_word(trig,0x90)-st_trig_first(st_trig_mask(trig),ST_TRIG_ARP);
@@ -687,9 +689,10 @@ static int arp_sync_track(void)
 {
     if(arp_main && view_word(arp_main,0xa4)){
         arp_u32 track=UI_CALL(0x4001ff74u,arp_u32 (*)(void *))(*(void **)(arp_main+0xa4));
+        if(!eligible(track)){arp_trig_close(0);return 0;}
         if(track!=arp_track){
             arp_u8 *parameter=*(arp_u8 **)(arp_main+0xc0);void *proxy=0;arp_u32 sound=0;
-            if(track<ARP_TRACKS && eligible(track) && parameter && view_word(parameter,0)==0x401c9a9cu){
+            if(parameter && view_word(parameter,0)==0x401c9a9cu){
                 proxy=((void *(*)(void *,arp_u32,int))(*(arp_u32 **)parameter)[0xc4/4])(parameter,0x60u,-1);
                 sound=proxy_sound(proxy);
             }

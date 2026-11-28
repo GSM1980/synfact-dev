@@ -24,6 +24,7 @@ __attribute__((noinline)) u32 core_native_original(u32 op,const u32 *a)
     case ST_NATIVE_PAGE_LAYOUT:return (u32)core_stock_page_layout(a[0]);
     case ST_NATIVE_SOUND_ALLOWED:case ST_NATIVE_MACHINE_ALLOWED:return 1;
     case ST_NATIVE_PAGE_NAV:return 0xffffffffu;
+    case ST_NATIVE_RELATION_MASK:return a[2];
     default:return 0;
     }
 }
@@ -36,7 +37,7 @@ __attribute__((noinline)) u32 core_native_original(u32 op,const u32 *a)
 static u32 *volatile native_profile;
 void core_native_profile(u32 *buffer){native_profile=buffer;}
 #ifdef __mcoldfire__
-_Static_assert(ST_NATIVE_OPERATION_LIMIT==22 && ST_NATIVE_OPERATION_COUNT==18,
+_Static_assert(ST_NATIVE_OPERATION_LIMIT==24 && ST_NATIVE_OPERATION_COUNT==18,
                "resident native service operation/profiler layout");
 /* Private alias for the resident wrapper. Volatile keeps setter stores visible
  * to assembly, including when a callback replaces the profile buffer. */

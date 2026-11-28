@@ -58,6 +58,7 @@ class Service(Routes):
 
 def verify(folder):
     m=Service(folder);rows=[]
+    limit=24 if 'core:core_native_relation_scope' in m.sym else 22
     for profiled in (False,True):
         for count in (0,3,8):
             entries=[CALLBACK+32*i for i in range(count)]
@@ -67,14 +68,14 @@ def verify(folder):
                 # Core 2.6.1: a positive byte takes its entries from the word.
                 if 'core:core_native_routes' in m.sym:
                     m.u.mem_write(m.sym['core:core_native_routes'],
-                                  pack(*[0xffffffff if route&128 else route]*22))
-                for op in (*range(22),22,0xffffffff):
+                                  pack(*[0xffffffff if route&128 else route]*limit))
+                for op in (*range(limit),24,0xffffffff):
                     for take in ('none','first','last','empty_result'):
                         m.operation=op;m.original=[];m.hits=[];m.timer_reads=0
                         m.no_write=take=='empty_result'
                         m.consume=(entries[-1] if take=='last' else entries[0]) if entries and take!='none' else None
                         want=[]
-                        if op<22 and route:
+                        if op<limit and route:
                             for i,fn in enumerate(entries):
                                 if op in (18,19) or route&128 or route>>i&1:
                                     want.append(fn)
@@ -104,7 +105,7 @@ def verify(folder):
     for initial,next_buffer,nested in ((0,OTHER,False),(PROFILE,0,False),(PROFILE,OTHER,False),(PROFILE,PROFILE,True)):
         code=bytes.fromhex('4feffff8')                 # outgoing op/args
         if nested:
-            code+=bytes.fromhex('2ebc')+pack(22)+bytes.fromhex('2f7c')+pack(ARGS)+bytes.fromhex('0004')
+            code+=bytes.fromhex('2ebc')+pack(24)+bytes.fromhex('2f7c')+pack(ARGS)+bytes.fromhex('0004')
             code+=bytes.fromhex('4eb9')+pack(m.sym['core:core_native'])
         code+=bytes.fromhex('2ebc')+pack(next_buffer)
         code+=bytes.fromhex('4eb9')+pack(m.sym['core:core_native_profile'])
@@ -115,7 +116,7 @@ def verify(folder):
         m.invoke('core_native_profile',initial)
         m.operation=17;m.consume=None;m.hits=[];m.original=[];m.timer_reads=0
         assert m.invoke('core_native',17,ARGS)==0x6a000011
-        assert m.hits==[CALLBACK] and m.original==([22,17] if nested else [17])
+        assert m.hits==[CALLBACK] and m.original==([24,17] if nested else [17])
         old=[0xffffffff]*36
         if initial:old[17]=13 if nested else 6;old[35]=0
         assert m.profile_words(PROFILE)==old and m.profile_words(OTHER)==[0xffffffff]*36
@@ -130,10 +131,16 @@ def main():
     p.add_argument('--out',type=Path,required=True);a=p.parse_args()
     before,after=verify(a.before),verify(a.after)
     rows=[]
-    for old,new in zip(before['rows'],after['rows']):
-        assert {k:v for k,v in old.items() if k!='instructions'}=={k:v for k,v in new.items() if k!='instructions'}
+    def key(row):return tuple(v for k,v in row.items() if k!='instructions')
+    previous={key(row):row for row in before['rows']}
+    for new in after['rows']:
+        old=previous.get(key(new))
+        if old is None:
+            assert new['operation'] in (22,23)
+            continue
         assert new['instructions']<=old['instructions'],('native service regression',old,new)
         rows.append({**{k:v for k,v in old.items() if k!='instructions'},'before':old['instructions'],'after':new['instructions']})
+    assert len(rows)==len(before['rows'])
     sha=lambda path:hashlib.sha256((path/'main.bin').read_bytes()).hexdigest()
     result=dict(ok=True,checks=after['checks'],profile_snapshot_transitions=after['profile_snapshot_transitions'],
                 all_call_counts_nonincreasing=True,rows=rows,bank_independent=True,device_access=False,

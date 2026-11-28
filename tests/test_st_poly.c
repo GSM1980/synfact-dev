@@ -20,7 +20,7 @@ static void *poly_test_function(T);
 static T events[128][20],used[128],queue[256][20],queued,releases,publishes,cancelled;
 static T fail_after,allocations,refcount=1,trig_calls,model_notifies,draws,immediate_calls;
 static T policy[13],increments[7],native_layout[11],tracked=0;
-static T rec_step,rec_track,trig_flags=0x10201u;  /* +24h of a note trig */
+static T rec_step,rec_track,trig_length,trig_flags=0x10201u;  /* +24h of a note trig */
 static B rec_model[0x500];
 static B view[512],model[64],header[256];
 static char labels[512];
@@ -69,7 +69,7 @@ static T original(T op,const T *a)
     case ST_NATIVE_TRIG:
         trig_calls++;e=(T *)a[4];if(!e)return 0;
         for(i=0;i<20;i++)e[i]=0;
-        e[0]=1;e[1]=1;e[2]=a[0];e[3]=1;e[6]=SEQ[a[0]*0x499+0x3c5];e[9]=trig_flags;e[18]=a[0];
+        e[0]=1;e[1]=1;e[2]=a[0];e[3]=1;e[6]=SEQ[a[0]*0x499+0x3c5];e[9]=trig_flags;e[12]=trig_length;e[18]=a[0];
         if(a[5])*(T *)a[5]=1000;return (T)e;
     case ST_NATIVE_ENQUEUE:native_enqueue((T *)a[0],a[1]);return 1;
     case ST_NATIVE_HEADER_LOAD:memcpy((void *)a[0],(void *)a[1],256);return 1;
@@ -87,10 +87,11 @@ static void delete_mock(void *p){free(p);}
 static T event_check(void *e,T mask){(void)e;assert(mask==0xfffffffdu);return 1;}
 static T position_mock(T *e){return e[1];}
 static T policy_mock(T id){assert(id==0x13u);return (T)policy;}
-static int delta_mock(T *e,T a,T b){(void)a;(void)b;return (int)e[2];}
+static int delta_mock(T *e,T a,T b)
+{if(e[1]==3)assert(a==1 && b==1);return (int)e[2];}
 static T pressed_mock(void *e){(void)e;return 0;}
 static int increment_mock(void *v,T pos,int delta,void *inc,T down)
-{assert(v==view+0x94 && pos<8 && inc && !down);return delta;}
+{assert(v==view+0x94 && pos<3 && inc && !down);return delta;}
 static void dirty_mock(void *v){assert(v==view);}
 static T key_mock(T *e){return e[0];}
 static T zero_mock(void *v,T pos){(void)v;(void)pos;return 0;}
@@ -135,27 +136,46 @@ static void *poly_test_function(T address)
     }
 }
 static const struct st_machine_host_api services={.version=2,.native_original=original};
+static T test_groups;
+static int test_pitch[12];
+static void unison_scope(void (*fn)(void),T mask,T offsets){(void)fn;(void)mask;(void)offsets;}
+static void unison_interest(void (*fn)(void),T mask){(void)fn;(void)mask;}
+static void unison_groups(T mask,const int *offsets)
+{
+    test_groups=mask;
+    if(offsets)memcpy(test_pitch,offsets,sizeof test_pitch);
+    else memset(test_pitch,0,sizeof test_pitch);
+}
+static const struct st_machine_host_api services22={.version=22,.native_original=original,
+    .native_interest=unison_interest,.native_relation_scope=unison_scope,
+    .voice_groups=&test_groups,.voice_groups_set=unison_groups};
 static void reset(void)
 {
     T i;
     memset(SEQ,0,0x22000);memset(KIT,0,0x1600);
     memset(events,0,sizeof events);memset(used,0,sizeof used);queued=releases=publishes=cancelled=0;
-    fail_after=allocations=trig_calls=rec_track=0;refcount=1;poly_test_origin=0;
+    fail_after=allocations=trig_calls=rec_track=trig_length=0;refcount=1;poly_test_origin=0;
     memset((void *)&poly_seq_config,0,sizeof poly_seq_config);
     poly_seq_config.generation=1;for(i=0;i<12;i++)poly_seq_config.owners[i]=(B)i;
     poly_has_groups=poly_analog_active=0;poly_publish_end=1;
     cache_sequence=0;cache_midi_mask=0xffffffffu;preview_depth=0;
-    memset(prep_generation,0,sizeof prep_generation);memset(live_generation,0,sizeof live_generation);
+    memset(prep_generation,0,sizeof prep_generation);
+    memset(live_mask,0,sizeof live_mask);memset(live_confirmed,0,sizeof live_confirmed);
+    memset(live_next,0,sizeof live_next);memset(seq_timed,0,sizeof seq_timed);
+    memset(seq_untimed,0,sizeof seq_untimed);
     memset(chord_generation,0,sizeof chord_generation);memset(preview_generation,0,sizeof preview_generation);
     memset(rec_chords,0,sizeof rec_chords);memset(live_age,0,sizeof live_age);live_clock=0;
-    memset(poly_modes,0,8);memset(poly_next_modes,0,8);poly_shared_mask=poly_copy_pending=0;
-    *(T *)0x800030b8=0;
+    memset(poly_modes,0,sizeof poly_modes);memset(poly_next_modes,0,sizeof poly_next_modes);
+    memset(poly_unison,0,sizeof poly_unison);memset(poly_next_unison,0,sizeof poly_next_unison);
+    poly_shared_mask=poly_copy_pending=0;
+    *(T *)0x800030b8=0;*(T *)0x80003124=0;memset((T *)0x80003084,0,13*4);
     for(i=0;i<12;i++)poly_lfo_map[i]=poly_post_map[i]=(B)i;
     *(B **)0x43bd8430u=SEQ;*(B **)0x43bd843cu=KIT;
     *(T *)0x444df434u=0;*(T *)0x444df43cu=64;*(T *)0x402d5aacu=0xffffffffu;
     *(T *)0x43bd8424u=0;*(T *)0x43bd83bcu=0;*(T *)0x444e23ecu=0;
     for(i=0;i<12;i++){
         B *tr=SEQ+i*0x499;tr[0x3c5]=60;tr[0x3c6]=68;tr[0x3c7]=71;tr[0x3c8]=76;
+        memset((T *)poly_native_held(i),0,16);
         memset(tr+0x2c0,255,256);*(T *)(0x43bd83c8u+i*4)=0;
         *(B *)(0x43bd84efu+i)=0;*(B *)(0x43bd84fcu+i)=0;
     }
@@ -166,7 +186,7 @@ static void live(T note,T on,T origin)
 {T e[20]={1,on,0,2,0,0,note};poly_test_origin=origin;native_immediate(e);}
 static void play_codec(void)
 {
-    B raw[7],states[12],modes[8],decoded[12],plays[8],owners[12];T rank,crc,i;
+    B raw[7],states[12],modes[POLY_MODE_TRACKS],decoded[12],plays[POLY_MODE_TRACKS],owners[12];T rank,crc,i;
     for(rank=0;rank<poly_counts[8];rank++) {
         raw[0]=0x50;raw[1]=0x52;raw[2]=(B)(rank>>16);raw[3]=(B)(rank>>8);raw[4]=(B)rank;
         crc=poly_crc(raw);raw[5]=(B)(crc>>8);raw[6]=(B)crc;
@@ -183,9 +203,28 @@ static void play_codec(void)
     printf("PASS: %u ranked PLAY/topology records, legacy round trips and CRC corruption\n",poly_counts[8]);
 }
 
+static void unison_codec(void)
+{
+    B raw[7],legacy[7],decoded[12],modes[10],spreads[10],values[10]={0};
+    B states[12]={3,2,3,2,3,2,3,2,0,3},expected_modes[10]={1,0,1,0,1,0,1,0,0,1};
+    T value,t,bit;
+    poly_encode(legacy,states,expected_modes);
+    poly_encode_settings(raw,states,expected_modes,values);
+    assert(!memcmp(raw,legacy,7));
+    for(value=1;value<=50;value++) {
+        for(t=0;t<10;t++)if(states[t]>=3)values[t]=(B)(1+(value+t-1)%50);
+        poly_encode_settings(raw,states,expected_modes,values);
+        assert(poly_decode_settings(raw,decoded,modes,spreads));
+        assert(!memcmp(decoded,states,12) && !memcmp(modes,expected_modes,10) && !memcmp(spreads,values,10));
+        for(bit=0;bit<56;bit++){
+            raw[bit/8]^=(B)(1u<<(bit%8));assert(!valid(raw));raw[bit/8]^=(B)(1u<<(bit%8));
+        }
+    }
+}
+
 static void play_modes(void)
 {
-    B original_state[80],working[0x754+13*0x7c],saved[7],states[12],modes[8];
+    B original_state[80],working[0x754+13*0x7c],saved[7],states[12],modes[POLY_MODE_TRACKS];
     T i,mode,e[20],time,result,q=1,crc,rank,pub[1]={(T)working};
     reset();assert(poly_record_write(0,1,4));
     for(i=0;i<80;i++)((B *)0x444db77cu)[i]=original_state[i]=(B)(i+7);
@@ -267,9 +306,11 @@ static void digital_event_sounds(void)
         assert(poly_record_write(0,1,voices));
         for(k=0;k<voices;k++) {
             memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=0;e[3]=2;e[6]=60+k;
-            poly_test_origin=1;native_immediate(e);
+            poly_test_origin=2;native_immediate(e);
             assert(queued==1 && queue[0][2]==k && queue[0][10]==(k?sound:0));drain();
         }
+        for(k=0;k<voices;k++)live(60+k,2,1);
+        drain();
         for(kind=1;kind<=2;kind++) {
             memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=0;e[3]=kind;e[6]=60;
             *(T *)0x402d5aacu=0;poly_test_origin=0;native_immediate(e);
@@ -301,7 +342,7 @@ static void topology(void)
             assert(poly_publish_span==((first<<8)|end));
             assert(poly_publish_entry==(end==first+1?poly_fast_publish_one:poly_fast_publish_span));
             for(T analog=0;analog<4;analog++) {
-                B all[12],decoded[12],raw[7],plays[8];
+                B all[12],decoded[12],raw[7],plays[POLY_MODE_TRACKS];
                 memcpy(all,states,12);
                 if(analog==1)all[8]=3;
                 if(analog==2)all[8]=4;
@@ -421,6 +462,91 @@ static void sequence_voices(void)
     }
     printf("PASS: sequencer notes rotate over 2/3/4 voices, chords take the oldest voices, first-step statics, analog Sounds\n");
 }
+
+static void mixed_voice_allocation(void)
+{
+    T event[20]={1},time,age;
+    T bucket[5]={0},pending[20]={1,1,0,1,0,0,60,0,0,0x10201u};
+
+    reset();assert(poly_record_write(0,1,2));
+    live(60,1,2);live(62,1,2);live(64,1,2);live(65,1,2);drain();
+    /* Native note-ons emitted during release (including fallback to a stolen
+     * pitch) do not start a voice. An actual repeated press still does. */
+    live(65,1,1);live(60,1,1);assert(!queued);
+    live(65,1,2);assert(queued==1 && queue[0][2]==1);drain();
+    live(60,2,1);live(62,2,1);assert(!queued);
+    live(64,2,1);live(65,2,1);assert(queued==2 && !live_mask[0]);drain();
+    live(60,1,1);assert(!queued);
+    live(60,1,2);assert(queued==1 && queue[0][1]==1);drain();
+    /* Editing another group leaves the first group's ownership intact. */
+    assert(poly_record_write(2,1,2));assert(live_mask[0]);
+    live(60,2,1);assert(queued==1 && !live_mask[0]);drain();
+
+    reset();assert(poly_record_write(0,1,4));
+    SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;
+    *(T *)0x43bd83bc=1;
+    assert(step_voices(0,0)==1);
+    /* Some native note flags leave the live gate flag clear. */
+    trig_length=1000;
+    assert(step_voices(1,0)==2);
+    *(T *)0x80003124=2; /* A finite gate may leave the flag set after expiry. */
+    for(T i=2;i<=9;i++)assert(step_voices(i,0)==(2u<<((i-1)%3)));
+    *(s32 *)0x80003084=-1; /* Native release has ended the infinite gate. */
+    assert(step_voices(10,0)==1);
+
+    reset();assert(poly_record_write(0,1,2));
+    SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;
+    live(60,1,2);drain();
+    for(T i=0;i<4;i++)assert(step_voices(i,0)==2);
+    live(62,1,2);drain();
+    assert(poly_trig(0,SEQ,(T)KIT,4,event,&time) && !poly_sequence_enqueue(event,time));
+    drain();
+    live(62,2,1);drain();
+    fail_after=allocations+1;
+    assert(step_voices(5,0)==2); /* The source alone still avoids the held voice. */
+    fail_after=0;
+
+    reset();assert(poly_record_write(0,1,2));
+    SEQ[0x3c6]=SEQ[0x3c7]=SEQ[0x3c8]=64;
+    bucket[2]=(T)pending;*(T *)0x444df434u=(T)bucket;
+    assert(step_voices(0,0)==2); /* Queued but not sounding yet. */
+    *(T *)0x444df434u=0;
+    live(60,1,2);drain(); /* Voice 0 is held by live input. */
+    SEQ[0x3c6]=68;
+    assert(step_voices(1,0)==2); /* The root gets the one available voice. */
+    *(T *)0x444df43cu=0;age=live_clock;
+    assert(poly_trig(0,SEQ,(T)KIT,2,event,&time) && !poly_sequence_enqueue(event,time));
+    assert(live_clock==age);drain();
+    puts("PASS: live ownership, release fallback, repeat, held and queued sequencer voices, queue rollback");
+}
+
+static void suppressed_live_releases(void)
+{
+    volatile T *held=(volatile T *)poly_native_held(0);
+    T before,commands;
+    reset();assert(poly_record_write(0,1,2));
+    before=releases;commands=immediate_calls;
+    for(T note=60;note<=65;note++) {
+        held[note>>5]|=1u<<(note&31u);
+        live(note,1,2);
+    }
+    drain();
+    assert(live_mask[0]==3 && live_confirmed[0]==3);
+    poly_tick(0);
+    assert(releases==before && immediate_calls==commands+6);
+    held[2]&=~(1u<<0); /* Note 64 disappeared without a native off. */
+    for(T i=0;i<1500;i++)poly_frame();
+    assert(releases==before && live_mask[0]==3);
+    poly_tick(0);
+    assert(releases==before+1 && live_mask[0]==2 && !queued);
+    held[1]=held[2]=0;
+    live(65,1,1); /* Mono priority fallback cannot reassign a stolen pitch. */
+    assert(!queued);
+    poly_tick(0);
+    assert(releases==before+2 && !live_mask[0] && !live_confirmed[0]);
+    drain();
+    puts("PASS: native-held cleanup of suppressed note-offs, without audio-block work");
+}
 static void ui(void)
 {
     T evt[4]={0},i,*pages,vtable[16]={0};
@@ -470,12 +596,29 @@ static void ui(void)
     evt[1]=2;evt[2]=(T)-1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==1);
     assert(poly_ui_encoder(view,evt) && poly_modes[0]==1); /* left bound */
     labels[0]=0;assert(poly_ui_draw(view,0));
-    assert(strstr(labels,"PLAY;") && strstr(labels,"POLY;") && !strstr(labels,"PRIO;") && !strstr(labels,"MONO;") && !strstr(labels,"LEG;"));
+    assert(strstr(labels,"MOD;P.MOD;") && !strstr(labels,"PLAY;") && !strstr(labels,"PRIO;") && !strstr(labels,"MONO;") && !strstr(labels,"LEG;"));
     evt[2]=1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==0);
     assert(poly_ui_encoder(view,evt) && poly_modes[0]==0); /* right bound */
+    labels[0]=0;assert(poly_ui_draw(view,0) && strstr(labels,"MOD;M.MOD;"));
     assert(valid(header+0x21) && !memcmp(header+0x21,SEQ+0x21381,7));
     evt[1]=3;assert(poly_ui_encoder(view,evt) && poly_modes[0]==0); /* D is empty */
     evt[2]=(T)-1;assert(poly_ui_encoder(view,evt) && poly_modes[0]==0);
+    poly_host=&services22;
+    labels[0]=0;assert(poly_ui_draw(view,0) && strstr(labels,"UNISON;OFF;"));
+    evt[2]=8;assert(poly_ui_encoder(view,evt) && !poly_unison_spread(0));
+    assert(poly_ui_encoder(view,evt) && poly_unison_spread(0)==1);
+    labels[0]=0;assert(poly_ui_draw(view,0) && strstr(labels,"UNISON;1c;"));
+    evt[2]=16;for(i=2;i<=50;i++)assert(poly_ui_encoder(view,evt) && poly_unison_spread(0)==i);
+    labels[0]=0;assert(poly_ui_draw(view,0) && strstr(labels,"UNISON;50c;"));
+    assert(test_groups==7 && test_pitch[0]==-16384 && test_pitch[1]==0 && test_pitch[2]==16384);
+    assert(!poly_ui_control(view,5) && !poly_ui_control(view,6) && !poly_ui_control(view,7));
+    assert(!memcmp(header+0x21,SEQ+0x21381,7));
+    evt[1]=7;assert(poly_ui_encoder(view,evt));
+    evt[1]=3;evt[2]=(T)-8;assert(poly_ui_encoder(view,evt) && poly_unison_spread(0)==50);
+    assert(poly_ui_encoder(view,evt) && poly_unison_spread(0)==49);
+    evt[2]=(T)-16;for(i=49;i>0;i--)assert(poly_ui_encoder(view,evt) && poly_unison_spread(0)==i-1);
+    assert(test_groups==7 && !test_pitch[0] && poly_ui_control(view,5)==0x1e);
+    poly_host=&services;
     assert(*(T *)(KIT+0x2a+0x10a)==0x12345678 && *(T *)(KIT+0x2a+0x10e)==0x87654321);
     evt[2]=1;
     tracked=1;labels[0]=0;assert(poly_ui_draw(view,0));assert(strstr(labels,"TRACK IN;") && strstr(labels,"SLAVE MODE;"));
@@ -501,6 +644,10 @@ static void ui(void)
     assert(poly_seq_config.states[8]==3 && poly_ui_control(view,4)==0x14);
     evt[1]=1;assert(poly_ui_encoder(view,evt));assert(poly_seq_config.states[8]==4);
     assert(poly_ui_encoder(view,evt) && poly_seq_config.states[8]==4);
+    evt[1]=2;evt[2]=(T)-1;assert(poly_ui_encoder(view,evt) && poly_modes[8]==1);
+    labels[0]=0;assert(poly_ui_draw(view,0) && strstr(labels,"MOD;P.MOD;"));
+    evt[2]=1;assert(poly_ui_encoder(view,evt) && poly_modes[8]==0);
+    labels[0]=0;assert(poly_ui_draw(view,0) && strstr(labels,"MOD;M.MOD;"));
     for(tracked=9;tracked<=10;tracked++) {
         T result=0,args[1]={(T)view};
         assert(poly_ui_slave(view) && poly_native(ST_NATIVE_PAGE_GUARD,args,&result) && result==1);
@@ -580,21 +727,24 @@ static void native_interest_changes(void)
     assert(interest_calls==1 && interest_fn==(T)poly_native && interest_mask==always);
     assert(always&(1u<<ST_NATIVE_IMMEDIATE) && !(always&(1u<<ST_NATIVE_TYPE)) && !(always&grouped));
     poly_native_interest();assert(interest_calls==1);                         /* unchanged: no call */
-    assert(poly_record_write(0,1,2) && poly_grouped() && interest_mask==(always|grouped));
+    assert(poly_record_write(0,1,2) && poly_grouped() && interest_mask==(always|grouped|POLY_NATIVE_SHARED));
     assert(!(interest_mask&(1u<<ST_NATIVE_TYPE))); /* direct native type projection */
-    assert(!(interest_mask&((1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO))));
+    assert((interest_mask&POLY_NATIVE_SHARED)==POLY_NATIVE_SHARED);
     *(B *)0x80002f50=65;*(B *)0x80002f51=1;*(B *)0x80002f52=2;
     assert(poly_mode_write(0,1) && !(interest_mask&((1u<<ST_NATIVE_PUBLISH)|(1u<<ST_NATIVE_MODULATION)|(1u<<ST_NATIVE_LFO)|(1u<<ST_NATIVE_OWNERS))));
     assert(poly_mode_write(0,0) && (interest_mask&(1u<<ST_NATIVE_PUBLISH)));
     memcpy(pq,SEQ+0x21381,7);
     assert(poly_record_write(0,0,2) && !poly_grouped() && interest_mask==always);
     assert(interest_calls==5);
+    assert(poly_record_write(8,1,2) && interest_mask==(always|grouped|POLY_NATIVE_SHARED));
+    assert(poly_mode_write(8,1) && interest_mask==(always|grouped));
+    assert(poly_record_write(8,0,2) && interest_mask==always);
     poly_host=&services;poly_interest=0;
 }
 /* Analog topologies and all event routes use the same production allocator. */
 static void analog(void)
 {
-    B states[12]={0},owners[12],raw[7],saved[7],copy[256],decoded[12];
+    B states[12]={0},owners[12],raw[7],saved[7],copy[256],decoded[12],modes[POLY_MODE_TRACKS];
     T t,v,i,result,args[6],event[20],time,commands,before;
     assert(poly_max_voices(8)==3 && poly_max_voices(9)==2 && !poly_max_voices(10) && !poly_max_voices(11));
     for(t=8;t<10;t++)for(v=2;v<=poly_max_voices(t);v++) {
@@ -602,12 +752,17 @@ static void analog(void)
         assert(poly_resolve(states,owners));
         for(i=1;i<v;i++)assert(owners[t+i]==t && poly_owner(owners,t+i)==t);
         record_encode(states,raw);assert(raw[1]==(t==9?0x59:v==2?0x5c:0x5e) && valid(raw));
-        record_states(raw,decoded);assert(!memcmp(states,decoded,12));
+        assert(poly_decode(raw,decoded,modes));assert(!memcmp(states,decoded,12) && !modes[t]);
         memcpy(copy+0x21,raw,7);poly_header_load(header,copy);assert(!memcmp(header+0x21,raw,7));
         header[0x27]^=1;assert(!valid(header+0x21));
         reset();*(B *)(0x80002f50u+t)=35;
         assert(poly_record_write(t,1,v));assert(poly_has_groups && poly_analog_active && poly_publish_end==t+v);
         assert(publishes==v-1);
+        assert(poly_mode_write(t,1) && SEQ[0x21382]==0x54 && !poly_shared_mask && poly_lfo_map[t+1]==t+1);
+        memcpy(copy+0x21,SEQ+0x21381,7);assert(poly_header_load(header,copy));
+        assert(!memcmp(header+0x21,copy+0x21,7) && poly_decode(header+0x21,decoded,modes));
+        assert(modes[t]==1 && !memcmp(states,decoded,12) && publishes==v-1);
+        assert(poly_mode_write(t,0) && poly_lfo_map[t+1]==t && !memcmp(SEQ+0x21381,raw,7));
         for(i=t+1;i<t+v;i++)assert(*(B *)(0x80002f50u+i)==35 && !poly_sound_write_allowed(i));
         /* Same on-disk bytes as old Synfact; first TRIG loads them. */
         memcpy(saved,SEQ+0x21381,7);assert(poly_record_write(t,0,v));
@@ -674,6 +829,17 @@ static void analog(void)
     assert(poly_sync() && !poly_grouped());assert(poly_record_write(0,1,2));
     assert(SEQ[0x21382]==0x5e && valid(SEQ+0x21381));
     *(unsigned short *)(KIT+0x1550)=0;assert(poly_sync() && poly_owner_map[10]==8 && poly_owner_map[1]==0);
+    assert(poly_mode_write(0,1) && SEQ[0x21382]==0x53);
+    assert(poly_mode_write(8,1) && SEQ[0x21382]==0x54);
+    memcpy(saved,SEQ+0x21381,7);
+    *(unsigned short *)(KIT+0x1550)=1u<<9;assert(poly_sync() && poly_owner_map[10]==10);
+    assert(poly_mode_write(0,0) && SEQ[0x21382]==0x54);
+    assert(memcmp(saved,SEQ+0x21381,7) && poly_decode(SEQ+0x21381,decoded,modes));
+    assert(!modes[0] && modes[8]==1 && decoded[8]==4);
+    *(unsigned short *)(KIT+0x1550)=0;assert(poly_sync() && poly_lfo_map[10]==10);
+    memcpy(raw,SEQ+0x21381,7);raw[4]&=0xfcu;
+    before=poly_crc(raw);raw[5]=(B)(before>>8);raw[6]=(B)before;
+    assert(!valid(raw));   /* PT requires an analog group. */
     /* 84 is valid; 85+ and negative chord notes are omitted. */
     reset();assert(poly_record_write(8,1,3));
     SEQ[8*0x499+0x3c5]=80;SEQ[8*0x499+0x3c6]=68;SEQ[8*0x499+0x3c7]=69;
@@ -690,14 +856,14 @@ static void analog(void)
  * retargeted keyboard/MIDI/chord/preview/first-step note. */
 static void analog_event_sounds(void)
 {
-    T master,voices,k,pass,origin,note,kind,e[20],time,sound,explicit_sound=(T)KIT+0x1580;
+    T master,voices,k,pass,note,kind,e[20],time,sound,explicit_sound=(T)KIT+0x1580;
     for(master=8;master<=9;master++)for(voices=2;voices<=poly_max_voices(master);voices++) {
         reset();sound=(T)KIT+0x2a+master*0x123;
         for(k=8;k<=10;k++)KIT[0x2a+k*0x123+0xa2]=(B)(8+k-8);
         assert(poly_record_write(master,1,voices));
-        for(origin=1;origin<=2;origin++)for(pass=0;pass<3;pass++)for(k=0;k<voices;k++) {
+        for(pass=0;pass<3;pass++)for(k=0;k<voices;k++) {
             memset(e,0,sizeof e);e[0]=1;e[1]=1;e[2]=master;e[3]=2;e[6]=60+k;
-            poly_test_origin=origin;native_immediate(e);
+            poly_test_origin=2;native_immediate(e);
             assert(queued==1 && queue[0][2]==master+k && queue[0][6]==60+k);
             assert(queue[0][10]==(k?sound:0));drain();
             e[1]=2;e[2]=master;e[18]=master;e[10]=0;native_immediate(e);
@@ -739,7 +905,7 @@ int main(void)
      ui.host=&services;assert(poly_initialize(&api));ui.version=7;assert(!poly_initialize(&api));
      h.version=8;h.native_interest=interest_mock;h.native_page_view=page_view_mock;
      ui.host=&h;assert(!poly_initialize(&api));}
-    play_codec();play_modes();copy_on_change();topology();groups_and_notes();sequence_voices();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();digital_event_sounds();
+    play_codec();unison_codec();play_modes();copy_on_change();topology();groups_and_notes();sequence_voices();mixed_voice_allocation();suppressed_live_releases();ui();recording_and_publication();inactive_native();native_interest_changes();analog();analog_event_sounds();digital_event_sounds();
     puts("PASS: analog event/Sound/UI regressions and 110592 mixed topology/mode/record cases; 108 POLY topologies, 2/3/4 voices, live/chord/sequence paths, stealing/off, rollback, CRC persistence, MIDI suspension, page/controls/slave guards, native interest by group state");
     return 0;
 }

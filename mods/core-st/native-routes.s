@@ -3,7 +3,7 @@
 | Core 2.6.1 (modules.c): a negative byte (0x80) is the full-list traversal
 | (also the pre-init fail-open state). A positive byte only says someone is
 | interested: the dispatcher takes the subscribers from the operation's word in
-| core_native_routes, one bit per list entry up to 32, which sits 88 bytes
+| core_native_routes, one bit per list entry up to 32, which sits 96 bytes
 | before the bytes. This encoder still shares bit 7 past the seventh entry;
 | modules.c then rewrites such bytes from the words.
 | TYPE track bytes 18/19 keep their original layout and semantics.
@@ -138,9 +138,9 @@ core_event_native:
  beq.s native_dispatch_open
  cmpi.l #19,%d2
  beq.s native_dispatch_open
- | Core 2.6.1: the subscribers from the word (core_native_routes, 88 bytes
+ | The subscribers come from the word (core_native_routes, 96 bytes
  | before the bytes), the same one instruction as the byte copy it replaces.
- move.l -88(%a0,%d2.l*4),%d2
+ move.l -96(%a0,%d2.l*4),%d2
  bra.s native_dispatch_loop
 native_dispatch_open:
  move.l (%a2)+,%d0
@@ -185,7 +185,7 @@ core_native:
  move.l core_native_profile_buffer,%d0
  bne.s native_service_profiled
  move.l 4(%sp),%d0
- cmpi.l #22,%d0
+ cmpi.l #24,%d0
  bcc.s native_service_stock
  lea core_native_interest,%a0
  tst.b (%a0,%d0.l)
@@ -213,7 +213,7 @@ native_service_profiled:
  movea.l %d0,%a2
  move.l 0xfc07000c,%d4
  clr.l 12(%sp)
- cmpi.l #22,%d2
+ cmpi.l #24,%d2
  bcc.s native_service_profile_invalid
  lea core_native_interest,%a0
  tst.b (%a0,%d2.l)

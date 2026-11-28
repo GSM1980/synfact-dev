@@ -59,14 +59,16 @@ def verify(folder,synfact=None):
            'core_pool_busy','core_pool_query_owner','core_native_original','core_machine_telemetry',
            'core_native_profile','core_native_interest_set','core_native_page_view_set']
     names+=['core_parameter_provider_set','core_native','core_sample_pool_api']
-    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',20,*[address(n) for n in names])
+    assert read(address('core_machine_host_api'),92)==struct.pack('>23I',22,*[address(n) for n in names])
+    assert read(address('core_machine_host_api')+108,12)==struct.pack('>3I',*[address(n) for n in (
+        'core_native_relation_scope','core_voice_groups','core_voice_groups_set')])
     assert not any(n.startswith('system-info-st:') for n in symbols)
     for name in ['native.c','native.s','view-draw.s']:
         assert r['instructions'][name]['instructions']>0
     assert r['instructions']['machine-host.c']=={'bytes':0,'instructions':0} # read-only pointer table
     manifest=json.loads((ROOT/'mods/core-st/mod.json').read_text())
     native_sites=[s for s in manifest['sites'] if s.get('target','').startswith('core_native_')]
-    assert len(native_sites)==14 and len(manifest['sites'])==129 and len(manifest['collections'])==19
+    assert len(native_sites)==14 and len(manifest['sites'])==139 and len(manifest['collections'])==19
     cleanup=next(s for s in manifest['sites'] if s['addr']=='0x401010f0')
     assert cleanup['op']=='bytes' and read(0x401010f0,18)==bytes.fromhex('4200174000224a0367082f0b4ebafba4588f')
     assert any(s['addr']=='0x400a5046' and s['target']=='core_audio_idle_mix' for s in manifest['sites'])

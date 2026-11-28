@@ -1,6 +1,9 @@
 # Digitone ARP → Syntakt: experimental source port
 
-Desktop OS 1.42 release: **1.11.0**, core **2.9 / host API 20**.
+Desktop OS 1.42 version **1.11.1**.
+Core **2.9.2 / host API 22** supplies the active POLY track mask in both
+`M.MOD` and `P.MOD`. ARP's two TRIG pages are unavailable to a group's master
+and slaves. Independent audio tracks retain their ARP pages.
 The native builder automatically includes the internal `state-st` service.
 ARP can be loaded without the third LFO: its Sound settings, shared
 parameter locks, copies, quick save/reload and project metadata remain

@@ -1,6 +1,6 @@
 {
   "id": "core",
-  "version": "2.9.0",
+  "version": "2.9.2",
   "license": "GPL-2.0-or-later",
   "title": "core",
   "category": "Framework",
@@ -47,6 +47,8 @@
     "view-draw.s",
     "preview.s",
     "note-events.s",
+    "track-relations.s",
+    "track-options.c",
     "fx-send.s",
     "fx-codec.s",
     "machine-randomize.c",
@@ -78,6 +80,16 @@
     "ST_CONTEXT_EVENTS": "1"
   },
   "sites": [
+    {"addr":"0x400a443a","stock":"41f9800046b8","op":"jmp","target":"core_note_pitch_a0"},
+    {"addr":"0x400a44e4","stock":"43f9800046b8","op":"jmp","target":"core_note_pitch_a1"},
+    {"addr":"0x40024550","stock":"114100a32d40fff8","op":"jmp","target":"core_meta_velocity_to_volume"},
+    {"addr":"0x4000ecb8","stock":"4e904fef0010","op":"jmp","target":"core_meta_track_sound_load"},
+    {"addr":"0x4004bf8e","stock":"282f001845f94016e9c8","op":"jmp","target":"core_fx_route_track"},
+    {"addr":"0x4004c610","stock":"0682ffffffe8","op":"jmp","target":"core_fx_route_edit_track"},
+    {"addr":"0x400a42f0","stock":"38300a004a87","op":"jmp","target":"core_relation_mask"},
+    {"addr":"0x400a290c","stock":"40c046fc2700","op":"jmp","target":"core_relation_event"},
+    {"addr":"0x40010122","stock":"71f01a00222f0014","op":"jmp","target":"core_relation_ui_mask"},
+    {"addr":"0x400f24d0","stock":"4eb940010056","op":"jsr","target":"core_relation_ui_set"},
     {"addr":"0x4000d870","stock":"2f02747c222f0008","op":"jmp","target":"core_global_has"},
     {"addr":"0x4000d94a","stock":"2f02222f0008202f000c","op":"jmp","target":"core_global_get"},
     {"addr":"0x4000da32","stock":"2f032f02222f000c","op":"jmp","target":"core_global_set"},
